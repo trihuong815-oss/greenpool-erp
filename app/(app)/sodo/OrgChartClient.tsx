@@ -1,0 +1,464 @@
+'use client';
+
+import { useMemo, useState } from 'react';
+import { X, Users, ArrowRight, ArrowDown } from 'lucide-react';
+import type { Role, Profile } from '@/lib/types';
+
+interface Props {
+  roles: Role[];
+  profiles: Profile[];
+}
+
+type Tab = 'org' | 'flow';
+
+const TIER_LABELS: Record<number, string> = {
+  1: 'Tầng 1 — Lãnh đạo',
+  2: 'Tầng 2 — Giám đốc Khối',
+  3: 'Tầng 3 — QLCS · Trưởng phòng · Tiểu ban',
+  4: 'Tầng 4 — Phó phòng · Tổ trưởng',
+  5: 'Tầng 5 — Nhân viên · Giáo viên',
+};
+
+function blockColor(role: Role): string {
+  if (role.tier === 1) return 'border-l-rose-600 bg-rose-50';
+  if (role.block_id === 'KD') return 'border-l-blue-600 bg-blue-50';
+  if (role.block_id === 'VP') return 'border-l-emerald-600 bg-emerald-50';
+  return 'border-l-slate-400 bg-white';
+}
+
+function blockBadge(role: Role): { label: string; cls: string } | null {
+  if (role.tier === 1) return { label: 'Lãnh đạo', cls: 'bg-rose-100 text-rose-800' };
+  if (role.block_id === 'KD') return { label: 'Kinh doanh', cls: 'bg-blue-100 text-blue-800' };
+  if (role.block_id === 'VP') return { label: 'Văn phòng', cls: 'bg-emerald-100 text-emerald-800' };
+  return null;
+}
+
+export function OrgChartClient({ roles, profiles }: Props) {
+  const [tab, setTab] = useState<Tab>('org');
+  const [selectedRole, setSelectedRole] = useState<Role | null>(null);
+
+  const profileCountByRole = useMemo(() => {
+    const map: Record<string, number> = {};
+    profiles.forEach(p => {
+      map[p.role_code] = (map[p.role_code] || 0) + 1;
+    });
+    return map;
+  }, [profiles]);
+
+  const rolesByTier = useMemo(() => {
+    const byTier: Record<number, { kd: Role[]; vp: Role[]; other: Role[] }> = {
+      1: { kd: [], vp: [], other: [] },
+      2: { kd: [], vp: [], other: [] },
+      3: { kd: [], vp: [], other: [] },
+      4: { kd: [], vp: [], other: [] },
+      5: { kd: [], vp: [], other: [] },
+    };
+    roles.forEach(r => {
+      const bucket = byTier[r.tier];
+      if (!bucket) return;
+      if (r.block_id === 'KD') bucket.kd.push(r);
+      else if (r.block_id === 'VP') bucket.vp.push(r);
+      else bucket.other.push(r);
+    });
+    return byTier;
+  }, [roles]);
+
+  const selectedProfiles = useMemo(
+    () => (selectedRole ? profiles.filter(p => p.role_code === selectedRole.code) : []),
+    [selectedRole, profiles]
+  );
+
+  return (
+    <>
+      <div className="flex gap-2 mb-4">
+        <button
+          onClick={() => setTab('org')}
+          className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
+            tab === 'org' ? 'bg-slate-800 text-white' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+          }`}
+        >
+          🏛️ Sơ đồ tổ chức
+        </button>
+        <button
+          onClick={() => setTab('flow')}
+          className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
+            tab === 'flow' ? 'bg-slate-800 text-white' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+          }`}
+        >
+          🔀 Quy trình đề xuất / giao việc
+        </button>
+      </div>
+
+      {tab === 'org' ? (
+        <OrgView
+          rolesByTier={rolesByTier}
+          profileCountByRole={profileCountByRole}
+          onSelect={setSelectedRole}
+        />
+      ) : (
+        <FlowView />
+      )}
+
+      {selectedRole && (
+        <RoleDetailModal
+          role={selectedRole}
+          profiles={selectedProfiles}
+          onClose={() => setSelectedRole(null)}
+        />
+      )}
+    </>
+  );
+}
+
+interface OrgViewProps {
+  rolesByTier: Record<number, { kd: Role[]; vp: Role[]; other: Role[] }>;
+  profileCountByRole: Record<string, number>;
+  onSelect: (r: Role) => void;
+}
+
+function OrgView({ rolesByTier, profileCountByRole, onSelect }: OrgViewProps) {
+  return (
+    <div className="space-y-4">
+      {[1, 2, 3, 4, 5].map(tier => {
+        const bucket = rolesByTier[tier];
+        const total = bucket.kd.length + bucket.vp.length + bucket.other.length;
+        if (total === 0) return null;
+
+        return (
+          <section key={tier} className="card">
+            <div className="flex items-center justify-between mb-3">
+              <div className="card-title flex items-center gap-2">
+                <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-800 text-white text-sm font-bold">
+                  {tier}
+                </span>
+                {TIER_LABELS[tier]}
+              </div>
+              <span className="text-xs text-slate-500">{total} vai trò</span>
+            </div>
+
+            {tier === 1 ? (
+              <div className="flex justify-center">
+                <RoleCardList roles={bucket.other.concat(bucket.kd, bucket.vp)} counts={profileCountByRole} onSelect={onSelect} compact={false} />
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <BlockColumn
+                  label="Khối Kinh doanh"
+                  accent="blue"
+                  count={bucket.kd.length}
+                  roles={bucket.kd}
+                  profileCountByRole={profileCountByRole}
+                  onSelect={onSelect}
+                />
+                <BlockColumn
+                  label="Khối Văn phòng"
+                  accent="emerald"
+                  count={bucket.vp.length}
+                  roles={bucket.vp}
+                  profileCountByRole={profileCountByRole}
+                  onSelect={onSelect}
+                />
+              </div>
+            )}
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+interface BlockColumnProps {
+  label: string;
+  accent: 'blue' | 'emerald';
+  count: number;
+  roles: Role[];
+  profileCountByRole: Record<string, number>;
+  onSelect: (r: Role) => void;
+}
+
+function BlockColumn({ label, accent, count, roles, profileCountByRole, onSelect }: BlockColumnProps) {
+  const accentCls = accent === 'blue' ? 'bg-blue-50 border-blue-200 text-blue-900' : 'bg-emerald-50 border-emerald-200 text-emerald-900';
+  return (
+    <div className={`rounded-lg border ${accentCls} p-3`}>
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-xs font-semibold uppercase tracking-wider">{label}</div>
+        <span className="text-xs opacity-70">{count} vai trò</span>
+      </div>
+      {roles.length === 0 ? (
+        <div className="text-xs italic opacity-60 py-3 text-center">— không có vai trò ở tầng này —</div>
+      ) : (
+        <RoleCardList roles={roles} counts={profileCountByRole} onSelect={onSelect} compact={true} />
+      )}
+    </div>
+  );
+}
+
+interface RoleCardListProps {
+  roles: Role[];
+  counts: Record<string, number>;
+  onSelect: (r: Role) => void;
+  compact: boolean;
+}
+
+function RoleCardList({ roles, counts, onSelect, compact }: RoleCardListProps) {
+  const gridCls = compact
+    ? 'grid grid-cols-1 sm:grid-cols-2 gap-2'
+    : 'grid grid-cols-1 gap-2';
+  return (
+    <div className={gridCls}>
+      {roles.map(role => {
+        const c = counts[role.code] || 0;
+        return (
+          <button
+            key={role.code}
+            onClick={() => onSelect(role)}
+            className={`text-left p-2.5 rounded-lg border border-slate-200 border-l-4 ${blockColor(role)} hover:shadow-md hover:border-slate-300 transition`}
+          >
+            <div className="font-semibold text-slate-800 text-sm leading-tight">{role.name}</div>
+            <div className="flex items-center justify-between mt-1">
+              <span className="text-[10px] text-slate-500 font-mono">{role.code}</span>
+              <span className="inline-flex items-center gap-1 text-xs text-slate-600">
+                <Users size={12} />
+                {c}
+              </span>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function FlowView() {
+  return (
+    <div className="space-y-4">
+      <div className="card">
+        <div className="card-title mb-3">🔵 Đề xuất trong cùng Khối</div>
+        <p className="text-sm text-slate-600 mb-4">
+          Nhân viên gửi đề xuất lên cấp trên trực tiếp trong cùng khối. Đi thẳng đến người duyệt — không cần qua 2 GĐ.
+        </p>
+        <FlowSteps
+          steps={[
+            { label: 'Nhân viên', sub: 'Tạo đề xuất', color: 'slate' },
+            { label: 'Cấp trên', sub: 'Tổ trưởng / Phó phòng / TP', color: 'blue' },
+            { label: 'Phê duyệt', sub: 'Approve / Reject', color: 'amber' },
+            { label: 'Triển khai', sub: 'Người thực hiện nhận việc', color: 'emerald' },
+          ]}
+        />
+      </div>
+
+      <div className="card">
+        <div className="card-title mb-3">🟣 Đề xuất chéo Khối (cần 2 GĐ duyệt)</div>
+        <p className="text-sm text-slate-600 mb-4">
+          Đề xuất từ Khối A muốn tác động sang Khối B → GĐ Khối A duyệt trước, sau đó GĐ Khối B mới duyệt và chỉ định người thực hiện.
+        </p>
+        <FlowSteps
+          steps={[
+            { label: 'NV Khối A', sub: 'Tạo đề xuất chéo khối', color: 'blue' },
+            { label: 'GĐ Khối A', sub: 'Duyệt cho phép gửi đi', color: 'blue' },
+            { label: 'GĐ Khối B', sub: 'Duyệt và chỉ định', color: 'emerald' },
+            { label: 'Người thực hiện', sub: 'NV thuộc Khối B', color: 'emerald' },
+          ]}
+        />
+        <div className="mt-3 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-2.5">
+          ⚠️ Quy tắc: bất kỳ đề xuất nào động đến nhân sự/tài nguyên Khối khác đều phải qua 2 GĐ. Audit log ghi lại toàn bộ quá trình.
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-title mb-3">🟢 Giao việc trực tiếp (trên → dưới)</div>
+        <p className="text-sm text-slate-600 mb-4">
+          Cấp trên giao việc thẳng cho nhân viên dưới quyền của mình. Không cần duyệt — đi ngay vào hàng đợi của người nhận.
+        </p>
+        <FlowSteps
+          steps={[
+            { label: 'Quản lý', sub: 'GĐ / TP / QLCS / Tổ trưởng', color: 'blue' },
+            { label: 'Giao việc', sub: 'Tạo task + gán người nhận', color: 'slate' },
+            { label: 'Nhân viên', sub: 'Nhận thông báo real-time', color: 'emerald' },
+          ]}
+        />
+      </div>
+
+      <div className="card">
+        <div className="card-title mb-3">🟡 Nhiệm vụ định kỳ / chuyên môn</div>
+        <p className="text-sm text-slate-600 mb-4">
+          Nhiệm vụ phát sinh từ checklist, lịch định kỳ, hoặc từ TP chuyên môn xuống QLCS để thực thi tại cơ sở.
+        </p>
+        <FlowSteps
+          steps={[
+            { label: 'Nguồn', sub: 'Checklist / Lịch / TP chuyên môn', color: 'slate' },
+            { label: 'QLCS', sub: 'Nhận nhiệm vụ tại cơ sở', color: 'blue' },
+            { label: 'Phân công', sub: 'QLCS giao nhân viên thực thi', color: 'amber' },
+            { label: 'Báo cáo', sub: 'Cập nhật trạng thái + đính kèm', color: 'emerald' },
+          ]}
+        />
+      </div>
+
+      <div className="card bg-slate-50">
+        <div className="card-title mb-3">📌 Tóm tắt nguyên tắc</div>
+        <ul className="text-sm text-slate-700 space-y-2">
+          <li className="flex gap-2"><span className="text-blue-600 font-bold">•</span> <span><strong>Trong khối:</strong> đề xuất đi thẳng cấp trên, 1 lần duyệt.</span></li>
+          <li className="flex gap-2"><span className="text-purple-600 font-bold">•</span> <span><strong>Chéo khối:</strong> cần 2 GĐ duyệt — GĐ khối gửi rồi GĐ khối nhận.</span></li>
+          <li className="flex gap-2"><span className="text-emerald-600 font-bold">•</span> <span><strong>Giao việc:</strong> cấp trên giao thẳng cấp dưới trong cây tổ chức, không cần duyệt.</span></li>
+          <li className="flex gap-2"><span className="text-amber-600 font-bold">•</span> <span><strong>Nhiệm vụ:</strong> từ lịch / checklist / TP chuyên môn → QLCS phân công.</span></li>
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+interface FlowStep {
+  label: string;
+  sub: string;
+  color: 'slate' | 'blue' | 'amber' | 'emerald' | 'purple';
+}
+
+const STEP_COLORS: Record<FlowStep['color'], string> = {
+  slate: 'bg-slate-100 border-slate-300 text-slate-800',
+  blue: 'bg-blue-100 border-blue-300 text-blue-900',
+  amber: 'bg-amber-100 border-amber-300 text-amber-900',
+  emerald: 'bg-emerald-100 border-emerald-300 text-emerald-900',
+  purple: 'bg-purple-100 border-purple-300 text-purple-900',
+};
+
+function FlowSteps({ steps }: { steps: FlowStep[] }) {
+  return (
+    <>
+      <div className="hidden md:flex items-stretch gap-2">
+        {steps.map((s, i) => (
+          <div key={i} className="flex items-stretch gap-2 flex-1">
+            <div className={`flex-1 rounded-lg border-2 ${STEP_COLORS[s.color]} p-3 text-center flex flex-col justify-center`}>
+              <div className="font-semibold text-sm">{s.label}</div>
+              <div className="text-xs opacity-80 mt-1">{s.sub}</div>
+            </div>
+            {i < steps.length - 1 && (
+              <div className="flex items-center text-slate-400">
+                <ArrowRight size={20} />
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="md:hidden space-y-2">
+        {steps.map((s, i) => (
+          <div key={i}>
+            <div className={`rounded-lg border-2 ${STEP_COLORS[s.color]} p-3 text-center`}>
+              <div className="font-semibold text-sm">{s.label}</div>
+              <div className="text-xs opacity-80 mt-1">{s.sub}</div>
+            </div>
+            {i < steps.length - 1 && (
+              <div className="flex justify-center py-1 text-slate-400">
+                <ArrowDown size={18} />
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+interface ModalProps {
+  role: Role;
+  profiles: Profile[];
+  onClose: () => void;
+}
+
+function RoleDetailModal({ role, profiles, onClose }: ModalProps) {
+  const badge = blockBadge(role);
+  return (
+    <div
+      className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[85vh] overflow-hidden flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="p-5 border-b flex items-start justify-between gap-3">
+          <div>
+            <div className="font-bold text-lg text-slate-800">{role.name}</div>
+            <div className="text-xs text-slate-500 font-mono mt-1">{role.code}</div>
+            <div className="flex gap-2 mt-2 flex-wrap">
+              <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                Tầng {role.tier}
+              </span>
+              {badge && (
+                <span className={`text-xs px-2 py-0.5 rounded ${badge.cls}`}>{badge.label}</span>
+              )}
+              {role.is_qlcs && (
+                <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800">QLCS</span>
+              )}
+              {role.is_tp && (
+                <span className="text-xs px-2 py-0.5 rounded bg-purple-100 text-purple-800">TP</span>
+              )}
+              {role.facility_id && (
+                <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                  CS: {role.facility_id}
+                </span>
+              )}
+              {role.dept_id && (
+                <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                  Phòng: {role.dept_id}
+                </span>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-slate-700 p-1"
+            aria-label="Đóng"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="p-5 overflow-y-auto flex-1">
+          {role.description && (
+            <div className="mb-4">
+              <div className="text-xs font-semibold text-slate-600 mb-1">Mô tả</div>
+              <p className="text-sm text-slate-700">{role.description}</p>
+            </div>
+          )}
+          {role.parent_role && (
+            <div className="mb-4">
+              <div className="text-xs font-semibold text-slate-600 mb-1">Báo cáo cho</div>
+              <div className="text-sm text-slate-700 font-mono">{role.parent_role}</div>
+            </div>
+          )}
+
+          <div>
+            <div className="text-xs font-semibold text-slate-600 mb-2">
+              Nhân sự đang giữ vai trò ({profiles.length})
+            </div>
+            {profiles.length === 0 ? (
+              <div className="text-sm text-slate-400 italic py-4 text-center bg-slate-50 rounded">
+                Chưa có nhân sự nào đang giữ vai trò này
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {profiles.map(p => (
+                  <div key={p.id} className="flex items-center gap-3 p-2 rounded hover:bg-slate-50 border border-slate-100">
+                    <div className="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center text-sm font-semibold text-slate-600">
+                      {p.full_name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-slate-800 truncate">{p.full_name}</div>
+                      <div className="text-xs text-slate-500 truncate">{p.email}</div>
+                    </div>
+                    {p.facility_id && (
+                      <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">
+                        {p.facility_id}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

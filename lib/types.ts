@@ -30,12 +30,13 @@ export interface Role {
   code: string;
   name: string;
   tier: number;
-  block_id?: BlockId;
-  dept_id?: DeptId;
-  facility_id?: FacilityId;
+  block_id?: BlockId | null;
+  dept_id?: DeptId | null;
+  facility_id?: FacilityId | null;
   is_qlcs: boolean;
   is_tp: boolean;
-  parent_role?: string;
+  parent_role?: string | null;
+  description?: string | null;
 }
 
 export interface Profile {
