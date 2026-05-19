@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brand-navy: #1F3A5F;
+  --brand-gold: #C9A227;
+  --brand-teal: #2E8B8B;
+}
+
+html, body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; }
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #f1f5f9; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+.kpi-card {
+  @apply bg-white rounded-xl p-5 shadow-sm border border-slate-200 transition-all hover:shadow-md;
+}
+.kpi-label {
+  @apply text-xs font-semibold uppercase tracking-wider text-slate-500;
+}
+.kpi-value {
+  @apply text-3xl font-extrabold text-slate-900 mt-1;
+}
+.kpi-sub {
+  @apply text-xs text-slate-500 mt-1;
+}
+
+.card {
+  @apply bg-white rounded-xl p-5 shadow-sm border border-slate-200;
+}
+.card-title {
+  @apply text-sm font-bold text-brand-navy mb-3 pb-2 border-b-2 border-slate-100 flex items-center gap-2;
+}
+.card-title::before {
+  content: '';
+  @apply block w-1 h-4 bg-brand-gold rounded-sm;
+}
