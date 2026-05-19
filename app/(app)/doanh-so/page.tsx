@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 import { formatVND } from '@/lib/utils';
 
 export default async function DoanhSoPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 

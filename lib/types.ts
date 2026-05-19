@@ -50,6 +50,14 @@ export interface Profile {
   active: boolean;
 }
 
+export interface ProfileWithRole {
+  id: string;
+  full_name: string;
+  role_code: string;
+  facility_id: FacilityId | null;
+  roles: { name: string } | null;
+}
+
 export interface Task {
   id: string;
   title: string;

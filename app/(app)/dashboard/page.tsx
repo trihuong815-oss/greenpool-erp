@@ -2,9 +2,10 @@ import { createClient } from '@/lib/supabase/server';
 import { Header } from '@/components/Header';
 import { canSeeAllFacilities, isQLCS, getVisibleFacilities } from '@/lib/permissions';
 import { DashboardContent } from './DashboardContent';
+import type { ProfileWithRole } from '@/lib/types';
 
 export default async function DashboardPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
@@ -12,7 +13,7 @@ export default async function DashboardPage() {
     .from('profiles')
     .select('id, full_name, role_code, facility_id, roles(name)')
     .eq('id', user.id)
-    .single();
+    .single<ProfileWithRole>();
 
   if (!profile) return null;
 
@@ -30,7 +31,7 @@ export default async function DashboardPage() {
     <>
       <Header
         title="Dashboard"
-        subtitle={`Tổng quan ${(profile as any).roles?.name || profile.role_code}`}
+        subtitle={`Tổng quan ${profile.roles?.name || profile.role_code}`}
         userId={profile.id}
       />
       <div className="flex-1 overflow-y-auto p-6 bg-slate-50">

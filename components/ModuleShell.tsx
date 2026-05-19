@@ -13,7 +13,7 @@ interface ModuleShellProps {
 }
 
 export async function ModuleShell({ route, title, subtitle, description, features, emoji }: ModuleShellProps) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 

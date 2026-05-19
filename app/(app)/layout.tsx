@@ -1,9 +1,10 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/Sidebar';
+import type { ProfileWithRole } from '@/lib/types';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
@@ -12,7 +13,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     .from('profiles')
     .select('id, full_name, role_code, facility_id, roles(name)')
     .eq('id', user.id)
-    .single();
+    .single<ProfileWithRole>();
 
   if (!profile) {
     return (
@@ -29,7 +30,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     );
   }
 
-  const roleName = (profile as any).roles?.name || profile.role_code;
+  const roleName = profile.roles?.name || profile.role_code;
 
   return (
     <div className="min-h-screen flex">
