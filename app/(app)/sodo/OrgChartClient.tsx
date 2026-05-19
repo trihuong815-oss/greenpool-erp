@@ -15,8 +15,9 @@ const TIER_LABELS: Record<number, string> = {
   1: 'Tầng 1 — Lãnh đạo',
   2: 'Tầng 2 — Giám đốc Khối',
   3: 'Tầng 3 — QLCS · Trưởng phòng · Tiểu ban',
-  4: 'Tầng 4 — Phó phòng · Tổ trưởng',
-  5: 'Tầng 5 — Nhân viên · Giáo viên',
+  4: 'Tầng 4 — Phó phòng',
+  5: 'Tầng 5 — Tổ trưởng',
+  6: 'Tầng 6 — Nhân viên · Giáo viên',
 };
 
 function blockColor(role: Role): string {
@@ -52,6 +53,7 @@ export function OrgChartClient({ roles, profiles }: Props) {
       3: { kd: [], vp: [], other: [] },
       4: { kd: [], vp: [], other: [] },
       5: { kd: [], vp: [], other: [] },
+      6: { kd: [], vp: [], other: [] },
     };
     roles.forEach(r => {
       const bucket = byTier[r.tier];
@@ -119,7 +121,7 @@ interface OrgViewProps {
 function OrgView({ rolesByTier, profileCountByRole, onSelect }: OrgViewProps) {
   return (
     <div className="space-y-4">
-      {[1, 2, 3, 4, 5].map(tier => {
+      {[1, 2, 3, 4, 5, 6].map(tier => {
         const bucket = rolesByTier[tier];
         const total = bucket.kd.length + bucket.vp.length + bucket.other.length;
         if (total === 0) return null;

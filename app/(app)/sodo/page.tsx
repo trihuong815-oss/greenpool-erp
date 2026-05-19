@@ -44,7 +44,7 @@ export default async function SoDoPage() {
     <>
       <Header
         title="Sơ đồ tổ chức"
-        subtitle="42 vai trò × 5 tầng — click vai trò để xem chi tiết nhân sự"
+        subtitle="42 vai trò × 6 tầng — click vai trò để xem chi tiết nhân sự"
         userId={profile.id}
       />
       <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
