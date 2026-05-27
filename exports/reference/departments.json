@@ -1,0 +1,56 @@
+[
+  {
+    "id": "KT",
+    "name": "Phòng Kỹ thuật",
+    "block_id": "KD",
+    "color": "#5B9BD5"
+  },
+  {
+    "id": "DT",
+    "name": "Phòng Đào tạo",
+    "block_id": "KD",
+    "color": "#7B6CDB"
+  },
+  {
+    "id": "MKT",
+    "name": "Phòng Marketing",
+    "block_id": "KD",
+    "color": "#E07A5F"
+  },
+  {
+    "id": "TTNB",
+    "name": "Tiểu ban Truyền thông Nội bộ",
+    "block_id": "KD",
+    "color": "#C9A227"
+  },
+  {
+    "id": "GS",
+    "name": "Phòng Giám sát",
+    "block_id": "VP",
+    "color": "#B23A48"
+  },
+  {
+    "id": "KE",
+    "name": "Phòng Kế toán",
+    "block_id": "VP",
+    "color": "#C9A227"
+  },
+  {
+    "id": "NS",
+    "name": "Phòng Nhân sự",
+    "block_id": "VP",
+    "color": "#2E8B8B"
+  },
+  {
+    "id": "AS",
+    "name": "An sinh",
+    "block_id": "KD",
+    "color": "#0ea5e9"
+  },
+  {
+    "id": "LT",
+    "name": "Lễ tân",
+    "block_id": "KD",
+    "color": "#8b5cf6"
+  }
+]

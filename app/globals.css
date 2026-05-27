@@ -16,6 +16,26 @@ html, body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvet
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
+/* Carousel ảnh cơ sở: cơ sở có ≥ 2 ảnh → crossfade tự động. Mỗi ảnh sáng 5s,
+   fade qua ảnh kế tiếp. animation-delay = (i * 5s) để các ảnh xuất hiện lệch nhau. */
+@keyframes branchCarousel {
+  0%, 40% { opacity: 1; }
+  50%, 90% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* Bỏ nút mũi tên tăng/giảm (spinner) trên input[type=number] — gây nhiễu UI nhập SL/giá.
+   Form vẫn validate min/max bình thường, chỉ ẩn arrows. */
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 .kpi-card {
   @apply bg-white rounded-xl p-5 shadow-sm border border-slate-200 transition-all hover:shadow-md;
 }
@@ -33,9 +53,9 @@ html, body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvet
   @apply bg-white rounded-xl p-5 shadow-sm border border-slate-200;
 }
 .card-title {
-  @apply text-sm font-bold text-brand-navy mb-3 pb-2 border-b-2 border-slate-100 flex items-center gap-2;
+  @apply text-sm font-bold text-slate-800 mb-3 pb-2 border-b-2 border-slate-100 flex items-center gap-2;
 }
 .card-title::before {
   content: '';
-  @apply block w-1 h-4 bg-brand-gold rounded-sm;
+  @apply block w-1 h-4 bg-emerald-500 rounded-sm;
 }

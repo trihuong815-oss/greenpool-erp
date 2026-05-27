@@ -37,3 +37,7 @@ next-env.d.ts
 .vscode/
 .idea/
 .claude/
+/secrets/
+
+# Backups (data thật — không commit)
+/backups/

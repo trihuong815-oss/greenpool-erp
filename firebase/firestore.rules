@@ -1,0 +1,309 @@
+rules_version = '2';
+
+// ============================================================
+// Firestore Security Rules — Green Pool ERP Checklist
+// Phản chiếu RLS Supabase: admin all, QLCS facility, TP dept,
+// shared_shift cs+bp+ca, assigned_to self.
+//
+// Nguyên tắc:
+// - profiles: read self-or-admin, write admin-only (Issue 1).
+// - templates: tách create/update để dùng đúng resource vs request.resource.
+// - instances + sub: scope check qua matchesUserScope().
+// - audit log: append-only, scope check khi create.
+// - catch-all deny ở cuối.
+// ============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---- Helpers ----
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function userProfile() {
+      return get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data;
+    }
+    function userRole() {
+      return userProfile().role_code;
+    }
+    function isAdmin() {
+      return isSignedIn() && userRole() in ['CEO','GD_KD','GD_VP'];
+    }
+    function isQLCS() {
+      return isSignedIn() && userRole().matches('QLCS_.*');
+    }
+    function isTP() {
+      return isSignedIn() && (userRole().matches('TP_.*') || userRole() == 'TIBAN_TT');
+    }
+    function userFacility() {
+      return userProfile().facility_id;
+    }
+    function userDepartment() {
+      return userProfile().department_id;
+    }
+    function userShift() {
+      return userProfile().shift_assignment;
+    }
+    function isSharedShift() {
+      return userProfile().is_shared_shift_account == true;
+    }
+    function matchesUserScope(instanceData) {
+      return
+        isAdmin()
+        || (isQLCS() && instanceData.facility_id == userFacility())
+        || (isTP()   && instanceData.department_id == userDepartment())
+        || instanceData.assigned_to == request.auth.uid
+        || (isSharedShift()
+            && instanceData.facility_id    == userFacility()
+            && instanceData.department_id  == userDepartment()
+            && instanceData.shift_type     == userShift());
+    }
+    function isTerminalStatus(s) {
+      return s == 'submitted' || s == 'approved' || s == 'failed';
+    }
+    function instanceDoc(iid) {
+      return get(/databases/$(database)/documents/checklists/$(iid)).data;
+    }
+    function templateDoc(tid) {
+      return get(/databases/$(database)/documents/templates/$(tid)).data;
+    }
+
+    // ---- Templates ----
+    match /templates/{templateId} {
+      allow read: if isSignedIn();
+
+      // CREATE: dùng request.resource.data (chưa có resource)
+      allow create: if isAdmin()
+        || (isQLCS() && request.resource.data.block_id == 'KD')
+        || (isTP()   && request.resource.data.department_id == userDepartment());
+
+      // UPDATE: dùng resource.data (doc cũ) để check quyền theo state hiện tại.
+      // Đồng thời chặn không cho đổi block_id sang ngoài scope của user.
+      allow update: if isAdmin()
+        || (isQLCS()
+            && resource.data.block_id == 'KD'
+            && request.resource.data.block_id == 'KD')
+        || (isTP()
+            && resource.data.department_id == userDepartment()
+            && request.resource.data.department_id == userDepartment());
+
+      allow delete: if isAdmin();
+
+      match /items/{itemId} {
+        allow read: if isSignedIn();
+        // CREATE/UPDATE: phải parent template tồn tại và user có scope.
+        allow create, update: if isAdmin()
+          || (isQLCS() && templateDoc(templateId).block_id == 'KD')
+          || (isTP()   && templateDoc(templateId).department_id == userDepartment());
+        allow delete: if isAdmin();
+      }
+    }
+
+    // ---- Instances ----
+    match /checklists/{instanceId} {
+      allow read: if matchesUserScope(resource.data);
+
+      allow create: if isAdmin()
+        || (isQLCS() && request.resource.data.facility_id == userFacility());
+
+      // UPDATE: scope + instance chưa terminal. Chặn đổi facility ra khỏi scope.
+      allow update: if matchesUserScope(resource.data)
+        && !isTerminalStatus(resource.data.status)
+        && (isAdmin() || request.resource.data.facility_id == resource.data.facility_id);
+
+      allow delete: if isAdmin();
+
+      match /items/{itemId} {
+        // Đọc: scope của parent instance
+        allow read: if matchesUserScope(instanceDoc(instanceId));
+
+        // Tạo item (auto-seed): scope của parent instance, parent chưa terminal
+        allow create: if matchesUserScope(instanceDoc(instanceId))
+          && !isTerminalStatus(instanceDoc(instanceId).status);
+
+        // Tick/uncheck: scope + parent chưa terminal
+        allow update: if matchesUserScope(instanceDoc(instanceId))
+          && !isTerminalStatus(instanceDoc(instanceId).status);
+
+        allow delete: if isAdmin();
+      }
+
+      match /evidenceFiles/{evidenceId} {
+        allow read: if matchesUserScope(instanceDoc(instanceId));
+
+        // Tạo metadata file: scope + uploaded_by là chính user
+        allow create: if matchesUserScope(instanceDoc(instanceId))
+          && request.resource.data.uploaded_by == request.auth.uid;
+
+        // User không được sửa/xoá metadata — Cloud Function dọn 7 ngày (admin)
+        allow update, delete: if isAdmin();
+      }
+    }
+
+    // ---- Audit logs (chuẩn Phase 1.5): append-only, mọi module ----
+    // Schema: { action, module, userId, branchId, before, after, createdAt,
+    //           actor_name, actor_role, instanceId?, templateId?, details? }
+    // (Admin SDK ở server bypass rules; rules này áp dụng nếu client SDK ghi
+    //  trực tiếp — hiện UI luôn ghi qua API routes, nên rule này chủ yếu là
+    //  defense-in-depth.)
+    match /auditLogs/{logId} {
+      // Đọc: admin xem mọi log; user xem log thuộc instance có scope.
+      allow read: if isAdmin()
+        || (resource.data.instanceId is string
+            && matchesUserScope(instanceDoc(resource.data.instanceId)));
+
+      // Insert: actor phải = current uid + (nếu là checklist module) có scope với instance.
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && (
+          request.resource.data.module != 'checklist'
+          || (request.resource.data.instanceId is string
+              && matchesUserScope(instanceDoc(request.resource.data.instanceId)))
+        );
+
+      // Tuyệt đối không cho client update/delete.
+      allow update, delete: if false;
+    }
+
+    // ---- Reference collections ----
+    match /branches/{id}    { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /facilities/{id}  { allow read: if isSignedIn(); allow write: if isAdmin(); }  // legacy backup
+    match /departments/{id} { allow read: if isSignedIn(); allow write: if isAdmin(); }
+    match /roles/{id}       { allow read: if isSignedIn(); allow write: if isAdmin(); }
+
+    // ---- Leads (Phase 6): branch-scoped, schema Lead Pipeline ----
+    match /leads/{leadId} {
+      allow read: if isSignedIn() && (
+        isAdmin() || isTP() || (userFacility() == resource.data.branchId)
+      );
+      allow create: if isSignedIn()
+        && request.resource.data.createdBy == request.auth.uid
+        && (isAdmin() || (userFacility() == request.resource.data.branchId));
+      allow update: if isSignedIn()
+        && resource.data.branchId == request.resource.data.branchId    // immutable
+        && (isAdmin() || (userFacility() == resource.data.branchId));
+      allow delete: if isAdmin();
+    }
+
+    // ---- Lead Activities (Phase 6): append-only ----
+    match /leadActivities/{activityId} {
+      allow read: if isSignedIn() && (
+        isAdmin() || isTP() || (userFacility() == resource.data.branchId)
+      );
+      allow create: if isSignedIn()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.saleId == request.auth.uid
+        && (isAdmin() || (userFacility() == request.resource.data.branchId));
+      allow update: if false;                                          // append-only
+      allow delete: if isAdmin();
+    }
+
+    // ---- Package Groups (Phase 6.G): nhóm gói per branch ----
+    // CRUD ĐẦU MỤC: CHỈ admin (CEO/GD_KD). QLCS read-only (để chọn dropdown nhập doanh số).
+    match /packageGroups/{groupId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin() && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isAdmin()
+        && resource.data.branchId == request.resource.data.branchId;  // immutable
+      allow delete: if isAdmin();
+    }
+
+    // ---- Packages (Phase 6.G): gói cụ thể trong group ----
+    // CRUD ĐẦU MỤC: CHỈ admin. QLCS read-only.
+    match /packages/{packageId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin() && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isAdmin()
+        && resource.data.branchId == request.resource.data.branchId   // immutable
+        && resource.data.groupId == request.resource.data.groupId;    // immutable
+      allow delete: if isAdmin();
+    }
+
+    // ---- Package Sales (Phase 6.H): entry doanh số per period × sale × package ----
+    match /packageSales/{entryId} {
+      allow read: if isSignedIn() && (
+        isAdmin() || isTP() || (userFacility() == resource.data.branchId)
+      );
+      allow create: if isSignedIn()
+        && request.resource.data.createdBy == request.auth.uid
+        && (isAdmin() || (userFacility() == request.resource.data.branchId));
+      allow update: if isSignedIn()
+        && resource.data.branchId == request.resource.data.branchId
+        && (isAdmin() || (userFacility() == resource.data.branchId));
+      allow delete: if isAdmin();
+    }
+
+    // ---- Sales Targets (Phase 6.I): mục tiêu năm/tháng per branch ----
+    // Đọc: signed-in. Ghi: CHỈ admin.
+    match /salesTargets/{targetId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin() && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isAdmin()
+        && resource.data.branchId == request.resource.data.branchId
+        && resource.data.year == request.resource.data.year;
+      allow delete: if isAdmin();
+    }
+
+    // ---- Sales Entries (Phase 6.E): bảng tổng nhập tay, doc ID deterministic ----
+    // Schema: period, periodType, year, month, day?, branchId, saleId, saleName, source,
+    //          leads, closed, notClosed, revenue, createdAt/By, updatedAt/By
+    match /salesEntries/{entryId} {
+      allow read: if isSignedIn() && (
+        isAdmin() || isTP() || (userFacility() == resource.data.branchId)
+      );
+      // CREATE/UPDATE: branchId immutable; admin (any) hoặc người trong scope
+      allow create: if isSignedIn()
+        && request.resource.data.createdBy == request.auth.uid
+        && (isAdmin() || (userFacility() == request.resource.data.branchId));
+      allow update: if isSignedIn()
+        && resource.data.branchId == request.resource.data.branchId
+        && (isAdmin() || (userFacility() == resource.data.branchId));
+      allow delete: if isAdmin();
+    }
+
+    // ---- Sales (Phase 6 schema mới): branch-scoped + leadId required + immutable ----
+    // Schema: leadId, packageId, packageName, amount, closeSource, saleBy, branchId, status...
+    match /sales/{saleId} {
+      allow read: if isSignedIn() && (
+        isAdmin() || isTP() || (userFacility() == resource.data.branchId)
+      );
+      allow create: if isSignedIn()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.leadId is string
+        && (isAdmin() || (userFacility() == request.resource.data.branchId));
+      // branchId + leadId luôn immutable
+      allow update: if isSignedIn()
+        && resource.data.branchId == request.resource.data.branchId
+        && resource.data.leadId == request.resource.data.leadId
+        && (isAdmin() || (userFacility() == resource.data.branchId));
+      allow delete: if isAdmin();
+    }
+
+    // ---- Profiles ----
+    // Read: chỉ chính mình hoặc admin (Issue 1).
+    // Write: chỉ admin (Issue 1). User KHÔNG được tự update profile.
+    match /profiles/{id} {
+      allow read: if isSignedIn() && (isAdmin() || request.auth.uid == id);
+      allow write: if isAdmin();
+    }
+
+    // ---- Tasks (Phase 7): Đề xuất · Nhiệm vụ · Giao việc ----
+    // Read: signed-in (server-side scope filter qua API GET).
+    // Write: CHỈ qua API (Admin SDK bypass rules). Client-side write bị chặn.
+    match /tasks/{taskId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+
+      // Subcollection comments — timeline + status change + approval events
+      match /comments/{commentId} {
+        allow read: if isSignedIn();
+        allow write: if false;
+      }
+    }
+
+    // ---- Catch-all deny ----
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

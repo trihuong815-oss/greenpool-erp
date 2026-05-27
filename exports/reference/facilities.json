@@ -1,0 +1,37 @@
+[
+  {
+    "id": "HM",
+    "name": "Hoàng Mai",
+    "color": "#1F3A5F",
+    "address": "123 Hoàng Mai, Hà Nội",
+    "created_at": "2026-05-19T00:19:38.342103+00:00"
+  },
+  {
+    "id": "TK",
+    "name": "Thuỵ Khuê",
+    "color": "#C9A227",
+    "address": "456 Thuỵ Khuê, Hà Nội",
+    "created_at": "2026-05-19T00:19:38.342103+00:00"
+  },
+  {
+    "id": "CTT",
+    "name": "Cung Thể Thao Dưới Nước",
+    "color": "#2E8B8B",
+    "address": "Mỹ Đình, Hà Nội",
+    "created_at": "2026-05-19T00:19:38.342103+00:00"
+  },
+  {
+    "id": "24",
+    "name": "24 Nguyễn Cơ Thạch",
+    "color": "#5B9BD5",
+    "address": "24 NCT, Hà Nội",
+    "created_at": "2026-05-19T00:19:38.342103+00:00"
+  },
+  {
+    "id": "TT",
+    "name": "Thanh Trì",
+    "color": "#E07A5F",
+    "address": "Thanh Trì, Hà Nội",
+    "created_at": "2026-05-19T00:19:38.342103+00:00"
+  }
+]

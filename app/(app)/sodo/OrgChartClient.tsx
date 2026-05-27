@@ -3,13 +3,14 @@
 import { useMemo, useState } from 'react';
 import { X, Users, ArrowRight, ArrowDown } from 'lucide-react';
 import type { Role, Profile } from '@/lib/types';
+import { OrgTreeView } from './OrgTreeView';
 
 interface Props {
   roles: Role[];
   profiles: Profile[];
 }
 
-type Tab = 'org' | 'flow';
+type Tab = 'org' | 'tree' | 'flow';
 
 const TIER_LABELS: Record<number, string> = {
   1: 'Tầng 1 — Lãnh đạo',
@@ -46,6 +47,17 @@ export function OrgChartClient({ roles, profiles }: Props) {
     return map;
   }, [profiles]);
 
+  // Ẩn các role không hiển thị trên sơ đồ tổ chức
+  const HIDDEN_ROLE_CODES = new Set(['NV_AS']);
+
+  // Sort: gom theo phòng ban (dept_id) để cùng bộ phận liền nhau
+  function sortByDept(a: Role, b: Role): number {
+    const da = a.dept_id || '￿'; // nulls last
+    const db = b.dept_id || '￿';
+    if (da !== db) return da.localeCompare(db);
+    return a.code.localeCompare(b.code);
+  }
+
   const rolesByTier = useMemo(() => {
     const byTier: Record<number, { kd: Role[]; vp: Role[]; other: Role[] }> = {
       1: { kd: [], vp: [], other: [] },
@@ -56,11 +68,18 @@ export function OrgChartClient({ roles, profiles }: Props) {
       6: { kd: [], vp: [], other: [] },
     };
     roles.forEach(r => {
+      if (HIDDEN_ROLE_CODES.has(r.code)) return;
       const bucket = byTier[r.tier];
       if (!bucket) return;
       if (r.block_id === 'KD') bucket.kd.push(r);
       else if (r.block_id === 'VP') bucket.vp.push(r);
       else bucket.other.push(r);
+    });
+    // Sort mỗi bucket theo phòng ban để cùng dept liền nhau
+    Object.values(byTier).forEach(b => {
+      b.kd.sort(sortByDept);
+      b.vp.sort(sortByDept);
+      b.other.sort(sortByDept);
     });
     return byTier;
   }, [roles]);
@@ -72,7 +91,7 @@ export function OrgChartClient({ roles, profiles }: Props) {
 
   return (
     <>
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-2 mb-4 flex-wrap">
         <button
           onClick={() => setTab('org')}
           className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
@@ -80,6 +99,14 @@ export function OrgChartClient({ roles, profiles }: Props) {
           }`}
         >
           🏛️ Sơ đồ tổ chức
+        </button>
+        <button
+          onClick={() => setTab('tree')}
+          className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
+            tab === 'tree' ? 'bg-slate-800 text-white' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50'
+          }`}
+        >
+          🌳 Cây phân cấp
         </button>
         <button
           onClick={() => setTab('flow')}
@@ -91,15 +118,21 @@ export function OrgChartClient({ roles, profiles }: Props) {
         </button>
       </div>
 
-      {tab === 'org' ? (
+      {tab === 'org' && (
         <OrgView
           rolesByTier={rolesByTier}
           profileCountByRole={profileCountByRole}
           onSelect={setSelectedRole}
         />
-      ) : (
-        <FlowView />
       )}
+      {tab === 'tree' && (
+        <OrgTreeView
+          roles={roles}
+          profiles={profiles}
+          onSelectRole={setSelectedRole}
+        />
+      )}
+      {tab === 'flow' && <FlowView />}
 
       {selectedRole && (
         <RoleDetailModal

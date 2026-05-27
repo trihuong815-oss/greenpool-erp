@@ -450,12 +450,12 @@ alter table sales_performance enable row level security;
 
 -- Helper function: lấy role code của user hiện tại
 create or replace function current_user_role() returns text as $$
-  select role_code from profiles where id = auth.uid();
+  select profiles.role_code from profiles where profiles.id = auth.uid();
 $$ language sql security definer;
 
 -- Helper function: lấy facility của user
 create or replace function current_user_facility() returns text as $$
-  select facility_id from profiles where id = auth.uid();
+  select profiles.facility_id from profiles where profiles.id = auth.uid();
 $$ language sql security definer;
 
 -- Policy: User chỉ đọc profile của chính mình + CEO/GĐ đọc tất cả

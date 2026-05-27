@@ -1,0 +1,116 @@
+rules_version = '2';
+
+// ============================================================
+// Firebase Storage Security Rules — Green Pool ERP Checklist
+// Bucket prefix:  checklist-evidence/{facilityId}/{instanceId}/{itemId}/{ts}_{filename}
+//
+// Read/Create kiểm tra scope ĐẦY ĐỦ qua firestore.get(instance):
+//   - Admin/CEO/GĐ Khối:        toàn hệ thống
+//   - QLCS:                     facility_id khớp
+//   - TP/Tiểu ban chuyên môn:   department_id khớp
+//   - assigned_to:              instance được giao cho user
+//   - shared_shift:             facility + department + shift khớp
+//
+// MIME whitelist: image/jpeg, image/png, image/webp, application/pdf
+// Size: ảnh ≤ 5MB, PDF ≤ 10MB
+// Path part 1 phải khớp instance.facility_id (chặn đặt file sai cơ sở).
+// Update: cấm tuyệt đối (phải xoá rồi upload lại).
+// Delete: chỉ admin (Cloud Function cleanup chạy với admin SDK).
+// Catch-all deny ở cuối.
+// ============================================================
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ---- Helpers (đồng bộ logic với firestore.rules) ----
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function userProfile() {
+      return firestore.get(/databases/(default)/documents/profiles/$(request.auth.uid)).data;
+    }
+    function userRole()       { return userProfile().role_code; }
+    function userFacility()   { return userProfile().facility_id; }
+    function userDepartment() { return userProfile().department_id; }
+    function userShift()      { return userProfile().shift_assignment; }
+    function isSharedShift()  { return userProfile().is_shared_shift_account == true; }
+
+    function isAdmin() {
+      return isSignedIn() && userRole() in ['CEO','GD_KD','GD_VP'];
+    }
+    function isQLCS() {
+      return isSignedIn() && userRole().matches('QLCS_.*');
+    }
+    function isTP() {
+      return isSignedIn() && (userRole().matches('TP_.*') || userRole() == 'TIBAN_TT');
+    }
+
+    function instanceData(iid) {
+      return firestore.get(/databases/(default)/documents/checklists/$(iid)).data;
+    }
+
+    function matchesScope(iid) {
+      return
+        isAdmin()
+        || (isQLCS() && instanceData(iid).facility_id == userFacility())
+        || (isTP()   && instanceData(iid).department_id == userDepartment())
+        || instanceData(iid).assigned_to == request.auth.uid
+        || (isSharedShift()
+            && instanceData(iid).facility_id    == userFacility()
+            && instanceData(iid).department_id  == userDepartment()
+            && instanceData(iid).shift_type     == userShift());
+    }
+
+    function pathFacilityMatchesInstance(iid, fid) {
+      return instanceData(iid).facility_id == fid;
+    }
+
+    function isMimeAllowed(mime) {
+      return mime in ['image/jpeg','image/png','image/webp','application/pdf'];
+    }
+    function sizeLimit(mime) {
+      // PDF up to 10MB, ảnh tối đa 5MB
+      return (mime == 'application/pdf') ? 10 * 1024 * 1024 : 5 * 1024 * 1024;
+    }
+
+    // ---- Evidence files ----
+    // Path: checklist-evidence/{facilityId}/{instanceId}/{itemId}/{fileName}
+    match /checklist-evidence/{facilityId}/{instanceId}/{itemId}/{fileName} {
+
+      // READ: scope đầy đủ qua instance trong Firestore (không chỉ vì instance tồn tại)
+      allow read: if isSignedIn() && matchesScope(instanceId);
+
+      // CREATE:
+      //  - auth bắt buộc
+      //  - MIME hợp lệ
+      //  - size trong giới hạn
+      //  - path facilityId khớp instance.facility_id (chặn upload sai cơ sở)
+      //  - user có scope thực hiện trên instance này
+      allow create: if isSignedIn()
+        && isMimeAllowed(request.resource.contentType)
+        && request.resource.size < sizeLimit(request.resource.contentType)
+        && pathFacilityMatchesInstance(instanceId, facilityId)
+        && matchesScope(instanceId);
+
+      // UPDATE: cấm. Cần upload mới (xoá object cũ qua admin SDK / cleanup).
+      allow update: if false;
+
+      // DELETE: chỉ admin. Cleanup tự động chạy bằng admin SDK (bypass rules).
+      allow delete: if isAdmin();
+    }
+
+    // ---- Task attachments (Phase 7) ----
+    // Path: task-attachments/{taskId}/{fileName}
+    // Upload thực tế đi qua SIGNED URL (server-side Admin SDK), không cần auth rules cho PUT.
+    // Read tương tự — server sign URL. Rule này chỉ là defense-in-depth cho client trực tiếp.
+    match /task-attachments/{taskId}/{fileName} {
+      allow read: if isSignedIn();   // user signed-in mới được xem
+      allow write: if false;          // chặn client ghi trực tiếp — bắt buộc qua signed URL
+    }
+
+    // ---- Catch-all deny: không cho truy cập đối tượng nào khác ----
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

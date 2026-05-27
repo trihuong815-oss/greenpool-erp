@@ -1,23 +1,27 @@
-import type { Config } from 'tailwindcss';
+import type { Config } from "tailwindcss";
 
 const config: Config = {
   content: [
-    './app/**/*.{js,ts,jsx,tsx,mdx}',
-    './components/**/*.{js,ts,jsx,tsx,mdx}',
+    "./app/**/*.{js,ts,jsx,tsx,mdx}",
+    "./components/**/*.{js,ts,jsx,tsx,mdx}",
+    "./lib/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
     extend: {
       colors: {
-        brand: {
-          navy: '#1F3A5F',
-          gold: '#C9A227',
-          teal: '#2E8B8B',
-          green: '#7AC142',
-          blue: '#1AB5C9',
+        lavi: {
+          50: "#F5F9FF",
+          100: "#EAF3FF",
+          500: "#2F80ED",
+          600: "#1C5DB8",
+          900: "#142235",
+          950: "#0B1830",
         },
       },
     },
   },
   plugins: [],
 };
+
 export default config;

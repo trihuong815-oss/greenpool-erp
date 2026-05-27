@@ -1,7 +1,6 @@
-import { redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
 import { canAccessRoute } from '@/lib/permissions';
-import { Header } from './Header';
+import { requireAuthedProfile } from '@/lib/firebase/current-profile';
+import { AppTopBar } from './AppTopBar';
 
 interface ModuleShellProps {
   route: string;
@@ -13,25 +12,17 @@ interface ModuleShellProps {
 }
 
 export async function ModuleShell({ route, title, subtitle, description, features, emoji }: ModuleShellProps) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect('/login');
+  const { profile } = await requireAuthedProfile();
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('id, full_name, role_code')
-    .eq('id', user.id)
-    .single();
-
-  if (!profile || !canAccessRoute(profile.role_code, route)) {
+  if (!canAccessRoute(profile.roleCode, route)) {
     return (
       <>
-        <Header title={title} userId={user.id} />
+        <AppTopBar title={title} />
         <div className="flex-1 flex items-center justify-center p-6 bg-slate-50">
           <div className="card text-center py-12 max-w-md">
             <div className="text-5xl mb-4">🔒</div>
             <div className="font-bold text-slate-800 text-lg mb-2">Không có quyền truy cập</div>
-            <div className="text-sm text-slate-500">Vai trò <strong>{profile?.role_code || '—'}</strong> không bao gồm module này.</div>
+            <div className="text-sm text-slate-500">Vai trò <strong>{profile.roleCode || '—'}</strong> không bao gồm module này.</div>
           </div>
         </div>
       </>
@@ -40,7 +31,7 @@ export async function ModuleShell({ route, title, subtitle, description, feature
 
   return (
     <>
-      <Header title={title} subtitle={subtitle} userId={profile.id} />
+      <AppTopBar title={title} subtitle={subtitle} />
       <div className="flex-1 overflow-y-auto p-6 bg-slate-50">
         <div className="card max-w-3xl mx-auto">
           <div className="text-center py-8">
@@ -49,10 +40,7 @@ export async function ModuleShell({ route, title, subtitle, description, feature
             <p className="text-slate-600 mb-6">{description}</p>
 
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-left max-w-xl mx-auto">
-              <div className="font-semibold text-amber-900 mb-2">🚧 Đang xây dựng — Phase 2</div>
-              <p className="text-sm text-slate-700 mb-3">
-                Module này đang được triển khai chi tiết. Logic và UI đã có sẵn trong prototype HTML, sẽ được chuyển sang Next.js + Supabase trong các phiên Cowork tiếp theo.
-              </p>
+              <div className="font-semibold text-amber-900 mb-2">🚧 Module sẽ được triển khai</div>
               <div className="text-sm">
                 <div className="font-semibold text-slate-800 mb-1">Chức năng dự kiến:</div>
                 <ul className="space-y-1">
@@ -64,10 +52,6 @@ export async function ModuleShell({ route, title, subtitle, description, feature
                   ))}
                 </ul>
               </div>
-            </div>
-
-            <div className="mt-4 text-xs text-slate-400">
-              Để test cấu trúc/UX module này, anh vào <strong>prototype HTML</strong> trong thư mục <code>GreenPool_ERP/</code> trên Desktop.
             </div>
           </div>
         </div>

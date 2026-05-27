@@ -1,0 +1,12 @@
+{
+  "exportedAt": "2026-05-21T13:57:54.558Z",
+  "source": "supabase",
+  "dateFilter": "2026-05-21",
+  "totalTemplates": 69,
+  "totalTemplateItems": 351,
+  "totalInstances": 55,
+  "totalInstanceItems": 270,
+  "totalEvidenceFiles": 0,
+  "evidenceTableExists": true,
+  "totalAuditLogs": 5
+}

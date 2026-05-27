@@ -1,48 +1,35 @@
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
+// Middleware (Next.js gọi là `middleware`, project này đặt là `proxy.ts`).
+//
+// Phase 4.C cut-over: verify Firebase session cookie (gp_session).
+// Middleware chạy trong Edge Runtime → KHÔNG dùng firebase-admin (Node-only).
+// Quick check ở middleware: chỉ kiểm sự tồn tại cookie.
+// Verify chữ ký thật sự sẽ xảy ra ở mỗi page server / API route qua
+// `getCurrentUser()` (chạy Node runtime, dùng Admin SDK).
+// Nếu session cookie hết hạn/sai chữ ký → page server tự redirect login.
+
 import { NextResponse, type NextRequest } from 'next/server';
 
-type CookieToSet = { name: string; value: string; options: CookieOptions };
+const SESSION_COOKIE = 'gp_session';
 
 export async function proxy(req: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request: req });
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return req.cookies.getAll();
-        },
-        setAll(cookiesToSet: CookieToSet[]) {
-          cookiesToSet.forEach(({ name, value }) => req.cookies.set(name, value));
-          supabaseResponse = NextResponse.next({ request: req });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          );
-        },
-      },
-    }
-  );
-
-  // QUAN TRỌNG: dùng getUser() để refresh token nếu cần
-  const { data: { user } } = await supabase.auth.getUser();
-
   const isLoginPage = req.nextUrl.pathname.startsWith('/login');
-  const isPublicAsset = req.nextUrl.pathname.startsWith('/_next')
-    || req.nextUrl.pathname.startsWith('/api')
-    || req.nextUrl.pathname.endsWith('.svg')
-    || req.nextUrl.pathname.endsWith('.png')
-    || req.nextUrl.pathname.endsWith('.ico');
+  const isPublicAsset =
+    req.nextUrl.pathname.startsWith('/_next') ||
+    req.nextUrl.pathname.startsWith('/api') ||
+    req.nextUrl.pathname.endsWith('.svg') ||
+    req.nextUrl.pathname.endsWith('.png') ||
+    req.nextUrl.pathname.endsWith('.ico');
 
-  if (!user && !isLoginPage && !isPublicAsset) {
+  const hasSession = !!req.cookies.get(SESSION_COOKIE)?.value;
+
+  if (!hasSession && !isLoginPage && !isPublicAsset) {
     return NextResponse.redirect(new URL('/login', req.url));
   }
-  if (user && isLoginPage) {
+  if (hasSession && isLoginPage) {
     return NextResponse.redirect(new URL('/dashboard', req.url));
   }
 
-  return supabaseResponse;
+  return NextResponse.next();
 }
 
 export const config = {
