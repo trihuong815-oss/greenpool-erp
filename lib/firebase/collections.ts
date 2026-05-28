@@ -33,6 +33,8 @@ export const COLLECTIONS = {
   PERSONAL_GOALS: 'personalGoals',     // (Phase 9b — mục tiêu cá nhân đa lĩnh vực; owner-only)
   PERSONAL_LEARNING: 'personalLearning', // (Phase 9 — mục tiêu học tập cá nhân)
   AI_ASSISTANT_LOGS: 'aiAssistantLogs',   // (Phase 9 — log AI cá nhân, owner-only)
+  CHECKLIST_RUNS_V2: 'checklistRunsV2',   // (Phase 10 — module Checklist v2 spec 2026-05-28; song song /checklist cũ)
+  CHECKLIST_NOTIFICATIONS_V2: 'checklistNotificationsV2', // (Phase 10 — thông báo cấp trên khi user submit)
 } as const;
 
 // Subcollection names — đứng trong context của doc cha.

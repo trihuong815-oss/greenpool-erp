@@ -19,22 +19,22 @@ export const MENU_PERMISSIONS: Record<string, string[]> = {
   // 'quan-ly-sale' — CHỈ admin (CEO/GD_KD/GD_VP) — thêm/tắt/đổi tên NV_SALE per branch.
   // 'quan-ly-cong-viec' — admin + mọi manager (QLCS/TP/TT) để lên lịch + theo dõi công việc trong scope của mình.
   // 'cong-viec-ca-nhan' — Không gian làm việc cá nhân (Phase 9). Chỉ cấp quản lý+.
-  ADMIN:     ['dashboard','doanh-so','doanh-so/nhap','doanh-so/packages','checklist','quy-trinh','giao-viec','quan-ly-cong-viec','quan-ly-sale','sodo','luong','bao-cao','daotao','mkt','users','ky-thuat','cong-viec-ca-nhan'],
-  CEO:       ['dashboard','doanh-so','doanh-so/nhap','doanh-so/packages','checklist','quy-trinh','giao-viec','quan-ly-cong-viec','quan-ly-sale','sodo','luong','bao-cao','daotao','mkt','users','ky-thuat','cong-viec-ca-nhan'],
-  GD_KD:     ['dashboard','doanh-so','doanh-so/nhap','doanh-so/packages','checklist','quy-trinh','giao-viec','quan-ly-cong-viec','quan-ly-sale','sodo','luong','bao-cao','daotao','mkt','users','ky-thuat','cong-viec-ca-nhan'],
-  GD_VP:     ['dashboard',         'checklist','quy-trinh','giao-viec','quan-ly-cong-viec','quan-ly-sale','sodo','luong','bao-cao','ky-thuat','cong-viec-ca-nhan'],
+  ADMIN:     ['dashboard','doanh-so','doanh-so/nhap','doanh-so/packages','checklist','checklist-v2','quy-trinh','giao-viec','quan-ly-cong-viec','quan-ly-sale','sodo','luong','bao-cao','daotao','mkt','users','ky-thuat','cong-viec-ca-nhan'],
+  CEO:       ['dashboard','doanh-so','doanh-so/nhap','doanh-so/packages','checklist','checklist-v2','quy-trinh','giao-viec','quan-ly-cong-viec','quan-ly-sale','sodo','luong','bao-cao','daotao','mkt','users','ky-thuat','cong-viec-ca-nhan'],
+  GD_KD:     ['dashboard','doanh-so','doanh-so/nhap','doanh-so/packages','checklist','checklist-v2','quy-trinh','giao-viec','quan-ly-cong-viec','quan-ly-sale','sodo','luong','bao-cao','daotao','mkt','users','ky-thuat','cong-viec-ca-nhan'],
+  GD_VP:     ['dashboard',         'checklist','checklist-v2','quy-trinh','giao-viec','quan-ly-cong-viec','quan-ly-sale','sodo','luong','bao-cao','ky-thuat','cong-viec-ca-nhan'],
 
   // QLCS_* — KHÔNG thấy `luong`, `doanh-so/packages` (quản trị gói catalog), `users` (theo spec 2026-05-27)
-  QLCS_HM:   ['dashboard','doanh-so','doanh-so/nhap','checklist','quy-trinh','giao-viec','quan-ly-cong-viec','sodo','bao-cao','daotao','mkt','ky-thuat','cong-viec-ca-nhan'],
-  QLCS_TK:   ['dashboard','doanh-so','doanh-so/nhap','checklist','quy-trinh','giao-viec','quan-ly-cong-viec','sodo','bao-cao','daotao','mkt','ky-thuat','cong-viec-ca-nhan'],
-  QLCS_CTT:  ['dashboard','doanh-so','doanh-so/nhap','checklist','quy-trinh','giao-viec','quan-ly-cong-viec','sodo','bao-cao','daotao','mkt','ky-thuat','cong-viec-ca-nhan'],
-  QLCS_24NCT:['dashboard','doanh-so','doanh-so/nhap','checklist','quy-trinh','giao-viec','quan-ly-cong-viec','sodo','bao-cao','daotao','mkt','ky-thuat','cong-viec-ca-nhan'],
-  QLCS_TT:   ['dashboard','doanh-so','doanh-so/nhap','checklist','quy-trinh','giao-viec','quan-ly-cong-viec','sodo','bao-cao','daotao','mkt','ky-thuat','cong-viec-ca-nhan'],
+  QLCS_HM:   ['dashboard','doanh-so','doanh-so/nhap','checklist','checklist-v2','quy-trinh','giao-viec','quan-ly-cong-viec','sodo','bao-cao','daotao','mkt','ky-thuat','cong-viec-ca-nhan'],
+  QLCS_TK:   ['dashboard','doanh-so','doanh-so/nhap','checklist','checklist-v2','quy-trinh','giao-viec','quan-ly-cong-viec','sodo','bao-cao','daotao','mkt','ky-thuat','cong-viec-ca-nhan'],
+  QLCS_CTT:  ['dashboard','doanh-so','doanh-so/nhap','checklist','checklist-v2','quy-trinh','giao-viec','quan-ly-cong-viec','sodo','bao-cao','daotao','mkt','ky-thuat','cong-viec-ca-nhan'],
+  QLCS_24NCT:['dashboard','doanh-so','doanh-so/nhap','checklist','checklist-v2','quy-trinh','giao-viec','quan-ly-cong-viec','sodo','bao-cao','daotao','mkt','ky-thuat','cong-viec-ca-nhan'],
+  QLCS_TT:   ['dashboard','doanh-so','doanh-so/nhap','checklist','checklist-v2','quy-trinh','giao-viec','quan-ly-cong-viec','sodo','bao-cao','daotao','mkt','ky-thuat','cong-viec-ca-nhan'],
 
-  TP_KT:     ['dashboard','checklist','quy-trinh','giao-viec','quan-ly-cong-viec','bao-cao','ky-thuat','cong-viec-ca-nhan'],
+  TP_KT:     ['dashboard','checklist','checklist-v2','quy-trinh','giao-viec','quan-ly-cong-viec','bao-cao','ky-thuat','cong-viec-ca-nhan'],
   // Phó phòng KT (Hệ thống / Xử lý nước) — xem toàn module ky-thuat, không xem doanh số.
-  PP_HT:     ['dashboard','checklist','quy-trinh','giao-viec','quan-ly-cong-viec','bao-cao','ky-thuat','cong-viec-ca-nhan'],
-  PP_XLN:    ['dashboard','checklist','quy-trinh','giao-viec','quan-ly-cong-viec','bao-cao','ky-thuat','cong-viec-ca-nhan'],
+  PP_HT:     ['dashboard','checklist','checklist-v2','quy-trinh','giao-viec','quan-ly-cong-viec','bao-cao','ky-thuat','cong-viec-ca-nhan'],
+  PP_XLN:    ['dashboard','checklist','checklist-v2','quy-trinh','giao-viec','quan-ly-cong-viec','bao-cao','ky-thuat','cong-viec-ca-nhan'],
   // Kỹ thuật viên cơ sở (Hệ thống / Xử lý nước) — chỉ xem ky-thuat scope cơ sở của mình.
   // Convention: KT_HT_HM, KT_HT_TK,... và KT_XLN_HM,... khớp QLCS_*. Permission scope ở backend.
   KT_HT_HM:    ['dashboard','checklist','giao-viec','ky-thuat'],
