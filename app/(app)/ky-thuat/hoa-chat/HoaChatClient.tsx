@@ -391,7 +391,6 @@ function DayView({
                                 {SUB_AREA_LABEL[e.subArea]}
                               </span>
                             )}
-                            {e.batch && <span className="ml-2 text-xs text-slate-500">· lô {e.batch}</span>}
                             {e.notes && <span className="ml-2 text-xs text-slate-500 italic">"{e.notes}"</span>}
                           </div>
                           <div className="text-[10px] text-slate-400 shrink-0 hidden md:block">
@@ -439,7 +438,6 @@ function EntryModal({
   const [branchId, setBranchId] = useState(defaultBranchId);
   const [type, setType] = useState<ChemicalType>('clo');
   const [amount, setAmount] = useState('');
-  const [batch, setBatch] = useState('');
   const [notes, setNotes] = useState('');
   // Khi branch=CTT, user có sub_areas khoá thì auto-fill option đầu; user boss (sub_areas empty) tự chọn 3 option
   const cttSubAreaOptions: CttSubArea[] = (userSubAreas.length > 0
@@ -466,7 +464,6 @@ function EntryModal({
       await chemicalsApi.create({
         branchId, date, type, amount: amt,
         subArea: requiresSubArea ? (subArea as CttSubArea) : undefined,
-        batch: batch.trim() || undefined,
         notes: notes.trim() || undefined,
       });
       onClose(true);
@@ -556,10 +553,6 @@ function EntryModal({
               autoFocus
               className={`${input} text-right tabular-nums font-semibold text-lg`}
             />
-          </Field>
-
-          <Field label="Số lô (optional)">
-            <input value={batch} onChange={(e) => setBatch(e.target.value)} placeholder="vd. L20260527" className={input} />
           </Field>
 
           <Field label="Ghi chú (optional)">
