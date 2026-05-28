@@ -178,6 +178,15 @@
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "_comment": "checklistNotificationsV2: supervisor list — where(role in [...]) where(submittedAt >=) orderBy(submittedAt)",
+      "collectionGroup": "checklistNotificationsV2",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "role", "order": "ASCENDING" },
+        { "fieldPath": "submittedAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

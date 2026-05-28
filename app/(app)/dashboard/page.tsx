@@ -6,9 +6,11 @@ import { COLLECTIONS } from '@/lib/firebase/collections';
 import { countUnhandledErrors } from '@/lib/firebase/system-errors';
 import { kyThuatReadScope } from '@/lib/firebase/ky-thuat-scope';
 import { DashboardContent } from './DashboardContent';
+import { ChecklistV2SupervisorWidget } from './ChecklistV2SupervisorWidget';
 import { fetchDashboardBranches, fetchTodayChecklistRuns } from './data.firebase';
 import { fetchKyThuatSummary } from './data.kythuat';
 import { fetchSalesReport } from '../doanh-so/data.firebase';
+import { checklistV2SupervisorScope } from '@/lib/checklist-v2/templates';
 import type { Facility, Task } from '@/lib/types';
 
 const ALL_BRANCHES_KT = ['HM', 'TK', 'CTT', '24', 'TT'] as const;
@@ -102,6 +104,9 @@ export default async function DashboardPage() {
     branchCount: salesReport.branches.length,
   };
 
+  // Checklist v2 supervisor widget — chỉ hiện cho ADMIN/CEO/GD_KD/GD_VP/TP_KT.
+  const isChecklistV2Supervisor = checklistV2SupervisorScope(profile.roleCode) !== null;
+
   return (
     <>
       <AppTopBar
@@ -122,6 +127,11 @@ export default async function DashboardPage() {
                 {' · '}Liên hệ team dev để khắc phục, sau đó đánh dấu <em>handled</em>.
               </div>
             </div>
+          </div>
+        )}
+        {isChecklistV2Supervisor && (
+          <div className="mb-4">
+            <ChecklistV2SupervisorWidget myUid={profile.id} />
           </div>
         )}
         <DashboardContent

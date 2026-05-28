@@ -178,3 +178,29 @@ export const ROLE_LABEL_V2: Record<ChecklistRole, string> = {
   PP_HT: 'Phó phòng KT — Hệ thống',
   PP_XLN: 'Phó phòng KT — Xử lý nước',
 };
+
+/** Label cho shift */
+export const SHIFT_LABEL_V2: Record<ChecklistShift, string> = {
+  morning: 'Ca sáng',
+  afternoon: 'Ca chiều',
+  evening: 'Ca tối',
+};
+
+/** User là cấp trên của submission nào trong checklist v2?
+ *  - ADMIN/CEO/GD_KD: thấy tất cả (QLCS + PP_HT + PP_XLN)
+ *  - GD_VP: chỉ thấy QLCS (không phụ trách KT)
+ *  - TP_KT: chỉ thấy PP_HT + PP_XLN (cấp trên trực tiếp của 2 PP)
+ *  - Khác: không thấy gì
+ */
+export function checklistV2SupervisorScope(roleCode: string): ChecklistRole[] | null {
+  if (roleCode === 'ADMIN' || roleCode === 'CEO' || roleCode === 'GD_KD') {
+    return ['QLCS', 'PP_HT', 'PP_XLN'];
+  }
+  if (roleCode === 'GD_VP') {
+    return ['QLCS'];
+  }
+  if (roleCode === 'TP_KT') {
+    return ['PP_HT', 'PP_XLN'];
+  }
+  return null;
+}

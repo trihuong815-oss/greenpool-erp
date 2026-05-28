@@ -142,6 +142,21 @@ export function ChecklistV2Client({
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
   const isSubmitted = run?.status === 'submitted';
 
+  // Reminder: tick mỗi 30s → tự update minutes-to-deadline.
+  const [now, setNow] = useState<number>(() => Date.now());
+  useEffect(() => {
+    const tid = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(tid);
+  }, []);
+  const minutesToDeadline = useMemo(() => {
+    if (!run || isSubmitted) return null;
+    const [y, m, d] = date.split('-').map(Number);
+    if (!y || !m || !d) return null;
+    const dl = new Date(y, m - 1, d, currentTemplate.deadlineHour, currentTemplate.deadlineMinute, 0, 0);
+    return Math.floor((dl.getTime() - now) / 60_000);
+  }, [run, isSubmitted, date, currentTemplate.deadlineHour, currentTemplate.deadlineMinute, now]);
+  const showReminder = minutesToDeadline !== null && minutesToDeadline <= 15 && minutesToDeadline > -60;
+
   return (
     <div className="max-w-4xl mx-auto space-y-4">
       {/* Header user info */}
@@ -185,6 +200,29 @@ export function ChecklistV2Client({
           );
         })}
       </div>
+
+      {/* Deadline reminder — chỉ hiện khi ≤15 phút trước hạn (hoặc đã quá hạn ≤60 phút) */}
+      {showReminder && minutesToDeadline !== null && (
+        <div className={`rounded-xl px-4 py-3 ring-1 flex items-center gap-3 ${
+          minutesToDeadline < 0
+            ? 'bg-rose-50 ring-rose-300 text-rose-900'
+            : minutesToDeadline <= 5
+              ? 'bg-rose-50 ring-rose-300 text-rose-900'
+              : 'bg-amber-50 ring-amber-300 text-amber-900'
+        }`}>
+          <Clock size={18} className="shrink-0" />
+          <div className="flex-1 text-sm font-semibold">
+            {minutesToDeadline < 0
+              ? <>Đã quá hạn {Math.abs(minutesToDeadline)} phút — hãy gửi ngay!</>
+              : minutesToDeadline === 0
+                ? <>Đến giờ deadline rồi — gửi ngay!</>
+                : <>Còn {minutesToDeadline} phút đến deadline {currentTemplate.deadlineHour}:{String(currentTemplate.deadlineMinute).padStart(2, '0')} — nhanh tay nào!</>}
+          </div>
+          <div className="text-xs">
+            {completed}/{total} mục
+          </div>
+        </div>
+      )}
 
       {/* Progress */}
       {run && !loading && (
