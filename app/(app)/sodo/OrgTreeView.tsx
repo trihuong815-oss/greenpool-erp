@@ -16,7 +16,7 @@ const HIDDEN_ROLE_CODES = new Set<string>([]);
 
 // Role thuộc quyền quản lý của QLCS (per cơ sở) — clone dưới TỪNG QLCS.
 // Không attach vào GD_KD theo block fallback.
-const CROSS_BRANCH_OPS = new Set(['TT_LT', 'TT_AS', 'NV_SALE', 'NV_LT', 'NV_AS', 'NV_CH', 'NV_TV']);
+const CROSS_BRANCH_OPS = new Set(['TT_LT', 'TT_AS', 'NV_SALE', 'NV_LT', 'NV_CH', 'NV_TV']);
 const QLCS_TO_BRANCH: Record<string, string> = {
   QLCS_HM: 'HM', QLCS_TK: 'TK', QLCS_CTT: 'CTT', QLCS_24NCT: '24', QLCS_TT: 'TT',
 };
@@ -44,7 +44,8 @@ function nodeKey(n: TreeNode): string {
 interface Props {
   roles: Role[];
   profiles: Profile[];
-  onSelectRole: (role: Role) => void;
+  /** branch = virtualBranch của clone (nếu có) — modal filter theo branch */
+  onSelectRole: (role: Role, branch?: string | null) => void;
 }
 
 function buildTree(roles: Role[]): TreeNode | null {
@@ -80,8 +81,9 @@ function buildTree(roles: Role[]): TreeNode | null {
   });
 
   // ─── Clone CROSS_BRANCH_OPS dưới TỪNG QLCS ───
-  // Spec: TT_LT, TT_AS thuộc QLCS · NV_SALE QLCS trực tiếp quản lý ·
-  //       NV_CH, NV_TV, NV_AS thuộc phòng An sinh dưới TT_AS · NV_LT dưới TT_LT
+  // Spec (2026-05-28): TT_LT, TT_AS thuộc QLCS · NV_SALE QLCS trực tiếp quản lý ·
+  // Tổ An sinh KHÔNG có NV An sinh — chỉ NV_CH (cứu hộ) + NV_TV (tạp vụ) dưới TT_AS ·
+  // NV_LT dưới TT_LT.
   function findRole(code: string): Role | undefined {
     return roles.find((x) => x.code === code);
   }
@@ -95,7 +97,6 @@ function buildTree(roles: Role[]): TreeNode | null {
       const rTtLt = findRole('TT_LT');
       const rTtAs = findRole('TT_AS');
       const rNvLt = findRole('NV_LT');
-      const rNvAs = findRole('NV_AS');
       const rNvCh = findRole('NV_CH');
       const rNvTv = findRole('NV_TV');
 
@@ -107,7 +108,6 @@ function buildTree(roles: Role[]): TreeNode | null {
       }
       if (rTtAs) {
         const asKids: TreeNode[] = [];
-        if (rNvAs) asKids.push(vNode(rNvAs, branchId));
         if (rNvCh) asKids.push(vNode(rNvCh, branchId));
         if (rNvTv) asKids.push(vNode(rNvTv, branchId));
         n.children.push(vNode(rTtAs, branchId, asKids));
@@ -556,7 +556,7 @@ export function OrgTreeView({ roles, profiles, onSelectRole }: Props) {
                 matched={matches.size > 0 && matches.has(node.role.code)}
                 dimmed={matches.size > 0 && !matches.has(node.role.code)}
                 onToggle={() => toggle(k)}
-                onSelect={() => onSelectRole(node.role)}
+                onSelect={() => onSelectRole(node.role, node.virtualBranch)}
               />
             );
           })}

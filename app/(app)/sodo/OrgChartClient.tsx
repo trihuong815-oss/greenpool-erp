@@ -38,6 +38,11 @@ function blockBadge(role: Role): { label: string; cls: string } | null {
 export function OrgChartClient({ roles, profiles }: Props) {
   const [tab, setTab] = useState<Tab>('tree');
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
+  const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
+  const handleSelect = (r: Role, branch?: string | null) => {
+    setSelectedRole(r);
+    setSelectedBranch(branch ?? null);
+  };
 
   const profileCountByRole = useMemo(() => {
     const map: Record<string, number> = {};
@@ -47,8 +52,8 @@ export function OrgChartClient({ roles, profiles }: Props) {
     return map;
   }, [profiles]);
 
-  // Ẩn các role không hiển thị trên sơ đồ tổ chức
-  const HIDDEN_ROLE_CODES = new Set(['NV_AS']);
+  // Ẩn các role không hiển thị trên sơ đồ tổ chức (rỗng — NV_AS đã xoá vì tổ An sinh chỉ có cứu hộ + tạp vụ)
+  const HIDDEN_ROLE_CODES = new Set<string>();
 
   // Sort: gom theo phòng ban (dept_id) để cùng bộ phận liền nhau
   function sortByDept(a: Role, b: Role): number {
@@ -85,8 +90,13 @@ export function OrgChartClient({ roles, profiles }: Props) {
   }, [roles]);
 
   const selectedProfiles = useMemo(
-    () => (selectedRole ? profiles.filter(p => p.role_code === selectedRole.code) : []),
-    [selectedRole, profiles]
+    () => {
+      if (!selectedRole) return [];
+      let list = profiles.filter(p => p.role_code === selectedRole.code);
+      if (selectedBranch) list = list.filter(p => p.facility_id === selectedBranch);
+      return list;
+    },
+    [selectedRole, selectedBranch, profiles]
   );
 
   return (
@@ -122,14 +132,14 @@ export function OrgChartClient({ roles, profiles }: Props) {
         <OrgView
           rolesByTier={rolesByTier}
           profileCountByRole={profileCountByRole}
-          onSelect={setSelectedRole}
+          onSelect={(r) => handleSelect(r, null)}
         />
       )}
       {tab === 'tree' && (
         <OrgTreeView
           roles={roles}
           profiles={profiles}
-          onSelectRole={setSelectedRole}
+          onSelectRole={handleSelect}
         />
       )}
       {tab === 'flow' && <FlowView />}
@@ -137,8 +147,9 @@ export function OrgChartClient({ roles, profiles }: Props) {
       {selectedRole && (
         <RoleDetailModal
           role={selectedRole}
+          branch={selectedBranch}
           profiles={selectedProfiles}
-          onClose={() => setSelectedRole(null)}
+          onClose={() => { setSelectedRole(null); setSelectedBranch(null); }}
         />
       )}
     </>
@@ -396,11 +407,12 @@ function FlowSteps({ steps }: { steps: FlowStep[] }) {
 
 interface ModalProps {
   role: Role;
+  branch: string | null;
   profiles: Profile[];
   onClose: () => void;
 }
 
-function RoleDetailModal({ role, profiles, onClose }: ModalProps) {
+function RoleDetailModal({ role, branch, profiles, onClose }: ModalProps) {
   const badge = blockBadge(role);
   return (
     <div
@@ -431,6 +443,11 @@ function RoleDetailModal({ role, profiles, onClose }: ModalProps) {
               {role.facility_id && (
                 <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-700">
                   CS: {role.facility_id}
+                </span>
+              )}
+              {branch && (
+                <span className="text-xs px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 font-bold">
+                  Cơ sở: {branch}
                 </span>
               )}
               {role.dept_id && (

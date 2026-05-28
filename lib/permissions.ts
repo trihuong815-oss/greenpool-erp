@@ -65,8 +65,8 @@ export const MENU_PERMISSIONS: Record<string, string[]> = {
 export const ROLE_BLOCK: Record<string, 'KD' | 'VP' | 'all'> = {
   ADMIN: 'all', CEO: 'all', GD_KD: 'KD', GD_VP: 'VP',
   QLCS_HM: 'KD', QLCS_TK: 'KD', QLCS_CTT: 'KD', QLCS_24NCT: 'KD', QLCS_TT: 'KD',
-  TP_KT: 'KD', TP_DT: 'KD', TP_MKT: 'KD', TIBAN_TT: 'KD',
-  TP_GS: 'VP', TP_KE: 'VP', TP_NS: 'VP',
+  TP_KT: 'KD', TP_DT: 'KD', TP_MKT: 'KD',
+  TP_GS: 'VP', TP_KE: 'VP', TP_NS: 'VP', TIBAN_TT: 'VP',
   TT_DT: 'KD', GV_CB: 'KD', GV_NC: 'KD', NV_SALE: 'KD', NV_CH: 'KD',
   // Phòng Kỹ thuật (thuộc khối KD)
   PP_HT: 'KD', PP_XLN: 'KD',
@@ -76,8 +76,8 @@ export const ROLE_BLOCK: Record<string, 'KD' | 'VP' | 'all'> = {
 
 // Role → phòng mapping
 export const ROLE_DEPT: Record<string, string> = {
-  TP_KT: 'KT', TP_DT: 'DT', TP_MKT: 'MKT', TIBAN_TT: 'MKT',
-  TP_GS: 'GS', TP_KE: 'KE', TP_NS: 'NS',
+  TP_KT: 'KT', TP_DT: 'DT', TP_MKT: 'MKT',
+  TP_GS: 'GS', TP_KE: 'KE', TP_NS: 'NS', TIBAN_TT: 'NS',
   TT_DT: 'DT', GV_CB: 'DT', GV_NC: 'DT',
   // Phòng KT — 2 nhóm chuyên môn (HT = Hệ thống, XLN = Xử lý nước)
   PP_HT: 'KT', PP_XLN: 'KT',

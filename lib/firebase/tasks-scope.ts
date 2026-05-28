@@ -12,8 +12,8 @@ export type TaskStatus = 'pending_approval' | 'pending' | 'in_progress' | 'done'
 const ROLE_BLOCK: Record<string, Block | 'all'> = {
   ADMIN: 'all', CEO: 'all', GD_KD: 'KD', GD_VP: 'VP',
   QLCS_HM: 'KD', QLCS_TK: 'KD', QLCS_CTT: 'KD', QLCS_24NCT: 'KD', QLCS_TT: 'KD',
-  TP_KT: 'KD', TP_DT: 'KD', TP_MKT: 'KD', TIBAN_TT: 'KD',
-  TP_GS: 'VP', TP_KE: 'VP', TP_NS: 'VP',
+  TP_KT: 'KD', TP_DT: 'KD', TP_MKT: 'KD',
+  TP_GS: 'VP', TP_KE: 'VP', TP_NS: 'VP', TIBAN_TT: 'VP',
   TT_DT: 'KD', GV_CB: 'KD', GV_NC: 'KD', NV_SALE: 'KD', NV_CH: 'KD',
 };
 
