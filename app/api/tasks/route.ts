@@ -410,6 +410,19 @@ export async function POST(req: NextRequest) {
       actorRole: caller.actorRole,
       source: 'api',
     });
+
+    // Fire-and-forget push notification
+    void (await import('@/lib/firebase/task-notifications')).notifyTaskCreated({
+      id: ref.id, kind, title,
+      createdBy: caller.profile.uid,
+      createdByName: caller.actorName,
+      assigneeUserIds,
+      assigneeDeptId,
+      assigneeFacilityId,
+      status,
+      approvalRequiredFrom,
+    });
+
     return NextResponse.json({ id: ref.id });
   } catch (e: any) {
     if (e instanceof UnauthorizedError) return NextResponse.json({ error: e.message }, { status: e.status });

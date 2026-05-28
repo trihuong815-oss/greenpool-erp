@@ -77,6 +77,17 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
     });
     // Bump updatedAt
     await taskRef.update({ updatedAt: now });
+
+    const td = taskSnap.data()!;
+    void (await import('@/lib/firebase/task-notifications')).notifyTaskComment({
+      id: taskId, kind: td.kind, title: td.title,
+      createdBy: td.createdBy, createdByName: td.createdByName,
+      assigneeUserIds: td.assigneeUserIds ?? [],
+      assigneeDeptId: td.assigneeDeptId ?? null,
+      assigneeFacilityId: td.assigneeFacilityId ?? null,
+      status: td.status,
+    }, { uid: caller.profile.uid, name: caller.actorName }, text);
+
     return NextResponse.json({ id: ref.id });
   } catch (e) {
     if (e instanceof UnauthorizedError) return NextResponse.json({ error: e.message }, { status: e.status });

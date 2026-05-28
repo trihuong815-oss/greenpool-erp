@@ -64,6 +64,17 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
       after: { status: 'pending' },
       actorName: caller.actorName, actorRole: caller.actorRole, source: 'api',
     });
+
+    void (await import('@/lib/firebase/task-notifications')).notifyTaskApproved({
+      id: taskId, kind: data.kind, title: data.title,
+      createdBy: data.createdBy, createdByName: data.createdByName,
+      assigneeUserIds: data.assigneeUserIds ?? [],
+      assigneeDeptId: data.assigneeDeptId ?? null,
+      assigneeFacilityId: data.assigneeFacilityId ?? null,
+      status: 'pending',
+      approvalRequiredFrom: null,
+    }, caller.actorName);
+
     return NextResponse.json({ ok: true });
   } catch (e) {
     if (e instanceof UnauthorizedError) return NextResponse.json({ error: e.message }, { status: e.status });

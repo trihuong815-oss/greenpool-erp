@@ -209,6 +209,26 @@ export async function PATCH(req: NextRequest) {
       actorRole: ctx.profile.roleName ?? ctx.profile.roleCode,
       source: 'api',
     });
+
+    // Push notification tới các role supervisor có scope chứa role này
+    // ADMIN/CEO/GD_KD luôn thấy mọi role · GD_VP chỉ QLCS · TP_KT chỉ PP_HT/PP_XLN
+    const supervisorRoles: string[] = ['ADMIN', 'CEO', 'GD_KD'];
+    if (cur.role === 'QLCS') supervisorRoles.push('GD_VP');
+    if (cur.role === 'PP_HT' || cur.role === 'PP_XLN') supervisorRoles.push('TP_KT');
+
+    const ROLE_LABEL: Record<string, string> = {
+      QLCS: 'QLCS', PP_HT: 'PP Hệ thống', PP_XLN: 'PP Xử lý nước',
+    };
+    const SHIFT_LABEL: Record<string, string> = {
+      morning: 'ca sáng', afternoon: 'ca chiều', evening: 'ca tối',
+    };
+    void (await import('@/lib/firebase/push-notifications')).pushToRoles(supervisorRoles, {
+      title: `📋 Checklist mới: ${cur.ownerName}`,
+      body: `${ROLE_LABEL[cur.role] ?? cur.role}${cur.branchId ? ` @${cur.branchId}` : ''} · ${SHIFT_LABEL[cur.shift] ?? cur.shift} · ${cur.date}`,
+      link: '/checklist-v2',
+      tag: `checklist-${id}`,
+      data: { kind: 'checklist_submit', runId: id, role: cur.role },
+    });
   }
 
   return NextResponse.json({ ok: true });

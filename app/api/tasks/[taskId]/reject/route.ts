@@ -67,6 +67,16 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
       after: { status: 'rejected', reason },
       actorName: caller.actorName, actorRole: caller.actorRole, source: 'api',
     });
+
+    void (await import('@/lib/firebase/task-notifications')).notifyTaskRejected({
+      id: taskId, kind: data.kind, title: data.title,
+      createdBy: data.createdBy, createdByName: data.createdByName,
+      assigneeUserIds: data.assigneeUserIds ?? [],
+      assigneeDeptId: data.assigneeDeptId ?? null,
+      assigneeFacilityId: data.assigneeFacilityId ?? null,
+      status: 'rejected',
+    }, caller.actorName, reason);
+
     return NextResponse.json({ ok: true });
   } catch (e) {
     if (e instanceof UnauthorizedError) return NextResponse.json({ error: e.message }, { status: e.status });
