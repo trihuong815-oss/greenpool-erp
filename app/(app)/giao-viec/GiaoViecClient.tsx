@@ -5,6 +5,7 @@ import {
   Plus, Search, X, ListChecks, Inbox, Send, ShieldCheck,
   Loader2, ArrowRight, CalendarDays, AlertTriangle, CheckCircle2,
   Clock, LayoutGrid, List as ListIcon, TrendingUp,
+  type LucideIcon,
 } from 'lucide-react';
 import { tasksApi, type Task, type TaskListMode, type TaskStatus, type TaskKind } from '@/lib/services/tasks/api-client';
 import { TaskCreateModal } from './TaskCreateModal';
@@ -420,7 +421,7 @@ interface CategoryStats {
   overdue: number;
 }
 function CategoryCard({ title, subtitle, icon: Icon, stats, onClick, active }: {
-  title: string; subtitle: string; icon: any; stats: CategoryStats; onClick?: () => void; active?: boolean;
+  title: string; subtitle: string; icon: LucideIcon; stats: CategoryStats; onClick?: () => void; active?: boolean;
 }) {
   const doneRate = stats.total > 0 ? Math.round((stats.done / stats.total) * 100) : 0;
   const inflight = stats.pending_approval + stats.pending + stats.in_progress;
@@ -503,7 +504,7 @@ function StatusMini({ count, label, hex }: { count: number; label: string; hex: 
 }
 
 function KpiCard({ label, value, icon: Icon, accent, sub }: {
-  label: string; value: number; icon: any; accent: 'emerald' | 'sky' | 'rose' | 'slate'; sub?: string;
+  label: string; value: number; icon: LucideIcon; accent: 'emerald' | 'sky' | 'rose' | 'slate'; sub?: string;
 }) {
   const A = {
     emerald: { bg: 'bg-emerald-50', text: 'text-emerald-700', ring: 'ring-emerald-100' },
@@ -526,7 +527,7 @@ function KpiCard({ label, value, icon: Icon, accent, sub }: {
 }
 
 function TabButton({ active, onClick, icon: Icon, label, badge }: {
-  active: boolean; onClick: () => void; icon: any; label: string; badge?: number;
+  active: boolean; onClick: () => void; icon: LucideIcon; label: string; badge?: number;
 }) {
   return (
     <button

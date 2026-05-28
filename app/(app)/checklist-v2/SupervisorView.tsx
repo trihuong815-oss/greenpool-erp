@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   CheckCircle2, AlertCircle, Loader2, Eye, X, Calendar, Building2, Clock as ClockIcon, User,
+  type LucideIcon,
 } from 'lucide-react';
 import {
   SHIFT_LABEL_V2, ROLE_LABEL_V2,
@@ -368,7 +369,7 @@ function RunDetailModal({ runId, onClose }: { runId: string; onClose: () => void
   );
 }
 
-function MetaItem({ icon: Icon, label, value }: { icon: any; label: string; value: string }) {
+function MetaItem({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
   return (
     <div>
       <div className="text-[10px] uppercase tracking-wider text-slate-500 inline-flex items-center gap-1">

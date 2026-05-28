@@ -53,9 +53,6 @@ export function OrgChartClient({ roles, profiles }: Props) {
     return map;
   }, [profiles]);
 
-  // Ẩn các role không hiển thị trên sơ đồ tổ chức (rỗng — NV_AS đã xoá vì tổ An sinh chỉ có cứu hộ + tạp vụ)
-  const HIDDEN_ROLE_CODES = new Set<string>();
-
   // Sort: gom theo phòng ban (dept_id) để cùng bộ phận liền nhau
   function sortByDept(a: Role, b: Role): number {
     const da = a.dept_id || '￿'; // nulls last
@@ -74,7 +71,6 @@ export function OrgChartClient({ roles, profiles }: Props) {
       6: { kd: [], vp: [], other: [] },
     };
     roles.forEach(r => {
-      if (HIDDEN_ROLE_CODES.has(r.code)) return;
       const bucket = byTier[r.tier];
       if (!bucket) return;
       if (r.block_id === 'KD') bucket.kd.push(r);

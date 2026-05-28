@@ -5,6 +5,7 @@ import type { Facility, Task } from '@/lib/types';
 import {
   Building2, BarChart3, ListChecks,
   TrendingUp, Clock, ShieldCheck, AlertTriangle,
+  type LucideIcon,
 } from 'lucide-react';
 import { KTDashboardSection } from './KTDashboardSection';
 
@@ -153,7 +154,7 @@ function RevenueSection({ r }: { r: RevenueSummary }) {
 }
 
 function RevenueCard({ label, actual, target, rate, sub, icon: Icon }: {
-  label: string; actual: number; target: number; rate: number; sub: string; icon: any;
+  label: string; actual: number; target: number; rate: number; sub: string; icon: LucideIcon;
 }) {
   const accent = rate >= 90 ? 'emerald' : rate >= 60 ? 'amber' : 'rose';
   const accentClass = {
@@ -236,7 +237,7 @@ function TasksSection({ counts, roleCode }: { counts: TaskCounts; roleCode: stri
 }
 
 function TaskTile({ icon: Icon, label, value, sub, accent, href }: {
-  icon: any; label: string; value: number; sub?: string;
+  icon: LucideIcon; label: string; value: number; sub?: string;
   accent: 'emerald' | 'sky' | 'amber' | 'rose' | 'slate'; href: string;
 }) {
   const A = {
@@ -267,7 +268,7 @@ function TaskTile({ icon: Icon, label, value, sub, accent, href }: {
 // SHARED HELPERS
 // ============================================================================
 function SectionTitle({ icon: Icon, title, subtitle, count }: {
-  icon: any; title: string; subtitle?: string; count?: number;
+  icon: LucideIcon; title: string; subtitle?: string; count?: number;
 }) {
   return (
     <div className="flex items-end justify-between">
