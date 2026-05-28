@@ -1,0 +1,51 @@
+name: Cron — Send task reminders + evening summary
+
+# Reminders: mỗi 5 phút (GitHub Actions min interval).
+# Evening summary: 13:00 UTC = 20:00 Vietnam (GMT+7).
+on:
+  schedule:
+    - cron: '*/5 * * * *'    # reminders mỗi 5 phút
+    - cron: '0 13 * * *'     # evening summary 20:00 VN
+  workflow_dispatch:          # manual trigger để test
+
+# Concurrency: cancel runs cũ nếu chậm — tránh chồng chéo
+concurrency:
+  group: cron-reminders-${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  send-reminders:
+    if: github.event.schedule == '*/5 * * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Call send-reminders endpoint
+        run: |
+          response=$(curl -s -o /tmp/body -w "%{http_code}" \
+            -X POST "${{ secrets.APP_HOSTING_URL }}/api/cron/send-reminders" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "content-type: application/json")
+          echo "Status: $response"
+          cat /tmp/body
+          if [ "$response" -ne 200 ]; then
+            echo "::error::Reminders cron failed with status $response"
+            exit 1
+          fi
+
+  send-evening-summary:
+    if: github.event.schedule == '0 13 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Call send-evening-summary endpoint
+        run: |
+          response=$(curl -s -o /tmp/body -w "%{http_code}" \
+            -X POST "${{ secrets.APP_HOSTING_URL }}/api/cron/send-evening-summary" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "content-type: application/json")
+          echo "Status: $response"
+          cat /tmp/body
+          if [ "$response" -ne 200 ]; then
+            echo "::error::Evening summary cron failed with status $response"
+            exit 1
+          fi

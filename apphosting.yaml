@@ -78,3 +78,17 @@ env:
     secret: GEMINI_API_KEY
     availability:
       - RUNTIME
+
+  # ─── FCM Push Notifications (Phase: cong-viec-ca-nhan) ───
+  # NEXT_PUBLIC_FCM_VAPID_KEY: lấy từ Firebase Console → Cloud Messaging → Web Push certificates
+  # CRON_SECRET: random string ≥32 ký tự — GitHub Actions dùng để auth cron endpoints
+  - variable: NEXT_PUBLIC_FCM_VAPID_KEY
+    secret: NEXT_PUBLIC_FCM_VAPID_KEY
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: CRON_SECRET
+    secret: CRON_SECRET
+    availability:
+      - RUNTIME

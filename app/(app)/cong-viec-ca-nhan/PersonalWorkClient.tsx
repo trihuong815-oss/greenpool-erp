@@ -140,14 +140,62 @@ export function PersonalWorkClient({ profile, initialTasks }: Props) {
     setTimeout(() => setToast(null), 3500);
   }
 
-  // ─── Client-side reminder polling (60s) ───
+  // ─── FCM Push Notifications setup (Phase 2 — background push qua Service Worker) ───
+  // 1. Check support + permission status
+  // 2. Nếu permission default → hiển thị banner xin permission
+  // 3. Nếu user click "Bật thông báo" → register FCM + lưu token lên backend
+  // 4. Subscribe foreground messages để show toast khi tab đang mở
+  const [pushStatus, setPushStatus] = useState<'idle' | 'requesting' | 'enabled' | 'denied' | 'unsupported' | 'no-vapid'>('idle');
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    let mounted = true;
+    (async () => {
+      const { isFcmSupported, getNotificationPermission, enablePushNotifications, subscribeForegroundMessages } =
+        await import('@/lib/firebase/messaging-client');
+      if (!isFcmSupported()) { if (mounted) setPushStatus('unsupported'); return; }
+      const perm = getNotificationPermission();
+      if (perm === 'denied') { if (mounted) setPushStatus('denied'); return; }
+      if (perm === 'granted') {
+        // Auto-register token (refresh case)
+        const r = await enablePushNotifications();
+        if (mounted) setPushStatus(r.ok ? 'enabled' : (r.reason === 'no-vapid' ? 'no-vapid' : 'denied'));
+        // Subscribe foreground messages → show toast
+        if (r.ok) {
+          subscribeForegroundMessages((p) => {
+            showToast('success', `🔔 ${p.title}${p.body ? ' — ' + p.body : ''}`);
+          });
+        }
+      }
+      // Nếu perm === 'default' → đợi user bấm nút (xem renderPushBanner)
+    })();
+    return () => { mounted = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function handleEnablePush() {
+    setPushStatus('requesting');
+    const { enablePushNotifications, subscribeForegroundMessages } = await import('@/lib/firebase/messaging-client');
+    const r = await enablePushNotifications();
+    if (r.ok) {
+      setPushStatus('enabled');
+      showToast('success', '🔔 Đã bật thông báo trên thiết bị này');
+      subscribeForegroundMessages((p) => {
+        showToast('success', `🔔 ${p.title}${p.body ? ' — ' + p.body : ''}`);
+      });
+    } else {
+      const reasonMap: Record<string, 'denied' | 'unsupported' | 'no-vapid'> = {
+        denied: 'denied', unsupported: 'unsupported', 'no-vapid': 'no-vapid',
+      };
+      const next = reasonMap[r.reason ?? ''] ?? 'denied';
+      setPushStatus(next);
+      if (r.errorMsg) showToast('error', r.errorMsg);
+    }
+  }
+
+  // ─── Client-side reminder polling (60s — fallback khi FCM chưa setup hoặc denied) ───
   // Show toast + browser notification khi đến giờ reminderAt; mark notified ở localStorage để tránh spam.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    // Ask permission once
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission().catch(() => { /* user denied — fine */ });
-    }
     const NOTIF_KEY = 'cvcn_notified_reminders';
     function getNotified(): Set<string> {
       try { return new Set(JSON.parse(localStorage.getItem(NOTIF_KEY) ?? '[]')); }
@@ -303,6 +351,49 @@ export function PersonalWorkClient({ profile, initialTasks }: Props) {
 
   return (
     <div className="max-w-5xl mx-auto space-y-4">
+      {/* ─── PUSH PERMISSION BANNER ─── */}
+      {pushStatus === 'idle' && (
+        <div className="rounded-xl ring-1 ring-emerald-200 bg-gradient-to-r from-emerald-50 via-white to-cyan-50 p-4 flex items-center gap-3 flex-wrap">
+          <Bell className="text-emerald-700 shrink-0" size={20} />
+          <div className="flex-1 min-w-0">
+            <div className="font-bold text-sm text-slate-800">Bật thông báo lên điện thoại</div>
+            <div className="text-xs text-slate-600 mt-0.5">
+              Nhận nhắc nhở task + tin nhắn buổi tối ngay cả khi app đóng. Khuyến nghị cho điện thoại.
+            </div>
+          </div>
+          <button
+            onClick={handleEnablePush}
+            className="px-4 py-2 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+          >
+            Bật thông báo
+          </button>
+        </div>
+      )}
+      {pushStatus === 'requesting' && (
+        <div className="rounded-xl ring-1 ring-slate-200 bg-white p-3 text-sm text-slate-600 inline-flex items-center gap-2">
+          <Loader2 size={14} className="animate-spin" /> Đang đăng ký…
+        </div>
+      )}
+      {pushStatus === 'denied' && (
+        <div className="rounded-xl ring-1 ring-amber-200 bg-amber-50 p-3 text-xs text-amber-900 flex items-center gap-2">
+          <AlertCircle size={14} className="shrink-0" />
+          <span>
+            Anh đã từ chối thông báo. Để bật lại: vào cài đặt trình duyệt → Site settings → Notifications → Allow cho site này.
+          </span>
+        </div>
+      )}
+      {pushStatus === 'unsupported' && (
+        <div className="rounded-xl ring-1 ring-slate-200 bg-slate-50 p-3 text-xs text-slate-600 flex items-center gap-2">
+          <AlertCircle size={14} className="shrink-0" />
+          Trình duyệt không hỗ trợ thông báo background. iPhone: cần "Add to Home Screen" để bật.
+        </div>
+      )}
+      {pushStatus === 'no-vapid' && (
+        <div className="rounded-xl ring-1 ring-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+          ⚠️ Server chưa cấu hình VAPID key (admin xem hướng dẫn FCM_SETUP.md)
+        </div>
+      )}
+
       {/* ─── EVENING BANNER (≥20:00) — danh sách task ngày mai + lời chúc ─── */}
       {showEveningBanner && !eveningDismissed && (
         <div className="relative rounded-2xl overflow-hidden shadow-lg ring-1 ring-indigo-300

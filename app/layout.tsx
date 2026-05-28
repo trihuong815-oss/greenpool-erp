@@ -4,6 +4,16 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'Green Pool System',
   description: 'Hệ thống Quản lý Nội bộ — Cụm 5 cơ sở Bơi-Thể thao',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'Green Pool',
+  },
+  icons: {
+    icon: '/logo.png',
+    apple: '/logo.png',
+  },
 };
 
 export const viewport: Viewport = {
