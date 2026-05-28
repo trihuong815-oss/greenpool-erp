@@ -482,35 +482,88 @@ function RoleDetailModal({ role, branch, profiles, onClose }: ModalProps) {
 
           <div>
             <div className="text-xs font-semibold text-slate-600 mb-2">
-              Nhân sự đang giữ vai trò ({profiles.length})
+              {branch
+                ? <>Nhân sự cơ sở <strong>{branch}</strong> ({profiles.length})</>
+                : <>Nhân sự đang giữ vai trò ({profiles.length})</>}
             </div>
             {profiles.length === 0 ? (
               <div className="text-sm text-slate-400 italic py-4 text-center bg-slate-50 rounded">
-                Chưa có nhân sự nào đang giữ vai trò này
+                {branch ? `Chưa có nhân sự nào tại cơ sở ${branch}` : 'Chưa có nhân sự nào đang giữ vai trò này'}
               </div>
-            ) : (
+            ) : branch ? (
+              // Branch-filtered → flat list
               <div className="space-y-2">
                 {profiles.map(p => (
-                  <div key={p.id} className="flex items-center gap-3 p-2 rounded hover:bg-slate-50 border border-slate-100">
-                    <div className="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center text-sm font-semibold text-slate-600">
-                      {p.full_name.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-slate-800 truncate">{p.full_name}</div>
-                      <div className="text-xs text-slate-500 truncate">{p.email}</div>
-                    </div>
-                    {p.facility_id && (
-                      <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">
-                        {p.facility_id}
-                      </span>
-                    )}
-                  </div>
+                  <ProfileRow key={p.id} profile={p} />
                 ))}
               </div>
+            ) : (
+              // No branch filter → group theo facility cho dễ nhìn
+              <GroupedProfileList profiles={profiles} />
             )}
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Hàng hiển thị 1 nhân sự
+function ProfileRow({ profile }: { profile: Profile }) {
+  return (
+    <div className="flex items-center gap-3 p-2 rounded hover:bg-slate-50 border border-slate-100">
+      <div className="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center text-sm font-semibold text-slate-600">
+        {profile.full_name.charAt(0).toUpperCase()}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-medium text-slate-800 truncate">{profile.full_name}</div>
+        <div className="text-xs text-slate-500 truncate">{profile.email}</div>
+      </div>
+      {profile.facility_id && (
+        <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600">
+          {profile.facility_id}
+        </span>
+      )}
+    </div>
+  );
+}
+
+// Group nhân sự theo cơ sở — dùng khi modal không filter branch (tier-view, hoặc cross-branch)
+const BRANCH_ORDER = ['HM', 'TK', 'CTT', '24', 'TT'];
+const BRANCH_LABEL: Record<string, string> = {
+  HM: 'Hoàng Mai', TK: 'Thuỵ Khuê', CTT: 'CTT Mỹ Đình', '24': '24 NCT', TT: 'Thanh Trì',
+};
+function GroupedProfileList({ profiles }: { profiles: Profile[] }) {
+  // Group theo facility_id; null/empty → 'Cross-branch / không gán'
+  const groups: Record<string, Profile[]> = {};
+  for (const p of profiles) {
+    const key = (p.facility_id ?? '__none__') as string;
+    (groups[key] ??= []).push(p);
+  }
+  const keys = Object.keys(groups).sort((a, b) => {
+    const ia = BRANCH_ORDER.indexOf(a);
+    const ib = BRANCH_ORDER.indexOf(b);
+    if (ia === -1 && ib === -1) return a.localeCompare(b);
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
+  });
+  return (
+    <div className="space-y-3">
+      {keys.map(k => (
+        <div key={k}>
+          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 flex items-center gap-2">
+            <span className="inline-flex items-center justify-center min-w-[24px] h-5 px-1.5 rounded bg-indigo-100 text-indigo-800 text-[10px]">
+              {k === '__none__' ? '—' : k}
+            </span>
+            <span>{k === '__none__' ? 'Chưa gán cơ sở' : (BRANCH_LABEL[k] ?? k)}</span>
+            <span className="ml-auto text-slate-400">{groups[k].length} người</span>
+          </div>
+          <div className="space-y-1.5">
+            {groups[k].map(p => <ProfileRow key={p.id} profile={p} />)}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
