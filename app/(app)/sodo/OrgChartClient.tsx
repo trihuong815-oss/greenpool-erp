@@ -36,7 +36,7 @@ function blockBadge(role: Role): { label: string; cls: string } | null {
 }
 
 export function OrgChartClient({ roles, profiles }: Props) {
-  const [tab, setTab] = useState<Tab>('org');
+  const [tab, setTab] = useState<Tab>('tree');
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
 
   const profileCountByRole = useMemo(() => {
