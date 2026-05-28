@@ -105,8 +105,8 @@ export default async function DashboardPage() {
   return (
     <>
       <AppTopBar
-        title="Dashboard"
-        subtitle={`Tổng quan · ${profile.roleName ?? profile.roleCode}`}
+        title="Green Pool System"
+        subtitle={`Dashboard · ${profile.roleName ?? profile.roleCode}`}
         icon="home"
       />
       <div className="flex-1 overflow-y-auto p-3 md:p-6 bg-slate-50">

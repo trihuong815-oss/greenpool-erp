@@ -114,7 +114,7 @@ export function Sidebar({ userName, userRole, roleCode, menuOverrides }: Sidebar
           <div className="min-w-0">
             <div className="text-lg font-bold text-slate-900 leading-tight">Green Pool</div>
             <div className="text-xs font-semibold uppercase tracking-wider text-emerald-700 mt-0.5">
-              Team Work
+              System
             </div>
           </div>
         </div>
@@ -166,7 +166,7 @@ export function Sidebar({ userName, userRole, roleCode, menuOverrides }: Sidebar
         ))}
       </nav>
 
-      {/* User footer — emerald brand đồng bộ với Green Pool Team Work */}
+      {/* User footer — emerald brand đồng bộ với Green Pool System */}
       <div className="border-t border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-cyan-50 px-3 py-3">
         <div className="flex items-center gap-2.5 rounded-lg bg-white p-2 ring-1 ring-emerald-100 shadow-sm">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-emerald-600 to-teal-700 text-xs font-bold text-white shadow-sm">
