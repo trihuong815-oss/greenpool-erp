@@ -55,6 +55,21 @@ export async function POST() {
   const tokensToRemove: string[] = [];
 
   for (const t of pending) {
+    // Atomic claim: mark reminderSent trước khi push, tránh race với cron.
+    // Nếu task đã sent bởi process khác → skip.
+    let claimed = false;
+    try {
+      await db.runTransaction(async (txn) => {
+        const ref = db.collection(COLLECTIONS.PERSONAL_TASKS).doc(t.id);
+        const s = await txn.get(ref);
+        if (!s.exists) return;
+        if (s.data()?.reminderSent === true) return;
+        txn.update(ref, { reminderSent: true, reminderSentAt: FieldValue.serverTimestamp() });
+        claimed = true;
+      });
+    } catch { continue; }
+    if (!claimed) continue;
+
     const timeLabel = t.data.scheduledTime ? ` lúc ${t.data.scheduledTime}` : '';
     try {
       const res = await messaging.sendEachForMulticast({
@@ -78,17 +93,14 @@ export async function POST() {
     }
   }
 
-  // Mark sent
-  const batch = db.batch();
-  pending.forEach((t) => batch.update(db.collection(COLLECTIONS.PERSONAL_TASKS).doc(t.id), {
-    reminderSent: true, reminderSentAt: FieldValue.serverTimestamp(),
-  }));
+  // Cleanup invalid tokens (atomic per token via arrayRemove)
   if (tokensToRemove.length > 0) {
-    batch.update(db.collection(COLLECTIONS.USERS).doc(ctx.profile.id), {
-      fcmTokens: FieldValue.arrayRemove(...tokensToRemove),
-    });
+    try {
+      await db.collection(COLLECTIONS.USERS).doc(ctx.profile.id).update({
+        fcmTokens: FieldValue.arrayRemove(...tokensToRemove),
+      });
+    } catch { /* ignore */ }
   }
-  await batch.commit();
 
   return NextResponse.json({ ok: true, sent, pending: pending.length, tokensCleaned: tokensToRemove.length });
 }

@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMessaging } from 'firebase-admin/messaging';
 import { FieldValue } from 'firebase-admin/firestore';
+import { timingSafeEqual } from 'node:crypto';
 import { getFirebaseAdmin, getFirebaseAdminDb } from '@/lib/firebase/admin';
 import { COLLECTIONS } from '@/lib/firebase/collections';
 
@@ -21,7 +22,13 @@ function checkAuth(req: NextRequest): boolean {
   if (!expected) return false;
   const auth = req.headers.get('authorization');
   if (!auth) return false;
-  return auth.replace(/^Bearer\s+/i, '').trim() === expected;
+  const token = auth.replace(/^Bearer\s+/i, '').trim();
+  if (token.length !== expected.length) return false;
+  try {
+    return timingSafeEqual(Buffer.from(token), Buffer.from(expected));
+  } catch {
+    return false;
+  }
 }
 
 function tomorrowDateStr(): string {

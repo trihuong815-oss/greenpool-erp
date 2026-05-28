@@ -106,9 +106,18 @@ export async function enablePushNotifications(): Promise<{
     const token = await getToken(messaging, { vapidKey: vapid, serviceWorkerRegistration: swReg });
     if (!token) return { ok: false, reason: 'error', errorMsg: 'No token returned' };
 
+    // Tránh re-register nếu token không đổi (multi-tab scenario)
+    // Cache cả ở localStorage để các tab khác cũng skip
+    const cachedKey = `fcm_token_registered`;
+    let cached: string | null = null;
+    try { cached = localStorage.getItem(cachedKey); } catch {}
+    if (cached === token && _currentToken === token) {
+      return { ok: true, token };
+    }
+
     _currentToken = token;
 
-    // POST token to backend
+    // POST token to backend (arrayUnion ở server đảm bảo dedup)
     const res = await fetch('/api/personal/fcm-token', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -118,6 +127,7 @@ export async function enablePushNotifications(): Promise<{
       const j = await res.json().catch(() => ({}));
       return { ok: false, reason: 'error', errorMsg: j?.error ?? `HTTP ${res.status}` };
     }
+    try { localStorage.setItem(cachedKey, token); } catch {}
 
     return { ok: true, token };
   } catch (e: any) {
@@ -144,15 +154,21 @@ export async function subscribeForegroundMessages(
   return unsub;
 }
 
-/** Unregister token khi user signout (optional) */
+/** Unregister token khi user signout (gọi từ Sidebar handleLogout) */
 export async function disablePushNotifications(): Promise<void> {
-  if (!_currentToken) return;
+  // Lấy token từ memory hoặc localStorage (memory có thể empty nếu page reload)
+  let token = _currentToken;
+  if (!token) {
+    try { token = localStorage.getItem('fcm_token_registered'); } catch {}
+  }
+  if (!token) return;
   try {
     await fetch('/api/personal/fcm-token', {
       method: 'DELETE',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ token: _currentToken }),
+      body: JSON.stringify({ token }),
     });
   } catch { /* ignore */ }
   _currentToken = null;
+  try { localStorage.removeItem('fcm_token_registered'); } catch {}
 }

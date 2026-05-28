@@ -86,6 +86,12 @@ export function Sidebar({ userName, userRole, roleCode, menuOverrides }: Sidebar
     .filter(s => s.items.length > 0);
 
   async function handleLogout() {
+    // Unregister FCM token trên thiết bị trước khi xoá session
+    // (tránh push tới device đã logout — đặc biệt thiết bị dùng chung)
+    try {
+      const mod = await import('@/lib/firebase/messaging-client');
+      await mod.disablePushNotifications();
+    } catch { /* ignore */ }
     // Phase 4.D: clear Firebase session cookie qua API route.
     await fetch('/api/auth/session', { method: 'DELETE' }).catch(() => {});
     router.push('/login');

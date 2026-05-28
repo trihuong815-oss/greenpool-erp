@@ -28,6 +28,15 @@ export interface PushPayload {
   data?: Record<string, string>;
 }
 
+/** Strip HTML tags + control chars khỏi user-provided strings để safe khi hiển thị qua FCM notification.
+ *  Browser notification render plain text, nhưng vẫn defense-in-depth. */
+function sanitize(s: string): string {
+  return s
+    .replace(/<[^>]*>/g, '')       // strip HTML tags
+    .replace(/[\x00-\x1f\x7f]/g, '') // strip control chars
+    .trim();
+}
+
 /** Push tới nhiều users. Tự dedup uids + cleanup invalid tokens.
  *  Fire-and-forget — không throw. */
 export async function pushToUsers(uids: string[], payload: PushPayload): Promise<{
@@ -59,8 +68,8 @@ export async function pushToUsers(uids: string[], payload: PushPayload): Promise
     const messaging = getMessaging();
     const res = await messaging.sendEachForMulticast({
       notification: {
-        title: payload.title.slice(0, 100),
-        body: payload.body.slice(0, 240),
+        title: sanitize(payload.title).slice(0, 100),
+        body: sanitize(payload.body).slice(0, 240),
       },
       webpush: {
         fcmOptions: { link: payload.link ?? '/dashboard' },

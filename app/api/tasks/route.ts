@@ -301,6 +301,26 @@ export async function POST(req: NextRequest) {
     if (!assigneeDeptId && !assigneeFacilityId && assigneeUserIds.length === 0) {
       return NextResponse.json({ error: 'Phải chọn phòng ban / cơ sở / hoặc user cụ thể' }, { status: 400 });
     }
+    // SECURITY: khi chỉ assign user (không dept/facility), assigneeBlock từ client KHÔNG đáng tin
+    // → server tự verify block của user assignees match assigneeBlock
+    if (!assigneeDeptId && !assigneeFacilityId && assigneeUserIds.length > 0) {
+      const db = getFirebaseAdminDb();
+      const userDocs = await Promise.all(
+        assigneeUserIds.map((uid: string) => db.collection(COLLECTIONS.USERS).doc(uid).get()),
+      );
+      for (const d of userDocs) {
+        if (!d.exists) {
+          return NextResponse.json({ error: 'User assignee không tồn tại' }, { status: 400 });
+        }
+        const userRoleId: string = d.data()?.roleId ?? '';
+        const userBlock = getBlockOf(userRoleId);
+        if (userBlock !== 'all' && userBlock !== assigneeBlock) {
+          return NextResponse.json({
+            error: `User ${d.data()?.displayName ?? d.id} thuộc khối ${userBlock}, không khớp assigneeBlock=${assigneeBlock}`,
+          }, { status: 400 });
+        }
+      }
+    }
 
     // CEO restriction (spec 2026-05-27): CEO chỉ được giao việc cho GĐ Khối (GD_KD/GD_VP) cá nhân.
     if (caller.profile.role_code === 'CEO') {

@@ -94,9 +94,12 @@ export async function notifyTaskApproved(task: TaskDoc, approverName: string): P
   }).catch(() => {});
 }
 
-/** Task bị từ chối — chỉ push creator. */
+/** Task bị từ chối — push creator + assignees (assignees cần biết để dừng làm việc). */
 export async function notifyTaskRejected(task: TaskDoc, rejecterName: string, reason: string): Promise<void> {
-  await pushToUsers([task.createdBy], {
+  const uids = await resolveAssigneeUids(task);
+  uids.push(task.createdBy);
+  const filtered = Array.from(new Set(uids));
+  await pushToUsers(filtered, {
     title: `❌ ${kindLabel(task.kind)} bị từ chối`,
     body: `"${task.title}" — ${rejecterName}: ${reason.slice(0, 80)}`,
     link: taskLink(task.id),

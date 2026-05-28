@@ -173,9 +173,18 @@ export async function PATCH(req: NextRequest) {
     patch.items = sanitized;
   }
 
-  // Submit
+  // Submit — validate server-side: mỗi item phải có ok=true HOẶC note != ''
+  // (client cũng check nhưng API phải tự bảo vệ — tránh bypass qua direct call)
   let justSubmitted = false;
   if (body.status === 'submitted') {
+    // Use latest items (incoming patch nếu có, else current)
+    const finalItems = Array.isArray(patch.items) ? patch.items as RunItem[] : cur.items;
+    const incomplete = finalItems.filter((it) => !it.ok && !(it.note ?? '').trim());
+    if (incomplete.length > 0) {
+      return NextResponse.json({
+        error: `Còn ${incomplete.length} mục chưa tick "đảm bảo" hoặc chưa ghi chú — không thể gửi`,
+      }, { status: 400 });
+    }
     patch.status = 'submitted';
     patch.submittedAt = new Date();
     justSubmitted = true;

@@ -271,7 +271,10 @@ export async function fetchSalesReport(
     if (x.periodType === 'month' && pkgDayBranchMonths.has(`${branchId}__${month}`)) {
       continue;
     }
-    const qty = Number(x.quantity ?? 0);
+    // __total sentinel doc: packageId='__total', qty=1 là placeholder (không phải qty thật).
+    // Chỉ revenue có ý nghĩa. Bỏ qty để không inflate totalPackagesSold.
+    const isTotalSentinel = x.packageId === '__total';
+    const qty = isTotalSentinel ? 0 : Number(x.quantity ?? 0);
     const rev = Number(x.revenue ?? 0);
 
     const b = ensureBranch(branchId);
@@ -282,14 +285,17 @@ export async function fetchSalesReport(
       b.byMonth[month - 1].revenue += rev;
     }
 
-    groupRevMap[branchId] ??= {};
+    // Group revenue map — KHÔNG aggregate __total (sentinel cho per-sale tổng, không phải group thật)
     const groupId: string = x.groupId ?? 'unknown';
     const groupName: string = x.groupName ?? 'Khác';
-    if (!groupRevMap[branchId][groupId]) {
-      groupRevMap[branchId][groupId] = { groupId, groupName, qty: 0, revenue: 0 };
+    if (groupId !== '__total') {
+      groupRevMap[branchId] ??= {};
+      if (!groupRevMap[branchId][groupId]) {
+        groupRevMap[branchId][groupId] = { groupId, groupName, qty: 0, revenue: 0 };
+      }
+      groupRevMap[branchId][groupId].qty += qty;
+      groupRevMap[branchId][groupId].revenue += rev;
     }
-    groupRevMap[branchId][groupId].qty += qty;
-    groupRevMap[branchId][groupId].revenue += rev;
 
     // Per-sale revenue + per-sale per-month
     const saleId: string = x.saleId ?? '__aggregate';

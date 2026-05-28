@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getMessaging } from 'firebase-admin/messaging';
 import { FieldValue } from 'firebase-admin/firestore';
+import { timingSafeEqual } from 'node:crypto';
 import { getFirebaseAdmin, getFirebaseAdminDb } from '@/lib/firebase/admin';
 import { COLLECTIONS } from '@/lib/firebase/collections';
 
@@ -33,7 +34,13 @@ function checkAuth(req: NextRequest): boolean {
   const auth = req.headers.get('authorization');
   if (!auth) return false;
   const token = auth.replace(/^Bearer\s+/i, '').trim();
-  return token === expected;
+  // timing-safe compare — prevent character-by-character brute force
+  if (token.length !== expected.length) return false;
+  try {
+    return timingSafeEqual(Buffer.from(token), Buffer.from(expected));
+  } catch {
+    return false;
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -48,7 +55,7 @@ export async function POST(req: NextRequest) {
   // Firestore where reminderSent != true không hỗ trợ trực tiếp → fetch reminderAt ≤ now rồi filter client-side.
   const snap = await db.collection(COLLECTIONS.PERSONAL_TASKS)
     .where('reminderAt', '<=', nowIso)
-    .where('reminderAt', '>', new Date(Date.now() - 24 * 60 * 60_000).toISOString()) // window 24h tránh fetch quá nhiều
+    .where('reminderAt', '>', new Date(Date.now() - 6 * 60 * 60_000).toISOString()) // window 6h — vừa đủ với cron */5 + delay
     .limit(500)
     .get();
 
@@ -142,15 +149,23 @@ export async function POST(req: NextRequest) {
     } catch { /* ignore */ }
   }
 
-  // Mark tasks as reminderSent
-  const batch = db.batch();
+  // Mark tasks as reminderSent — atomic via transaction để tránh race với /check-my-reminders
+  // (cùng task có thể được fetch song song bởi cron + user trigger)
   for (const taskId of taskMarkSent) {
-    batch.update(db.collection(COLLECTIONS.PERSONAL_TASKS).doc(taskId), {
-      reminderSent: true,
-      reminderSentAt: FieldValue.serverTimestamp(),
-    });
+    try {
+      await db.runTransaction(async (txn) => {
+        const ref = db.collection(COLLECTIONS.PERSONAL_TASKS).doc(taskId);
+        const s = await txn.get(ref);
+        if (!s.exists) return;
+        const d = s.data();
+        if (d?.reminderSent === true) return;  // đã mark bởi process khác
+        txn.update(ref, {
+          reminderSent: true,
+          reminderSentAt: FieldValue.serverTimestamp(),
+        });
+      });
+    } catch { /* ignore individual failures */ }
   }
-  if (taskMarkSent.length > 0) await batch.commit();
 
   return NextResponse.json({
     ok: true,

@@ -121,14 +121,17 @@ export async function GET(req: NextRequest) {
     });
 
     // Aggregate by sale. byPackage cũ đã bỏ — UI không dùng sau khi simplify form (placeholder __total).
+    // __total sentinel: qty=1 placeholder (không phải qty thật) → CHỈ cộng revenue, bỏ qty.
     const bySaleMap: Record<string, { saleId: string; saleName: string; qty: number; revenue: number }> = {};
     let totalQty = 0, totalRevenue = 0;
     for (const l of lines) {
-      totalQty += l.quantity;
+      const isTotalSentinel = l.packageId === '__total';
+      const qtyToAdd = isTotalSentinel ? 0 : l.quantity;
+      totalQty += qtyToAdd;
       totalRevenue += l.revenue;
       const sk = `${l.saleId}`;
       bySaleMap[sk] ??= { saleId: l.saleId, saleName: l.saleName, qty: 0, revenue: 0 };
-      bySaleMap[sk].qty += l.quantity;
+      bySaleMap[sk].qty += qtyToAdd;
       bySaleMap[sk].revenue += l.revenue;
     }
     const bySale = Object.values(bySaleMap).sort((a, b) => b.revenue - a.revenue);
@@ -146,6 +149,13 @@ export async function GET(req: NextRequest) {
         bySalePackageMap[sk] = { saleId: l.saleId, saleName: l.saleName, totalQty: 0, totalRevenue: 0, packages: [] };
       }
       const sale = bySalePackageMap[sk];
+      // __total sentinel: per-sale tổng — đếm vào totals nhưng KHÔNG add vào packages list
+      // (avoid hiển thị fake package "(Tổng theo sale)" lẫn với gói thật)
+      if (l.packageId === '__total') {
+        sale.totalQty += l.quantity;
+        sale.totalRevenue += l.revenue;
+        continue;
+      }
       sale.totalQty += l.quantity;
       sale.totalRevenue += l.revenue;
       const existing = sale.packages.find((p) => p.packageId === l.packageId);
