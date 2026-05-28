@@ -61,7 +61,7 @@ export default function LoginPage() {
           <div className="inline-block bg-white rounded-2xl p-2 mb-4">
             <img src="/logo.png" alt="Green Pool" width={192} height={192} className="mx-auto object-contain" />
           </div>
-          <h1 className="text-3xl font-bold text-slate-800">Green Pool ERP</h1>
+          <h1 className="text-3xl font-bold text-slate-800">Green Pool System</h1>
           <p className="text-slate-500 mt-2">Hệ thống Quản lý Nội bộ — Cụm 5 cơ sở</p>
         </div>
 

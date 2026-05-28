@@ -117,7 +117,7 @@ export function ManageSalesModal({ branchId, branchName, staff, onClose, onChang
 
   function copyCredentials() {
     if (!lastCreated) return;
-    const text = `Đăng nhập app Green Pool ERP:\nEmail: ${lastCreated.email}\nMật khẩu: ${lastCreated.defaultPassword}\n(Đổi mật khẩu sau khi đăng nhập lần đầu)`;
+    const text = `Đăng nhập app Green Pool System:\nEmail: ${lastCreated.email}\nMật khẩu: ${lastCreated.defaultPassword}\n(Đổi mật khẩu sau khi đăng nhập lần đầu)`;
     navigator.clipboard.writeText(text).then(
       () => alert('Đã copy email + mật khẩu vào clipboard'),
       () => alert('Copy thất bại — chọn text bằng tay'),
