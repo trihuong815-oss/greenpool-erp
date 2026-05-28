@@ -3,17 +3,10 @@
 import Link from 'next/link';
 import type { Facility, Task } from '@/lib/types';
 import {
-  Building2, BarChart3, ListChecks, CheckSquare,
+  Building2, BarChart3, ListChecks,
   TrendingUp, Clock, ShieldCheck, AlertTriangle,
 } from 'lucide-react';
 import { KTDashboardSection } from './KTDashboardSection';
-
-interface ChecklistRun {
-  id: string;
-  facility_id: string | null;
-  status: string;
-  deadline_at: string | null;
-}
 
 interface RevenueSummary {
   year: number;
@@ -39,7 +32,6 @@ interface Props {
   tasks: Task[];
   taskCounts: TaskCounts;
   revenueSummary: RevenueSummary;
-  checklistRuns: ChecklistRun[];
   visibleFacilities: string[];
   isAdmin: boolean;
   kyThuatSummary?: import('./data.kythuat').KyThuatSummary | null;
@@ -60,34 +52,11 @@ function isKTViewer(role: string): boolean {
 
 export function DashboardContent({
   roleCode, facilities, taskCounts, revenueSummary,
-  checklistRuns, visibleFacilities, isAdmin,
+  visibleFacilities, isAdmin,
   kyThuatSummary, ktVisibleBranchIds,
 }: Props) {
   const showKT = isKTViewer(roleCode) && !!kyThuatSummary;
   const hideRevenue = isKTOnly(roleCode);
-  // === Checklist aggregation (giữ nguyên logic cũ) ===
-  const now = new Date();
-  const checklistByFacility = facilities
-    .filter((f) => visibleFacilities.includes(f.id))
-    .map((f) => {
-      const subset = checklistRuns.filter((r) => r.facility_id === f.id);
-      const total = subset.length;
-      const done = subset.filter((r) => r.status === 'submitted' || r.status === 'approved').length;
-      const pending = subset.filter((r) => r.status === 'pending' || r.status === 'in_progress').length;
-      const overdue = subset.filter((r) => {
-        if (r.status === 'overdue') return true;
-        if (['pending', 'in_progress'].includes(r.status) && r.deadline_at) {
-          return new Date(r.deadline_at) < now;
-        }
-        return false;
-      }).length;
-      const failed = subset.filter((r) => r.status === 'failed').length;
-      return { facility: f, total, done, pending, overdue, failed, pct: total > 0 ? (done / total) * 100 : 0 };
-    });
-
-  const totalChecklists = checklistRuns.length;
-  const doneChecklists = checklistRuns.filter((r) => r.status === 'submitted' || r.status === 'approved').length;
-  const overdueChecklists = checklistByFacility.reduce((a, r) => a + r.overdue, 0);
 
   return (
     <div className="space-y-5">
@@ -146,71 +115,6 @@ export function DashboardContent({
       {/* ===== 3. CÔNG VIỆC ===== */}
       <SectionTitle icon={ListChecks} title="Công việc" subtitle="Đề xuất · Nhiệm vụ · Giao việc" />
       <TasksSection counts={taskCounts} roleCode={roleCode} />
-
-      {/* ===== 4. CHECKLIST ===== */}
-      <SectionTitle icon={CheckSquare} title="Checklist hôm nay" />
-      <div className="card">
-        {checklistByFacility.length === 0 || totalChecklists === 0 ? (
-          <div className="text-sm text-slate-400 italic py-6 text-center">
-            Chưa có checklist nào cho hôm nay trong phạm vi của bạn.
-          </div>
-        ) : (
-          <>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
-              <SummaryBox label="Tổng" value={totalChecklists} cls="bg-slate-100 text-slate-700" />
-              <SummaryBox label="Đã nộp" value={doneChecklists} cls="bg-emerald-100 text-emerald-800" />
-              <SummaryBox label="Quá hạn" value={overdueChecklists} cls="bg-rose-100 text-rose-800" />
-              <SummaryBox
-                label="% Hoàn thành"
-                value={totalChecklists > 0 ? Math.round((doneChecklists / totalChecklists) * 100) : 0}
-                suffix="%"
-                cls="bg-emerald-50 text-emerald-800"
-              />
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50">
-                  <tr className="text-left">
-                    <th className="p-2 font-semibold text-slate-600">Cơ sở</th>
-                    <th className="p-2 font-semibold text-slate-600 text-right">Tổng</th>
-                    <th className="p-2 font-semibold text-slate-600 text-right">Đã nộp</th>
-                    <th className="p-2 font-semibold text-slate-600 text-right">Đang chờ</th>
-                    <th className="p-2 font-semibold text-slate-600 text-right">Quá hạn</th>
-                    <th className="p-2 font-semibold text-slate-600 text-right">Không đạt</th>
-                    <th className="p-2 font-semibold text-slate-600 text-right">% HT</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {checklistByFacility.map((r) => (
-                    <tr key={r.facility.id} className="border-b border-slate-100">
-                      <td className="p-2 font-medium text-slate-800 flex items-center gap-2">
-                        <span
-                          className="w-6 h-6 rounded text-white text-xs flex items-center justify-center font-bold"
-                          style={{ background: r.facility.color }}
-                        >{r.facility.id}</span>
-                        {r.facility.name}
-                      </td>
-                      <td className="p-2 text-right tabular-nums">{r.total}</td>
-                      <td className="p-2 text-right text-emerald-700 font-semibold tabular-nums">{r.done}</td>
-                      <td className="p-2 text-right text-amber-700 tabular-nums">{r.pending}</td>
-                      <td className="p-2 text-right text-rose-700 tabular-nums">{r.overdue}</td>
-                      <td className="p-2 text-right text-rose-800 font-semibold tabular-nums">{r.failed}</td>
-                      <td className={`p-2 text-right font-bold tabular-nums ${r.pct >= 90 ? 'text-emerald-700' : r.pct >= 60 ? 'text-amber-700' : 'text-rose-700'}`}>
-                        {r.pct.toFixed(0)}%
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="mt-3 text-right">
-              <Link href="/checklist" className="text-xs text-emerald-700 hover:underline font-semibold">
-                Xem chi tiết checklist →
-              </Link>
-            </div>
-          </>
-        )}
-      </div>
     </div>
   );
 }
@@ -472,11 +376,3 @@ function FacilityCard({ facility, size = 'md' }: { facility: Facility; size?: 'l
   );
 }
 
-function SummaryBox({ label, value, suffix, cls }: { label: string; value: number; suffix?: string; cls: string }) {
-  return (
-    <div className={`p-2.5 rounded-lg ${cls}`}>
-      <div className="text-[10px] uppercase tracking-wider opacity-80">{label}</div>
-      <div className="text-xl font-bold mt-0.5 tabular-nums">{value}{suffix || ''}</div>
-    </div>
-  );
-}

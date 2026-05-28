@@ -7,7 +7,7 @@ import { countUnhandledErrors } from '@/lib/firebase/system-errors';
 import { kyThuatReadScope } from '@/lib/firebase/ky-thuat-scope';
 import { DashboardContent } from './DashboardContent';
 import { ChecklistV2SupervisorWidget } from './ChecklistV2SupervisorWidget';
-import { fetchDashboardBranches, fetchTodayChecklistRuns } from './data.firebase';
+import { fetchDashboardBranches } from './data.firebase';
 import { fetchKyThuatSummary } from './data.kythuat';
 import { fetchSalesReport } from '../doanh-so/data.firebase';
 import { checklistV2SupervisorScope } from '@/lib/checklist-v2/templates';
@@ -24,7 +24,6 @@ export default async function DashboardPage() {
   const systemErrorCount = isSystemAdmin ? await countUnhandledErrors() : 0;
 
   const today = new Date();
-  const todayIso = today.toISOString().slice(0, 10);
   const currentYear = today.getFullYear();
   const currentMonth = today.getMonth() + 1;     // 1-12
   const monthIdx = currentMonth - 1;              // 0-11
@@ -51,9 +50,8 @@ export default async function DashboardPage() {
 
   // Parallel fetch toàn bộ data dashboard cần. Mỗi fetch wrap fallback để 1 nguồn fail
   // không làm sập cả dashboard.
-  const [facilities, checklistRuns, salesReport, taskCounts] = await Promise.all([
+  const [facilities, salesReport, taskCounts] = await Promise.all([
     fetchDashboardBranches().catch((e) => { console.warn('[dashboard] facilities', e?.message); return []; }),
-    fetchTodayChecklistRuns(visibleFacilities, todayIso).catch((e) => { console.warn('[dashboard] checklists', e?.message); return []; }),
     fetchSalesReport(
       {
         uid: profile.id,
@@ -140,7 +138,6 @@ export default async function DashboardPage() {
           tasks={[] as Task[]}
           taskCounts={taskCounts}
           revenueSummary={revenueSummary}
-          checklistRuns={checklistRuns}
           visibleFacilities={visibleFacilities}
           isAdmin={isAdmin}
           kyThuatSummary={kyThuatSummary}

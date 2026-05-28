@@ -38,8 +38,7 @@ export const PERMISSION_CATALOG: PermissionItem[] = [
   { route: 'doanh-so/nhap',     label: 'Nhập doanh số',            description: 'Nhập/sửa entries · gói đã bán · chỉ tiêu',                         group: 'sales' },
 
   // Ops
-  { route: 'checklist',         label: 'Checklist vận hành (v1)',  description: 'Bảng kiểm tra hằng ngày — module cũ',                              group: 'ops' },
-  { route: 'checklist-v2',      label: 'Checklist vận hành (v2)',  description: 'QLCS + PP_HT + PP_XLN tick đảm bảo · ghi chú · gửi cấp trên',     group: 'ops' },
+  { route: 'checklist-v2',      label: 'Checklist vận hành',       description: 'QLCS + PP_HT + PP_XLN tick đảm bảo · ghi chú · gửi cấp trên',     group: 'ops' },
   { route: 'quy-trinh',         label: 'Quy trình',                description: 'Template checklist · CRUD theo phòng',                              group: 'ops' },
   { route: 'giao-viec',         label: 'Giao việc',                description: 'Tasks chung — đề xuất · nhiệm vụ',                                  group: 'ops' },
 
