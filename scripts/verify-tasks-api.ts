@@ -8,6 +8,8 @@ import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { existsSync, readFileSync } from 'fs';
 import { resolve } from 'path';
+// Canonical ROLE_BLOCK lives in lib/permissions.ts
+import { ROLE_BLOCK } from '../lib/permissions';
 
 const credPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
 if (!credPath || !existsSync(resolve(process.cwd(), credPath))) {
@@ -25,14 +27,6 @@ const LIMIT = 200;
 
 function hr(c = '─', n = 78) { console.log(c.repeat(n)); }
 function title(t: string) { console.log(); hr('═'); console.log(`  ${t}`); hr('═'); }
-
-const ROLE_BLOCK: Record<string, 'KD' | 'VP' | 'all'> = {
-  CEO: 'all', GD_KD: 'KD', GD_VP: 'VP',
-  QLCS_HM: 'KD', QLCS_TK: 'KD', QLCS_CTT: 'KD', QLCS_24NCT: 'KD', QLCS_TT: 'KD',
-  TP_KT: 'KD', TP_DT: 'KD', TP_MKT: 'KD',
-  TP_GS: 'VP', TP_KE: 'VP', TP_NS: 'VP', TIBAN_TT: 'VP',
-  TT_DT: 'KD', GV_CB: 'KD', GV_NC: 'KD', NV_SALE: 'KD', NV_CH: 'KD',
-};
 
 interface Profile { uid: string; role_code: string; department_id: string | null; facility_id: string | null; }
 

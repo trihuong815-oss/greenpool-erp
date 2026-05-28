@@ -1,9 +1,10 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { X, Users, ArrowRight, ArrowDown } from 'lucide-react';
+import { X, Users } from 'lucide-react';
 import type { Role, Profile } from '@/lib/types';
 import { OrgTreeView } from './OrgTreeView';
+import { FlowView } from './FlowView';
 
 interface Props {
   roles: Role[];
@@ -275,135 +276,6 @@ function RoleCardList({ roles, counts, onSelect, compact }: RoleCardListProps) {
   );
 }
 
-function FlowView() {
-  return (
-    <div className="space-y-4">
-      <div className="card">
-        <div className="card-title mb-3">🔵 Đề xuất trong cùng Khối</div>
-        <p className="text-sm text-slate-600 mb-4">
-          Nhân viên gửi đề xuất lên cấp trên trực tiếp trong cùng khối. Đi thẳng đến người duyệt — không cần qua 2 GĐ.
-        </p>
-        <FlowSteps
-          steps={[
-            { label: 'Nhân viên', sub: 'Tạo đề xuất', color: 'slate' },
-            { label: 'Cấp trên', sub: 'Tổ trưởng / Phó phòng / TP', color: 'blue' },
-            { label: 'Phê duyệt', sub: 'Approve / Reject', color: 'amber' },
-            { label: 'Triển khai', sub: 'Người thực hiện nhận việc', color: 'emerald' },
-          ]}
-        />
-      </div>
-
-      <div className="card">
-        <div className="card-title mb-3">🟣 Đề xuất chéo Khối (cần 2 GĐ duyệt)</div>
-        <p className="text-sm text-slate-600 mb-4">
-          Đề xuất từ Khối A muốn tác động sang Khối B → GĐ Khối A duyệt trước, sau đó GĐ Khối B mới duyệt và chỉ định người thực hiện.
-        </p>
-        <FlowSteps
-          steps={[
-            { label: 'NV Khối A', sub: 'Tạo đề xuất chéo khối', color: 'blue' },
-            { label: 'GĐ Khối A', sub: 'Duyệt cho phép gửi đi', color: 'blue' },
-            { label: 'GĐ Khối B', sub: 'Duyệt và chỉ định', color: 'emerald' },
-            { label: 'Người thực hiện', sub: 'NV thuộc Khối B', color: 'emerald' },
-          ]}
-        />
-        <div className="mt-3 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-2.5">
-          ⚠️ Quy tắc: bất kỳ đề xuất nào động đến nhân sự/tài nguyên Khối khác đều phải qua 2 GĐ. Audit log ghi lại toàn bộ quá trình.
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="card-title mb-3">🟢 Giao việc trực tiếp (trên → dưới)</div>
-        <p className="text-sm text-slate-600 mb-4">
-          Cấp trên giao việc thẳng cho nhân viên dưới quyền của mình. Không cần duyệt — đi ngay vào hàng đợi của người nhận.
-        </p>
-        <FlowSteps
-          steps={[
-            { label: 'Quản lý', sub: 'GĐ / TP / QLCS / Tổ trưởng', color: 'blue' },
-            { label: 'Giao việc', sub: 'Tạo task + gán người nhận', color: 'slate' },
-            { label: 'Nhân viên', sub: 'Nhận thông báo real-time', color: 'emerald' },
-          ]}
-        />
-      </div>
-
-      <div className="card">
-        <div className="card-title mb-3">🟡 Nhiệm vụ định kỳ / chuyên môn</div>
-        <p className="text-sm text-slate-600 mb-4">
-          Nhiệm vụ phát sinh từ checklist, lịch định kỳ, hoặc từ TP chuyên môn xuống QLCS để thực thi tại cơ sở.
-        </p>
-        <FlowSteps
-          steps={[
-            { label: 'Nguồn', sub: 'Checklist / Lịch / TP chuyên môn', color: 'slate' },
-            { label: 'QLCS', sub: 'Nhận nhiệm vụ tại cơ sở', color: 'blue' },
-            { label: 'Phân công', sub: 'QLCS giao nhân viên thực thi', color: 'amber' },
-            { label: 'Báo cáo', sub: 'Cập nhật trạng thái + đính kèm', color: 'emerald' },
-          ]}
-        />
-      </div>
-
-      <div className="card bg-slate-50">
-        <div className="card-title mb-3">📌 Tóm tắt nguyên tắc</div>
-        <ul className="text-sm text-slate-700 space-y-2">
-          <li className="flex gap-2"><span className="text-blue-600 font-bold">•</span> <span><strong>Trong khối:</strong> đề xuất đi thẳng cấp trên, 1 lần duyệt.</span></li>
-          <li className="flex gap-2"><span className="text-purple-600 font-bold">•</span> <span><strong>Chéo khối:</strong> cần 2 GĐ duyệt — GĐ khối gửi rồi GĐ khối nhận.</span></li>
-          <li className="flex gap-2"><span className="text-emerald-600 font-bold">•</span> <span><strong>Giao việc:</strong> cấp trên giao thẳng cấp dưới trong cây tổ chức, không cần duyệt.</span></li>
-          <li className="flex gap-2"><span className="text-amber-600 font-bold">•</span> <span><strong>Nhiệm vụ:</strong> từ lịch / checklist / TP chuyên môn → QLCS phân công.</span></li>
-        </ul>
-      </div>
-    </div>
-  );
-}
-
-interface FlowStep {
-  label: string;
-  sub: string;
-  color: 'slate' | 'blue' | 'amber' | 'emerald' | 'purple';
-}
-
-const STEP_COLORS: Record<FlowStep['color'], string> = {
-  slate: 'bg-slate-100 border-slate-300 text-slate-800',
-  blue: 'bg-blue-100 border-blue-300 text-blue-900',
-  amber: 'bg-amber-100 border-amber-300 text-amber-900',
-  emerald: 'bg-emerald-100 border-emerald-300 text-emerald-900',
-  purple: 'bg-purple-100 border-purple-300 text-purple-900',
-};
-
-function FlowSteps({ steps }: { steps: FlowStep[] }) {
-  return (
-    <>
-      <div className="hidden md:flex items-stretch gap-2">
-        {steps.map((s, i) => (
-          <div key={i} className="flex items-stretch gap-2 flex-1">
-            <div className={`flex-1 rounded-lg border-2 ${STEP_COLORS[s.color]} p-3 text-center flex flex-col justify-center`}>
-              <div className="font-semibold text-sm">{s.label}</div>
-              <div className="text-xs opacity-80 mt-1">{s.sub}</div>
-            </div>
-            {i < steps.length - 1 && (
-              <div className="flex items-center text-slate-400">
-                <ArrowRight size={20} />
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      <div className="md:hidden space-y-2">
-        {steps.map((s, i) => (
-          <div key={i}>
-            <div className={`rounded-lg border-2 ${STEP_COLORS[s.color]} p-3 text-center`}>
-              <div className="font-semibold text-sm">{s.label}</div>
-              <div className="text-xs opacity-80 mt-1">{s.sub}</div>
-            </div>
-            {i < steps.length - 1 && (
-              <div className="flex justify-center py-1 text-slate-400">
-                <ArrowDown size={18} />
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-    </>
-  );
-}
 
 interface ModalProps {
   role: Role;

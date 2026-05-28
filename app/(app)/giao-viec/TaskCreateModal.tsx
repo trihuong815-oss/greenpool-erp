@@ -3,19 +3,13 @@
 import { useMemo, useState } from 'react';
 import { X, Loader2, Paperclip, Trash2 } from 'lucide-react';
 import { tasksApi, type Block, type TaskPriority, type TaskKind } from '@/lib/services/tasks/api-client';
+import { ROLE_BLOCK } from '@/lib/permissions';
 
 interface Department { id: string; name: string; blockId: 'KD' | 'VP' | null; }
 interface Branch { id: string; name: string; }
 interface User { id: string; name: string; roleId: string; branchId: string | null; departmentId: string | null; }
 
 type AssigneeKind = 'department' | 'facility' | 'user';
-
-const ROLE_BLOCK: Record<string, Block | 'all'> = {
-  CEO: 'all', GD_KD: 'KD', GD_VP: 'VP',
-  QLCS_HM: 'KD', QLCS_TK: 'KD', QLCS_CTT: 'KD', QLCS_24NCT: 'KD', QLCS_TT: 'KD',
-  TP_KT: 'KD', TP_DT: 'KD', TP_MKT: 'KD',
-  TP_GS: 'VP', TP_KE: 'VP', TP_NS: 'VP', TIBAN_TT: 'VP',
-};
 
 export function TaskCreateModal(props: {
   kind: TaskKind;

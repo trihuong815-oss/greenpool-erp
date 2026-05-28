@@ -61,17 +61,29 @@ export const MENU_PERMISSIONS: Record<string, string[]> = {
   NV_CH:     ['dashboard','giao-viec'],
 };
 
-// Role → khối mapping
+// Role → khối mapping (single source of truth — tasks-scope/sales-scope import từ đây)
 export const ROLE_BLOCK: Record<string, 'KD' | 'VP' | 'all'> = {
   ADMIN: 'all', CEO: 'all', GD_KD: 'KD', GD_VP: 'VP',
+  // KD — Vận hành cơ sở
   QLCS_HM: 'KD', QLCS_TK: 'KD', QLCS_CTT: 'KD', QLCS_24NCT: 'KD', QLCS_TT: 'KD',
-  TP_KT: 'KD', TP_DT: 'KD', TP_MKT: 'KD',
-  TP_GS: 'VP', TP_KE: 'VP', TP_NS: 'VP', TIBAN_TT: 'VP',
-  TT_DT: 'KD', GV_CB: 'KD', GV_NC: 'KD', NV_SALE: 'KD', NV_CH: 'KD',
-  // Phòng Kỹ thuật (thuộc khối KD)
-  PP_HT: 'KD', PP_XLN: 'KD',
+  NV_SALE: 'KD', NV_CH: 'KD', NV_TV: 'KD', NV_LT: 'KD',
+  TT_LT: 'KD', TT_AS: 'KD',
+  // KD — phòng KT
+  TP_KT: 'KD', PP_HT: 'KD', PP_XLN: 'KD',
   KT_HT_HM: 'KD', KT_HT_TK: 'KD', KT_HT_CTT: 'KD', KT_HT_24NCT: 'KD', KT_HT_TT: 'KD',
   KT_XLN_HM: 'KD', KT_XLN_TK: 'KD', KT_XLN_CTT: 'KD', KT_XLN_24NCT: 'KD', KT_XLN_TT: 'KD',
+  // KD — phòng Đào tạo
+  TP_DT: 'KD', PP_DT_CM: 'KD', PP_DT_TC: 'KD',
+  TT_DT: 'KD', GV_CB: 'KD', GV_NC: 'KD', GV_TG: 'KD',
+  // KD — phòng Marketing
+  TP_MKT: 'KD', PP_MKT: 'KD',
+  TT_CT: 'KD', TT_ED: 'KD', TT_TK: 'KD',
+  NV_CT: 'KD', NV_ED: 'KD', NV_TK: 'KD',
+  // VP — phòng Nhân sự (gồm cả Tiểu ban TTNB)
+  TP_NS: 'VP', TIBAN_TT: 'VP', NV_TTNB: 'VP',
+  // VP — phòng Giám sát + Kế toán
+  TP_GS: 'VP', TP_KE: 'VP',
+  NV_GS: 'VP', NV_KE: 'VP', NV_NS: 'VP',
 };
 
 // Role → phòng mapping
