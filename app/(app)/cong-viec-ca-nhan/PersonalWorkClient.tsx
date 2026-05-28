@@ -67,6 +67,7 @@ export interface PersonalTaskRow {
   priority: TaskPriority;
   status: TaskStatus;
   dueDate: string | null;
+  scheduledTime: string | null;  // HH:MM — giờ thực hiện task
   reminderAt: string | null;
   category: TaskCategory;
   deleted: boolean;
@@ -138,6 +139,74 @@ export function PersonalWorkClient({ profile, initialTasks }: Props) {
     setToast({ type: t, msg });
     setTimeout(() => setToast(null), 3500);
   }
+
+  // ─── Client-side reminder polling (60s) ───
+  // Show toast + browser notification khi đến giờ reminderAt; mark notified ở localStorage để tránh spam.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    // Ask permission once
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => { /* user denied — fine */ });
+    }
+    const NOTIF_KEY = 'cvcn_notified_reminders';
+    function getNotified(): Set<string> {
+      try { return new Set(JSON.parse(localStorage.getItem(NOTIF_KEY) ?? '[]')); }
+      catch { return new Set<string>(); }
+    }
+    function saveNotified(s: Set<string>) {
+      try { localStorage.setItem(NOTIF_KEY, JSON.stringify([...s].slice(-200))); } catch {}
+    }
+    function check() {
+      const now = Date.now();
+      const notified = getNotified();
+      let changed = false;
+      for (const t of tasks) {
+        if (!t.reminderAt) continue;
+        if (t.status === 'done' || t.status === 'cancelled') continue;
+        const at = new Date(t.reminderAt).getTime();
+        if (!Number.isFinite(at)) continue;
+        // Trigger window: từ reminderAt → reminderAt + 30 phút (tránh fire lại entry cũ)
+        if (at <= now && now - at < 30 * 60_000) {
+          const key = `${t.id}__${t.reminderAt}`;
+          if (notified.has(key)) continue;
+          notified.add(key);
+          changed = true;
+          const body = t.scheduledTime
+            ? `Lúc ${t.scheduledTime} hôm nay`
+            : 'Sắp đến giờ thực hiện';
+          showToast('success', `🔔 ${t.title} — ${body}`);
+          if ('Notification' in window && Notification.permission === 'granted') {
+            try { new Notification(`🔔 ${t.title}`, { body, tag: t.id }); } catch {}
+          }
+        }
+      }
+      if (changed) saveNotified(notified);
+    }
+    check();
+    const id = setInterval(check, 60_000);
+    return () => clearInterval(id);
+  }, [tasks]);
+
+  // ─── Evening banner (>= 20:00 local) ───
+  // Hiển thị danh sách task ngày mai + lời chúc nghỉ ngơi.
+  const [now, setNow] = useState<Date>(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+  const showEveningBanner = now.getHours() >= 20;
+  const tomorrowTasks = useMemo(() => {
+    const t = new Date(now);
+    t.setDate(t.getDate() + 1);
+    const tomorrowStr = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+    return tasks
+      .filter((x) => x.dueDate === tomorrowStr && x.status !== 'done' && x.status !== 'cancelled')
+      .sort((a, b) => (a.scheduledTime ?? '99:99').localeCompare(b.scheduledTime ?? '99:99'));
+  }, [tasks, now]);
+  const [eveningDismissed, setEveningDismissed] = useState(false);
+  // Reset dismiss khi sang ngày mới
+  const todayKey = `${now.getFullYear()}${now.getMonth()}${now.getDate()}`;
+  useEffect(() => { setEveningDismissed(false); }, [todayKey]);
 
   // KPI auto compute (re-derive overdue based on dueDate)
   const stats = useMemo(() => {
@@ -234,6 +303,56 @@ export function PersonalWorkClient({ profile, initialTasks }: Props) {
 
   return (
     <div className="max-w-5xl mx-auto space-y-4">
+      {/* ─── EVENING BANNER (≥20:00) — danh sách task ngày mai + lời chúc ─── */}
+      {showEveningBanner && !eveningDismissed && (
+        <div className="relative rounded-2xl overflow-hidden shadow-lg ring-1 ring-indigo-300
+          bg-gradient-to-br from-indigo-600 via-purple-700 to-slate-900 text-white">
+          <div className="absolute -right-12 -top-12 h-44 w-44 rounded-full bg-white/10 blur-2xl" aria-hidden />
+          <div className="absolute left-1/2 -bottom-10 h-32 w-32 rounded-full bg-amber-400/20 blur-2xl" aria-hidden />
+          <button
+            onClick={() => setEveningDismissed(true)}
+            className="absolute top-2 right-2 p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition"
+            aria-label="Đóng"
+          >
+            <X size={14} />
+          </button>
+          <div className="relative p-5">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-2xl">🌙</span>
+              <div className="font-bold text-base">Chào buổi tối, {profileState.displayName.split(' ').slice(-1)[0]}!</div>
+            </div>
+            <p className="text-sm text-indigo-100 mb-3 leading-relaxed">
+              Bạn hãy nghỉ ngơi thật khoẻ để chuẩn bị cho 1 ngày mai tuyệt vời.
+            </p>
+            {tomorrowTasks.length === 0 ? (
+              <div className="rounded-lg bg-white/10 ring-1 ring-white/20 px-3 py-2 text-sm">
+                ✨ Ngày mai chưa có task nào — một ngày tự do hoặc dành cho việc lớn?
+              </div>
+            ) : (
+              <div className="rounded-lg bg-white/10 backdrop-blur ring-1 ring-white/20 p-3">
+                <div className="text-xs font-bold uppercase tracking-wider text-indigo-200 mb-2 inline-flex items-center gap-1.5">
+                  🎯 {tomorrowTasks.length} việc cho ngày mai
+                </div>
+                <ul className="space-y-1.5">
+                  {tomorrowTasks.slice(0, 6).map((t) => (
+                    <li key={t.id} className="flex items-center gap-2 text-sm">
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-300 shrink-0" />
+                      {t.scheduledTime && (
+                        <span className="font-mono text-amber-200 text-xs">{t.scheduledTime}</span>
+                      )}
+                      <span className="truncate">{t.title}</span>
+                    </li>
+                  ))}
+                  {tomorrowTasks.length > 6 && (
+                    <li className="text-xs text-indigo-200 italic">+ {tomorrowTasks.length - 6} task khác…</li>
+                  )}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ─── HERO: greeting + name + role + progress ring + slogan + quote ─── */}
       <div className="relative overflow-hidden rounded-2xl ring-1 ring-emerald-200 shadow-md bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-700 text-white">
         {/* Decorative dots */}
@@ -320,7 +439,7 @@ export function PersonalWorkClient({ profile, initialTasks }: Props) {
       </div>
 
       {/* ─── PANELS ─── */}
-      {tab === 'journal' && <JournalPanel onToast={showToast} />}
+      {tab === 'journal' && <JournalPanel onToast={showToast} author={{ displayName: profileState.displayName, avatarUrl: profileState.avatarUrl, positionTitle: profileState.positionTitle }} />}
       {tab === 'habits' && <HabitsPanel onToast={showToast} />}
       {tab === 'goals' && <GoalsPanel onToast={showToast} />}
       {tab === 'ai' && (
@@ -416,10 +535,11 @@ export function PersonalWorkClient({ profile, initialTasks }: Props) {
                         {t.dueDate && (
                           <span className={`inline-flex items-center gap-1 ${overdue ? 'text-rose-600 font-semibold' : ''}`}>
                             <Calendar size={11} /> {t.dueDate}
+                            {t.scheduledTime && <span className="font-mono text-emerald-700 ml-0.5">· {t.scheduledTime}</span>}
                           </span>
                         )}
                         {t.reminderAt && (
-                          <span className="inline-flex items-center gap-1">
+                          <span className="inline-flex items-center gap-1 text-amber-700">
                             <Bell size={11} /> {new Date(t.reminderAt).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                           </span>
                         )}
@@ -722,19 +842,44 @@ function TaskModal({
   const [status, setStatus] = useState<TaskStatus>(editing?.status ?? 'todo');
   const [category, setCategory] = useState<TaskCategory>(editing?.category ?? 'personal');
   const [dueDate, setDueDate] = useState(editing?.dueDate ?? '');
+  const [scheduledTime, setScheduledTime] = useState(editing?.scheduledTime ?? '');
   const [reminderAt, setReminderAt] = useState(editing?.reminderAt ?? '');
+  /** Khi user thay đổi reminderAt thủ công → khoá auto-update */
+  const [reminderManual, setReminderManual] = useState(!!editing?.reminderAt && !editing?.scheduledTime);
   const [saving, setSaving] = useState(false);
+
+  // Auto-tính reminderAt = scheduledAt - 1h khi dueDate + scheduledTime đổi (trừ khi user override)
+  useEffect(() => {
+    if (reminderManual) return;
+    if (dueDate && scheduledTime) {
+      const d = new Date(`${dueDate}T${scheduledTime}:00`);
+      if (Number.isFinite(d.getTime())) {
+        const r = new Date(d.getTime() - 60 * 60_000);
+        // Convert sang datetime-local format YYYY-MM-DDTHH:MM (no seconds, no TZ suffix)
+        const pad = (n: number) => String(n).padStart(2, '0');
+        const localStr = `${r.getFullYear()}-${pad(r.getMonth() + 1)}-${pad(r.getDate())}T${pad(r.getHours())}:${pad(r.getMinutes())}`;
+        setReminderAt(localStr);
+      }
+    }
+  }, [dueDate, scheduledTime, reminderManual]);
 
   async function save() {
     if (!title.trim()) { onError('Tiêu đề bắt buộc'); return; }
     setSaving(true);
     try {
+      // Convert reminderAt (datetime-local string) → ISO string nếu có giá trị
+      let reminderISO: string | null = null;
+      if (reminderAt) {
+        const d = new Date(reminderAt);
+        if (Number.isFinite(d.getTime())) reminderISO = d.toISOString();
+      }
       const payload = {
         title: title.trim(),
         description: description.trim(),
         priority, status, category,
         dueDate: dueDate || null,
-        reminderAt: reminderAt || null,
+        scheduledTime: scheduledTime || null,
+        reminderAt: reminderISO,
       };
       const res = editing
         ? await fetch(`/api/personal/tasks/${encodeURIComponent(editing.id)}`, {
@@ -810,16 +955,36 @@ function TaskModal({
               </select>
             </label>
             <label className="block">
-              <span className="block text-xs font-semibold text-slate-600 mb-1">Hạn (deadline)</span>
+              <span className="block text-xs font-semibold text-slate-600 mb-1">Ngày thực hiện</span>
               <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)}
                 className="w-full px-3 py-2 border border-slate-300 rounded text-sm" />
             </label>
           </div>
-          <label className="block">
-            <span className="block text-xs font-semibold text-slate-600 mb-1">Nhắc nhở (Phase 2 — tạm chỉ lưu giá trị)</span>
-            <input type="datetime-local" value={reminderAt} onChange={(e) => setReminderAt(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded text-sm" />
-          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className="block text-xs font-semibold text-slate-600 mb-1">Giờ thực hiện</span>
+              <input type="time" value={scheduledTime} onChange={(e) => { setScheduledTime(e.target.value); setReminderManual(false); }}
+                className="w-full px-3 py-2 border border-slate-300 rounded text-sm" />
+            </label>
+            <label className="block">
+              <span className="block text-xs font-semibold text-slate-600 mb-1">
+                Nhắc nhở
+                {!reminderManual && scheduledTime && <span className="text-emerald-600 font-normal ml-1">· tự động -1h</span>}
+              </span>
+              <input
+                type="datetime-local"
+                value={reminderAt}
+                onChange={(e) => { setReminderAt(e.target.value); setReminderManual(true); }}
+                className="w-full px-3 py-2 border border-slate-300 rounded text-sm"
+              />
+            </label>
+          </div>
+          {scheduledTime && dueDate && (
+            <div className="text-[11px] text-slate-500 -mt-1">
+              📅 Task lúc <strong className="text-emerald-700">{scheduledTime} {dueDate}</strong>
+              {reminderAt && <> · 🔔 Nhắc <strong className="text-amber-700">{new Date(reminderAt).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</strong></>}
+            </div>
+          )}
         </div>
         <div className="px-5 py-3 border-t border-slate-100 flex justify-end gap-2">
           <button onClick={onClose} disabled={saving} className="px-4 py-2 text-sm rounded border border-slate-200 hover:bg-slate-50 disabled:opacity-50">Huỷ</button>

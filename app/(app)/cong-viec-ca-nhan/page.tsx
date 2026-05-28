@@ -34,6 +34,7 @@ export default async function CongViecCaNhanPage() {
           priority: x.priority ?? 'medium',
           status: x.status ?? 'todo',
           dueDate: x.dueDate ?? null,
+          scheduledTime: x.scheduledTime ?? null,
           reminderAt: x.reminderAt ?? null,
           category: x.category ?? 'personal',
           deleted: !!x.deleted,

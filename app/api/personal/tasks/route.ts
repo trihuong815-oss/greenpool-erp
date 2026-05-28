@@ -77,8 +77,17 @@ export async function POST(req: NextRequest) {
 
   const dueDateRaw = body.dueDate;
   const dueDate: string | null = typeof dueDateRaw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dueDateRaw) ? dueDateRaw : null;
-  const reminderRaw = body.reminderAt;
-  const reminderAt: string | null = typeof reminderRaw === 'string' && reminderRaw ? reminderRaw : null;
+  const schedTimeRaw = body.scheduledTime;
+  const scheduledTime: string | null = typeof schedTimeRaw === 'string' && /^\d{2}:\d{2}$/.test(schedTimeRaw) ? schedTimeRaw : null;
+
+  // Auto-compute reminderAt = scheduledAt - 1h khi có dueDate + scheduledTime + chưa override
+  let reminderAt: string | null = typeof body.reminderAt === 'string' && body.reminderAt ? body.reminderAt : null;
+  if (!reminderAt && dueDate && scheduledTime) {
+    const d = new Date(`${dueDate}T${scheduledTime}:00`);
+    if (Number.isFinite(d.getTime())) {
+      reminderAt = new Date(d.getTime() - 60 * 60_000).toISOString();
+    }
+  }
 
   const now = new Date();
   const doc: PersonalTaskDoc = {
@@ -88,6 +97,7 @@ export async function POST(req: NextRequest) {
     priority,
     status,
     dueDate,
+    scheduledTime,
     reminderAt,
     category,
     deleted: false,

@@ -22,7 +22,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   try {
     const { ref } = await getOwnedJournalOr404(id, user.profile.id);
     const patch: Record<string, unknown> = { updatedAt: new Date() };
-    const sections: Array<keyof typeof body> = ['didToday', 'challenges', 'learned', 'tomorrow', 'freeNote'];
+    const sections: Array<keyof typeof body> = ['content', 'didToday', 'challenges', 'learned', 'tomorrow', 'freeNote'];
     for (const k of sections) {
       const v = clean(body[k]);
       if (v !== undefined) patch[k as string] = v;
@@ -31,6 +31,11 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       if (body.mood === null || body.mood === '') patch.mood = null;
       else if (typeof body.mood === 'string' && VALID_MOOD.has(body.mood as any)) patch.mood = body.mood;
       else return NextResponse.json({ error: 'mood không hợp lệ' }, { status: 400 });
+    }
+    if (body.imageUrls !== undefined) {
+      const arr = Array.isArray(body.imageUrls) ? body.imageUrls : null;
+      if (!arr) return NextResponse.json({ error: 'imageUrls phải là array' }, { status: 400 });
+      patch.imageUrls = arr.filter((u: any) => typeof u === 'string' && /^https:\/\//.test(u)).slice(0, 10);
     }
     if (Object.keys(patch).length === 1) return NextResponse.json({ error: 'Không có field hợp lệ' }, { status: 400 });
     await ref.update(patch);

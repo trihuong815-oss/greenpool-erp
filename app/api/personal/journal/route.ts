@@ -75,10 +75,17 @@ export async function POST(req: NextRequest) {
       }, { status: 409 });
     }
 
+    // Sanitize imageUrls — chỉ accept https URLs từ Firebase Storage signed
+    const imageUrls: string[] = Array.isArray(body.imageUrls)
+      ? body.imageUrls.filter((u: any) => typeof u === 'string' && /^https:\/\//.test(u)).slice(0, 10)
+      : [];
+
     const now = new Date();
     const doc: PersonalJournalDoc = {
       ownerId: ctx.profile.id,
       date,
+      content: clean(body.content),
+      imageUrls,
       didToday: clean(body.didToday),
       challenges: clean(body.challenges),
       learned: clean(body.learned),

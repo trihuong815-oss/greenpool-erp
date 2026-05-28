@@ -51,10 +51,24 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       else if (typeof body.dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(body.dueDate)) patch.dueDate = body.dueDate;
       else return NextResponse.json({ error: 'dueDate phải YYYY-MM-DD hoặc null' }, { status: 400 });
     }
+    if (body.scheduledTime !== undefined) {
+      if (body.scheduledTime === null || body.scheduledTime === '') patch.scheduledTime = null;
+      else if (typeof body.scheduledTime === 'string' && /^\d{2}:\d{2}$/.test(body.scheduledTime)) patch.scheduledTime = body.scheduledTime;
+      else return NextResponse.json({ error: 'scheduledTime phải HH:MM hoặc null' }, { status: 400 });
+    }
     if (body.reminderAt !== undefined) {
       if (body.reminderAt === null || body.reminderAt === '') patch.reminderAt = null;
       else if (typeof body.reminderAt === 'string') patch.reminderAt = body.reminderAt;
       else return NextResponse.json({ error: 'reminderAt phải ISO string hoặc null' }, { status: 400 });
+    }
+    // Auto-tính reminderAt = scheduledAt - 1h khi dueDate + scheduledTime thay đổi nhưng reminderAt không được set
+    const newDue = patch.dueDate !== undefined ? patch.dueDate : data.dueDate;
+    const newSched = patch.scheduledTime !== undefined ? patch.scheduledTime : data.scheduledTime;
+    if (patch.reminderAt === undefined && newDue && newSched && (patch.dueDate !== undefined || patch.scheduledTime !== undefined)) {
+      const d = new Date(`${newDue}T${newSched}:00`);
+      if (Number.isFinite(d.getTime())) {
+        patch.reminderAt = new Date(d.getTime() - 60 * 60_000).toISOString();
+      }
     }
 
     if (Object.keys(patch).length === 1) {

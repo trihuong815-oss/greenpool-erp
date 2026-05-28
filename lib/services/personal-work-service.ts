@@ -23,8 +23,11 @@ export interface PersonalTaskDoc {
   description?: string;
   priority: TaskPriority;
   status: TaskStatus;
-  dueDate?: string | null;     // YYYY-MM-DD
-  reminderAt?: string | null;  // ISO
+  dueDate?: string | null;        // YYYY-MM-DD
+  /** Giờ thực hiện task trong ngày — HH:MM. Kết hợp với dueDate để tạo schedule cụ thể. */
+  scheduledTime?: string | null;  // HH:MM
+  /** Thời điểm nhắc nhở — ISO. Tự tính = (dueDate + scheduledTime - 1h) khi có scheduledTime, hoặc user nhập tay. */
+  reminderAt?: string | null;     // ISO
   category: TaskCategory;
   deleted: boolean;
   deletedAt?: Date | null;
@@ -92,7 +95,11 @@ export const VALID_MOOD: ReadonlySet<JournalMood> = new Set(['great', 'good', 'o
 export interface PersonalJournalDoc {
   ownerId: string;
   date: string;  // YYYY-MM-DD — 1 entry/day/user
-  /** Sections — tự do bỏ trống bất kỳ */
+  /** Facebook-style post content — text chính. Mới (Phase 2 — UI feed). */
+  content?: string;
+  /** URLs ảnh upload — Storage signed URLs. */
+  imageUrls?: string[];
+  /** Sections — tự do bỏ trống bất kỳ. Backward compat với UI cũ. */
   didToday?: string;
   challenges?: string;
   learned?: string;
