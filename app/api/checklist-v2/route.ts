@@ -12,7 +12,7 @@ import { COLLECTIONS } from '@/lib/firebase/collections';
 import { writeAuditLog } from '@/lib/firebase/audit-log';
 import { getCurrentProfile } from '@/lib/firebase/current-profile';
 import {
-  TEMPLATES_V2, getTemplate, userRoleForChecklistV2,
+  TEMPLATES_V2, getTemplate, userRoleForChecklistV2, checklistV2SupervisorScope,
   type ChecklistRole, type ChecklistShift,
 } from '@/lib/checklist-v2/templates';
 
@@ -60,12 +60,30 @@ export async function GET(req: NextRequest) {
   const ctx = await getCurrentProfile();
   if (!ctx) return NextResponse.json({ error: 'Chưa đăng nhập' }, { status: 401 });
 
+  const qs = req.nextUrl.searchParams;
+
+  // ─── Mode 1: ?id=<runId> → đọc run cụ thể (supervisor in-scope hoặc owner) ───
+  const queryId = qs.get('id');
+  if (queryId) {
+    const db = getFirebaseAdminDb();
+    const snap = await db.collection(COLLECTIONS.CHECKLIST_RUNS_V2).doc(queryId).get();
+    if (!snap.exists) return NextResponse.json({ error: 'Không tìm thấy run' }, { status: 404 });
+    const data = snap.data() as RunDoc;
+    const isOwner = data.ownerId === ctx.profile.id;
+    const scope = checklistV2SupervisorScope(ctx.profile.roleCode);
+    const isSupervisor = !!scope && scope.includes(data.role);
+    if (!isOwner && !isSupervisor) {
+      return NextResponse.json({ error: 'Không có quyền xem run này' }, { status: 403 });
+    }
+    return NextResponse.json({ run: serialize(snap.id, data) });
+  }
+
+  // ─── Mode 2: ?date=&shift= → run của caller (submitter mode) ───
   const role = userRoleForChecklistV2(ctx.profile.roleCode);
   if (!role) {
     return NextResponse.json({ error: 'Vai trò không thuộc checklist v2' }, { status: 403 });
   }
 
-  const qs = req.nextUrl.searchParams;
   const date = qs.get('date');
   const shift = qs.get('shift') as ChecklistShift | null;
 
