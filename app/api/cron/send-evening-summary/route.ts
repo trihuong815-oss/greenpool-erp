@@ -25,11 +25,12 @@ function checkAuth(req: NextRequest): boolean {
 }
 
 function tomorrowDateStr(): string {
-  // 20:00 Vietnam = 13:00 UTC. Ngày mai (theo VN) = ngày của (now + 1 ngày, theo VN tz).
-  // Easy: lấy ngày hiện tại UTC + 1 (vì 13 UTC = 20 VN, cùng ngày VN). Output YYYY-MM-DD.
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  // "Ngày mai" tính theo giờ Vietnam (GMT+7), không phải UTC.
+  // Server chạy UTC nên cần convert qua Intl.DateTimeFormat với timeZone Asia/Ho_Chi_Minh.
+  const nowVN = new Date(Date.now() + 7 * 60 * 60_000); // shift sang VN
+  const tomorrow = new Date(nowVN);
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+  return `${tomorrow.getUTCFullYear()}-${String(tomorrow.getUTCMonth() + 1).padStart(2, '0')}-${String(tomorrow.getUTCDate()).padStart(2, '0')}`;
 }
 
 export async function POST(req: NextRequest) {

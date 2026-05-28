@@ -164,6 +164,8 @@ export function PersonalWorkClient({ profile, initialTasks }: Props) {
           subscribeForegroundMessages((p) => {
             showToast('success', `🔔 ${p.title}${p.body ? ' — ' + p.body : ''}`);
           });
+          // Trigger reminder check ngay khi mở app — bypass GitHub cron delay
+          fetch('/api/personal/check-my-reminders', { method: 'POST' }).catch(() => {});
         }
       }
       // Nếu perm === 'default' → đợi user bấm nút (xem renderPushBanner)

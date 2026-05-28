@@ -62,10 +62,11 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       else return NextResponse.json({ error: 'reminderAt phải ISO string hoặc null' }, { status: 400 });
     }
     // Auto-tính reminderAt = scheduledAt - 1h khi dueDate + scheduledTime thay đổi nhưng reminderAt không được set
+    // QUAN TRỌNG: giờ là Vietnam (GMT+7), không phải UTC.
     const newDue = patch.dueDate !== undefined ? patch.dueDate : data.dueDate;
     const newSched = patch.scheduledTime !== undefined ? patch.scheduledTime : data.scheduledTime;
     if (patch.reminderAt === undefined && newDue && newSched && (patch.dueDate !== undefined || patch.scheduledTime !== undefined)) {
-      const d = new Date(`${newDue}T${newSched}:00`);
+      const d = new Date(`${newDue}T${newSched}:00+07:00`);
       if (Number.isFinite(d.getTime())) {
         patch.reminderAt = new Date(d.getTime() - 60 * 60_000).toISOString();
       }
