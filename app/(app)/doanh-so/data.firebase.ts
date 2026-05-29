@@ -46,6 +46,17 @@ export interface PackageQuantityAgg {
   totalYearRevenue: number;    // sum revenueByMonth
 }
 
+/** Cảnh báo lệch giữa 2 nguồn doanh thu:
+ *  - revenuePerSale: tổng từ packageSales (per Sale, includes __total sentinel)
+ *  - revenuePerPackage: tổng từ packageQuantities (per Package detail)
+ *  Cùng (branch × tháng) nên sum bằng nhau. Nếu lệch → data inconsistent, cần admin kiểm tra. */
+export interface RevenueDiscrepancy {
+  month: number;             // 1-12 (0 = tổng năm)
+  revenuePerSale: number;    // sum packageSales doanh thu
+  revenuePerPackage: number; // sum packageQuantities doanh thu
+  diff: number;              // perSale - perPackage
+}
+
 export interface BranchAgg {
   branchId: string;
   totalLeads: number;
@@ -65,6 +76,8 @@ export interface BranchAgg {
   staffTargets: Record<string, number[]> | null; // saleId → 12 months target (QLCS-set)
   /** SL gói theo package × 12 tháng (từ collection packageQuantities, độc lập với revenue). */
   packageQuantities: PackageQuantityAgg[];
+  /** Cảnh báo lệch doanh thu per-sale vs per-package — chỉ chứa tháng có lệch > threshold. */
+  revenueDiscrepancies: RevenueDiscrepancy[];
 }
 
 export interface SalesReport {
@@ -177,6 +190,7 @@ export async function fetchSalesReport(
         leadTargets: null,
         staffTargets: null,
         packageQuantities: [],
+        revenueDiscrepancies: [],
       };
       staffMap[branchId] = {};
     }
@@ -343,7 +357,10 @@ export async function fetchSalesReport(
   // Ensure all branches with targets show up even if zero entries
   for (const branchId of Object.keys(targetMap)) ensureBranch(branchId);
 
-  // 4. Finalize per-branch (+ apply targets)
+  // 4. Finalize per-branch (+ apply targets + compute discrepancy)
+  // Invariant: ∑(packageSales.revenue) === ∑(packageQuantities.revenue) per (branch × month).
+  // Cùng nguồn data, chỉ khác cách aggregate. Lệch → admin nhập sai 1 trong 2 chỗ.
+  const DISCREPANCY_THRESHOLD = 1000; // ≤1000đ tính là noise (lỗi làm tròn), >1000đ mới warn
   for (const b of Object.values(byBranch)) {
     b.closeRate = b.totalLeads === 0 ? 0 : b.totalClosed / b.totalLeads;
     b.groups = Object.values(groupRevMap[b.branchId] ?? {}).sort((a, b) => b.revenue - a.revenue);
@@ -363,6 +380,30 @@ export async function fetchSalesReport(
       b.leadTargets = t.leadTargets;
       b.staffTargets = t.staffTargets;
     }
+
+    // Compute discrepancy: so sánh byMonth.revenue (từ packageSales) vs sum packageQuantities.revenueByMonth
+    const discrepancies: RevenueDiscrepancy[] = [];
+    let yearPerSale = 0, yearPerPackage = 0;
+    for (let m = 1; m <= 12; m++) {
+      const perSale = b.byMonth[m - 1]?.revenue ?? 0;
+      let perPackage = 0;
+      for (const pq of b.packageQuantities) {
+        perPackage += pq.revenueByMonth[m - 1] ?? 0;
+      }
+      yearPerSale += perSale;
+      yearPerPackage += perPackage;
+      const diff = perSale - perPackage;
+      // Chỉ cảnh báo tháng có data (1 trong 2 nguồn > 0) và lệch > threshold
+      if ((perSale > 0 || perPackage > 0) && Math.abs(diff) > DISCREPANCY_THRESHOLD) {
+        discrepancies.push({ month: m, revenuePerSale: perSale, revenuePerPackage: perPackage, diff });
+      }
+    }
+    // Year-level discrepancy (month=0 sentinel)
+    const yearDiff = yearPerSale - yearPerPackage;
+    if ((yearPerSale > 0 || yearPerPackage > 0) && Math.abs(yearDiff) > DISCREPANCY_THRESHOLD) {
+      discrepancies.unshift({ month: 0, revenuePerSale: yearPerSale, revenuePerPackage: yearPerPackage, diff: yearDiff });
+    }
+    b.revenueDiscrepancies = discrepancies;
   }
 
   // 5. System aggregate

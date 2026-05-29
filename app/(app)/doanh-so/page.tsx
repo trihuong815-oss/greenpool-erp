@@ -37,6 +37,7 @@ function emptyBranch(branchId: string): BranchAgg {
     leadTargets: null,
     staffTargets: null,
     packageQuantities: [],
+    revenueDiscrepancies: [],
   };
 }
 
@@ -214,6 +215,8 @@ function adaptReport(branches: BranchAgg[], salesRegistry: SalesRegistry) {
       yearLeadTarget: b.yearLeadTarget,
       // PHẦN 3: cơ cấu SL gói theo tháng (từ collection packageQuantities, độc lập revenue).
       packageQuantities: b.packageQuantities,
+      // Cảnh báo lệch doanh thu per-sale vs per-package (admin cần kiểm tra data)
+      revenueDiscrepancies: b.revenueDiscrepancies,
     };
   });
 }

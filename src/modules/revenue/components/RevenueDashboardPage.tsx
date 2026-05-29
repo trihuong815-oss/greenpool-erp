@@ -88,6 +88,9 @@ type BranchRevenue = {
   yearTarget?: number;
   monthTargets?: number[] | null;
   yearLeadTarget?: number;
+  /** Cảnh báo lệch doanh thu per-sale (packageSales) vs per-package (packageQuantities).
+   *  month=0 = tổng năm, 1-12 = từng tháng. Chỉ chứa entry có lệch > 1000đ. */
+  revenueDiscrepancies?: { month: number; revenuePerSale: number; revenuePerPackage: number; diff: number }[];
 };
 
 type LeadSource = "MKT" | "Sale" | "Renew" | "Referral" | "Walk-in";
@@ -473,6 +476,81 @@ function CompareBar({
 }
 
 /* ============================================================
+   Discrepancy Warning — cảnh báo lệch per-sale vs per-package
+   ============================================================ */
+
+function fmtMoney(n: number): string {
+  return n.toLocaleString('vi-VN') + 'đ';
+}
+
+function DiscrepancyWarning({
+  discrepancies,
+}: { discrepancies?: { month: number; revenuePerSale: number; revenuePerPackage: number; diff: number }[] }) {
+  const [open, setOpen] = useState(false);
+  if (!discrepancies || discrepancies.length === 0) return null;
+  const yearEntry = discrepancies.find((d) => d.month === 0);
+  const monthEntries = discrepancies.filter((d) => d.month > 0);
+  return (
+    <span className="relative inline-block">
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-rose-50 text-rose-700 ring-1 ring-rose-200 text-[10px] font-bold hover:bg-rose-100"
+        title="Lệch doanh thu — click xem chi tiết"
+      >
+        ⚠ {discrepancies.length}
+      </button>
+      {open && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="absolute left-0 top-full mt-1 z-50 w-[320px] rounded-lg bg-white ring-1 ring-rose-300 shadow-lg p-3 text-left text-[11px] font-normal text-slate-700"
+        >
+          <div className="font-bold text-rose-700 mb-1.5 text-xs flex items-center justify-between">
+            <span>⚠ Doanh thu lệch giữa 2 nguồn</span>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="text-slate-400 hover:text-slate-700 leading-none text-base"
+              aria-label="Đóng"
+            >×</button>
+          </div>
+          <div className="text-[10px] text-slate-500 mb-2 leading-snug">
+            Tổng từ <strong>per-sale</strong> (mỗi NV bán) cần bằng tổng từ <strong>per-package</strong> (mỗi gói).
+            Lệch = data nhập sai 1 trong 2 chỗ → cần kiểm tra.
+          </div>
+          {yearEntry && (
+            <div className="rounded bg-rose-50 ring-1 ring-rose-200 p-2 mb-1.5">
+              <div className="font-semibold text-rose-800 mb-1">📅 Tổng năm</div>
+              <div className="grid grid-cols-3 gap-1 tabular-nums">
+                <div><span className="text-slate-500">Per-sale:</span><br/>{fmtMoney(yearEntry.revenuePerSale)}</div>
+                <div><span className="text-slate-500">Per-package:</span><br/>{fmtMoney(yearEntry.revenuePerPackage)}</div>
+                <div className="text-rose-700 font-bold"><span className="text-slate-500">Lệch:</span><br/>{yearEntry.diff > 0 ? '+' : ''}{fmtMoney(yearEntry.diff)}</div>
+              </div>
+            </div>
+          )}
+          {monthEntries.length > 0 && (
+            <div>
+              <div className="font-semibold text-slate-700 mb-1">Lệch theo tháng:</div>
+              <div className="max-h-[200px] overflow-y-auto space-y-1">
+                {monthEntries.map((d) => (
+                  <div key={d.month} className="flex items-center justify-between rounded bg-amber-50 ring-1 ring-amber-200 px-2 py-1">
+                    <span className="font-semibold text-amber-800">T{d.month}</span>
+                    <span className="text-[10px] text-slate-500">
+                      Sale: {fmtMoney(d.revenuePerSale)} · Gói: {fmtMoney(d.revenuePerPackage)}
+                    </span>
+                    <span className="text-rose-700 font-bold ml-1">{d.diff > 0 ? '+' : ''}{fmtMoney(d.diff)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </span>
+  );
+}
+
+/* ============================================================
    Branch Card
    ============================================================ */
 
@@ -523,7 +601,10 @@ function BranchCard({
       {/* Header */}
       <header className="mb-4 flex items-start justify-between gap-3 pl-1">
         <div className="min-w-0">
-          <h3 className="text-sm font-bold text-slate-900 truncate">{branch.branchName}</h3>
+          <h3 className="text-sm font-bold text-slate-900 truncate flex items-center gap-1.5">
+            {branch.branchName}
+            <DiscrepancyWarning discrepancies={branch.revenueDiscrepancies} />
+          </h3>
           <p className="mt-0.5 text-xs text-slate-500">Lũy kế năm {year}</p>
         </div>
         <StatusChip rate={yearRate} />
