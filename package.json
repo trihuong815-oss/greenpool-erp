@@ -9,7 +9,8 @@
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
-    "deploy:rules": "npx --yes tsx scripts/deploy-firebase-rules.ts"
+    "deploy:rules": "npx --yes tsx scripts/deploy-firebase-rules.ts",
+    "deploy:firestore": "firebase deploy --only firestore:indexes,firestore:rules"
   },
   "dependencies": {
     "clsx": "^2.1.1",

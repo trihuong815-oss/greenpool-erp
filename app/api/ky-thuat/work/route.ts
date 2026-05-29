@@ -192,6 +192,20 @@ export async function PATCH(req: NextRequest) {
         if (!isAssignee && !isCreator && !canCreateTask(caller.profile)) {
           return NextResponse.json({ error: 'Không có quyền đổi status' }, { status: 403 });
         }
+        // Enforce flow: open → in_progress → done. Cho phép cancel ở mọi trạng thái chưa done.
+        // Không cho phép quay lại (done → in_progress / open) hoặc skip giai đoạn.
+        const cur = String(data.status ?? 'open');
+        const allowed: Record<string, string[]> = {
+          open: ['in_progress', 'cancelled'],
+          in_progress: ['done', 'cancelled'],
+          done: [],
+          cancelled: [],
+        };
+        if (!(allowed[cur] ?? []).includes(newStatus)) {
+          return NextResponse.json({
+            error: `Không thể chuyển công việc từ "${cur}" → "${newStatus}". Quy trình: open → in_progress → done.`,
+          }, { status: 400 });
+        }
         patch.status = newStatus;
         if (newStatus === 'done') patch.completedAt = now;
       } else {
@@ -200,11 +214,17 @@ export async function PATCH(req: NextRequest) {
     } else if (action === 'approve' || action === 'reject') {
       if (data.kind !== 'proposal') return NextResponse.json({ error: 'approve/reject chỉ cho proposal' }, { status: 400 });
       const notes = String(body?.approvalNotes ?? '').trim().slice(0, 1000);
-      // Check quyền duyệt
+      // Check quyền duyệt — truyền createdBy để chặn người tạo tự duyệt
       const ok = data.proposalType === 'expense'
-        ? canApproveExpenseProposal(caller.profile, data.branchId)
-        : canApproveProfessionalProposal(caller.profile, data.specialization ?? null);
-      if (!ok) return NextResponse.json({ error: 'Không có quyền duyệt đề xuất này' }, { status: 403 });
+        ? canApproveExpenseProposal(caller.profile, data.branchId, data.createdBy)
+        : canApproveProfessionalProposal(caller.profile, data.specialization ?? null, data.createdBy);
+      if (!ok) {
+        const sameUser = data.createdBy === caller.profile.uid;
+        const msg = sameUser
+          ? 'Bạn là người tạo đề xuất này — không thể tự duyệt. Hãy chuyển cho người khác duyệt.'
+          : 'Bạn không có quyền duyệt đề xuất này.';
+        return NextResponse.json({ error: msg }, { status: 403 });
+      }
       patch.status = action === 'approve' ? 'approved' : 'rejected';
       patch.approvalNotes = notes;
       patch.decidedBy = caller.profile.uid;

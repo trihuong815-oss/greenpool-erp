@@ -24,7 +24,8 @@ export default async function ChecklistV2Page({ searchParams }: PageProps) {
   }
 
   const role: ChecklistRole | null = userRoleForChecklistV2(profile.roleCode);
-  const today = new Date().toISOString().slice(0, 10);
+  // Phải tính theo VN tz (UTC+7) — server chạy UTC, dùng toISOString() sẽ lệch ngày sau 17h VN.
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date());
   const sp = await searchParams;
   const shift: ChecklistShift = sp.shift === 'morning' || sp.shift === 'afternoon' || sp.shift === 'evening'
     ? sp.shift

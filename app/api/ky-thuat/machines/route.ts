@@ -151,6 +151,18 @@ export async function PATCH(req: NextRequest) {
     if (snap.data()?.branchId === 'CTT' && body.subArea !== undefined) {
       patch.subArea = isValidCttSubArea(body.subArea) ? body.subArea : null;
     }
+
+    // Re-validate constraint: bể ngoài trời CTT chỉ có máy lọc.
+    // Áp dụng cho cả 2 trường hợp: đổi subArea sang 'outdoor', hoặc đổi type sang 'nhiet'.
+    const finalBranchId = snap.data()?.branchId;
+    const finalSubArea = patch.subArea !== undefined ? patch.subArea : snap.data()?.subArea;
+    const finalType = snap.data()?.type;
+    if (finalBranchId === 'CTT' && finalSubArea === 'outdoor' && finalType !== 'loc') {
+      return NextResponse.json({
+        error: 'Bể ngoài trời CTT chỉ có máy lọc — không thể chuyển máy nhiệt sang outdoor',
+      }, { status: 400 });
+    }
+
     await ref.update(patch);
     await writeAuditLog({
       action: 'update_machine', module: 'ky-thuat',
@@ -177,6 +189,16 @@ export async function DELETE(req: NextRequest) {
     const snap = await ref.get();
     if (!snap.exists) return NextResponse.json({ error: 'Không tìm thấy' }, { status: 404 });
     const x = snap.data()!;
+
+    // Chặn xóa nếu còn machineRuns tham chiếu — tránh mồ côi dữ liệu lịch sử vận hành
+    const runsCount = await db.collection(COLLECTIONS.MACHINE_RUNS)
+      .where('machineId', '==', id).count().get();
+    if (runsCount.data().count > 0) {
+      return NextResponse.json({
+        error: `Không thể xoá: máy này còn ${runsCount.data().count} lượt vận hành đã ghi nhận. Hãy chuyển máy sang "ngừng hoạt động" thay vì xóa.`,
+      }, { status: 409 });
+    }
+
     await ref.delete();
     await writeAuditLog({
       action: 'delete_machine', module: 'ky-thuat',

@@ -176,12 +176,13 @@ export function calcStreak(completions: Record<string, boolean>): { current: num
   }
 
   // Current: đếm ngược từ hôm nay (cho phép bỏ qua "hôm nay chưa làm" → tính từ hôm qua)
-  const today = new Date();
+  // Phải dùng giờ VN (UTC+7): server chạy UTC, nếu dùng UTC date thì từ 0h-7h VN
+  // bị tính sang ngày hôm trước → streak sai 1 ngày.
+  const vnFmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
+  const now = Date.now();
   let cur = 0;
   for (let i = 0; i < 365; i++) {
-    const d = new Date(today);
-    d.setUTCDate(d.getUTCDate() - i);
-    const key = d.toISOString().slice(0, 10);
+    const key = vnFmt.format(new Date(now - i * 86_400_000));
     if (completions[key]) cur++;
     else if (i > 0) break;
     // i=0 (hôm nay) không completed → vẫn check ngày hôm qua

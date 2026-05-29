@@ -115,19 +115,29 @@ export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ leadId:
 
     const db = getFirebaseAdminDb();
     const ref = db.collection(COL).doc(leadId);
-    const snap = await ref.get();
-    if (!snap.exists) return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
-    const data = snap.data()!;
 
-    // Chặn xóa lead nếu còn sale tham chiếu (data integrity)
-    const salesRef = await db.collection(COLLECTIONS.SALES).where('leadId', '==', leadId).count().get();
-    if (salesRef.data().count > 0) {
-      return NextResponse.json({
-        error: `Không thể xoá: còn ${salesRef.data().count} sale tham chiếu lead này.`,
-      }, { status: 409 });
+    // Wrap trong transaction để chống race: nếu kiểm tra count + delete không atomic,
+    // 2 lệnh xóa đồng thời có thể cùng thấy count=0 → cả 2 cùng xóa sau khi 1 sale vừa được tạo.
+    // Transaction lock đảm bảo bất kỳ sale POST nào cùng leadId đang chạy sẽ buộc DELETE retry.
+    let data: FirebaseFirestore.DocumentData;
+    try {
+      data = await db.runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        if (!snap.exists) throw new Error('lead-not-found');
+        const salesQ = db.collection(COLLECTIONS.SALES).where('leadId', '==', leadId).limit(1);
+        const salesSnap = await tx.get(salesQ);
+        if (!salesSnap.empty) throw new Error('lead-has-sales');
+        tx.delete(ref);
+        return snap.data()!;
+      });
+    } catch (txErr: any) {
+      const msg = String(txErr?.message ?? '');
+      if (msg === 'lead-not-found') return NextResponse.json({ error: 'Lead not found' }, { status: 404 });
+      if (msg === 'lead-has-sales') {
+        return NextResponse.json({ error: 'Không thể xoá: lead này đã có sale tham chiếu.' }, { status: 409 });
+      }
+      throw txErr;
     }
-
-    await ref.delete();
     await writeAuditLog({
       action: 'delete_lead',
       module: 'sales',

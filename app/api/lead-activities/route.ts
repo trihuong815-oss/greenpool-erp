@@ -63,7 +63,19 @@ export async function POST(req: NextRequest) {
     const leadId: string = body?.leadId;
     const type: string = body?.type;
     const content: string = (body?.content ?? '').toString().trim();
-    const nextFollowUpAt = body?.nextFollowUpAt ? new Date(body.nextFollowUpAt) : null;
+    // Parse nextFollowUpAt ép múi giờ VN (UTC+7) nếu client gửi date/datetime không có tz:
+    //   "2026-06-01" → "2026-06-01T00:00:00+07:00" (đầu ngày VN)
+    //   "2026-06-01T08:00" → "2026-06-01T08:00+07:00"
+    //   "2026-06-01T08:00:00Z" → giữ nguyên (đã có tz)
+    function parseVN(input: unknown): Date | null {
+      if (!input) return null;
+      const s = String(input).trim();
+      if (!s) return null;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(`${s}T00:00:00+07:00`);
+      if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(s)) return new Date(`${s}+07:00`);
+      return new Date(s);
+    }
+    const nextFollowUpAt = parseVN(body?.nextFollowUpAt);
 
     if (!leadId || !type || !content) {
       return NextResponse.json({ error: 'Thiếu leadId / type / content' }, { status: 400 });

@@ -175,17 +175,25 @@ export function canCreateProposal(p: CallerProfile): boolean {
   return isKT(p.role_code);
 }
 
-/** Duyệt proposal type 'expense' (duyệt chi) — QLCS cơ sở + ADMIN/GD/TP_KT. CEO loại trừ. */
-export function canApproveExpenseProposal(p: CallerProfile, branchId: string): boolean {
+/** Duyệt proposal type 'expense' (duyệt chi) — QLCS cơ sở + GD/TP_KT.
+ *  ADMIN system bypass; người tạo proposal KHÔNG được tự duyệt (kể cả khi role match).
+ *  CEO loại trừ vì view-only. */
+export function canApproveExpenseProposal(p: CallerProfile, branchId: string, createdBy?: string): boolean {
   if (!p.uid) return false;
+  if (p.role_code === 'ADMIN') return true;
+  if (createdBy && createdBy === p.uid) return false;
   if (isWriteAdmin(p) || p.role_code === 'TP_KT') return true;
   if (isQLCSRole(p.role_code) && p.facility_id === branchId) return true;
   return false;
 }
 
-/** Duyệt proposal type 'professional' (chuyên môn) — TP_KT / PP cùng specialization + ADMIN/GD. CEO loại trừ. */
-export function canApproveProfessionalProposal(p: CallerProfile, specialization: 'HT' | 'XLN' | null): boolean {
+/** Duyệt proposal type 'professional' (chuyên môn) — TP_KT / PP cùng specialization + GD.
+ *  ADMIN system bypass; người tạo proposal KHÔNG được tự duyệt.
+ *  CEO loại trừ vì view-only. */
+export function canApproveProfessionalProposal(p: CallerProfile, specialization: 'HT' | 'XLN' | null, createdBy?: string): boolean {
   if (!p.uid) return false;
+  if (p.role_code === 'ADMIN') return true;
+  if (createdBy && createdBy === p.uid) return false;
   if (isWriteAdmin(p) || p.role_code === 'TP_KT') return true;
   if (specialization === 'HT' && p.role_code === 'PP_HT') return true;
   if (specialization === 'XLN' && p.role_code === 'PP_XLN') return true;

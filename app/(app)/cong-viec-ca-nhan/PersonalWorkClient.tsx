@@ -311,7 +311,7 @@ export function PersonalWorkClient({ profile, initialTasks }: Props) {
         throw new Error(j?.error ?? 'Lỗi xoá');
       }
       setTasks((arr) => arr.filter((t) => t.id !== id));
-      showToast('success', 'Đã xoá task');
+      showToast('success', 'Đã xoá công việc');
     } catch (e: any) {
       showToast('error', e.message);
     }
@@ -329,7 +329,7 @@ export function PersonalWorkClient({ profile, initialTasks }: Props) {
         throw new Error(j?.error ?? 'Lỗi cập nhật');
       }
       setTasks((arr) => arr.map((x) => x.id === t.id ? { ...x, status: newStatus } : x));
-      if (newStatus === 'done') showToast('success', '🎉 Hoàn tất task!');
+      if (newStatus === 'done') showToast('success', '🎉 Hoàn tất công việc!');
     } catch (e: any) {
       showToast('error', e.message);
     }
@@ -371,7 +371,7 @@ export function PersonalWorkClient({ profile, initialTasks }: Props) {
           <div className="flex-1 min-w-0">
             <div className="font-bold text-sm text-slate-800">Bật thông báo lên điện thoại</div>
             <div className="text-xs text-slate-600 mt-0.5">
-              Nhận nhắc nhở task + tin nhắn buổi tối ngay cả khi app đóng. Khuyến nghị cho điện thoại.
+              Nhận nhắc nhở công việc + tin nhắn buổi tối ngay cả khi app đóng. Khuyến nghị cho điện thoại.
             </div>
           </div>
           <button
@@ -430,7 +430,7 @@ export function PersonalWorkClient({ profile, initialTasks }: Props) {
             </p>
             {tomorrowTasks.length === 0 ? (
               <div className="rounded-lg bg-white/10 ring-1 ring-white/20 px-3 py-2 text-sm">
-                ✨ Ngày mai chưa có task nào — một ngày tự do hoặc dành cho việc lớn?
+                ✨ Ngày mai chưa có công việc nào — một ngày tự do hoặc dành cho việc lớn?
               </div>
             ) : (
               <div className="rounded-lg bg-white/10 backdrop-blur ring-1 ring-white/20 p-3">
@@ -517,12 +517,12 @@ export function PersonalWorkClient({ profile, initialTasks }: Props) {
             </div>
           </div>
 
-          {/* Edit button (bottom right) */}
+          {/* Edit button (top-right, dịch sát mép để không che ring biểu đồ tròn) */}
           <button
             onClick={() => setProfileModalOpen(true)}
-            className="absolute top-4 right-4 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md bg-white/15 backdrop-blur text-white ring-1 ring-white/30 hover:bg-white/25 transition"
+            className="absolute top-1.5 right-2 inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold rounded-md bg-white/15 backdrop-blur text-white ring-1 ring-white/30 hover:bg-white/25 transition"
           >
-            <Edit3 size={13} /> Sửa hồ sơ
+            <Edit3 size={11} /> Sửa hồ sơ
           </button>
         </div>
       </div>
@@ -671,7 +671,7 @@ export function PersonalWorkClient({ profile, initialTasks }: Props) {
 
       {/* ─── Privacy notice (luôn hiện) ─── */}
       <div className="text-[11px] text-slate-400 text-center">
-        🔒 Không gian riêng tư — chỉ bạn xem được. Admin/CEO KHÔNG truy cập nội dung task / nhật ký / mục tiêu / AI logs của bạn.
+        🔒 Không gian riêng tư — chỉ bạn xem được. Admin/CEO KHÔNG truy cập nội dung công việc / nhật ký / mục tiêu / AI logs của bạn.
       </div>
 
       {/* ─── MODALS ─── */}

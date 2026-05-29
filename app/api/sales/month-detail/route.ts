@@ -149,10 +149,9 @@ export async function GET(req: NextRequest) {
         bySalePackageMap[sk] = { saleId: l.saleId, saleName: l.saleName, totalQty: 0, totalRevenue: 0, packages: [] };
       }
       const sale = bySalePackageMap[sk];
-      // __total sentinel: per-sale tổng — đếm vào totals nhưng KHÔNG add vào packages list
-      // (avoid hiển thị fake package "(Tổng theo sale)" lẫn với gói thật)
+      // __total sentinel: qty=1 placeholder → CHỈ cộng revenue, bỏ qty
+      // (đồng bộ với bySaleMap line 128-130 và comment line 124)
       if (l.packageId === '__total') {
-        sale.totalQty += l.quantity;
         sale.totalRevenue += l.revenue;
         continue;
       }

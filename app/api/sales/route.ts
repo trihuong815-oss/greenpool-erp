@@ -114,36 +114,57 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Validate leadId: phải tồn tại + cùng branch
+    // Validate + create sale + auto-close lead trong 1 transaction.
+    // Lý do: nếu không transaction, 2 request song song cùng leadId đều thấy lead chưa closed_won
+    // → tạo 2 sale → revenue double-count. Transaction lock đảm bảo invariant 1 lead = max 1 sale confirmed.
     const db = getFirebaseAdminDb();
-    const leadSnap = await db.collection(COLLECTIONS.LEADS).doc(payload.leadId as string).get();
-    if (!leadSnap.exists) return NextResponse.json({ error: 'leadId không tồn tại' }, { status: 400 });
-    const lead = leadSnap.data()!;
-    if (lead.branchId !== payload.branchId) {
-      return NextResponse.json({ error: 'Lead thuộc cơ sở khác — không tạo sale chéo cơ sở' }, { status: 400 });
-    }
-    if (lead.status === 'closed_lost') {
-      return NextResponse.json({ error: 'Lead đã closed_lost — không tạo sale từ lead này' }, { status: 400 });
-    }
-
     const now = new Date();
-    const ref = await db.collection(COL).add({
-      ...payload,
-      createdAt: now,
-      createdBy: caller.profile.uid,
-      updatedAt: now,
-      updatedBy: caller.profile.uid,
-    });
-    const created = (await ref.get()).data()!;
+    let saleId: string;
+    let created: FirebaseFirestore.DocumentData;
 
-    // Auto chuyển lead.status → closed_won nếu sale confirmed
-    if (payload.status === 'confirmed' && lead.status !== 'closed_won') {
-      await db.collection(COLLECTIONS.LEADS).doc(payload.leadId as string).update({
-        status: 'closed_won',
-        updatedAt: now,
-        updatedBy: caller.profile.uid,
+    try {
+      const result = await db.runTransaction(async (tx) => {
+        const leadRef = db.collection(COLLECTIONS.LEADS).doc(payload.leadId as string);
+        const leadSnap = await tx.get(leadRef);
+        if (!leadSnap.exists) throw new Error('lead-not-found');
+        const lead = leadSnap.data()!;
+        if (lead.branchId !== payload.branchId) throw new Error('lead-branch-mismatch');
+        if (lead.status === 'closed_lost') throw new Error('lead-closed-lost');
+        if (payload.status === 'confirmed' && lead.status === 'closed_won') {
+          throw new Error('lead-already-converted');
+        }
+
+        const saleRef = db.collection(COL).doc();
+        const saleData = {
+          ...payload,
+          createdAt: now,
+          createdBy: caller.profile.uid,
+          updatedAt: now,
+          updatedBy: caller.profile.uid,
+        };
+        tx.set(saleRef, saleData);
+
+        if (payload.status === 'confirmed' && lead.status !== 'closed_won') {
+          tx.update(leadRef, {
+            status: 'closed_won',
+            updatedAt: now,
+            updatedBy: caller.profile.uid,
+          });
+        }
+        return { id: saleRef.id, data: saleData };
       });
+      saleId = result.id;
+      created = result.data;
+    } catch (txErr: any) {
+      const msg = String(txErr?.message ?? '');
+      if (msg === 'lead-not-found') return NextResponse.json({ error: 'leadId không tồn tại' }, { status: 400 });
+      if (msg === 'lead-branch-mismatch') return NextResponse.json({ error: 'Lead thuộc cơ sở khác — không tạo sale chéo cơ sở' }, { status: 400 });
+      if (msg === 'lead-closed-lost') return NextResponse.json({ error: 'Lead đã closed_lost — không tạo sale từ lead này' }, { status: 400 });
+      if (msg === 'lead-already-converted') return NextResponse.json({ error: 'Lead đã được chốt sale rồi — không tạo trùng' }, { status: 409 });
+      throw txErr;
     }
+
+    const ref = db.collection(COL).doc(saleId);
 
     await writeAuditLog({
       action: 'create_sale',
