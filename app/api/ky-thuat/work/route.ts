@@ -136,6 +136,25 @@ export async function POST(req: NextRequest) {
       before: null, after: { id: ref.id, title, kind },
       actorName: caller.actorName, actorRole: caller.actorRole, source: 'api',
     });
+
+    // Push notification
+    const ktNoti = await import('@/lib/firebase/ky-thuat-notifications');
+    if (kind === 'task') {
+      await ktNoti.notifyKtTaskCreated({
+        id: ref.id, kind: 'task', title, branchId,
+        createdBy: caller.profile.uid, createdByName: caller.actorName,
+        assigneeId: (doc as any).assigneeId,
+        assigneeName: (doc as any).assigneeName,
+      });
+    } else if (kind === 'proposal') {
+      await ktNoti.notifyKtProposalCreated({
+        id: ref.id, kind: 'proposal', title, branchId,
+        createdBy: caller.profile.uid, createdByName: caller.actorName,
+        proposalType: (doc as any).proposalType,
+        specialization: (doc as any).specialization,
+      });
+    }
+
     return NextResponse.json({ ok: true, id: ref.id });
   } catch (e: any) {
     if (e instanceof UnauthorizedError) return NextResponse.json({ error: e.message }, { status: e.status });
@@ -205,6 +224,24 @@ export async function PATCH(req: NextRequest) {
       after: { ...patch, id },
       actorName: caller.actorName, actorRole: caller.actorRole, source: 'api',
     });
+
+    // Push notification
+    const ktNoti = await import('@/lib/firebase/ky-thuat-notifications');
+    if (action === 'status_change' && data.kind === 'task') {
+      await ktNoti.notifyKtStatusChanged({
+        id, kind: 'task', title: data.title, branchId: data.branchId,
+        createdBy: data.createdBy, createdByName: data.createdByName,
+        assigneeId: data.assigneeId,
+      }, { uid: caller.profile.uid, name: caller.actorName ?? '' }, String(patch.status));
+    } else if ((action === 'approve' || action === 'reject') && data.kind === 'proposal') {
+      await ktNoti.notifyKtProposalDecided({
+        id, kind: 'proposal', title: data.title, branchId: data.branchId,
+        createdBy: data.createdBy, createdByName: data.createdByName,
+        proposalType: data.proposalType,
+        specialization: data.specialization,
+      }, { uid: caller.profile.uid, name: caller.actorName ?? '' }, action === 'approve', String(patch.approvalNotes ?? ''));
+    }
+
     return NextResponse.json({ ok: true });
   } catch (e: any) {
     if (e instanceof UnauthorizedError) return NextResponse.json({ error: e.message }, { status: e.status });

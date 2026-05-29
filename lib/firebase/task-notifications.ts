@@ -131,6 +131,25 @@ export async function notifyTaskStatusChanged(
   }).catch(() => {});
 }
 
+/** File đính kèm mới — push creator + assignees (trừ uploader). */
+export async function notifyTaskAttachment(
+  task: TaskDoc,
+  uploader: { uid: string; name: string },
+  fileName: string,
+): Promise<void> {
+  const uids = await resolveAssigneeUids(task);
+  uids.push(task.createdBy);
+  const filtered = Array.from(new Set(uids)).filter((u) => u !== uploader.uid);
+  if (filtered.length === 0) return;
+  await pushToUsers(filtered, {
+    title: `📎 ${uploader.name} đính file`,
+    body: `"${task.title}" — ${fileName.slice(0, 80)}`,
+    link: taskLink(task.id),
+    tag: `task-${task.id}`,
+    data: { taskId: task.id, kind: 'task_attachment' },
+  }).catch(() => {});
+}
+
 /** Comment mới — push creator + assignees (trừ commenter). */
 export async function notifyTaskComment(
   task: TaskDoc,

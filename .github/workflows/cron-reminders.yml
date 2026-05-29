@@ -1,10 +1,12 @@
-name: Cron — Send task reminders + evening summary
+name: Cron — Push notifications (reminders + morning + evening)
 
 # Reminders: mỗi 5 phút (GitHub Actions min interval).
-# Evening summary: 13:00 UTC = 20:00 Vietnam (GMT+7).
+# Morning summary: 00:00 UTC = 07:00 Vietnam.
+# Evening summary: 13:00 UTC = 20:00 Vietnam.
 on:
   schedule:
     - cron: '*/5 * * * *'    # reminders mỗi 5 phút
+    - cron: '0 0 * * *'      # morning summary 07:00 VN
     - cron: '0 13 * * *'     # evening summary 20:00 VN
   workflow_dispatch:          # manual trigger để test
 
@@ -29,6 +31,24 @@ jobs:
           cat /tmp/body
           if [ "$response" -ne 200 ]; then
             echo "::error::Reminders cron failed with status $response"
+            exit 1
+          fi
+
+  send-morning-summary:
+    if: github.event.schedule == '0 0 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Call send-morning-summary endpoint
+        run: |
+          response=$(curl -s -o /tmp/body -w "%{http_code}" \
+            -X POST "${{ secrets.APP_HOSTING_URL }}/api/cron/send-morning-summary" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "content-type: application/json")
+          echo "Status: $response"
+          cat /tmp/body
+          if [ "$response" -ne 200 ]; then
+            echo "::error::Morning summary cron failed with status $response"
             exit 1
           fi
 

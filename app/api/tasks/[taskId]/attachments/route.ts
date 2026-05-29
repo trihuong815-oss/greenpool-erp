@@ -91,6 +91,16 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
       createdAt: now,
     });
 
+    // Push notification — đính file là sự kiện cần thông báo
+    await (await import('@/lib/firebase/task-notifications')).notifyTaskAttachment({
+      id: taskId, kind: data.kind, title: data.title,
+      createdBy: data.createdBy, createdByName: data.createdByName,
+      assigneeUserIds: data.assigneeUserIds ?? [],
+      assigneeDeptId: data.assigneeDeptId ?? null,
+      assigneeFacilityId: data.assigneeFacilityId ?? null,
+      status: data.status,
+    }, { uid: caller.profile.uid, name: caller.actorName }, fileName);
+
     return NextResponse.json({ ok: true, path });
   } catch (e: any) {
     if (e instanceof UnauthorizedError) return NextResponse.json({ error: e.message }, { status: e.status });
