@@ -39,7 +39,8 @@ const MENU_SECTIONS: MenuSection[] = [
       { route: 'ky-thuat',           label: 'Kỹ thuật vận hành',            icon: Wrench },
       { route: 'checklist-v2', label: 'Checklist vận hành',          icon: CheckSquare },
       { route: 'quy-trinh', label: 'Quy trình vận hành phòng ban',   icon: FileText },
-      { route: 'giao-viec', label: 'Đề xuất · Nhiệm vụ · Giao việc', icon: ListTodo },
+      { route: 'de-xuat',   label: 'Đề xuất · Xin duyệt',            icon: FileText },
+      { route: 'giao-viec', label: 'Nhiệm vụ · Giao việc',           icon: ListTodo },
     ],
   },
   {

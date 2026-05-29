@@ -9,6 +9,7 @@ import {
 import {
   tasksApi, type Task, type TaskComment, type TaskStatus, type TaskAttachment,
 } from '@/lib/services/tasks/api-client';
+import { tasksCompletionApi } from '@/lib/services/proposals/api-client';
 
 interface Department { id: string; name: string; blockId: 'KD' | 'VP' | null; }
 interface Branch { id: string; name: string; }
@@ -16,12 +17,14 @@ interface User { id: string; name: string; roleId: string; branchId: string | nu
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
   pending_approval: 'Chờ duyệt', pending: 'Chờ làm', in_progress: 'Đang làm',
+  waiting_approval: 'Chờ duyệt hoàn thành',
   done: 'Hoàn thành', rejected: 'Từ chối', cancelled: 'Huỷ',
 };
 const STATUS_BG: Record<TaskStatus, string> = {
   pending_approval: 'bg-amber-50 text-amber-700 ring-amber-200',
   pending: 'bg-slate-100 text-slate-700 ring-slate-200',
   in_progress: 'bg-sky-50 text-sky-700 ring-sky-200',
+  waiting_approval: 'bg-violet-50 text-violet-700 ring-violet-200',
   done: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
   rejected: 'bg-rose-50 text-rose-700 ring-rose-200',
   cancelled: 'bg-slate-50 text-slate-500 ring-slate-200',
@@ -55,30 +58,56 @@ export function TaskDetailModal(props: {
   const [attachments, setAttachments] = useState<TaskAttachment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<null | 'approve' | 'reject' | 'status' | 'comment' | 'delete' | 'upload'>(null);
+  const [busy, setBusy] = useState<null | 'approve' | 'reject' | 'status' | 'comment' | 'delete' | 'upload' | 'submit-completion' | 'approve-completion'>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [showReject, setShowReject] = useState(false);
   const [newComment, setNewComment] = useState('');
   const [progressInput, setProgressInput] = useState(initialTask.progressPct);
+  // Phase 11 completion workflow state
+  const [showSubmitCompletion, setShowSubmitCompletion] = useState(false);
+  const [completionReport, setCompletionReport] = useState('');
+  const [completionDecideMode, setCompletionDecideMode] = useState<null | 'reject'>(null);
+  const [completionApproverNotes, setCompletionApproverNotes] = useState('');
 
   const isCEO = currentUserRole === 'CEO' || currentUserRole === 'ADMIN';
   const isGD = GD_ROLES.has(currentUserRole);
   const isAdmin = ADMIN.has(currentUserRole);
+  const isAdminSystem = currentUserRole === 'ADMIN';
   const isMyBlockApprover = isGD && task.approvalRequiredFrom === currentUserRole;
 
   const isCreator = task.createdBy === currentUserId;
   const isAssigneeUser = task.assigneeUserIds.includes(currentUserId);
   const isAssigneeDept = task.assigneeDeptId && task.assigneeDeptId === currentDepartmentId;
   const isAssigneeFacility = task.assigneeFacilityId && task.assigneeFacilityId === currentBranchId;
+  // Quy tắc: chỉ assignee (trực tiếp hoặc theo dept/facility) mới được cập nhật tiến độ.
+  // Creator KHÔNG được tự đánh dấu hoàn thành (trừ khi cũng là assignee chính thức).
+  // ADMIN system bypass để sửa data hỏng.
   const canUpdateStatus =
-    isAdmin ||
-    isCreator ||
+    isAdminSystem ||
     isAssigneeUser ||
     !!isAssigneeDept ||
     !!isAssigneeFacility;
 
-  const canApprove = task.status === 'pending_approval' && (isCEO || isMyBlockApprover);
+  // Quy tắc: creator + assignee KHÔNG tự duyệt task của mình.
+  const canApprove = task.status === 'pending_approval'
+    && !isCreator
+    && !isAssigneeUser
+    && (isCEO || isMyBlockApprover);
   const canDelete = isAdmin || isCreator;
+
+  // Phase 11 — Completion workflow cho task sinh từ proposal (kind='general')
+  const isProposalGenerated = !!task.proposalId;
+  // Submit completion: chỉ assignee được gửi báo cáo hoàn thành (in_progress → waiting_approval)
+  const canSubmitCompletion = task.status === 'in_progress'
+    && (isAdminSystem || isAssigneeUser || !!isAssigneeDept || !!isAssigneeFacility);
+  // Approve completion: manager khác creator + khác assignee (waiting_approval → done)
+  const canApproveCompletion = task.status === 'waiting_approval'
+    && !isCreator
+    && !isAssigneeUser
+    && (isAdminSystem || isCEO
+        || (isGD && task.assigneeBlock === (currentUserRole === 'GD_KD' ? 'KD' : 'VP'))
+        || (currentUserRole.startsWith('TP_') && task.assigneeDeptId === currentDepartmentId)
+        || (currentUserRole.startsWith('QLCS_') && task.assigneeFacilityId === currentBranchId));
 
   const assigneeLabel = task.assigneeDeptId
     ? departments.find((d) => d.id === task.assigneeDeptId)?.name ?? task.assigneeDeptId
@@ -164,6 +193,32 @@ export function TaskDetailModal(props: {
     catch (e: any) { setError(e.message); setBusy(null); }
   }
 
+  // Phase 11 — Submit báo cáo hoàn thành (in_progress → waiting_approval)
+  async function handleSubmitCompletion() {
+    if (!completionReport.trim()) { setError('Phải nhập báo cáo hoàn thành.'); return; }
+    setBusy('submit-completion');
+    try {
+      await tasksCompletionApi.submitCompletion(task.id, completionReport.trim());
+      setShowSubmitCompletion(false);
+      setCompletionReport('');
+      await refresh();
+    } catch (e: any) { setError(e.message); } finally { setBusy(null); }
+  }
+  // Phase 11 — Manager duyệt hoặc bác báo cáo hoàn thành (waiting_approval → done / in_progress)
+  async function handleDecideCompletion(decision: 'approve' | 'reject') {
+    if (decision === 'reject' && !completionApproverNotes.trim()) {
+      setError('Vui lòng nhập ghi chú khi bác báo cáo.');
+      return;
+    }
+    setBusy('approve-completion');
+    try {
+      await tasksCompletionApi.approveCompletion(task.id, decision, completionApproverNotes.trim() || undefined);
+      setCompletionDecideMode(null);
+      setCompletionApproverNotes('');
+      await refresh();
+    } catch (e: any) { setError(e.message); } finally { setBusy(null); }
+  }
+
   return (
     <div className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
@@ -228,6 +283,41 @@ export function TaskDetailModal(props: {
                 </div>
               )}
 
+              {/* Phase 11 — Banner: nhiệm vụ sinh từ đề xuất */}
+              {isProposalGenerated && task.proposalId && (
+                <a
+                  href={`/de-xuat?id=${task.proposalId}`}
+                  className="flex items-center gap-3 rounded-lg border border-violet-200 bg-violet-50/60 p-3 hover:bg-violet-100 transition-colors"
+                >
+                  <div className="w-10 h-10 rounded-lg bg-violet-100 flex items-center justify-center flex-shrink-0">
+                    <Send size={18} className="text-violet-600 -rotate-45" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-violet-700">Sinh từ đề xuất</div>
+                    <div className="text-sm font-semibold text-slate-800 truncate">{task.proposalTitle ?? '(không có tiêu đề)'}</div>
+                    <div className="text-xs text-violet-600 font-mono">#{task.proposalId.slice(0, 12)}</div>
+                  </div>
+                  <ArrowRight size={16} className="text-violet-600 flex-shrink-0" />
+                </a>
+              )}
+
+              {/* Phase 11 — Báo cáo hoàn thành đã submit (hiển thị cho mọi người xem) */}
+              {(task.status === 'waiting_approval' || task.status === 'done') && task.completionReport && (
+                <div className="rounded-lg border border-violet-200 bg-violet-50/30 p-3">
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-violet-700 mb-1 flex items-center gap-1">
+                    <CheckCircle2 size={11} /> Báo cáo hoàn thành
+                    {task.submittedAt && <span className="ml-auto font-normal text-slate-500 normal-case">{fmtDateTime(task.submittedAt)}</span>}
+                  </div>
+                  <p className="text-sm text-slate-700 whitespace-pre-wrap">{task.completionReport}</p>
+                  {task.status === 'done' && task.completionApproverName && (
+                    <div className="mt-2 pt-2 border-t border-violet-200 text-xs text-emerald-700">
+                      ✓ Đã duyệt bởi <strong>{task.completionApproverName}</strong>
+                      {task.completionDecidedAt && <span className="text-slate-500 ml-1">· {fmtDateTime(task.completionDecidedAt)}</span>}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Status update controls */}
               {canUpdateStatus && !['rejected', 'cancelled'].includes(task.status) && (
                 <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-3 space-y-2">
@@ -255,7 +345,14 @@ export function TaskDetailModal(props: {
                         <Clock size={14} /> Bắt đầu
                       </button>
                     )}
-                    {(task.status === 'pending' || task.status === 'in_progress') && (
+                    {/* Task sinh từ proposal: in_progress → "Gửi báo cáo hoàn thành" (waiting_approval) thay vì done trực tiếp */}
+                    {isProposalGenerated && task.status === 'in_progress' && canSubmitCompletion && (
+                      <button disabled={!!busy} onClick={() => setShowSubmitCompletion(true)} className={btnSuccess}>
+                        <Send size={14} /> Gửi báo cáo hoàn thành
+                      </button>
+                    )}
+                    {/* Task thường (không sinh từ proposal): nút "Hoàn thành" trực tiếp như cũ */}
+                    {!isProposalGenerated && (task.status === 'pending' || task.status === 'in_progress') && (
                       <button disabled={!!busy} onClick={() => changeStatus('done')} className={btnSuccess}>
                         <CheckCircle2 size={14} /> Hoàn thành
                       </button>
@@ -276,6 +373,92 @@ export function TaskDetailModal(props: {
                       </button>
                     )}
                   </div>
+                </div>
+              )}
+
+              {/* Phase 11 — Form gửi báo cáo hoàn thành (inline) */}
+              {showSubmitCompletion && (
+                <div className="rounded-lg border-2 border-violet-300 bg-violet-50/60 p-3 space-y-2">
+                  <div className="text-xs font-bold uppercase tracking-wider text-violet-800 flex items-center gap-1">
+                    <Send size={12} /> Gửi báo cáo hoàn thành
+                  </div>
+                  <p className="text-xs text-slate-600">
+                    Báo cáo này sẽ gửi cho quản lý cấp trên duyệt. Sau khi duyệt, nhiệm vụ chuyển sang trạng thái "Hoàn thành".
+                  </p>
+                  <textarea
+                    value={completionReport}
+                    onChange={(e) => setCompletionReport(e.target.value)}
+                    placeholder="Mô tả công việc đã thực hiện, kết quả đạt được…"
+                    rows={4}
+                    maxLength={5000}
+                    className="w-full text-sm border border-violet-300 rounded-lg p-2 focus:ring-2 focus:ring-violet-400 outline-none"
+                  />
+                  <div className="flex gap-2 justify-end">
+                    <button
+                      onClick={() => { setShowSubmitCompletion(false); setCompletionReport(''); }}
+                      className={btnSecondary}
+                    >Hủy</button>
+                    <button
+                      disabled={busy === 'submit-completion' || !completionReport.trim()}
+                      onClick={handleSubmitCompletion}
+                      className={btnPrimary}
+                    >
+                      {busy === 'submit-completion' && <Loader2 size={14} className="animate-spin" />}
+                      <Send size={14} /> Gửi báo cáo
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Phase 11 — Block duyệt báo cáo hoàn thành (chỉ manager, không phải creator/assignee) */}
+              {canApproveCompletion && (
+                <div className="rounded-lg border-2 border-violet-300 bg-violet-50/60 p-3 space-y-2">
+                  <div className="text-xs font-bold uppercase tracking-wider text-violet-800 flex items-center gap-1">
+                    <AlertTriangle size={12} /> Báo cáo hoàn thành — chờ bạn duyệt
+                  </div>
+                  {completionDecideMode !== 'reject' ? (
+                    <div className="flex gap-2 flex-wrap">
+                      <button
+                        disabled={busy === 'approve-completion'}
+                        onClick={() => handleDecideCompletion('approve')}
+                        className={btnSuccess}
+                      >
+                        {busy === 'approve-completion' && <Loader2 size={14} className="animate-spin" />}
+                        <CheckCircle2 size={14} /> Duyệt hoàn thành
+                      </button>
+                      <button
+                        onClick={() => setCompletionDecideMode('reject')}
+                        className={btnDanger}
+                      >
+                        <XCircle size={14} /> Bác — yêu cầu làm lại
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <textarea
+                        value={completionApproverNotes}
+                        onChange={(e) => setCompletionApproverNotes(e.target.value)}
+                        placeholder="Ghi chú — cần làm thêm gì để hoàn thành (bắt buộc)"
+                        rows={2}
+                        maxLength={1000}
+                        className="w-full text-sm border border-rose-300 rounded-lg p-2 focus:ring-2 focus:ring-rose-400 outline-none"
+                      />
+                      <div className="flex gap-2 justify-end">
+                        <button
+                          onClick={() => { setCompletionDecideMode(null); setCompletionApproverNotes(''); }}
+                          className={btnSecondary}
+                        >Hủy</button>
+                        <button
+                          disabled={busy === 'approve-completion' || !completionApproverNotes.trim()}
+                          onClick={() => handleDecideCompletion('reject')}
+                          className={btnDanger}
+                        >
+                          {busy === 'approve-completion' && <Loader2 size={14} className="animate-spin" />}
+                          Xác nhận bác
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

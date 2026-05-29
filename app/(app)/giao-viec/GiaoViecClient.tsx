@@ -33,6 +33,7 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
   pending_approval: 'Chờ duyệt',
   pending: 'Chờ làm',
   in_progress: 'Đang làm',
+  waiting_approval: 'Chờ duyệt hoàn thành',
   done: 'Hoàn thành',
   rejected: 'Từ chối',
   cancelled: 'Huỷ',
@@ -41,6 +42,7 @@ const STATUS_BG: Record<TaskStatus, string> = {
   pending_approval: 'bg-amber-50 text-amber-700 ring-amber-200',
   pending: 'bg-slate-100 text-slate-700 ring-slate-200',
   in_progress: 'bg-sky-50 text-sky-700 ring-sky-200',
+  waiting_approval: 'bg-violet-50 text-violet-700 ring-violet-200',
   done: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
   rejected: 'bg-rose-50 text-rose-700 ring-rose-200',
   cancelled: 'bg-slate-50 text-slate-500 ring-slate-200',
@@ -295,7 +297,7 @@ export function GiaoViecClient(props: Props) {
               onClick={() => setShowCreate('proposal')}
               className="my-2 mr-2 inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 shadow-sm"
             >
-              <Plus size={14} /> Tạo đề xuất
+              <Plus size={14} /> Gửi duyệt
             </button>
           )}
           {canCreate && tab === 'assignment' && (

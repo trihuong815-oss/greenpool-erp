@@ -2,9 +2,10 @@
 
 export type Block = 'KD' | 'VP';
 export type TaskStatus =
-  | 'pending_approval'   // chờ GĐ Khối nhận duyệt (cross-block)
+  | 'pending_approval'   // chờ GĐ Khối nhận duyệt (cross-block) — flow cũ
   | 'pending'            // sẵn sàng làm
   | 'in_progress'        // đang làm
+  | 'waiting_approval'   // chờ duyệt hoàn thành (Phase 11 — task sinh từ proposal)
   | 'done'               // hoàn thành
   | 'rejected'           // GĐ Khối từ chối
   | 'cancelled';         // creator huỷ
@@ -38,6 +39,14 @@ export interface Task {
   progressPct: number;
   updatedAt: string;
   updatedBy: string;
+  // Phase 11 — task sinh từ proposal (optional, chỉ có với kind='general' tạo qua approve proposal)
+  proposalId?: string | null;
+  proposalTitle?: string | null;
+  completionReport?: string | null;
+  completionApproverName?: string | null;
+  completionDecidedAt?: string | null;
+  submittedAt?: string | null;
+  completedAt?: string | null;
 }
 
 export interface TaskCreate {

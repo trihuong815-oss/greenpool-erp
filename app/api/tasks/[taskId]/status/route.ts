@@ -6,16 +6,24 @@ import { getFirebaseAdminDb } from '@/lib/firebase/admin';
 import { COLLECTIONS } from '@/lib/firebase/collections';
 import { writeAuditLog } from '@/lib/firebase/audit-log';
 import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-auth';
-import { canUpdateTaskStatus, type TaskForScope, type TaskStatus } from '@/lib/firebase/tasks-scope';
+import { canUpdateTaskStatus, canReopenTask, type TaskForScope, type TaskStatus } from '@/lib/firebase/tasks-scope';
 
 const COL = COLLECTIONS.TASKS;
+// Quy trình chuẩn: pending → in_progress → done. Strict step (không skip).
+// pending → cancelled, in_progress → cancelled: cho phép hủy giữa chừng.
+// done → in_progress: reopen — yêu cầu quyền GD Khối / CEO / ADMIN (canReopenTask).
+// cancelled → pending: restore (cùng quyền reopen).
 const VALID_NEXT: Record<TaskStatus, TaskStatus[]> = {
-  pending_approval: [],                                         // chỉ qua approve/reject route
-  pending: ['in_progress', 'done', 'cancelled'],
-  in_progress: ['pending', 'done', 'cancelled'],
-  done: ['in_progress'],                                        // reopen
-  rejected: [],                                                 // terminal
-  cancelled: ['pending'],                                       // restore
+  pending_approval: [],
+  pending: ['in_progress', 'cancelled'],
+  // Flow mới (sinh từ proposal): in_progress → waiting_approval (assignee submit completion).
+  // Endpoint riêng /tasks/[id]/submit-completion + /approve-completion sẽ chuyển 2 step này.
+  // Route /status hiện chỉ phục vụ luồng cũ (in_progress ↔ done trực tiếp).
+  in_progress: ['done', 'waiting_approval', 'cancelled'],
+  waiting_approval: ['done', 'in_progress'],
+  done: ['in_progress'],
+  rejected: [],
+  cancelled: ['pending'],
 };
 
 function asScope(d: Record<string, any>): TaskForScope {
@@ -57,12 +65,22 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
     const snap = await ref.get();
     if (!snap.exists) return NextResponse.json({ error: 'Không tìm thấy nhiệm vụ' }, { status: 404 });
     const data = snap.data()!;
-    if (!canUpdateTaskStatus(caller.profile, asScope(data))) {
-      return NextResponse.json({ error: 'Bạn không có quyền cập nhật trạng thái' }, { status: 403 });
-    }
+    const scope = asScope(data);
     const cur = data.status as TaskStatus;
     if (!VALID_NEXT[cur]?.includes(newStatus)) {
       return NextResponse.json({ error: `Không thể chuyển từ ${cur} → ${newStatus}` }, { status: 400 });
+    }
+    // Reopen (done → in_progress) hoặc restore (cancelled → pending) cần quyền cao hơn.
+    const isReopen = (cur === 'done' && newStatus === 'in_progress') ||
+                     (cur === 'cancelled' && newStatus === 'pending');
+    const allowed = isReopen
+      ? canReopenTask(caller.profile, scope)
+      : canUpdateTaskStatus(caller.profile, scope);
+    if (!allowed) {
+      const msg = isReopen
+        ? 'Chỉ GĐ Khối / CEO / ADMIN được mở lại nhiệm vụ đã đóng.'
+        : 'Bạn không có quyền cập nhật trạng thái.';
+      return NextResponse.json({ error: msg }, { status: 403 });
     }
 
     const now = new Date();

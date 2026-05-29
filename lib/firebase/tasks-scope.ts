@@ -7,7 +7,11 @@ import { ROLE_BLOCK } from '@/lib/permissions';
 // Tasks scope phân biệt rõ CEO vs GĐ Khối (GĐ chỉ thấy/sửa trong block mình).
 
 export type Block = 'KD' | 'VP';
-export type TaskStatus = 'pending_approval' | 'pending' | 'in_progress' | 'done' | 'rejected' | 'cancelled';
+// Phase 11 mở rộng: thêm 'waiting_approval' cho luồng task sinh từ proposal.
+// Status cũ giữ nguyên — backward compat với data hiện tại.
+//   Flow cũ (kind='proposal'/'assignment'): pending_approval → pending → in_progress → done
+//   Flow mới (task sinh từ proposal, kind='general'): pending → in_progress → waiting_approval → done
+export type TaskStatus = 'pending_approval' | 'pending' | 'in_progress' | 'waiting_approval' | 'done' | 'rejected' | 'cancelled';
 
 export function getBlockOf(roleCode: string): Block | 'all' | null {
   return ROLE_BLOCK[roleCode] ?? null;
@@ -19,6 +23,13 @@ export function isGD(p: CallerProfile): boolean {
 
 export function isCEO(p: CallerProfile): boolean {
   return p.role_code === 'CEO' || p.role_code === 'ADMIN';
+}
+
+// ADMIN system thuần — duy nhất role được bypass quy tắc nghiệp vụ
+// (vd: "creator không được tự duyệt" — ADMIN vẫn cho fix data lỗi).
+// CEO chính danh nghiệp vụ KHÔNG bypass: tạo task cũng không tự duyệt.
+export function isAdminSystem(p: CallerProfile): boolean {
+  return p.role_code === 'ADMIN';
 }
 
 // Task shape (subset cần cho scope check)
@@ -129,28 +140,72 @@ export function computeApproval(
 }
 
 // ---- APPROVE / REJECT ----
-// CEO: override approve mọi task
 // GĐ Khối: approve task có approvalRequiredFrom == role mình
+// CEO: override approve mọi task
+// ADMIN system: bypass mọi quy tắc (sửa data hỏng)
+// Creator + Assignee KHÔNG được tự duyệt task của mình — kể cả CEO (trừ ADMIN)
 export function canApproveTask(p: CallerProfile, t: TaskForScope): boolean {
   if (t.status !== 'pending_approval') return false;
+  if (isAdminSystem(p)) return true;
+  // Quy tắc nghiệp vụ: creator + assignee không tự duyệt
+  if (t.createdBy === p.uid) return false;
+  if (t.assigneeUserIds.includes(p.uid)) return false;
   if (isCEO(p)) return true;
   return t.approvalRequiredFrom === p.role_code;
 }
 
 // ---- UPDATE STATUS (in_progress / done) ----
-// CEO + creator + assignee user/dept/facility + GĐ Khối của block + TP/QLCS trong dept/facility
+// CHỈ assignee (user/dept/facility được giao) được cập nhật tiến độ.
+// Creator KHÔNG được tự đánh dấu hoàn thành (trừ khi cũng nằm trong assigneeUserIds).
+// ADMIN system: bypass để sửa data lỗi.
 export function canUpdateTaskStatus(p: CallerProfile, t: TaskForScope): boolean {
-  if (isCEO(p)) return true;
-  if (t.createdBy === p.uid) return true;
+  if (isAdminSystem(p)) return true;
+  // Assignee trực tiếp (user)
   if (t.assigneeUserIds.includes(p.uid)) return true;
+  // Assignee gián tiếp (theo dept/facility — chỉ chấp nhận trong cùng khối để tránh leak)
+  const myBlock = getBlockOf(p.role_code);
+  if (t.assigneeBlock !== myBlock) return false;
+  if (t.assigneeDeptId && t.assigneeDeptId === p.department_id) return true;
+  if (t.assigneeFacilityId && t.assigneeFacilityId === p.facility_id) return true;
+  return false;
+}
+
+// ---- REOPEN (done → in_progress) ----
+// Chỉ GĐ Khối / CEO / ADMIN được mở lại task đã done. Assignee không tự reopen.
+export function canReopenTask(p: CallerProfile, t: TaskForScope): boolean {
+  if (isAdminSystem(p) || isCEO(p)) return true;
+  if (!isGD(p)) return false;
+  const myBlock = getBlockOf(p.role_code);
+  return t.assigneeBlock === myBlock;
+}
+
+// ---- SUBMIT COMPLETION (in_progress → waiting_approval) ----
+// Chỉ assignee (user/dept/facility) được submit báo cáo hoàn thành.
+// Flow Phase 11: task sinh từ proposal phải qua waiting_approval trước khi done.
+export function canSubmitCompletion(p: CallerProfile, t: TaskForScope): boolean {
+  if (isAdminSystem(p)) return true;
+  if (t.assigneeUserIds.includes(p.uid)) return true;
+  const myBlock = getBlockOf(p.role_code);
+  if (t.assigneeBlock !== myBlock) return false;
+  if (t.assigneeDeptId && t.assigneeDeptId === p.department_id) return true;
+  if (t.assigneeFacilityId && t.assigneeFacilityId === p.facility_id) return true;
+  return false;
+}
+
+// ---- APPROVE COMPLETION (waiting_approval → done) ----
+// Manager khác duyệt completion. KHÔNG cho assignee + creator tự duyệt.
+// Manager = GĐ Khối / CEO / ADMIN / TP-QLCS cùng dept-facility (nhưng không là assignee/creator).
+export function canApproveCompletion(p: CallerProfile, t: TaskForScope): boolean {
+  if (isAdminSystem(p)) return true;
+  // Chặn creator + assignee tự duyệt completion
+  if (t.createdBy === p.uid) return false;
+  if (t.assigneeUserIds.includes(p.uid)) return false;
+  if (isCEO(p)) return true;
   const myBlock = getBlockOf(p.role_code);
   if (t.assigneeBlock !== myBlock) return false;
   if (isGD(p)) return true;
   if (isTP(p) && t.assigneeDeptId === p.department_id) return true;
   if (isQLCS(p) && t.assigneeFacilityId === p.facility_id) return true;
-  // NV/GV/TT trong phòng/cơ sở được assign → cũng cho update
-  if (t.assigneeDeptId && t.assigneeDeptId === p.department_id) return true;
-  if (t.assigneeFacilityId && t.assigneeFacilityId === p.facility_id) return true;
   return false;
 }
 

@@ -23,6 +23,7 @@ export const COLLECTIONS = {
   TECH_WORK: 'techWork',               // (Phase 7.C — KT module: tasks + reports + proposals; discriminator field `kind`)
   SALES_TARGETS: 'salesTargets',        // (Phase 6.I — mục tiêu doanh số per year × branch, admin set)
   TASKS: 'tasks',                       // (Phase 7 — Đề xuất · Nhiệm vụ · Giao việc với approval cross-block)
+  PROPOSALS: 'proposals',               // (Phase 11 — Đề xuất xin duyệt tách khỏi Task; workflow draft→submitted→approved/rejected → auto-generate task)
   DASHBOARD_SNAPSHOTS: 'dashboardSnapshots', // (Phase 3 tạo mới)
   DEPARTMENTS: 'departments',
   ROLES: 'roles',

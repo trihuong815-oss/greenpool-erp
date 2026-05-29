@@ -1,6 +1,35 @@
 {
   "indexes": [
     {
+      "_comment": "Phase 11 proposals: list theo branchId + status — most common query",
+      "collectionGroup": "proposals",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "branchId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "_comment": "Phase 11 proposals: list theo approverRole (người được uỷ quyền duyệt xem inbox)",
+      "collectionGroup": "proposals",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "approverRole", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "_comment": "Phase 11 proposals: list theo creatorId (xem proposal mình tạo)",
+      "collectionGroup": "proposals",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "creatorId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "_comment": "tasks: GĐ Khối list pending_approval cần duyệt — where(status) where(approvalRequiredFrom) orderBy(createdAt)",
       "collectionGroup": "tasks",
       "queryScope": "COLLECTION",
