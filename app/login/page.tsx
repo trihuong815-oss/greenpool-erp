@@ -68,19 +68,26 @@ export default function LoginPage() {
           <p className="text-slate-500 mt-2">Hệ thống Quản lý Nội bộ — Cụm 5 cơ sở</p>
         </div>
 
-        <form onSubmit={handleLogin} className="space-y-4">
+        {/* id="login-form" + autoComplete đúng → iOS Safari + Chrome auto-offer "Save Password",
+            lần sau autofill bằng Face ID / Touch ID / Windows Hello */}
+        <form id="login-form" onSubmit={handleLogin} className="space-y-4" method="post" action="/login">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+            <label htmlFor="email" className="block text-sm font-medium text-slate-700 mb-1">Email</label>
             <input
-              type="email" required autoComplete="email"
+              id="email" name="email" type="email" required
+              autoComplete="email"
+              inputMode="email"
+              autoCapitalize="off"
+              spellCheck={false}
               value={email} onChange={e => setEmail(e.target.value)}
               className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Mật khẩu</label>
+            <label htmlFor="password" className="block text-sm font-medium text-slate-700 mb-1">Mật khẩu</label>
             <input
-              type="password" required autoComplete="current-password"
+              id="password" name="password" type="password" required
+              autoComplete="current-password"
               value={password} onChange={e => setPassword(e.target.value)}
               className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
             />
