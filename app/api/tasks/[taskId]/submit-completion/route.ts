@@ -72,6 +72,16 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
       before: { status: cur }, after: { status: 'waiting_approval', completionReport: report },
       actorName: caller.actorName, actorRole: caller.actorRole, source: 'api',
     });
+    // Push notification cho manager (= creator của task, người sẽ duyệt completion)
+    await (await import('@/lib/firebase/proposals-notifications')).notifyCompletionSubmitted(
+      {
+        id: taskId,
+        title: data.title,
+        createdBy: data.createdBy,
+        assigneeUserIds: Array.isArray(data.assigneeUserIds) ? data.assigneeUserIds : [],
+      },
+      caller.actorName ?? 'Người thực hiện',
+    );
     return NextResponse.json({ ok: true });
   } catch (e) {
     if (e instanceof UnauthorizedError) return NextResponse.json({ error: e.message }, { status: e.status });

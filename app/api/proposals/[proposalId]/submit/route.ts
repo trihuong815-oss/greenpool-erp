@@ -34,6 +34,14 @@ export async function POST(_req: NextRequest, ctx: { params: Promise<{ proposalI
       before: { status: data.status }, after: { status: 'submitted', submittedAt: now },
       actorName: caller.actorName, actorRole: caller.actorRole, source: 'api',
     });
+    // Push notification cho approver — fire-and-forget
+    await (await import('@/lib/firebase/proposals-notifications')).notifyProposalSubmitted({
+      id: proposalId,
+      title: data.title,
+      approverRole: data.approverRole,
+      creatorId: data.creatorId,
+      creatorName: data.creatorName,
+    });
     return NextResponse.json({ ok: true });
   } catch (e) {
     if (e instanceof UnauthorizedError) return NextResponse.json({ error: e.message }, { status: e.status });

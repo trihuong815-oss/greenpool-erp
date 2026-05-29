@@ -96,6 +96,19 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
       after: { status: patch.status, notes },
       actorName: caller.actorName, actorRole: caller.actorRole, source: 'api',
     });
+    // Push notification — approve → cả creator + assignees; reject → chỉ assignees để làm lại
+    const noti = await import('@/lib/firebase/proposals-notifications');
+    const taskForNoti = {
+      id: taskId,
+      title: data.title,
+      createdBy: data.createdBy,
+      assigneeUserIds: Array.isArray(data.assigneeUserIds) ? data.assigneeUserIds : [],
+    };
+    if (decision === 'approve') {
+      await noti.notifyCompletionApproved(taskForNoti, caller.actorName ?? 'Quản lý');
+    } else {
+      await noti.notifyCompletionRejected(taskForNoti, caller.actorName ?? 'Quản lý', notes);
+    }
     return NextResponse.json({ ok: true });
   } catch (e) {
     if (e instanceof UnauthorizedError) return NextResponse.json({ error: e.message }, { status: e.status });

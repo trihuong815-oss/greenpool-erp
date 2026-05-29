@@ -51,6 +51,18 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ proposalId
       after: { status: 'rejected', rejectedReason: reason },
       actorName: caller.actorName, actorRole: caller.actorRole, source: 'api',
     });
+    // Push notification cho creator — fire-and-forget
+    await (await import('@/lib/firebase/proposals-notifications')).notifyProposalRejected(
+      {
+        id: proposalId,
+        title: data.title,
+        approverRole: data.approverRole,
+        creatorId: data.creatorId,
+        creatorName: data.creatorName,
+      },
+      caller.actorName ?? 'Người duyệt',
+      reason,
+    );
     return NextResponse.json({ ok: true });
   } catch (e) {
     if (e instanceof UnauthorizedError) return NextResponse.json({ error: e.message }, { status: e.status });

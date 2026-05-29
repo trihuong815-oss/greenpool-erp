@@ -72,7 +72,13 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ proposalId
     const now = new Date();
 
     let creatorIsAssignee = false;
-    const proposalSnapshot: { branchId: string | null } = { branchId: null };
+    const proposalSnapshot: {
+      branchId: string | null;
+      title: string;
+      creatorId: string;
+      creatorName: string;
+      approverRole: string;
+    } = { branchId: null, title: '', creatorId: '', creatorName: '', approverRole: '' };
 
     try {
       await db.runTransaction(async (tx) => {
@@ -80,6 +86,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ proposalId
         if (!snap.exists) throw new Error('not-found');
         const data = snap.data()!;
         proposalSnapshot.branchId = data.branchId ?? null;
+        proposalSnapshot.title = data.title ?? '';
+        proposalSnapshot.creatorId = data.creatorId ?? '';
+        proposalSnapshot.creatorName = data.creatorName ?? '';
+        proposalSnapshot.approverRole = data.approverRole ?? '';
 
         // Permission check trong tx — chặn creator tự duyệt
         if (!canDecideProposal(caller.profile, asProposalScope(data))) {
@@ -181,6 +191,19 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ proposalId
       },
       actorName: caller.actorName, actorRole: caller.actorRole, source: 'api',
     });
+    // Push notification — creator + assignees mới của task
+    await (await import('@/lib/firebase/proposals-notifications')).notifyProposalApproved(
+      {
+        id: proposalId,
+        title: proposalSnapshot.title,
+        approverRole: proposalSnapshot.approverRole,
+        creatorId: proposalSnapshot.creatorId,
+        creatorName: proposalSnapshot.creatorName,
+      },
+      caller.actorName ?? 'Người duyệt',
+      taskRef.id,
+      assigneeUserIds,
+    );
 
     return NextResponse.json({
       ok: true,
