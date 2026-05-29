@@ -65,7 +65,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
       actorName: caller.actorName, actorRole: caller.actorRole, source: 'api',
     });
 
-    void (await import('@/lib/firebase/task-notifications')).notifyTaskApproved({
+    await (await import('@/lib/firebase/task-notifications')).notifyTaskApproved({
       id: taskId, kind: data.kind, title: data.title,
       createdBy: data.createdBy, createdByName: data.createdByName,
       assigneeUserIds: data.assigneeUserIds ?? [],

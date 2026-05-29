@@ -432,7 +432,7 @@ export async function POST(req: NextRequest) {
     });
 
     // Fire-and-forget push notification
-    void (await import('@/lib/firebase/task-notifications')).notifyTaskCreated({
+    await (await import('@/lib/firebase/task-notifications')).notifyTaskCreated({
       id: ref.id, kind, title,
       createdBy: caller.profile.uid,
       createdByName: caller.actorName,

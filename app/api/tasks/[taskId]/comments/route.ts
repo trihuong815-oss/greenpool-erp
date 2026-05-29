@@ -79,7 +79,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
     await taskRef.update({ updatedAt: now });
 
     const td = taskSnap.data()!;
-    void (await import('@/lib/firebase/task-notifications')).notifyTaskComment({
+    await (await import('@/lib/firebase/task-notifications')).notifyTaskComment({
       id: taskId, kind: td.kind, title: td.title,
       createdBy: td.createdBy, createdByName: td.createdByName,
       assigneeUserIds: td.assigneeUserIds ?? [],

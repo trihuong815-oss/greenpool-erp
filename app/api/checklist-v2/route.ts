@@ -231,7 +231,10 @@ export async function PATCH(req: NextRequest) {
     const SHIFT_LABEL: Record<string, string> = {
       morning: 'ca sáng', afternoon: 'ca chiều', evening: 'ca tối',
     };
-    void (await import('@/lib/firebase/push-notifications')).pushToRoles(supervisorRoles, {
+    // AWAIT push để đảm bảo Cloud Run không terminate trước khi FCM gửi xong.
+    // pushToRoles trả result {sent,failed,...} — luôn return không throw.
+    const pushModule = await import('@/lib/firebase/push-notifications');
+    await pushModule.pushToRoles(supervisorRoles, {
       title: `📋 Checklist mới: ${cur.ownerName}`,
       body: `${ROLE_LABEL[cur.role] ?? cur.role}${cur.branchId ? ` @${cur.branchId}` : ''} · ${SHIFT_LABEL[cur.shift] ?? cur.shift} · ${cur.date}`,
       link: '/checklist-v2',
