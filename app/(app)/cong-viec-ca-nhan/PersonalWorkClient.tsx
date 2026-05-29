@@ -21,6 +21,7 @@ function roleTagline(roleCode: string): { text: string; Icon: typeof Crown } | n
   if (roleCode === 'GD_KD' || roleCode === 'GD_VP') return { text: 'Thành viên cốt lõi của Green Pool', Icon: Star };
   if (roleCode.startsWith('TP_') || roleCode === 'TIBAN_TT') return { text: 'Thành viên cốt lõi của Green Pool', Icon: Star };
   if (roleCode === 'PP_HT' || roleCode === 'PP_XLN' || roleCode.startsWith('PP_')) return { text: 'Thành viên cốt lõi của Green Pool', Icon: Star };
+  if (roleCode.startsWith('QLCS_')) return { text: 'Thành viên cốt lõi của Green Pool', Icon: Star };
   return null;
 }
 
