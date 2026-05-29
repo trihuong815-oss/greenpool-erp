@@ -16,11 +16,7 @@ const COL = COLLECTIONS.TASKS;
 const VALID_NEXT: Record<TaskStatus, TaskStatus[]> = {
   pending_approval: [],
   pending: ['in_progress', 'cancelled'],
-  // Flow mới (sinh từ proposal): in_progress → waiting_approval (assignee submit completion).
-  // Endpoint riêng /tasks/[id]/submit-completion + /approve-completion sẽ chuyển 2 step này.
-  // Route /status hiện chỉ phục vụ luồng cũ (in_progress ↔ done trực tiếp).
-  in_progress: ['done', 'waiting_approval', 'cancelled'],
-  waiting_approval: ['done', 'in_progress'],
+  in_progress: ['done', 'cancelled'],
   done: ['in_progress'],
   rejected: [],
   cancelled: ['pending'],

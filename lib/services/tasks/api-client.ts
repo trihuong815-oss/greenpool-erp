@@ -2,10 +2,9 @@
 
 export type Block = 'KD' | 'VP';
 export type TaskStatus =
-  | 'pending_approval'   // chờ GĐ Khối nhận duyệt (cross-block) — flow cũ
+  | 'pending_approval'   // chờ GĐ Khối nhận duyệt (cross-block)
   | 'pending'            // sẵn sàng làm
   | 'in_progress'        // đang làm
-  | 'waiting_approval'   // chờ duyệt hoàn thành (Phase 11 — task sinh từ proposal)
   | 'done'               // hoàn thành
   | 'rejected'           // GĐ Khối từ chối
   | 'cancelled';         // creator huỷ
@@ -39,15 +38,29 @@ export interface Task {
   progressPct: number;
   updatedAt: string;
   updatedBy: string;
-  // Phase 11 — task sinh từ proposal (optional, chỉ có với kind='general' tạo qua approve proposal)
-  proposalId?: string | null;
-  proposalTitle?: string | null;
-  completionReport?: string | null;
-  completionApproverName?: string | null;
-  completionDecidedAt?: string | null;
-  submittedAt?: string | null;
-  completedAt?: string | null;
+  // Đề xuất mở rộng: loại đề xuất + chi phí dự kiến (chỉ áp dụng kind='proposal')
+  proposalCategory?: ProposalCategory | null;
+  estimatedCost?: number | null;
 }
+
+export type ProposalCategory =
+  | 'mua_sam'
+  | 'sua_chua'
+  | 'tuyen_dung'
+  | 'marketing'
+  | 'dao_tao'
+  | 'dau_tu'
+  | 'khac';
+
+export const PROPOSAL_CATEGORY_LABEL: Record<ProposalCategory, string> = {
+  mua_sam: 'Mua sắm',
+  sua_chua: 'Sửa chữa',
+  tuyen_dung: 'Tuyển dụng',
+  marketing: 'Marketing',
+  dao_tao: 'Đào tạo',
+  dau_tu: 'Đầu tư',
+  khac: 'Khác',
+};
 
 export interface TaskCreate {
   kind: TaskKind;              // bắt buộc: đề xuất hay giao việc
@@ -59,6 +72,9 @@ export interface TaskCreate {
   assigneeUserIds?: string[];
   priority: TaskPriority;
   dueDate?: string | null;
+  // Đề xuất mở rộng: bắt buộc khi kind='proposal'
+  proposalCategory?: ProposalCategory | null;
+  estimatedCost?: number | null;     // bắt buộc khi proposalCategory='mua_sam'
 }
 
 export interface TaskUpdate {

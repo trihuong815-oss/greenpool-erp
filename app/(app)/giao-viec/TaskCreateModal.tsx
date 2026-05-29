@@ -2,8 +2,24 @@
 
 import { useMemo, useState } from 'react';
 import { X, Loader2, Paperclip, Trash2 } from 'lucide-react';
-import { tasksApi, type Block, type TaskPriority, type TaskKind } from '@/lib/services/tasks/api-client';
+import { tasksApi, type Block, type TaskPriority, type TaskKind, type ProposalCategory, PROPOSAL_CATEGORY_LABEL } from '@/lib/services/tasks/api-client';
 import { ROLE_BLOCK } from '@/lib/permissions';
+
+// Cấp bậc role để validate đề xuất "ngang cấp / cấp trên".
+// Đề xuất chỉ được gửi cho người có level ≥ level creator.
+const ROLE_LEVEL: Record<string, number> = {
+  ADMIN: 10, CEO: 10,
+  GD_KD: 8, GD_VP: 8,
+  TP_KT: 6, TP_DT: 6, TP_MKT: 6, TP_GS: 6, TP_KE: 6, TP_NS: 6, TIBAN_TT: 6,
+  PP_HT: 5, PP_XLN: 5, PP_DT_CM: 5, PP_DT_TC: 5,
+  QLCS_HM: 5, QLCS_TK: 5, QLCS_CTT: 5, QLCS_24NCT: 5, QLCS_TT: 5,
+  TT_LT: 4, TT_AS: 4, TT_DT: 4,
+};
+function getRoleLevel(roleCode: string): number {
+  return ROLE_LEVEL[roleCode] ?? 3; // mặc định nhân viên cấp 3
+}
+
+const PROPOSAL_CATEGORIES: ProposalCategory[] = ['mua_sam', 'sua_chua', 'tuyen_dung', 'marketing', 'dao_tao', 'dau_tu', 'khac'];
 
 interface Department { id: string; name: string; blockId: 'KD' | 'VP' | null; }
 interface Branch { id: string; name: string; }
@@ -48,6 +64,12 @@ export function TaskCreateModal(props: {
   const [saving, setSaving] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Đề xuất: loại đề xuất + chi phí dự kiến (chỉ Mua sắm bắt buộc)
+  const [proposalCategory, setProposalCategory] = useState<ProposalCategory>('khac');
+  const [estimatedCost, setEstimatedCost] = useState<string>('');
+
+  // Cấp bậc người tạo — dùng để filter "Gửi cho" cho đề xuất (ngang cấp hoặc cấp trên)
+  const myLevel = getRoleLevel(currentUserRole);
 
   // Filter departments theo khối nhận
   const deptsInBlock = useMemo(
@@ -55,16 +77,19 @@ export function TaskCreateModal(props: {
     [departments, assigneeBlock],
   );
 
-  // Filter users theo khối + dept/facility (nếu chọn)
+  // Filter users theo khối + dept/facility (nếu chọn).
+  // Đề xuất: chỉ gửi cho người ngang cấp (cùng level) hoặc cấp trên (level cao hơn). Không gửi xuống cấp dưới.
   const usersInScope = useMemo(() => {
     return users.filter((u) => {
       const ub = ROLE_BLOCK[u.roleId];
       if (ub !== assigneeBlock && ub !== 'all') return false;
       if (assigneeKind === 'department' && assigneeDeptId && u.departmentId !== assigneeDeptId) return false;
       if (assigneeKind === 'facility' && assigneeFacilityId && u.branchId !== assigneeFacilityId) return false;
+      // Đề xuất: validate cấp bậc — người nhận phải >= cấp người gửi
+      if (kind === 'proposal' && getRoleLevel(u.roleId) < myLevel) return false;
       return true;
     });
-  }, [users, assigneeBlock, assigneeKind, assigneeDeptId, assigneeFacilityId]);
+  }, [users, assigneeBlock, assigneeKind, assigneeDeptId, assigneeFacilityId, kind, myLevel]);
 
   // Constraints — đã mở: TP/QLCS/GĐ/CEO đều có thể cross-block / liên phòng.
   // computeApproval ở server tự quyết status (pending_approval khi cần).
@@ -94,7 +119,25 @@ export function TaskCreateModal(props: {
       facilityId = assigneeFacilityId;
     } else {
       if (assigneeUserIds.length === 0) { setError('Chọn ít nhất 1 người'); return; }
+      // Đề xuất: validate người nhận phải ≥ cấp người gửi
+      if (kind === 'proposal') {
+        const wrong = assigneeUserIds.find((uid) => {
+          const u = users.find((x) => x.id === uid);
+          return u && getRoleLevel(u.roleId) < myLevel;
+        });
+        if (wrong) { setError('Đề xuất chỉ được gửi cho người ngang cấp hoặc cấp trên — không gửi xuống cấp dưới.'); return; }
+      }
       userIds = assigneeUserIds;
+    }
+    // Đề xuất Mua sắm: bắt buộc số tiền > 0
+    let cost: number | null = null;
+    if (kind === 'proposal' && proposalCategory === 'mua_sam') {
+      const n = Number(estimatedCost.replace(/[^\d]/g, ''));
+      if (!Number.isFinite(n) || n <= 0) { setError('Đề xuất Mua sắm bắt buộc nhập chi phí dự kiến (VND > 0).'); return; }
+      cost = n;
+    } else if (kind === 'proposal' && estimatedCost) {
+      const n = Number(estimatedCost.replace(/[^\d]/g, ''));
+      if (Number.isFinite(n) && n > 0) cost = n;
     }
     setSaving(true);
     try {
@@ -108,6 +151,8 @@ export function TaskCreateModal(props: {
         assigneeUserIds: userIds,
         priority,
         dueDate: dueDate || null,
+        proposalCategory: kind === 'proposal' ? proposalCategory : null,
+        estimatedCost: cost,
       });
       // Upload attachments tuần tự (đơn giản, ít edge case)
       if (files.length > 0) {
@@ -182,6 +227,38 @@ export function TaskCreateModal(props: {
             />
           </Field>
 
+          {/* Đề xuất: loại + chi phí dự kiến (Mua sắm) */}
+          {kind === 'proposal' && (
+            <>
+              <Field label="Loại đề xuất">
+                <select
+                  value={proposalCategory}
+                  onChange={(e) => setProposalCategory(e.target.value as ProposalCategory)}
+                  className={inputCls}
+                >
+                  {PROPOSAL_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>{PROPOSAL_CATEGORY_LABEL[c]}</option>
+                  ))}
+                </select>
+              </Field>
+              {(proposalCategory === 'mua_sam' || estimatedCost) && (
+                <Field label={proposalCategory === 'mua_sam' ? 'Chi phí dự kiến (VND) *' : 'Chi phí dự kiến (VND, tùy chọn)'}>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={estimatedCost}
+                    onChange={(e) => {
+                      const raw = e.target.value.replace(/[^\d]/g, '');
+                      setEstimatedCost(raw ? Number(raw).toLocaleString('vi-VN') : '');
+                    }}
+                    placeholder="vd: 5.000.000"
+                    className={inputCls}
+                  />
+                </Field>
+              )}
+            </>
+          )}
+
           {/* Block radio */}
           <Field label="Khối nhận">
             <div className="flex gap-2">
@@ -209,8 +286,8 @@ export function TaskCreateModal(props: {
             </div>
           </Field>
 
-          {/* Assignee kind picker */}
-          <Field label="Giao cho">
+          {/* Assignee kind picker — proposal: "Gửi cho" (người duyệt ngang cấp/cấp trên); assignment: "Giao cho" */}
+          <Field label={kind === 'proposal' ? 'Gửi cho (ngang cấp hoặc cấp trên)' : 'Giao cho'}>
             <div className="flex gap-1 mb-2 bg-slate-100 p-1 rounded-lg">
               {(['department', 'facility', 'user'] as const).map((k) => (
                 <button

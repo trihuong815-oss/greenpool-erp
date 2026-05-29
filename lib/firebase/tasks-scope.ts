@@ -7,11 +7,7 @@ import { ROLE_BLOCK } from '@/lib/permissions';
 // Tasks scope phân biệt rõ CEO vs GĐ Khối (GĐ chỉ thấy/sửa trong block mình).
 
 export type Block = 'KD' | 'VP';
-// Phase 11 mở rộng: thêm 'waiting_approval' cho luồng task sinh từ proposal.
-// Status cũ giữ nguyên — backward compat với data hiện tại.
-//   Flow cũ (kind='proposal'/'assignment'): pending_approval → pending → in_progress → done
-//   Flow mới (task sinh từ proposal, kind='general'): pending → in_progress → waiting_approval → done
-export type TaskStatus = 'pending_approval' | 'pending' | 'in_progress' | 'waiting_approval' | 'done' | 'rejected' | 'cancelled';
+export type TaskStatus = 'pending_approval' | 'pending' | 'in_progress' | 'done' | 'rejected' | 'cancelled';
 
 export function getBlockOf(roleCode: string): Block | 'all' | null {
   return ROLE_BLOCK[roleCode] ?? null;
@@ -179,35 +175,6 @@ export function canReopenTask(p: CallerProfile, t: TaskForScope): boolean {
   return t.assigneeBlock === myBlock;
 }
 
-// ---- SUBMIT COMPLETION (in_progress → waiting_approval) ----
-// Chỉ assignee (user/dept/facility) được submit báo cáo hoàn thành.
-// Flow Phase 11: task sinh từ proposal phải qua waiting_approval trước khi done.
-export function canSubmitCompletion(p: CallerProfile, t: TaskForScope): boolean {
-  if (isAdminSystem(p)) return true;
-  if (t.assigneeUserIds.includes(p.uid)) return true;
-  const myBlock = getBlockOf(p.role_code);
-  if (t.assigneeBlock !== myBlock) return false;
-  if (t.assigneeDeptId && t.assigneeDeptId === p.department_id) return true;
-  if (t.assigneeFacilityId && t.assigneeFacilityId === p.facility_id) return true;
-  return false;
-}
-
-// ---- APPROVE COMPLETION (waiting_approval → done) ----
-// Manager khác duyệt completion. KHÔNG cho assignee + creator tự duyệt.
-// Manager = GĐ Khối / CEO / ADMIN / TP-QLCS cùng dept-facility (nhưng không là assignee/creator).
-export function canApproveCompletion(p: CallerProfile, t: TaskForScope): boolean {
-  if (isAdminSystem(p)) return true;
-  // Chặn creator + assignee tự duyệt completion
-  if (t.createdBy === p.uid) return false;
-  if (t.assigneeUserIds.includes(p.uid)) return false;
-  if (isCEO(p)) return true;
-  const myBlock = getBlockOf(p.role_code);
-  if (t.assigneeBlock !== myBlock) return false;
-  if (isGD(p)) return true;
-  if (isTP(p) && t.assigneeDeptId === p.department_id) return true;
-  if (isQLCS(p) && t.assigneeFacilityId === p.facility_id) return true;
-  return false;
-}
 
 // ---- UPDATE METADATA (title, desc, priority, dueDate) ----
 // Chỉ creator + CEO mới được sửa nội dung — tránh GĐ Khối thay đổi đề xuất sau khi đã tạo.

@@ -301,15 +301,6 @@ service cloud.firestore {
       }
     }
 
-    // ---- Proposals (Phase 11): Hồ sơ xin duyệt, tách khỏi tasks ----
-    // Workflow: draft → submitted → approved/rejected (approve → auto generate task).
-    // Read: signed-in (server-side scope qua API GET).
-    // Write: CHỈ qua API — phải transaction-safe (đặc biệt approve).
-    match /proposals/{proposalId} {
-      allow read: if isSignedIn();
-      allow write: if false;
-    }
-
     // ---- Catch-all deny ----
     match /{document=**} {
       allow read, write: if false;

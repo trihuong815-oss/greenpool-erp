@@ -360,6 +360,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'dueDate phải định dạng YYYY-MM-DD hoặc null' }, { status: 400 });
     }
 
+    // Đề xuất mở rộng: loại đề xuất + chi phí dự kiến (chỉ kind='proposal')
+    const VALID_PROPOSAL_CATEGORY = new Set(['mua_sam', 'sua_chua', 'tuyen_dung', 'marketing', 'dao_tao', 'dau_tu', 'khac']);
+    let proposalCategory: string | null = null;
+    let estimatedCost: number | null = null;
+    if (kind === 'proposal') {
+      if (typeof body?.proposalCategory === 'string' && VALID_PROPOSAL_CATEGORY.has(body.proposalCategory)) {
+        proposalCategory = body.proposalCategory;
+      } else {
+        proposalCategory = 'khac';
+      }
+      if (body?.estimatedCost != null) {
+        const n = Number(body.estimatedCost);
+        if (!Number.isFinite(n) || n < 0) {
+          return NextResponse.json({ error: 'estimatedCost phải là số ≥ 0' }, { status: 400 });
+        }
+        estimatedCost = n;
+      }
+      // Mua sắm: chi phí dự kiến bắt buộc > 0
+      if (proposalCategory === 'mua_sam' && (estimatedCost === null || estimatedCost <= 0)) {
+        return NextResponse.json({ error: 'Đề xuất Mua sắm bắt buộc nhập chi phí dự kiến (> 0).' }, { status: 400 });
+      }
+    }
+
     const creatorBlock = getBlockOf(caller.profile.role_code) ?? 'all';
     // Cho phép mọi role có quyền tạo (TP, QLCS, GĐ, CEO) đều có thể cross-block / liên phòng.
     // computeApproval sẽ tự set pending_approval khi cần.
@@ -400,6 +423,8 @@ export async function POST(req: NextRequest) {
       dueDate,
       progressPct: 0,
       attachments: [],
+      proposalCategory,
+      estimatedCost,
       updatedAt: now,
       updatedBy: caller.profile.uid,
     };
