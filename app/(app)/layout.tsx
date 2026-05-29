@@ -1,4 +1,5 @@
 import { AppShell } from '@/components/AppShell';
+import { SessionRefresher } from '@/components/SessionRefresher';
 import { getCurrentProfile } from '@/lib/firebase/current-profile';
 import { redirect } from 'next/navigation';
 
@@ -23,13 +24,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <AppShell
-      userName={profile.displayName}
-      userRole={profile.roleName ?? profile.roleCode}
-      roleCode={profile.roleCode}
-      menuOverrides={profile.menuOverrides}
-    >
-      {children}
-    </AppShell>
+    <>
+      <SessionRefresher />
+      <AppShell
+        userName={profile.displayName}
+        userRole={profile.roleName ?? profile.roleCode}
+        roleCode={profile.roleCode}
+        menuOverrides={profile.menuOverrides}
+      >
+        {children}
+      </AppShell>
+    </>
   );
 }

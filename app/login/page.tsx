@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getFirebaseClientAuth } from '@/lib/firebase/client';
 
 export default function LoginPage() {
@@ -18,12 +18,16 @@ export default function LoginPage() {
     setError('');
 
     try {
-      // 1. Sign-in Firebase client SDK → lấy idToken
+      // 1. Set persistence LOCAL — Firebase client giữ trạng thái signed-in mãi mãi trên device này
+      //    (auto-refresh ID token mỗi giờ). Dùng để session cookie tự renew khi mở app.
       const auth = getFirebaseClientAuth();
+      await setPersistence(auth, browserLocalPersistence);
+
+      // 2. Sign-in Firebase client SDK → lấy idToken
       const cred = await signInWithEmailAndPassword(auth, email, password);
       const idToken = await cred.user.getIdToken();
 
-      // 2. Gửi idToken lên server để tạo session cookie httpOnly
+      // 3. Gửi idToken lên server để tạo session cookie httpOnly
       const res = await fetch('/api/auth/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -33,8 +37,7 @@ export default function LoginPage() {
         const j = await res.json().catch(() => ({}));
         throw new Error(j?.error ?? 'Không tạo được session.');
       }
-      // 3. Logout client-side Firebase (chỉ dùng để mint token, session ở cookie)
-      await auth.signOut();
+      // GIỮ Firebase client signed-in (không signOut) → SessionRefresher tự renew cookie 14d định kỳ
 
       router.push('/dashboard');
       router.refresh();
