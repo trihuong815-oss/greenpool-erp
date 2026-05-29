@@ -67,8 +67,27 @@ export async function POST(req: NextRequest) {
   const messaging = getMessaging();
   let totalSent = 0;
   const tokensToRemove: { uid: string; token: string }[] = [];
+  const dedupKey = `${today}_morning`;
 
   for (const u of candidates) {
+    // Dedup: skip nếu đã nhận morning summary hôm nay (cron OR client trigger trước đó)
+    const userRef = db.collection(COLLECTIONS.USERS).doc(u.uid);
+    let claimed = false;
+    try {
+      await db.runTransaction(async (txn) => {
+        const s = await txn.get(userRef);
+        if (!s.exists) return;
+        const log = (s.data()?.summarySentLog ?? {}) as Record<string, unknown>;
+        if (log[dedupKey]) return;
+        log[dedupKey] = new Date().toISOString();
+        const keys = Object.keys(log).sort();
+        if (keys.length > 30) for (const k of keys.slice(0, keys.length - 30)) delete log[k];
+        txn.update(userRef, { summarySentLog: log });
+        claimed = true;
+      });
+    } catch { continue; }
+    if (!claimed) continue;
+
     // 1. Personal tasks hôm nay
     const ptSnap = await db.collection(COLLECTIONS.PERSONAL_TASKS)
       .where('ownerId', '==', u.uid)

@@ -1,11 +1,12 @@
 'use client';
 
 import {
-  Bell, Home, BarChart3, Settings, CheckSquare, FileText, Users, UserCog,
+  Home, BarChart3, Settings, CheckSquare, FileText, Users, UserCog,
   DollarSign, Megaphone, GraduationCap, FileBarChart, ListTodo, KeyRound, Menu,
   type LucideIcon,
 } from 'lucide-react';
 import { TodayBadge } from './TodayBadge';
+import { NotificationBell } from './NotificationBell';
 import { useMobileNav } from './MobileNavContext';
 
 // Map tên → component icon. Pass string từ Server Component an toàn (function refs không serialize qua RSC boundary).
@@ -75,12 +76,7 @@ export function AppTopBar({ title, subtitle, icon, children }: AppTopBarProps) {
 
         {/* Right utilities — Bell + Today badge */}
         <div className="flex shrink-0 items-center gap-1 md:gap-2">
-          <div
-            title="Thông báo (chưa có dữ liệu)"
-            className="relative rounded-lg p-2 text-slate-300"
-          >
-            <Bell size={18} />
-          </div>
+          <NotificationBell />
           <TodayBadge />
         </div>
       </div>

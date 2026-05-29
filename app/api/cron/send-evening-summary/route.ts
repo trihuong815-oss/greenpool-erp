@@ -70,7 +70,30 @@ export async function POST(req: NextRequest) {
   let totalSent = 0;
   const tokensToRemove: { uid: string; token: string }[] = [];
 
+  // Date string today VN cho dedup key
+  const nowVN = new Date(Date.now() + 7 * 60 * 60_000);
+  const todayVN = `${nowVN.getUTCFullYear()}-${String(nowVN.getUTCMonth() + 1).padStart(2, '0')}-${String(nowVN.getUTCDate()).padStart(2, '0')}`;
+  const dedupKey = `${todayVN}_evening`;
+
   for (const u of candidates) {
+    // Dedup: skip nếu user đã nhận evening summary hôm nay (cron OR client trigger trước đó)
+    const userRef = db.collection(COLLECTIONS.USERS).doc(u.uid);
+    let claimed = false;
+    try {
+      await db.runTransaction(async (txn) => {
+        const s = await txn.get(userRef);
+        if (!s.exists) return;
+        const log = (s.data()?.summarySentLog ?? {}) as Record<string, unknown>;
+        if (log[dedupKey]) return;
+        log[dedupKey] = new Date().toISOString();
+        const keys = Object.keys(log).sort();
+        if (keys.length > 30) for (const k of keys.slice(0, keys.length - 30)) delete log[k];
+        txn.update(userRef, { summarySentLog: log });
+        claimed = true;
+      });
+    } catch { continue; }
+    if (!claimed) continue;
+
     // Query tasks ngày mai
     const tasksSnap = await db.collection(COLLECTIONS.PERSONAL_TASKS)
       .where('ownerId', '==', u.uid)
@@ -83,19 +106,20 @@ export async function POST(req: NextRequest) {
       .filter((t) => t.status !== 'done' && t.status !== 'cancelled')
       .sort((a, b) => (a.scheduledTime ?? '99:99').localeCompare(b.scheduledTime ?? '99:99'));
 
-    // Skip nếu không có task ngày mai (tránh spam)
-    if (tomorrowTasks.length === 0) continue;
-
+    // Luôn gửi lời chúc buổi tối — dù có task hay không (theo yêu cầu user)
     const firstName = u.displayName.split(' ').slice(-1)[0] || 'bạn';
     const taskList = tomorrowTasks.slice(0, 3).map((t) =>
       t.scheduledTime ? `${t.scheduledTime} ${t.title}` : t.title
     ).join(' · ');
     const more = tomorrowTasks.length > 3 ? ` (+${tomorrowTasks.length - 3} việc)` : '';
+    const body = tomorrowTasks.length > 0
+      ? `${tomorrowTasks.length} việc cho ngày mai: ${taskList}${more}. Hãy nghỉ ngơi thật khoẻ nhé! 💚`
+      : `Ngày mai chưa có task lên lịch — hãy nghỉ ngơi thật khoẻ cho ngày mai tuyệt vời nhé! 💚`;
 
     const message = {
       notification: {
         title: `🌙 Chào buổi tối, ${firstName}!`,
-        body: `${tomorrowTasks.length} việc cho ngày mai: ${taskList}${more}. Hãy nghỉ ngơi thật khoẻ nhé! 💚`,
+        body,
       },
       webpush: {
         fcmOptions: { link: '/cong-viec-ca-nhan' },

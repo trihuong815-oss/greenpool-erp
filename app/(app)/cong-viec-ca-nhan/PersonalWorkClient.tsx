@@ -167,6 +167,15 @@ export function PersonalWorkClient({ profile, initialTasks }: Props) {
           });
           // Trigger reminder check ngay khi mở app — bypass GitHub cron delay
           fetch('/api/personal/check-my-reminders', { method: 'POST' }).catch(() => {});
+          // FALLBACK: cron không đáng tin → mỗi khi mở app, tự check morning (7-12h) + evening (20-24h) summary
+          // Server dedup: chỉ gửi 1 lần / user / ngày / kind (cron hoặc client — bên nào tới trước).
+          const hourVN = new Date(Date.now() + 7 * 60 * 60_000).getUTCHours();
+          if (hourVN >= 7 && hourVN < 12) {
+            fetch('/api/personal/check-my-summary?kind=morning', { method: 'POST' }).catch(() => {});
+          }
+          if (hourVN >= 20 && hourVN < 24) {
+            fetch('/api/personal/check-my-summary?kind=evening', { method: 'POST' }).catch(() => {});
+          }
         }
       }
       // Nếu perm === 'default' → đợi user bấm nút (xem renderPushBanner)
@@ -293,7 +302,7 @@ export function PersonalWorkClient({ profile, initialTasks }: Props) {
   }
 
   async function handleDeleteTask(id: string) {
-    if (!confirm('Xoá task này khỏi không gian cá nhân?')) return;
+    if (!confirm('Xoá công việc này khỏi không gian cá nhân?')) return;
     try {
       const res = await fetch(`/api/personal/tasks/${encodeURIComponent(id)}`, { method: 'DELETE' });
       if (!res.ok) {
@@ -438,7 +447,7 @@ export function PersonalWorkClient({ profile, initialTasks }: Props) {
                     </li>
                   ))}
                   {tomorrowTasks.length > 6 && (
-                    <li className="text-xs text-indigo-200 italic">+ {tomorrowTasks.length - 6} task khác…</li>
+                    <li className="text-xs text-indigo-200 italic">+ {tomorrowTasks.length - 6} công việc khác…</li>
                   )}
                 </ul>
               </div>
@@ -588,7 +597,7 @@ export function PersonalWorkClient({ profile, initialTasks }: Props) {
         </header>
         {filteredTasks.length === 0 ? (
           <div className="py-12 text-center text-sm text-slate-400">
-            Chưa có task nào. Bấm <strong>+ Thêm việc</strong> để bắt đầu.
+            Chưa có công việc nào. Bấm <strong>+ Thêm việc</strong> để bắt đầu.
           </div>
         ) : (
           <ul className="divide-y divide-slate-100">
@@ -688,7 +697,7 @@ export function PersonalWorkClient({ profile, initialTasks }: Props) {
         <TaskModal
           editing={editingTask}
           onClose={() => { setTaskModalOpen(false); setEditingTask(null); }}
-          onSaved={() => { setTaskModalOpen(false); setEditingTask(null); reloadTasks(); showToast('success', editingTask ? 'Đã cập nhật task' : 'Đã thêm task'); }}
+          onSaved={() => { setTaskModalOpen(false); setEditingTask(null); reloadTasks(); showToast('success', editingTask ? 'Đã cập nhật công việc' : 'Đã thêm công việc'); }}
           onError={(m) => showToast('error', m)}
         />
       )}
@@ -995,7 +1004,7 @@ function TaskModal({
     <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-3" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[92vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
         <div className="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
-          <h3 className="font-bold text-slate-800">{editing ? 'Sửa task' : 'Thêm task'}</h3>
+          <h3 className="font-bold text-slate-800">{editing ? 'Sửa công việc' : 'Thêm công việc'}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
         </div>
         <div className="p-5 space-y-3 overflow-y-auto">
