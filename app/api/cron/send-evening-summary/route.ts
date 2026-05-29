@@ -100,8 +100,8 @@ export async function POST(req: NextRequest) {
       webpush: {
         fcmOptions: { link: '/cong-viec-ca-nhan' },
         notification: {
-          icon: '/logo.png',
-          badge: '/logo.png',
+          icon: '/icon-192.png',
+          badge: '/icon-192.png',
           tag: `evening-${tomorrow}`,
           requireInteraction: false,
         },

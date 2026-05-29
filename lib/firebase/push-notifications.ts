@@ -74,8 +74,8 @@ export async function pushToUsers(uids: string[], payload: PushPayload): Promise
       webpush: {
         fcmOptions: { link: payload.link ?? '/dashboard' },
         notification: {
-          icon: '/logo.png',
-          badge: '/logo.png',
+          icon: '/icon-192.png',
+          badge: '/icon-192.png',
           tag: payload.tag ?? 'green-pool',
           requireInteraction: false,
         },

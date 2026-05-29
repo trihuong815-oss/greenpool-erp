@@ -79,7 +79,7 @@ export async function POST() {
         },
         webpush: {
           fcmOptions: { link: '/cong-viec-ca-nhan' },
-          notification: { icon: '/logo.png', tag: t.id, requireInteraction: false },
+          notification: { icon: '/icon-192.png', tag: t.id, requireInteraction: false },
         },
         data: { taskId: t.id, kind: 'reminder' },
         tokens,

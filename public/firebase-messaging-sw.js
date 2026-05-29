@@ -34,7 +34,7 @@ self.addEventListener('activate', (event) => {
     messaging.onBackgroundMessage((payload) => {
       const title = payload?.notification?.title ?? 'Green Pool';
       const body = payload?.notification?.body ?? '';
-      const icon = payload?.notification?.icon ?? '/logo.png';
+      const icon = payload?.notification?.icon ?? '/icon-192.png';
       const tag = payload?.data?.taskId ?? payload?.data?.kind ?? 'green-pool';
       const link = payload?.fcmOptions?.link ?? payload?.webpush?.fcmOptions?.link ?? '/cong-viec-ca-nhan';
 

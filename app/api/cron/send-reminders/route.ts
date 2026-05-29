@@ -109,8 +109,8 @@ export async function POST(req: NextRequest) {
             link: '/cong-viec-ca-nhan',
           },
           notification: {
-            icon: '/logo.png',
-            badge: '/logo.png',
+            icon: '/icon-192.png',
+            badge: '/icon-192.png',
             tag: t.id,
             requireInteraction: false,
           },
