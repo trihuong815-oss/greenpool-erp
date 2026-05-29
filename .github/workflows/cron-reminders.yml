@@ -8,6 +8,7 @@ on:
     - cron: '*/5 * * * *'    # reminders mỗi 5 phút
     - cron: '0 0 * * *'      # morning summary 07:00 VN
     - cron: '0 13 * * *'     # evening summary 20:00 VN
+    - cron: '0 * * * *'      # cleanup-checklists mỗi giờ
   workflow_dispatch:          # manual trigger để test
 
 # Concurrency: cancel runs cũ nếu chậm — tránh chồng chéo
@@ -67,5 +68,23 @@ jobs:
           cat /tmp/body
           if [ "$response" -ne 200 ]; then
             echo "::error::Evening summary cron failed with status $response"
+            exit 1
+          fi
+
+  cleanup-checklists:
+    if: github.event.schedule == '0 * * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Call cleanup-checklists endpoint
+        run: |
+          response=$(curl -s -o /tmp/body -w "%{http_code}" \
+            -X POST "${{ secrets.APP_HOSTING_URL }}/api/cron/cleanup-checklists" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "content-type: application/json")
+          echo "Status: $response"
+          cat /tmp/body
+          if [ "$response" -ne 200 ]; then
+            echo "::error::Cleanup checklists cron failed with status $response"
             exit 1
           fi

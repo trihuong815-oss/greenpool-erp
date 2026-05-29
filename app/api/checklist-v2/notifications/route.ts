@@ -55,6 +55,8 @@ export async function GET(req: NextRequest) {
     .get();
 
   let items = snap.docs.map((doc) => serialize(doc.id, doc.data()));
+  // Filter soft-deleted (cron cleanup-checklists set deleted=true 48h sau khi xem)
+  items = items.filter((n) => n.deleted !== true);
   if (onlyUnseen) {
     items = items.filter((n) => !Array.isArray(n.seenBy) || !n.seenBy.includes(ctx.profile.id));
   }
@@ -84,13 +86,20 @@ export async function PATCH(req: NextRequest) {
   const snap = await ref.get();
   if (!snap.exists) return NextResponse.json({ error: 'Không tìm thấy notification' }, { status: 404 });
 
-  const cur = snap.data() as { role: ChecklistRole; seenBy?: string[] };
+  const cur = snap.data() as { role: ChecklistRole; seenBy?: string[]; firstSeenAt?: unknown };
   // Chỉ supervisor in-scope mới mark seen
   if (!scope.includes(cur.role)) {
     return NextResponse.json({ error: 'Không thuộc scope của bạn' }, { status: 403 });
   }
-  // arrayUnion → idempotent + tránh race condition khi nhiều supervisor mark cùng lúc
-  await ref.update({ seenBy: FieldValue.arrayUnion(ctx.profile.id) });
+  // arrayUnion → idempotent + tránh race condition khi nhiều supervisor mark cùng lúc.
+  // Đồng thời set firstSeenAt nếu chưa có (timer 48h auto-delete tính từ đây).
+  const patch: Record<string, unknown> = {
+    seenBy: FieldValue.arrayUnion(ctx.profile.id),
+  };
+  if (!cur.firstSeenAt) {
+    patch.firstSeenAt = FieldValue.serverTimestamp();
+  }
+  await ref.update(patch);
 
   return NextResponse.json({ ok: true });
 }

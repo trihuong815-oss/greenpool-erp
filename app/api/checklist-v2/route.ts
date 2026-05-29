@@ -68,7 +68,10 @@ export async function GET(req: NextRequest) {
     const db = getFirebaseAdminDb();
     const snap = await db.collection(COLLECTIONS.CHECKLIST_RUNS_V2).doc(queryId).get();
     if (!snap.exists) return NextResponse.json({ error: 'Không tìm thấy run' }, { status: 404 });
-    const data = snap.data() as RunDoc;
+    const data = snap.data() as RunDoc & { deleted?: boolean };
+    if (data.deleted === true) {
+      return NextResponse.json({ error: 'Run này đã bị xoá tự động (>48h sau khi xem)' }, { status: 404 });
+    }
     const isOwner = data.ownerId === ctx.profile.id;
     const scope = checklistV2SupervisorScope(ctx.profile.roleCode);
     const isSupervisor = !!scope && scope.includes(data.role);
@@ -110,7 +113,13 @@ export async function GET(req: NextRequest) {
   const snap = await ref.get();
 
   if (snap.exists) {
-    return NextResponse.json({ run: serialize(snap.id, snap.data()!) });
+    const existing = snap.data()!;
+    // Nếu doc cũ đã bị soft-deleted bởi cron cleanup → reset & cho tạo mới
+    if (existing.deleted === true) {
+      // Fall through tới phần khởi tạo mới (override doc cũ)
+    } else {
+      return NextResponse.json({ run: serialize(snap.id, existing) });
+    }
   }
 
   // Khởi tạo run mới từ template
@@ -145,8 +154,12 @@ export async function PATCH(req: NextRequest) {
   const ref = db.collection(COLLECTIONS.CHECKLIST_RUNS_V2).doc(id);
   const snap = await ref.get();
   if (!snap.exists) return NextResponse.json({ error: 'Không tìm thấy run' }, { status: 404 });
-  const cur = snap.data() as RunDoc;
+  const cur = snap.data() as RunDoc & { deleted?: boolean };
 
+  // Run đã bị soft-deleted bởi cron cleanup → không cho thao tác nữa
+  if (cur.deleted === true) {
+    return NextResponse.json({ error: 'Run này đã bị xoá tự động (>48h sau khi xem)' }, { status: 400 });
+  }
   // Chỉ owner mới PATCH
   if (cur.ownerId !== ctx.profile.id) {
     return NextResponse.json({ error: 'Không có quyền sửa run này' }, { status: 403 });
