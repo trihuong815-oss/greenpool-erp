@@ -14,6 +14,7 @@ import { JournalPanel } from './JournalPanel';
 import { HabitsPanel } from './HabitsPanel';
 import { GoalsPanel } from './GoalsPanel';
 import { AIPanel } from './AIPanel';
+import { AvatarCropper } from './AvatarCropper';
 
 // ─── Role tagline (cảm hứng) ───
 function roleTagline(roleCode: string): { text: string; Icon: typeof Crown } | null {
@@ -463,12 +464,6 @@ export function PersonalWorkClient({ profile, initialTasks }: Props) {
         <div className="absolute right-20 bottom-0 h-32 w-32 rounded-full bg-white/5 blur-xl" aria-hidden />
 
         <div className="relative p-5 md:p-6">
-          {/* Top row: greeting time-of-day */}
-          <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-gradient-to-r ${g.accent} shadow-sm mb-3`}>
-            <GreetIcon size={14} />
-            {g.text}, {profileState.displayName.split(' ').slice(-1)[0]}
-          </div>
-
           <div className="flex items-start gap-4 flex-wrap">
             {/* Avatar */}
             <div className="relative shrink-0">
@@ -802,21 +797,29 @@ function ProfileModal({
   const [avatarUrl, setAvatarUrl] = useState(initial.avatarUrl ?? '');
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [cropperFile, setCropperFile] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  async function handleAvatarUpload(file: File) {
-    if (file.size > 5 * 1024 * 1024) {
-      onError('Ảnh quá lớn (>5MB)');
+  // Khi user chọn file → mở cropper trước, không upload luôn
+  function handleFileSelected(file: File) {
+    if (file.size > 10 * 1024 * 1024) {
+      onError('Ảnh quá lớn (>10MB)');
       return;
     }
+    setCropperFile(file);
+  }
+
+  // Sau khi user crop xong → upload blob lên server
+  async function handleCropConfirm(blob: Blob) {
     setUploadingAvatar(true);
     try {
       const fd = new FormData();
-      fd.append('file', file);
+      fd.append('file', blob, 'avatar.jpg');
       const res = await fetch('/api/personal/avatar', { method: 'POST', body: fd });
       const j = await res.json();
       if (!res.ok) throw new Error(j?.error ?? 'Lỗi upload');
       setAvatarUrl(j.url);
+      setCropperFile(null);
     } catch (e: any) {
       onError(e.message);
     } finally {
@@ -886,11 +889,11 @@ function ProfileModal({
                 hidden
                 onChange={(e) => {
                   const f = e.target.files?.[0];
-                  if (f) handleAvatarUpload(f);
+                  if (f) handleFileSelected(f);
                   e.target.value = '';
                 }}
               />
-              <div className="text-[11px] text-slate-500 mt-1">JPG/PNG/WEBP, ≤ 5MB</div>
+              <div className="text-[11px] text-slate-500 mt-1">JPG/PNG/WEBP, ≤ 10MB · sẽ cắt vuông</div>
             </div>
           </div>
 
@@ -926,6 +929,15 @@ function ProfileModal({
           </button>
         </div>
       </div>
+
+      {/* Cropper overlay khi user chọn file */}
+      {cropperFile && (
+        <AvatarCropper
+          file={cropperFile}
+          onCancel={() => setCropperFile(null)}
+          onConfirm={handleCropConfirm}
+        />
+      )}
     </div>
   );
 }
