@@ -18,7 +18,10 @@ export async function proxy(req: NextRequest) {
     req.nextUrl.pathname.startsWith('/api') ||
     req.nextUrl.pathname.endsWith('.svg') ||
     req.nextUrl.pathname.endsWith('.png') ||
-    req.nextUrl.pathname.endsWith('.ico');
+    req.nextUrl.pathname.endsWith('.ico') ||
+    // PWA assets — Chrome cần fetch không cookie để cài app
+    req.nextUrl.pathname === '/manifest.json' ||
+    req.nextUrl.pathname === '/firebase-messaging-sw.js';
 
   const hasSession = !!req.cookies.get(SESSION_COOKIE)?.value;
 
