@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { X, Loader2, Paperclip, Trash2 } from 'lucide-react';
 import {
   tasksApi,
@@ -116,18 +116,43 @@ export function TaskCreateModal(props: {
   );
 
   // Filter users theo khối + dept/facility (nếu chọn).
-  // Đề xuất: chỉ gửi cho người ngang cấp (cùng level) hoặc cấp trên (level cao hơn). Không gửi xuống cấp dưới.
+  // Đề xuất + tab "Cá nhân": CHỈ list cấp trên (GĐ_KD, GĐ_VP, CEO, ADMIN/Chủ tịch).
+  // Giao việc: ngang cấp / cấp trên (logic cũ).
+  const TOP_LEADER_ROLES = new Set(['GD_KD', 'GD_VP', 'CEO', 'ADMIN']);
   const usersInScope = useMemo(() => {
     return users.filter((u) => {
+      // Đề xuất + tab user → chỉ list cấp trên
+      if (kind === 'proposal' && assigneeKind === 'user') {
+        return TOP_LEADER_ROLES.has(u.roleId);
+      }
       const ub = ROLE_BLOCK[u.roleId];
       if (ub !== assigneeBlock && ub !== 'all') return false;
       if (assigneeKind === 'department' && assigneeDeptId && u.departmentId !== assigneeDeptId) return false;
       if (assigneeKind === 'facility' && assigneeFacilityId && u.branchId !== assigneeFacilityId) return false;
-      // Đề xuất: validate cấp bậc — người nhận phải >= cấp người gửi
       if (kind === 'proposal' && getRoleLevel(u.roleId) < myLevel) return false;
       return true;
     });
   }, [users, assigneeBlock, assigneeKind, assigneeDeptId, assigneeFacilityId, kind, myLevel]);
+
+  // Đề xuất + chọn phòng ban → tự động set assignee = TP của phòng đó (gửi cho TP).
+  // Đề xuất + chọn cơ sở → tự động set assignee = QLCS của cơ sở.
+  useEffect(() => {
+    if (kind !== 'proposal') return;
+    if (assigneeKind === 'department' && assigneeDeptId) {
+      const tp = users.find((u) => u.departmentId === assigneeDeptId && u.roleId.startsWith('TP_'));
+      setAssigneeUserIds(tp ? [tp.id] : []);
+    } else if (assigneeKind === 'facility' && assigneeFacilityId) {
+      const qlcs = users.find((u) => u.branchId === assigneeFacilityId && u.roleId.startsWith('QLCS_'));
+      setAssigneeUserIds(qlcs ? [qlcs.id] : []);
+    }
+  }, [kind, assigneeKind, assigneeDeptId, assigneeFacilityId, users]);
+
+  // Lookup tên TP / QLCS để hiển thị xác nhận dưới select
+  const autoResolvedRecipient = useMemo(() => {
+    if (kind !== 'proposal' || assigneeUserIds.length === 0) return null;
+    const u = users.find((x) => x.id === assigneeUserIds[0]);
+    return u ? `${u.name} (${u.roleId})` : null;
+  }, [kind, assigneeUserIds, users]);
 
   // Constraints — đã mở: TP/QLCS/GĐ/CEO đều có thể cross-block / liên phòng.
   // computeApproval ở server tự quyết status (pending_approval khi cần).
@@ -355,54 +380,78 @@ export function TaskCreateModal(props: {
             </div>
           </Field>
 
-          {/* Assignee kind picker — proposal: "Gửi cho" (người duyệt ngang cấp/cấp trên); assignment: "Giao cho" */}
-          <Field label={kind === 'proposal' ? 'Gửi cho (ngang cấp hoặc cấp trên)' : 'Giao cho'}>
+          {/* Assignee kind picker — proposal: 3 nhóm rõ ràng (gửi TP phòng / QLCS cơ sở / Lãnh đạo cá nhân) */}
+          <Field label={kind === 'proposal' ? 'Gửi cho' : 'Giao cho'}>
             <div className="flex gap-1 mb-2 bg-slate-100 p-1 rounded-lg">
-              {(['department', 'facility', 'user'] as const).map((k) => (
-                <button
-                  key={k}
-                  onClick={() => setAssigneeKind(k)}
-                  className={`flex-1 py-1.5 text-xs rounded font-medium ${
-                    assigneeKind === k ? 'bg-white shadow text-emerald-700' : 'text-slate-600 hover:bg-white/50'
-                  }`}
-                >
-                  {k === 'department' ? 'Phòng ban' : k === 'facility' ? 'Cơ sở' : 'Cá nhân'}
-                </button>
-              ))}
+              {(['department', 'facility', 'user'] as const).map((k) => {
+                const labels = kind === 'proposal'
+                  ? { department: 'Phòng ban', facility: 'Cơ sở', user: 'Lãnh đạo' }
+                  : { department: 'Phòng ban', facility: 'Cơ sở', user: 'Cá nhân' };
+                return (
+                  <button
+                    key={k}
+                    onClick={() => { setAssigneeKind(k); setAssigneeUserIds([]); }}
+                    className={`flex-1 py-1.5 text-xs rounded font-medium ${
+                      assigneeKind === k ? 'bg-white shadow text-emerald-700' : 'text-slate-600 hover:bg-white/50'
+                    }`}
+                  >
+                    {labels[k]}
+                  </button>
+                );
+              })}
             </div>
 
             {assigneeKind === 'department' && (
-              <select
-                value={assigneeDeptId}
-                onChange={(e) => setAssigneeDeptId(e.target.value)}
-                className={inputCls}
-              >
-                <option value="">-- Chọn phòng --</option>
-                {deptsInBlock.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}{d.id === currentDepartmentId ? ' (phòng của bạn)' : ''}
-                  </option>
-                ))}
-              </select>
+              <>
+                <select
+                  value={assigneeDeptId}
+                  onChange={(e) => setAssigneeDeptId(e.target.value)}
+                  className={inputCls}
+                >
+                  <option value="">-- Chọn phòng --</option>
+                  {deptsInBlock.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}{d.id === currentDepartmentId ? ' (phòng của bạn)' : ''}
+                    </option>
+                  ))}
+                </select>
+                {kind === 'proposal' && assigneeDeptId && (
+                  <div className={`mt-1.5 text-xs px-2 py-1.5 rounded ${autoResolvedRecipient ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>
+                    {autoResolvedRecipient ? `→ Gửi cho TP: ${autoResolvedRecipient}` : '⚠ Phòng này chưa có Trưởng phòng — đề xuất sẽ không có người nhận'}
+                  </div>
+                )}
+              </>
             )}
             {assigneeKind === 'facility' && (
-              <select
-                value={assigneeFacilityId}
-                onChange={(e) => setAssigneeFacilityId(e.target.value)}
-                className={inputCls}
-              >
-                <option value="">-- Chọn cơ sở --</option>
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.id} · {b.name}{b.id === currentBranchId ? ' (cơ sở của bạn)' : ''}
-                  </option>
-                ))}
-              </select>
+              <>
+                <select
+                  value={assigneeFacilityId}
+                  onChange={(e) => setAssigneeFacilityId(e.target.value)}
+                  className={inputCls}
+                >
+                  <option value="">-- Chọn cơ sở --</option>
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.id} · {b.name}{b.id === currentBranchId ? ' (cơ sở của bạn)' : ''}
+                    </option>
+                  ))}
+                </select>
+                {kind === 'proposal' && assigneeFacilityId && (
+                  <div className={`mt-1.5 text-xs px-2 py-1.5 rounded ${autoResolvedRecipient ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>
+                    {autoResolvedRecipient ? `→ Gửi cho QLCS: ${autoResolvedRecipient}` : '⚠ Cơ sở này chưa có QLCS — đề xuất sẽ không có người nhận'}
+                  </div>
+                )}
+              </>
             )}
             {assigneeKind === 'user' && (
               <div className="max-h-40 overflow-auto border border-slate-200 rounded-lg p-2 bg-slate-50/40 space-y-1">
+                {kind === 'proposal' && (
+                  <div className="text-[10px] uppercase tracking-wider text-slate-500 px-2 pb-1 font-semibold">
+                    Lãnh đạo cấp trên
+                  </div>
+                )}
                 {usersInScope.length === 0 && (
-                  <div className="text-xs text-slate-400 text-center py-3">Không có user nào trong scope</div>
+                  <div className="text-xs text-slate-400 text-center py-3">Không có người nhận phù hợp</div>
                 )}
                 {usersInScope.map((u) => {
                   const checked = assigneeUserIds.includes(u.id);
