@@ -295,7 +295,7 @@ export function GiaoViecClient(props: Props) {
               onClick={() => setShowCreate('proposal')}
               className="my-2 mr-2 inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 shadow-sm"
             >
-              <Plus size={14} /> Gửi duyệt
+              <Plus size={14} /> Tạo đề xuất
             </button>
           )}
           {canCreate && tab === 'assignment' && (
