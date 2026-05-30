@@ -79,9 +79,36 @@ export async function notifyTaskCreated(task: TaskDoc): Promise<void> {
   }
 }
 
-/** Task được duyệt — push creator + assignees. */
+/** Task được duyệt.
+ *  - Multi-step (Phase 12): nếu còn approver tiếp (task.approvalRequiredFrom != null + status='pending_approval')
+ *    → push cấp tiếp theo qua pushToRoles. Creator nhận noti riêng cho biết đang qua bước nào.
+ *  - Cuối chain (status='pending'): push creator + assignees.
+ */
 export async function notifyTaskApproved(task: TaskDoc, approverName: string): Promise<void> {
   const link = taskLink(task.id);
+  const isStillPending = task.status === 'pending_approval' && task.approvalRequiredFrom;
+  if (isStillPending) {
+    // Push cấp duyệt tiếp theo
+    await pushToRoles([task.approvalRequiredFrom as string], {
+      title: `📥 ${kindLabel(task.kind)} chờ bạn duyệt`,
+      body: `"${task.title}" — ${approverName} vừa duyệt, đến lượt bạn`,
+      link,
+      tag: `task-${task.id}`,
+      data: { taskId: task.id, kind: 'task_pending_next_approval' },
+    }).catch(() => {});
+    // Push creator để biết tiến độ
+    if (task.createdBy) {
+      await pushToUsers([task.createdBy], {
+        title: `✓ ${approverName} đã duyệt — chuyển cấp tiếp`,
+        body: `"${task.title}" đang chờ ${task.approvalRequiredFrom} duyệt`,
+        link,
+        tag: `task-${task.id}`,
+        data: { taskId: task.id, kind: 'task_approved_step' },
+      }).catch(() => {});
+    }
+    return;
+  }
+  // Hết chain → đến recipient
   const uids = await resolveAssigneeUids(task);
   uids.push(task.createdBy);
   const filtered = Array.from(new Set(uids));
@@ -108,21 +135,38 @@ export async function notifyTaskRejected(task: TaskDoc, rejecterName: string, re
   }).catch(() => {});
 }
 
-/** Task đổi status — push creator (trừ khi actor === creator). */
+/** Task đổi status — push target tùy newStatus:
+ *  - in_progress / done: assignee action → push creator (trừ khi actor=creator).
+ *  - pending (resubmit từ requested_revision): creator action → push assignees (trừ creator).
+ *  - cancelled: push cả creator + assignees (trừ actor) — để cả 2 phía đều biết task đã hủy.
+ */
 export async function notifyTaskStatusChanged(
   task: TaskDoc,
   actor: { uid: string; name: string },
   newStatus: string,
 ): Promise<void> {
-  // Đừng push nếu creator chính là actor
-  if (actor.uid === task.createdBy) return;
   const statusLabel: Record<string, string> = {
     in_progress: '🔄 đang làm',
     done: '✓ hoàn thành',
     cancelled: '🚫 đã huỷ',
+    pending: '↩️ gửi lại sau bổ sung',
   };
   const label = statusLabel[newStatus] ?? `→ ${newStatus}`;
-  await pushToUsers([task.createdBy], {
+  let targets: string[];
+  if (newStatus === 'pending') {
+    // Creator bổ sung xong gửi lại → recipient cần biết
+    targets = (await resolveAssigneeUids(task)).filter((u) => u !== actor.uid);
+  } else if (newStatus === 'cancelled') {
+    // Cả creator + assignees cần biết task hủy
+    const set = new Set([...(await resolveAssigneeUids(task)), task.createdBy].filter((u) => u && u !== actor.uid));
+    targets = Array.from(set);
+  } else {
+    // in_progress / done: assignee action → push creator (nếu khác actor)
+    if (actor.uid === task.createdBy) return;
+    targets = [task.createdBy];
+  }
+  if (targets.length === 0) return;
+  await pushToUsers(targets, {
     title: `${label}: ${task.title}`,
     body: `${actor.name} cập nhật trạng thái`,
     link: taskLink(task.id),
