@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import {
   tasksApi, type Task, type TaskComment, type TaskStatus, type TaskAttachment,
-  PROPOSAL_CATEGORY_LABEL,
+  PROPOSAL_TYPE_LABEL, FINANCIAL_GROUP_LABEL, roleLabelVN,
 } from '@/lib/services/tasks/api-client';
 
 interface Department { id: string; name: string; blockId: 'KD' | 'VP' | null; }
@@ -17,12 +17,14 @@ interface User { id: string; name: string; roleId: string; branchId: string | nu
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
   pending_approval: 'Chờ duyệt', pending: 'Chờ làm', in_progress: 'Đang làm',
+  requested_revision: 'Yêu cầu bổ sung',
   done: 'Hoàn thành', rejected: 'Từ chối', cancelled: 'Huỷ',
 };
 const STATUS_BG: Record<TaskStatus, string> = {
   pending_approval: 'bg-amber-50 text-amber-700 ring-amber-200',
   pending: 'bg-slate-100 text-slate-700 ring-slate-200',
   in_progress: 'bg-sky-50 text-sky-700 ring-sky-200',
+  requested_revision: 'bg-orange-50 text-orange-700 ring-orange-200',
   done: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
   rejected: 'bg-rose-50 text-rose-700 ring-rose-200',
   cancelled: 'bg-slate-50 text-slate-500 ring-slate-200',
@@ -56,11 +58,16 @@ export function TaskDetailModal(props: {
   const [attachments, setAttachments] = useState<TaskAttachment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<null | 'approve' | 'reject' | 'status' | 'comment' | 'delete' | 'upload'>(null);
+  const [busy, setBusy] = useState<null | 'approve' | 'reject' | 'status' | 'comment' | 'delete' | 'upload' | 'request-revision'>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [showReject, setShowReject] = useState(false);
   const [newComment, setNewComment] = useState('');
   const [progressInput, setProgressInput] = useState(initialTask.progressPct);
+  // Phase 12 — recipient actions cho đề xuất v2
+  const [showStartForm, setShowStartForm] = useState(false);
+  const [expectedCompletionDate, setExpectedCompletionDate] = useState('');
+  const [showRevisionForm, setShowRevisionForm] = useState(false);
+  const [revisionMessage, setRevisionMessage] = useState('');
 
   const isCEO = currentUserRole === 'CEO' || currentUserRole === 'ADMIN';
   const isGD = GD_ROLES.has(currentUserRole);
@@ -172,6 +179,29 @@ export function TaskDetailModal(props: {
     catch (e: any) { setError(e.message); setBusy(null); }
   }
 
+  // Phase 12 — Recipient bắt đầu thực hiện đề xuất (kèm dự kiến hoàn thành)
+  async function startProposal() {
+    if (!expectedCompletionDate) { setError('Phải chọn ngày dự kiến hoàn thành.'); return; }
+    setBusy('status');
+    try {
+      await tasksApi.updateStatus(task.id, { status: 'in_progress', expectedCompletionDate });
+      setShowStartForm(false);
+      setExpectedCompletionDate('');
+      await refresh();
+    } catch (e: any) { setError(e.message); } finally { setBusy(null); }
+  }
+  // Phase 12 — Recipient yêu cầu creator bổ sung
+  async function requestRevision() {
+    if (!revisionMessage.trim()) { setError('Phải nhập nội dung yêu cầu bổ sung.'); return; }
+    setBusy('request-revision');
+    try {
+      await tasksApi.requestRevision(task.id, revisionMessage.trim());
+      setShowRevisionForm(false);
+      setRevisionMessage('');
+      await refresh();
+    } catch (e: any) { setError(e.message); } finally { setBusy(null); }
+  }
+
 
   return (
     <div className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
@@ -229,13 +259,67 @@ export function TaskDetailModal(props: {
                 </Meta>
               </div>
 
-              {/* Đề xuất: loại + chi phí dự kiến */}
-              {task.kind === 'proposal' && task.proposalCategory && (
-                <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-3 flex items-center gap-3">
-                  <div>
-                    <div className="text-[10px] font-semibold uppercase tracking-wider text-amber-700 mb-0.5">Loại đề xuất</div>
-                    <div className="text-sm font-semibold text-slate-800">{PROPOSAL_CATEGORY_LABEL[task.proposalCategory]}</div>
+              {/* Phase 12 — Luồng duyệt đề xuất (chain) */}
+              {task.kind === 'proposal' && task.approvalChain && task.approvalChain.length > 0 && (
+                <div className="rounded-lg border border-blue-200 bg-blue-50/40 p-3">
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-blue-700 mb-2">Luồng duyệt</div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {task.approvalChain.map((role, i) => {
+                      const done = (task.approvalsCompleted ?? []).find((s) => s.role === role);
+                      const isCurrent = task.currentApprover === role && !done;
+                      return (
+                        <div key={i} className="flex items-center gap-1.5">
+                          <div className={`px-2.5 py-1 rounded-md text-xs font-semibold ring-1 ${
+                            done ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
+                            : isCurrent ? 'bg-amber-50 text-amber-700 ring-amber-300 animate-pulse'
+                            : 'bg-slate-50 text-slate-500 ring-slate-200'
+                          }`}>
+                            {done ? '✓ ' : isCurrent ? '⏳ ' : ''}{roleLabelVN(role)}
+                            {done && <span className="ml-1 font-normal text-emerald-600">· {done.name}</span>}
+                          </div>
+                          {i < task.approvalChain!.length - 1 && <ArrowRight size={12} className="text-slate-400" />}
+                        </div>
+                      );
+                    })}
                   </div>
+                </div>
+              )}
+
+              {/* Phase 12 — Lịch sử yêu cầu bổ sung (nếu có) */}
+              {task.revisionRequests && task.revisionRequests.length > 0 && (
+                <div className="rounded-lg border border-orange-200 bg-orange-50/40 p-3 space-y-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-orange-700">Yêu cầu bổ sung từ người nhận</div>
+                  {task.revisionRequests.slice(-3).map((r, i) => (
+                    <div key={i} className="text-sm text-slate-700 border-l-2 border-orange-300 pl-2">
+                      <div className="font-medium text-orange-800">{r.name} <span className="text-xs text-slate-400 font-normal">· {fmtDateTime(r.requestedAt)}</span></div>
+                      <div className="text-sm whitespace-pre-wrap">{r.message}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Phase 12 — Dự kiến hoàn thành (recipient set khi in_progress) */}
+              {task.kind === 'proposal' && task.expectedCompletionDate && (
+                <div className="rounded-lg border border-sky-200 bg-sky-50/40 px-3 py-2 text-sm flex items-center gap-2">
+                  <CalendarDays size={14} className="text-sky-600" />
+                  <span className="text-slate-600">Dự kiến hoàn thành:</span>
+                  <span className="font-semibold text-sky-800">{task.expectedCompletionDate}</span>
+                </div>
+              )}
+
+              {/* Đề xuất v2: nội dung + nhóm chi + chi phí */}
+              {task.kind === 'proposal' && task.proposalType && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-3 flex items-center gap-3 flex-wrap">
+                  <div>
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-amber-700 mb-0.5">Nội dung đề xuất</div>
+                    <div className="text-sm font-semibold text-slate-800">{PROPOSAL_TYPE_LABEL[task.proposalType]}</div>
+                  </div>
+                  {task.proposalType === 'tai_chinh' && task.financialGroup && (
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-amber-700 mb-0.5">Nhóm chi</div>
+                      <div className="text-sm font-medium text-slate-700">{FINANCIAL_GROUP_LABEL[task.financialGroup]}</div>
+                    </div>
+                  )}
                   {task.estimatedCost != null && task.estimatedCost > 0 && (
                     <div className="ml-auto text-right">
                       <div className="text-[10px] font-semibold uppercase tracking-wider text-amber-700 mb-0.5">Chi phí dự kiến</div>
@@ -275,9 +359,22 @@ export function TaskDetailModal(props: {
                     </div>
                   )}
                   <div className="flex gap-2 flex-wrap">
-                    {task.status === 'pending' && (
+                    {/* Đề xuất: bắt đầu phải nhập "dự kiến hoàn thành" → mở form */}
+                    {task.status === 'pending' && task.kind === 'proposal' && (
+                      <button disabled={!!busy} onClick={() => setShowStartForm(true)} className={btnPrimary}>
+                        <Clock size={14} /> Bắt đầu thực hiện
+                      </button>
+                    )}
+                    {/* Giao việc thường: bắt đầu trực tiếp */}
+                    {task.status === 'pending' && task.kind !== 'proposal' && (
                       <button disabled={!!busy} onClick={() => changeStatus('in_progress', task.progressPct || 10)} className={btnPrimary}>
                         <Clock size={14} /> Bắt đầu
+                      </button>
+                    )}
+                    {/* Đề xuất: recipient có thể yêu cầu bổ sung */}
+                    {(task.status === 'pending' || task.status === 'in_progress') && task.kind === 'proposal' && !isCreator && (
+                      <button disabled={!!busy} onClick={() => setShowRevisionForm(true)} className={btnSecondary}>
+                        <AlertTriangle size={14} /> Yêu cầu bổ sung
                       </button>
                     )}
                     {(task.status === 'pending' || task.status === 'in_progress') && (
@@ -285,7 +382,13 @@ export function TaskDetailModal(props: {
                         <CheckCircle2 size={14} /> Hoàn thành
                       </button>
                     )}
-                    {task.status === 'in_progress' && (
+                    {/* Đề xuất ở requested_revision: creator bổ sung xong gửi lại */}
+                    {task.status === 'requested_revision' && task.kind === 'proposal' && (isCreator || isAdmin) && (
+                      <button disabled={!!busy} onClick={() => changeStatus('pending')} className={btnPrimary}>
+                        <Send size={14} /> Gửi lại sau bổ sung
+                      </button>
+                    )}
+                    {task.status === 'in_progress' && task.kind !== 'proposal' && (
                       <button disabled={!!busy} onClick={() => changeStatus('pending')} className={btnSecondary}>
                         Tạm dừng
                       </button>
@@ -300,6 +403,55 @@ export function TaskDetailModal(props: {
                         Mở lại
                       </button>
                     )}
+                  </div>
+                </div>
+              )}
+
+              {/* Phase 12 — Form "Bắt đầu thực hiện" cho recipient (đề xuất) */}
+              {showStartForm && (
+                <div className="rounded-lg border-2 border-emerald-300 bg-emerald-50/60 p-3 space-y-2">
+                  <div className="text-xs font-bold uppercase tracking-wider text-emerald-800 flex items-center gap-1">
+                    <Clock size={12} /> Bắt đầu thực hiện đề xuất
+                  </div>
+                  <p className="text-xs text-slate-600">Vui lòng nhập ngày dự kiến hoàn thành để người gửi biết.</p>
+                  <input
+                    type="date"
+                    value={expectedCompletionDate}
+                    onChange={(e) => setExpectedCompletionDate(e.target.value)}
+                    min={new Date().toISOString().slice(0, 10)}
+                    className="w-full text-sm border border-emerald-300 rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-emerald-400 outline-none"
+                  />
+                  <div className="flex gap-2 justify-end">
+                    <button onClick={() => { setShowStartForm(false); setExpectedCompletionDate(''); }} className={btnSecondary}>Hủy</button>
+                    <button disabled={busy === 'status' || !expectedCompletionDate} onClick={startProposal} className={btnPrimary}>
+                      {busy === 'status' && <Loader2 size={14} className="animate-spin" />}
+                      <Clock size={14} /> Xác nhận bắt đầu
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Phase 12 — Form "Yêu cầu bổ sung" cho recipient (đề xuất) */}
+              {showRevisionForm && (
+                <div className="rounded-lg border-2 border-orange-300 bg-orange-50/60 p-3 space-y-2">
+                  <div className="text-xs font-bold uppercase tracking-wider text-orange-800 flex items-center gap-1">
+                    <AlertTriangle size={12} /> Yêu cầu người gửi bổ sung
+                  </div>
+                  <p className="text-xs text-slate-600">Đề xuất sẽ chuyển về trạng thái "Yêu cầu bổ sung". Người gửi nhận thông báo + bổ sung rồi gửi lại.</p>
+                  <textarea
+                    value={revisionMessage}
+                    onChange={(e) => setRevisionMessage(e.target.value)}
+                    placeholder="Nêu rõ thông tin cần bổ sung..."
+                    rows={3}
+                    maxLength={1000}
+                    className="w-full text-sm border border-orange-300 rounded-lg p-2 focus:ring-2 focus:ring-orange-400 outline-none"
+                  />
+                  <div className="flex gap-2 justify-end">
+                    <button onClick={() => { setShowRevisionForm(false); setRevisionMessage(''); }} className={btnSecondary}>Hủy</button>
+                    <button disabled={busy === 'request-revision' || !revisionMessage.trim()} onClick={requestRevision} className={btnDanger}>
+                      {busy === 'request-revision' && <Loader2 size={14} className="animate-spin" />}
+                      <AlertTriangle size={14} /> Gửi yêu cầu
+                    </button>
                   </div>
                 </div>
               )}

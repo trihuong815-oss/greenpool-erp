@@ -9,14 +9,18 @@ import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-aut
 import { canUpdateTaskStatus, canReopenTask, type TaskForScope, type TaskStatus } from '@/lib/firebase/tasks-scope';
 
 const COL = COLLECTIONS.TASKS;
-// Quy trình chuẩn: pending → in_progress → done. Strict step (không skip).
-// pending → cancelled, in_progress → cancelled: cho phép hủy giữa chừng.
-// done → in_progress: reopen — yêu cầu quyền GD Khối / CEO / ADMIN (canReopenTask).
-// cancelled → pending: restore (cùng quyền reopen).
+// Quy trình:
+//   pending → in_progress (recipient bắt đầu, kèm expectedCompletionDate nếu kind='proposal')
+//   in_progress → done (hoàn thành) hoặc → cancelled
+//   in_progress → requested_revision (recipient yêu cầu creator bổ sung — qua route riêng /request-revision)
+//   requested_revision → pending (creator bổ sung xong, gửi lại — đến tay recipient)
+//   done → in_progress: reopen (chỉ GD Khối / CEO / ADMIN)
+//   cancelled → pending: restore
 const VALID_NEXT: Record<TaskStatus, TaskStatus[]> = {
   pending_approval: [],
   pending: ['in_progress', 'cancelled'],
   in_progress: ['done', 'cancelled'],
+  requested_revision: ['pending', 'cancelled'],
   done: ['in_progress'],
   rejected: [],
   cancelled: ['pending'],
@@ -88,6 +92,20 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
     // Auto progress khi done → 100, pending → giữ nguyên
     if (newStatus === 'done') patch.progressPct = 100;
     else if (progressPct !== null) patch.progressPct = progressPct;
+
+    // Phase 12 — Đề xuất v2: recipient bắt đầu → bắt buộc nhập dự kiến hoàn thành
+    if (newStatus === 'in_progress' && data.kind === 'proposal') {
+      const exp = typeof body?.expectedCompletionDate === 'string' ? body.expectedCompletionDate.trim() : '';
+      if (!exp) {
+        return NextResponse.json({
+          error: 'Đề xuất khi chuyển "Đang thực hiện" bắt buộc nhập "Dự kiến hoàn thành".',
+        }, { status: 400 });
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(exp)) {
+        return NextResponse.json({ error: 'expectedCompletionDate phải định dạng YYYY-MM-DD' }, { status: 400 });
+      }
+      patch.expectedCompletionDate = exp;
+    }
 
     await ref.update(patch);
     await ref.collection('comments').add({

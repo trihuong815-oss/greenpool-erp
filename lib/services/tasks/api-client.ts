@@ -2,11 +2,12 @@
 
 export type Block = 'KD' | 'VP';
 export type TaskStatus =
-  | 'pending_approval'   // chờ GĐ Khối nhận duyệt (cross-block)
-  | 'pending'            // sẵn sàng làm
-  | 'in_progress'        // đang làm
+  | 'pending_approval'   // chờ duyệt (single hoặc multi-step theo approvalChain)
+  | 'pending'            // sẵn sàng làm (đã qua hết chain duyệt)
+  | 'in_progress'        // đang làm (recipient set kèm expectedCompletionDate)
+  | 'requested_revision' // recipient yêu cầu creator bổ sung
   | 'done'               // hoàn thành
-  | 'rejected'           // GĐ Khối từ chối
+  | 'rejected'           // bị từ chối ở bất kỳ bước duyệt nào
   | 'cancelled';         // creator huỷ
 export type TaskPriority = 'low' | 'normal' | 'high' | 'urgent';
 // 'general' = legacy/migrated task (chưa phân loại proposal/assignment) — chỉ tồn tại
@@ -38,29 +39,73 @@ export interface Task {
   progressPct: number;
   updatedAt: string;
   updatedBy: string;
-  // Đề xuất mở rộng: loại đề xuất + chi phí dự kiến (chỉ áp dụng kind='proposal')
-  proposalCategory?: ProposalCategory | null;
+  // ── Đề xuất (kind='proposal') v2 — anh chốt 2026-05-30 ────────────────
+  /** Nội dung đề xuất: tài chính (kèm financialGroup + estimatedCost) hoặc vận hành */
+  proposalType?: ProposalType | null;
+  /** Nhóm chi (chỉ tài chính): thường xuyên (không cần duyệt) / chi khác */
+  financialGroup?: FinancialGroup | null;
+  /** Chi phí dự kiến (VND) — bắt buộc với tài chính + chi_khac; quyết định có cần duyệt hay không (> 5tr → cần) */
   estimatedCost?: number | null;
+  /** Recipient nhập khi chuyển in_progress: dự kiến hoàn thành */
+  expectedCompletionDate?: string | null;
+  /** Chuỗi role cần duyệt theo thứ tự. [] = không cần duyệt. ['GD_KD'] = 1 cấp. ['GD_KD','GD_VP'] = cross-block 2 cấp */
+  approvalChain?: string[];
+  /** Lịch sử các bước duyệt đã hoàn thành */
+  approvalsCompleted?: ApprovalStep[];
+  /** Role cần duyệt tiếp theo (cho UI hiển thị). null khi chain done hoặc chưa start. */
+  currentApprover?: string | null;
+  /** Lịch sử yêu cầu bổ sung từ recipient → creator (lưu để track) */
+  revisionRequests?: RevisionRequest[];
+  /** Role label tiếng Việt — UI dùng để render chain (vd "Giám đốc Khối KD") */
+  approvalChainLabels?: Record<string, string>;
 }
 
-export type ProposalCategory =
-  | 'mua_sam'
-  | 'sua_chua'
-  | 'tuyen_dung'
-  | 'marketing'
-  | 'dao_tao'
-  | 'dau_tu'
-  | 'khac';
-
-export const PROPOSAL_CATEGORY_LABEL: Record<ProposalCategory, string> = {
-  mua_sam: 'Mua sắm',
-  sua_chua: 'Sửa chữa',
-  tuyen_dung: 'Tuyển dụng',
-  marketing: 'Marketing',
-  dao_tao: 'Đào tạo',
-  dau_tu: 'Đầu tư',
-  khac: 'Khác',
+/** Map role → label tiếng Việt cho UI chain. */
+export const ROLE_LABEL_VN: Record<string, string> = {
+  GD_KD: 'Giám đốc Khối Kinh doanh',
+  GD_VP: 'Giám đốc Khối Văn phòng',
+  CEO: 'Chủ tịch / CEO',
+  ADMIN: 'Quản trị hệ thống',
+  TP_KE: 'Trưởng phòng Kế toán',
+  TP_NS: 'Trưởng phòng Nhân sự',
+  TP_KT: 'Trưởng phòng Kỹ thuật',
+  TP_DT: 'Trưởng phòng Đào tạo',
+  TP_MKT: 'Trưởng phòng Marketing',
+  TP_GS: 'Trưởng phòng Giám sát',
 };
+export function roleLabelVN(role: string): string {
+  return ROLE_LABEL_VN[role] ?? role;
+}
+
+export type ProposalType = 'tai_chinh' | 'van_hanh';
+export type FinancialGroup = 'chi_thuong_xuyen' | 'chi_khac';
+
+export interface ApprovalStep {
+  role: string;
+  uid: string;
+  name: string;
+  decidedAt: string;        // ISO
+  decision: 'approved' | 'rejected';
+  notes?: string;
+}
+
+export interface RevisionRequest {
+  uid: string;
+  name: string;
+  requestedAt: string;      // ISO
+  message: string;
+}
+
+export const PROPOSAL_TYPE_LABEL: Record<ProposalType, string> = {
+  tai_chinh: 'Tài chính',
+  van_hanh: 'Vận hành',
+};
+export const FINANCIAL_GROUP_LABEL: Record<FinancialGroup, string> = {
+  chi_thuong_xuyen: 'Chi hoạt động thường xuyên',
+  chi_khac: 'Chi khác (mua sắm, sửa chữa, đầu tư...)',
+};
+/** Ngưỡng tự quyết: chi khác ≤ giá trị này → QLCS tự quyết, không cần GĐ duyệt */
+export const AUTO_APPROVE_THRESHOLD = 5_000_000;
 
 export interface TaskCreate {
   kind: TaskKind;              // bắt buộc: đề xuất hay giao việc
@@ -72,9 +117,11 @@ export interface TaskCreate {
   assigneeUserIds?: string[];
   priority: TaskPriority;
   dueDate?: string | null;
-  // Đề xuất mở rộng: bắt buộc khi kind='proposal'
-  proposalCategory?: ProposalCategory | null;
-  estimatedCost?: number | null;     // bắt buộc khi proposalCategory='mua_sam'
+  // Đề xuất v2 (kind='proposal'): bắt buộc proposalType.
+  // Nếu tai_chinh: bắt buộc financialGroup; nếu chi_khac thì estimatedCost bắt buộc (server validate).
+  proposalType?: ProposalType | null;
+  financialGroup?: FinancialGroup | null;
+  estimatedCost?: number | null;
 }
 
 export interface TaskUpdate {
@@ -177,13 +224,24 @@ export const tasksApi = {
 
   async updateStatus(
     id: string,
-    input: { status: TaskStatus; progressPct?: number; comment?: string },
+    input: { status: TaskStatus; progressPct?: number; comment?: string; expectedCompletionDate?: string },
   ): Promise<{ ok: true }> {
     return jsonOrThrow<{ ok: true }>(
       await fetch(`/api/tasks/${id}/status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(input),
+      }),
+    );
+  },
+
+  /** Phase 12 — Recipient (assignee) yêu cầu creator bổ sung. Status: pending|in_progress → requested_revision. */
+  async requestRevision(id: string, message: string): Promise<{ ok: true }> {
+    return jsonOrThrow<{ ok: true }>(
+      await fetch(`/api/tasks/${id}/request-revision`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message }),
       }),
     );
   },

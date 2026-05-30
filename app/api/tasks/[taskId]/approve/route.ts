@@ -40,18 +40,58 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
     }
 
     const now = new Date();
-    await ref.update({
-      status: 'pending',
-      approvedBy: caller.profile.uid,
-      approvedAt: now,
+
+    // Phase 12 multi-step approval cho kind='proposal':
+    //   - Nếu approvalChain có nhiều cấp → ghi nhận approval của cấp hiện tại + chuyển currentApprover sang cấp tiếp theo
+    //   - Khi hết chain → status='pending', đến tay recipient
+    // Legacy (kind='assignment' hoặc proposal không có chain): chuyển thẳng pending như cũ.
+    const chain: string[] = Array.isArray(data.approvalChain) ? data.approvalChain : [];
+    const completed: Array<Record<string, unknown>> = Array.isArray(data.approvalsCompleted) ? data.approvalsCompleted : [];
+    const currentIdx = completed.length;
+    const isMultiStep = chain.length > 0;
+    const nextApprover = isMultiStep && currentIdx + 1 < chain.length ? chain[currentIdx + 1] : null;
+
+    const newApprovalStep = {
+      role: caller.profile.role_code,
+      uid: caller.profile.uid,
+      name: caller.actorName ?? '',
+      decidedAt: now.toISOString(),
+      decision: 'approved' as const,
+      notes: comment || '',
+    };
+
+    const update: Record<string, unknown> = {
       updatedAt: now,
       updatedBy: caller.profile.uid,
-    });
+    };
+    if (isMultiStep) {
+      update.approvalsCompleted = [...completed, newApprovalStep];
+      if (nextApprover) {
+        // Còn cấp tiếp → giữ pending_approval, chuyển currentApprover
+        update.status = 'pending_approval';
+        update.currentApprover = nextApprover;
+        update.approvalRequiredFrom = nextApprover;   // sync để canApproveTask cũ work
+      } else {
+        // Hết chain → đến recipient
+        update.status = 'pending';
+        update.currentApprover = null;
+        update.approvalRequiredFrom = null;
+        update.approvedBy = caller.profile.uid;
+        update.approvedAt = now;
+      }
+    } else {
+      // Legacy single-step
+      update.status = 'pending';
+      update.approvedBy = caller.profile.uid;
+      update.approvedAt = now;
+    }
+
+    await ref.update(update);
     await ref.collection('comments').add({
       authorId: caller.profile.uid,
       authorName: caller.actorName,
       authorRole: caller.actorRole,
-      body: comment || 'Đã duyệt',
+      body: comment || (nextApprover ? `Đã duyệt — chuyển ${nextApprover} duyệt tiếp` : 'Đã duyệt'),
       kind: 'approval',
       createdAt: now,
     });
@@ -60,8 +100,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
       action: 'approve_task', module: 'giaoviec',
       userId: caller.profile.uid,
       branchId: data.assigneeFacilityId ?? null,
-      before: { status: data.status },
-      after: { status: 'pending' },
+      before: { status: data.status, currentApprover: data.currentApprover ?? null },
+      after: { status: update.status, currentApprover: update.currentApprover ?? null },
       actorName: caller.actorName, actorRole: caller.actorRole, source: 'api',
     });
 
@@ -71,11 +111,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
       assigneeUserIds: data.assigneeUserIds ?? [],
       assigneeDeptId: data.assigneeDeptId ?? null,
       assigneeFacilityId: data.assigneeFacilityId ?? null,
-      status: 'pending',
-      approvalRequiredFrom: null,
+      status: (update.status ?? 'pending') as string,
+      approvalRequiredFrom: (update.approvalRequiredFrom ?? null) as string | null,
     }, caller.actorName);
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, nextApprover, status: update.status });
   } catch (e) {
     if (e instanceof UnauthorizedError) return NextResponse.json({ error: e.message }, { status: e.status });
     console.error('[task approve]', e);

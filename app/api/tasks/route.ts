@@ -360,15 +360,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'dueDate phải định dạng YYYY-MM-DD hoặc null' }, { status: 400 });
     }
 
-    // Đề xuất mở rộng: loại đề xuất + chi phí dự kiến (chỉ kind='proposal')
-    const VALID_PROPOSAL_CATEGORY = new Set(['mua_sam', 'sua_chua', 'tuyen_dung', 'marketing', 'dao_tao', 'dau_tu', 'khac']);
-    let proposalCategory: string | null = null;
+    // Đề xuất v2 (anh chốt 2026-05-30): nội dung tài chính/vận hành + nhóm chi + chi phí
+    // → quyết định approvalChain (0/1/2 cấp duyệt).
+    const VALID_PROPOSAL_TYPE = new Set(['tai_chinh', 'van_hanh']);
+    const VALID_FINANCIAL_GROUP = new Set(['chi_thuong_xuyen', 'chi_khac']);
+    const AUTO_APPROVE_THRESHOLD = 5_000_000;   // chi khác ≤ ngưỡng → tự quyết
+    let proposalType: string | null = null;
+    let financialGroup: string | null = null;
     let estimatedCost: number | null = null;
     if (kind === 'proposal') {
-      if (typeof body?.proposalCategory === 'string' && VALID_PROPOSAL_CATEGORY.has(body.proposalCategory)) {
-        proposalCategory = body.proposalCategory;
-      } else {
-        proposalCategory = 'khac';
+      if (typeof body?.proposalType !== 'string' || !VALID_PROPOSAL_TYPE.has(body.proposalType)) {
+        return NextResponse.json({ error: 'proposalType phải là tai_chinh hoặc van_hanh' }, { status: 400 });
+      }
+      proposalType = body.proposalType;
+      if (proposalType === 'tai_chinh') {
+        if (typeof body?.financialGroup !== 'string' || !VALID_FINANCIAL_GROUP.has(body.financialGroup)) {
+          return NextResponse.json({ error: 'Đề xuất tài chính bắt buộc financialGroup (chi_thuong_xuyen hoặc chi_khac)' }, { status: 400 });
+        }
+        financialGroup = body.financialGroup;
       }
       if (body?.estimatedCost != null) {
         const n = Number(body.estimatedCost);
@@ -377,18 +386,18 @@ export async function POST(req: NextRequest) {
         }
         estimatedCost = n;
       }
-      // Mua sắm: chi phí dự kiến bắt buộc > 0
-      if (proposalCategory === 'mua_sam' && (estimatedCost === null || estimatedCost <= 0)) {
-        return NextResponse.json({ error: 'Đề xuất Mua sắm bắt buộc nhập chi phí dự kiến (> 0).' }, { status: 400 });
+      // chi khác: bắt buộc cost > 0
+      if (proposalType === 'tai_chinh' && financialGroup === 'chi_khac' && (estimatedCost === null || estimatedCost <= 0)) {
+        return NextResponse.json({ error: 'Đề xuất chi khác bắt buộc nhập chi phí dự kiến (> 0).' }, { status: 400 });
       }
     }
 
     const creatorBlock = getBlockOf(caller.profile.role_code) ?? 'all';
-    // Cho phép mọi role có quyền tạo (TP, QLCS, GĐ, CEO) đều có thể cross-block / liên phòng.
-    // computeApproval sẽ tự set pending_approval khi cần.
-    void isGD; // kept import for clarity, no longer used to block
+    void isGD; // import giữ cho clarity
 
-    const { crossBlock, status, approvalRequiredFrom } = computeApproval(
+    // ── Compute approval logic ──
+    // Legacy `computeApproval` cho kind='assignment' (giao việc) — giữ pattern cũ
+    const legacyApproval = computeApproval(
       caller.profile.role_code,
       creatorBlock,
       caller.profile.department_id,
@@ -397,6 +406,41 @@ export async function POST(req: NextRequest) {
       assigneeDeptId,
       assigneeFacilityId,
     );
+    let crossBlock = legacyApproval.crossBlock;
+    let status = legacyApproval.status;
+    let approvalRequiredFrom: string | null = legacyApproval.approvalRequiredFrom;
+    let approvalChain: string[] = [];
+    let currentApprover: string | null = null;
+
+    if (kind === 'proposal') {
+      // Đề xuất v2: tự tính approvalChain dựa vào loại + nhóm chi + chi phí + cross-block + role creator
+      const isCreatorTopAdmin = caller.profile.role_code === 'CEO' || caller.profile.role_code === 'ADMIN';
+      const isFinanceAutoApprove = proposalType === 'tai_chinh' &&
+        (financialGroup === 'chi_thuong_xuyen' ||
+         (financialGroup === 'chi_khac' && estimatedCost !== null && estimatedCost <= AUTO_APPROVE_THRESHOLD));
+      if (isCreatorTopAdmin || isFinanceAutoApprove) {
+        approvalChain = [];
+      } else if (creatorBlock !== assigneeBlock && creatorBlock !== 'all') {
+        // Cross-block: GĐ block creator duyệt trước → GĐ block assignee duyệt → đến recipient
+        const creatorGD = creatorBlock === 'KD' ? 'GD_KD' : 'GD_VP';
+        const assigneeGD = assigneeBlock === 'KD' ? 'GD_KD' : 'GD_VP';
+        approvalChain = creatorGD === assigneeGD ? [creatorGD] : [creatorGD, assigneeGD];
+      } else {
+        const gd = assigneeBlock === 'KD' ? 'GD_KD' : 'GD_VP';
+        approvalChain = [gd];
+      }
+      // Override status từ legacy: dùng chain thay vì approvalRequiredFrom đơn cấp
+      if (approvalChain.length === 0) {
+        status = 'pending';
+        approvalRequiredFrom = null;
+        currentApprover = null;
+      } else {
+        status = 'pending_approval';
+        currentApprover = approvalChain[0];
+        approvalRequiredFrom = approvalChain[0];   // backward compat với UI cũ + canApproveTask
+      }
+      crossBlock = creatorBlock !== assigneeBlock && creatorBlock !== 'all';
+    }
 
     const db = getFirebaseAdminDb();
     const now = new Date();
@@ -423,8 +467,15 @@ export async function POST(req: NextRequest) {
       dueDate,
       progressPct: 0,
       attachments: [],
-      proposalCategory,
+      // Đề xuất v2 fields (null cho kind='assignment')
+      proposalType,
+      financialGroup,
       estimatedCost,
+      expectedCompletionDate: null,
+      approvalChain,
+      approvalsCompleted: [],
+      currentApprover,
+      revisionRequests: [],
       updatedAt: now,
       updatedBy: caller.profile.uid,
     };

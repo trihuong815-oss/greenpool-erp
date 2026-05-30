@@ -7,7 +7,8 @@ import { ROLE_BLOCK } from '@/lib/permissions';
 // Tasks scope phân biệt rõ CEO vs GĐ Khối (GĐ chỉ thấy/sửa trong block mình).
 
 export type Block = 'KD' | 'VP';
-export type TaskStatus = 'pending_approval' | 'pending' | 'in_progress' | 'done' | 'rejected' | 'cancelled';
+// Phase 12 mở rộng: thêm 'requested_revision' cho luồng đề xuất v2 (recipient yêu cầu creator bổ sung).
+export type TaskStatus = 'pending_approval' | 'pending' | 'in_progress' | 'requested_revision' | 'done' | 'rejected' | 'cancelled';
 
 export function getBlockOf(roleCode: string): Block | 'all' | null {
   return ROLE_BLOCK[roleCode] ?? null;

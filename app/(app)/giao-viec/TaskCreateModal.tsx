@@ -2,7 +2,12 @@
 
 import { useMemo, useState } from 'react';
 import { X, Loader2, Paperclip, Trash2 } from 'lucide-react';
-import { tasksApi, type Block, type TaskPriority, type TaskKind, type ProposalCategory, PROPOSAL_CATEGORY_LABEL } from '@/lib/services/tasks/api-client';
+import {
+  tasksApi,
+  type Block, type TaskPriority, type TaskKind,
+  type ProposalType, type FinancialGroup,
+  PROPOSAL_TYPE_LABEL, FINANCIAL_GROUP_LABEL, AUTO_APPROVE_THRESHOLD,
+} from '@/lib/services/tasks/api-client';
 import { ROLE_BLOCK } from '@/lib/permissions';
 
 // Cấp bậc role để validate đề xuất "ngang cấp / cấp trên".
@@ -19,7 +24,39 @@ function getRoleLevel(roleCode: string): number {
   return ROLE_LEVEL[roleCode] ?? 3; // mặc định nhân viên cấp 3
 }
 
-const PROPOSAL_CATEGORIES: ProposalCategory[] = ['mua_sam', 'sua_chua', 'tuyen_dung', 'marketing', 'dao_tao', 'dau_tu', 'khac'];
+const PROPOSAL_TYPES: ProposalType[] = ['tai_chinh', 'van_hanh'];
+const FINANCIAL_GROUPS: FinancialGroup[] = ['chi_thuong_xuyen', 'chi_khac'];
+
+/** Tính trước "đề xuất này có cần duyệt không, qua bao nhiêu cấp" để hiển thị cho user
+ *  ngay trước khi submit. Mirror logic server (POST /api/tasks). */
+function computeApprovalPreview(
+  creatorRole: string,
+  creatorBlock: 'KD' | 'VP' | 'all',
+  proposalType: ProposalType,
+  financialGroup: FinancialGroup | null,
+  estimatedCost: number | null,
+  assigneeBlock: Block,
+): { chain: string[]; reason: string } {
+  // Skip: creator đã ở top
+  if (creatorRole === 'CEO' || creatorRole === 'ADMIN') return { chain: [], reason: 'Bạn ở cấp cao nhất — không cần duyệt' };
+  // Skip: chi thường xuyên
+  if (proposalType === 'tai_chinh' && financialGroup === 'chi_thuong_xuyen') {
+    return { chain: [], reason: 'Chi hoạt động thường xuyên — QLCS tự quyết, không cần duyệt' };
+  }
+  // Skip: chi khác ≤ 5tr
+  if (proposalType === 'tai_chinh' && financialGroup === 'chi_khac' && estimatedCost != null && estimatedCost <= AUTO_APPROVE_THRESHOLD) {
+    return { chain: [], reason: `Chi ≤ ${(AUTO_APPROVE_THRESHOLD / 1_000_000).toFixed(0)}tr — QLCS tự quyết, không cần duyệt` };
+  }
+  // Cross-block: 2 cấp duyệt
+  if (creatorBlock !== assigneeBlock && creatorBlock !== 'all') {
+    const creatorGD = creatorBlock === 'KD' ? 'GD_KD' : 'GD_VP';
+    const assigneeGD = assigneeBlock === 'KD' ? 'GD_KD' : 'GD_VP';
+    return { chain: [creatorGD, assigneeGD], reason: `Cross-block: ${creatorGD} duyệt → ${assigneeGD} duyệt → đến người nhận` };
+  }
+  // Same block: 1 cấp
+  const gd = assigneeBlock === 'KD' ? 'GD_KD' : 'GD_VP';
+  return { chain: [gd], reason: `Cần ${gd} duyệt → đến người nhận` };
+}
 
 interface Department { id: string; name: string; blockId: 'KD' | 'VP' | null; }
 interface Branch { id: string; name: string; }
@@ -64,8 +101,9 @@ export function TaskCreateModal(props: {
   const [saving, setSaving] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // Đề xuất: loại đề xuất + chi phí dự kiến (chỉ Mua sắm bắt buộc)
-  const [proposalCategory, setProposalCategory] = useState<ProposalCategory>('khac');
+  // Đề xuất v2: nội dung (tài chính/vận hành) + nhóm chi + số tiền
+  const [proposalType, setProposalType] = useState<ProposalType>('van_hanh');
+  const [financialGroup, setFinancialGroup] = useState<FinancialGroup>('chi_thuong_xuyen');
   const [estimatedCost, setEstimatedCost] = useState<string>('');
 
   // Cấp bậc người tạo — dùng để filter "Gửi cho" cho đề xuất (ngang cấp hoặc cấp trên)
@@ -129,11 +167,11 @@ export function TaskCreateModal(props: {
       }
       userIds = assigneeUserIds;
     }
-    // Đề xuất Mua sắm: bắt buộc số tiền > 0
+    // Đề xuất v2: tài chính + chi khác bắt buộc số tiền > 0; chi thường xuyên cost optional
     let cost: number | null = null;
-    if (kind === 'proposal' && proposalCategory === 'mua_sam') {
+    if (kind === 'proposal' && proposalType === 'tai_chinh' && financialGroup === 'chi_khac') {
       const n = Number(estimatedCost.replace(/[^\d]/g, ''));
-      if (!Number.isFinite(n) || n <= 0) { setError('Đề xuất Mua sắm bắt buộc nhập chi phí dự kiến (VND > 0).'); return; }
+      if (!Number.isFinite(n) || n <= 0) { setError('Đề xuất chi khác bắt buộc nhập chi phí dự kiến (VND > 0).'); return; }
       cost = n;
     } else if (kind === 'proposal' && estimatedCost) {
       const n = Number(estimatedCost.replace(/[^\d]/g, ''));
@@ -151,7 +189,8 @@ export function TaskCreateModal(props: {
         assigneeUserIds: userIds,
         priority,
         dueDate: dueDate || null,
-        proposalCategory: kind === 'proposal' ? proposalCategory : null,
+        proposalType: kind === 'proposal' ? proposalType : null,
+        financialGroup: kind === 'proposal' && proposalType === 'tai_chinh' ? financialGroup : null,
         estimatedCost: cost,
       });
       // Upload attachments tuần tự (đơn giản, ít edge case)
@@ -227,35 +266,65 @@ export function TaskCreateModal(props: {
             />
           </Field>
 
-          {/* Đề xuất: loại + chi phí dự kiến (Mua sắm) */}
+          {/* Đề xuất v2: nội dung + nhóm chi + số tiền (tài chính) */}
           {kind === 'proposal' && (
             <>
-              <Field label="Loại đề xuất">
-                <select
-                  value={proposalCategory}
-                  onChange={(e) => setProposalCategory(e.target.value as ProposalCategory)}
-                  className={inputCls}
-                >
-                  {PROPOSAL_CATEGORIES.map((c) => (
-                    <option key={c} value={c}>{PROPOSAL_CATEGORY_LABEL[c]}</option>
+              <Field label="Nội dung đề xuất *">
+                <div className="grid grid-cols-2 gap-2">
+                  {PROPOSAL_TYPES.map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setProposalType(t)}
+                      className={`px-3 py-2 rounded-lg text-sm font-semibold ring-1 transition ${
+                        proposalType === t
+                          ? 'bg-amber-50 text-amber-800 ring-amber-300'
+                          : 'bg-white text-slate-600 ring-slate-200 hover:ring-amber-200'
+                      }`}
+                    >
+                      {t === 'tai_chinh' ? '💰 ' : '⚙️ '}{PROPOSAL_TYPE_LABEL[t]}
+                    </button>
                   ))}
-                </select>
+                </div>
               </Field>
-              {(proposalCategory === 'mua_sam' || estimatedCost) && (
-                <Field label={proposalCategory === 'mua_sam' ? 'Chi phí dự kiến (VND) *' : 'Chi phí dự kiến (VND, tùy chọn)'}>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={estimatedCost}
-                    onChange={(e) => {
-                      const raw = e.target.value.replace(/[^\d]/g, '');
-                      setEstimatedCost(raw ? Number(raw).toLocaleString('vi-VN') : '');
-                    }}
-                    placeholder="vd: 5.000.000"
-                    className={inputCls}
-                  />
-                </Field>
+              {proposalType === 'tai_chinh' && (
+                <>
+                  <Field label="Nhóm chi *">
+                    <select
+                      value={financialGroup}
+                      onChange={(e) => setFinancialGroup(e.target.value as FinancialGroup)}
+                      className={inputCls}
+                    >
+                      {FINANCIAL_GROUPS.map((g) => (
+                        <option key={g} value={g}>{FINANCIAL_GROUP_LABEL[g]}</option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label={financialGroup === 'chi_khac' ? 'Chi phí dự kiến (VND) *' : 'Chi phí dự kiến (VND, tùy chọn)'}>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={estimatedCost}
+                      onChange={(e) => {
+                        const raw = e.target.value.replace(/[^\d]/g, '');
+                        setEstimatedCost(raw ? Number(raw).toLocaleString('vi-VN') : '');
+                      }}
+                      placeholder="vd: 5.000.000"
+                      className={inputCls}
+                    />
+                  </Field>
+                </>
               )}
+              {/* Preview luồng duyệt — minh bạch trước khi gửi */}
+              {(() => {
+                const costNum = estimatedCost ? Number(estimatedCost.replace(/[^\d]/g, '')) : null;
+                const preview = computeApprovalPreview(currentUserRole, myBlock, proposalType, proposalType === 'tai_chinh' ? financialGroup : null, costNum, assigneeBlock);
+                return (
+                  <div className={`text-xs rounded-lg p-2.5 ${preview.chain.length === 0 ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-amber-50 text-amber-800 border border-amber-200'}`}>
+                    <span className="font-semibold">{preview.chain.length === 0 ? '✓ Không cần duyệt:' : `📋 Cần duyệt (${preview.chain.length} cấp):`}</span> {preview.reason}
+                  </div>
+                );
+              })()}
             </>
           )}
 

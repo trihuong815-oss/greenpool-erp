@@ -150,6 +150,22 @@ export async function notifyTaskAttachment(
   }).catch(() => {});
 }
 
+/** Phase 12 — Recipient yêu cầu creator bổ sung đề xuất. Push creator. */
+export async function notifyTaskRevisionRequested(
+  task: TaskDoc,
+  requester: { uid: string; name: string },
+  message: string,
+): Promise<void> {
+  if (!task.createdBy || task.createdBy === requester.uid) return;
+  await pushToUsers([task.createdBy], {
+    title: `⚠️ ${requester.name} yêu cầu bổ sung`,
+    body: `"${task.title}" — ${message.slice(0, 100)}`,
+    link: taskLink(task.id),
+    tag: `task-${task.id}`,
+    data: { taskId: task.id, kind: 'task_revision_requested' },
+  }).catch(() => {});
+}
+
 /** Comment mới — push creator + assignees (trừ commenter). */
 export async function notifyTaskComment(
   task: TaskDoc,
