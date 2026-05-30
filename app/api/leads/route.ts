@@ -120,8 +120,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'assignedSaleId không tồn tại' }, { status: 400 });
     }
     const saleData = saleSnap.data() as { role_code?: string; facility_id?: string } | undefined;
-    if (saleData?.role_code !== 'NV_SALE') {
-      return NextResponse.json({ error: 'assignedSaleId phải là nhân viên Sale (NV_SALE)' }, { status: 400 });
+    if (saleData?.role_code !== 'NV_SALE' && saleData?.role_code !== 'NV_SALE_PT') {
+      return NextResponse.json({ error: 'assignedSaleId phải là nhân viên Sale (NV_SALE hoặc NV_SALE_PT)' }, { status: 400 });
     }
     if (saleData?.facility_id !== payload.branchId) {
       return NextResponse.json({ error: 'assignedSaleId phải thuộc cùng cơ sở với lead' }, { status: 400 });

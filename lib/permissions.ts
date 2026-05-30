@@ -58,6 +58,7 @@ export const MENU_PERMISSIONS: Record<string, string[]> = {
   GV_CB:     ['dashboard','quy-trinh','giao-viec'],
   GV_NC:     ['dashboard','quy-trinh','giao-viec'],
   NV_SALE:   ['dashboard','giao-viec'],
+  NV_SALE_PT:['dashboard','giao-viec'],
   NV_CH:     ['dashboard','giao-viec'],
 };
 
@@ -66,7 +67,7 @@ export const ROLE_BLOCK: Record<string, 'KD' | 'VP' | 'all'> = {
   ADMIN: 'all', CEO: 'all', GD_KD: 'KD', GD_VP: 'VP',
   // KD — Vận hành cơ sở
   QLCS_HM: 'KD', QLCS_TK: 'KD', QLCS_CTT: 'KD', QLCS_24NCT: 'KD', QLCS_TT: 'KD',
-  NV_SALE: 'KD', NV_CH: 'KD', NV_TV: 'KD', NV_LT: 'KD',
+  NV_SALE: 'KD', NV_SALE_PT: 'KD', NV_CH: 'KD', NV_TV: 'KD', NV_LT: 'KD',
   TT_LT: 'KD', TT_AS: 'KD',
   // KD — phòng KT
   TP_KT: 'KD', PP_HT: 'KD', PP_XLN: 'KD',

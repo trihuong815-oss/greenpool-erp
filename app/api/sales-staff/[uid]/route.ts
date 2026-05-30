@@ -10,6 +10,7 @@ import { COLLECTIONS } from '@/lib/firebase/collections';
 import { writeAuditLog } from '@/lib/firebase/audit-log';
 import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-auth';
 import { isAdmin } from '@/lib/firebase/checklist-scope';
+import { isSaleRole } from '@/lib/sales-roles';
 
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ uid: string }> }) {
   try {
@@ -51,8 +52,8 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ uid: stri
     const snap = await ref.get();
     if (!snap.exists) return NextResponse.json({ error: 'Không tìm thấy user' }, { status: 404 });
     const data = snap.data()!;
-    if (data.roleId !== 'NV_SALE') {
-      return NextResponse.json({ error: 'Endpoint này chỉ cho NV_SALE' }, { status: 400 });
+    if (!isSaleRole(data.roleId)) {
+      return NextResponse.json({ error: 'Endpoint này chỉ cho NV_SALE hoặc NV_SALE_PT' }, { status: 400 });
     }
 
     // Firebase Auth update — gộp cả disabled + displayName trong 1 call

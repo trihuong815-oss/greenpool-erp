@@ -35,8 +35,9 @@ export default async function QuanLySalePage() {
     .sort((a, b) => a.id.localeCompare(b.id));
   const allowedBranches = isAdmin ? allBranches : allBranches.filter((b) => b.id === profile.branchId);
 
-  // Pre-fetch toàn bộ NV_SALE (kể cả inactive) để client filter theo branch
-  const usersSnap = await db.collection(COLLECTIONS.USERS).where('roleId', '==', 'NV_SALE').get();
+  // Pre-fetch toàn bộ sale roles (NV_SALE + NV_SALE_PT, kể cả inactive) để client filter theo branch
+  const { SALE_ROLE_CODES } = await import('@/lib/sales-roles');
+  const usersSnap = await db.collection(COLLECTIONS.USERS).where('roleId', 'in', SALE_ROLE_CODES as unknown as string[]).get();
   const staffUsers = usersSnap.docs.map((d) => {
     const x = d.data();
     return {

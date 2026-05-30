@@ -36,7 +36,8 @@ export function ManageSalesModal({ branchId, branchName, staff, onClose, onChang
   const [editingUid, setEditingUid] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
 
-  const branchSales = staff.filter((s) => s.roleId === 'NV_SALE' && s.branchId === branchId);
+  // Phase 2026-05-30: filter cả NV_SALE (Member) + NV_SALE_PT (PT — chỉ cơ sở 24)
+  const branchSales = staff.filter((s) => (s.roleId === 'NV_SALE' || s.roleId === 'NV_SALE_PT') && s.branchId === branchId);
 
   async function addSale() {
     if (!newName.trim()) { setError('Nhập họ tên'); return; }

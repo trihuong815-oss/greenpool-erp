@@ -16,7 +16,7 @@ const HIDDEN_ROLE_CODES = new Set<string>([]);
 
 // Role thuộc quyền quản lý của QLCS (per cơ sở) — clone dưới TỪNG QLCS.
 // Không attach vào GD_KD theo block fallback.
-const CROSS_BRANCH_OPS = new Set(['TT_LT', 'TT_AS', 'NV_SALE', 'NV_LT', 'NV_CH', 'NV_TV']);
+const CROSS_BRANCH_OPS = new Set(['TT_LT', 'TT_AS', 'NV_SALE', 'NV_SALE_PT', 'NV_LT', 'NV_CH', 'NV_TV']);
 const QLCS_TO_BRANCH: Record<string, string> = {
   QLCS_HM: 'HM', QLCS_TK: 'TK', QLCS_CTT: 'CTT', QLCS_24NCT: '24', QLCS_TT: 'TT',
 };
@@ -94,6 +94,7 @@ function buildTree(roles: Role[]): TreeNode | null {
     const branchId = QLCS_TO_BRANCH[n.role.code];
     if (branchId) {
       const rSale = findRole('NV_SALE');
+      const rSalePt = findRole('NV_SALE_PT');   // Chỉ cơ sở 24 mới có
       const rTtLt = findRole('TT_LT');
       const rTtAs = findRole('TT_AS');
       const rNvLt = findRole('NV_LT');
@@ -101,6 +102,8 @@ function buildTree(roles: Role[]): TreeNode | null {
       const rNvTv = findRole('NV_TV');
 
       if (rSale) n.children.push(vNode(rSale, branchId));
+      // NV_SALE_PT (Sale PT Gym) chỉ clone dưới QLCS_24NCT — các cơ sở khác không có dịch vụ PT
+      if (rSalePt && branchId === '24') n.children.push(vNode(rSalePt, branchId));
       if (rTtLt) {
         const ltKids: TreeNode[] = [];
         if (rNvLt) ltKids.push(vNode(rNvLt, branchId));

@@ -46,15 +46,16 @@ function emptyBranch(branchId: string): BranchAgg {
 //  1. Zero-fill sale active chưa có doanh thu → UI hiện đủ team.
 //  2. ẨN sale aggregate có saleId không thuộc registry (vd. inactive/deleted user) → tránh leak tên cũ.
 //  3. Giữ sentinel '__aggregate' (data nhập theo tháng không có per-sale).
-type SalesRegistry = Record<string, { saleId: string; saleName: string }[]>;
+type SalesRegistry = Record<string, { saleId: string; saleName: string; saleSubtype: 'member' | 'pt' }[]>;
 
 // Server-side: load active NV_SALE users grouped by branchId.
 // Một query duy nhất, in-memory group → tránh N+1.
 async function fetchSalesRegistry(): Promise<SalesRegistry> {
   const db = getFirebaseAdminDb();
+  const { SALE_ROLE_CODES, saleSubtype } = await import('@/lib/sales-roles');
   const snap = await db.collection(COLLECTIONS.USERS)
     .where('status', '==', 'active')
-    .where('roleId', '==', 'NV_SALE')
+    .where('roleId', 'in', SALE_ROLE_CODES as unknown as string[])
     .get();
   const out: SalesRegistry = {};
   for (const d of snap.docs) {
@@ -64,6 +65,7 @@ async function fetchSalesRegistry(): Promise<SalesRegistry> {
     (out[branchId] ??= []).push({
       saleId: d.id,
       saleName: x.displayName ?? '(không tên)',
+      saleSubtype: saleSubtype(x.roleId) ?? 'member',   // 'member' | 'pt' — để UI group theo nhóm
     });
   }
   // Sort theo tên cho UI ổn định

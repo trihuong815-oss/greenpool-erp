@@ -71,11 +71,11 @@ export async function GET(req: NextRequest) {
         .where('branchId', '==', branchId)
         .where('year', '==', year)
         .get(),
-      // Registry: active NV_SALE của branch — dùng để filter bySalePackage/leadsBySale,
+      // Registry: active sale roles (NV_SALE + NV_SALE_PT) của branch — dùng để filter bySalePackage/leadsBySale,
       // khớp với /doanh-so dashboard (mergeRegistry). Sale inactive → ẩn khỏi mọi view.
       db.collection(COLLECTIONS.USERS)
         .where('branchId', '==', branchId)
-        .where('roleId', '==', 'NV_SALE')
+        .where('roleId', 'in', ['NV_SALE', 'NV_SALE_PT'])
         .where('status', '==', 'active')
         .get(),
     ]);

@@ -44,6 +44,7 @@ type RowKey = string; // `${saleId}__${source}`
 interface RowData {
   saleId: string;
   saleName: string;
+  saleSubtype: 'member' | 'pt';   // derive từ staff.roleId — group UI theo nhóm
   source: typeof SOURCES[number];
   leads: number;
   closed: number;
@@ -142,6 +143,7 @@ export function NhapClient(props: Props) {
         out.push({
           saleId: staff.id,
           saleName: staff.name,
+          saleSubtype: staff.roleId === 'NV_SALE_PT' ? 'pt' : 'member',
           source,
           leads: 0, closed: 0, notClosed: 0,
           isExisting: false,
@@ -201,8 +203,11 @@ export function NhapClient(props: Props) {
       for (const ex of existing) {
         const key = `${ex.saleId}__${ex.source}`;
         if (!merged.find((r) => `${r.saleId}__${r.source}` === key)) {
+          // Inactive sale → fallback: tìm trong staffUsers (kể cả inactive) để biết subtype, nếu không có thì 'member'
+          const u = staffUsers.find((x) => x.id === ex.saleId);
           merged.push({
             saleId: ex.saleId, saleName: ex.saleName || '(unknown)',
+            saleSubtype: u?.roleId === 'NV_SALE_PT' ? 'pt' : 'member',
             source: ex.source as typeof SOURCES[number],
             leads: ex.leads, closed: ex.closed, notClosed: ex.notClosed,
             isExisting: true,
@@ -240,19 +245,28 @@ export function NhapClient(props: Props) {
     }));
   }
 
-  // Group rows theo saleId để render bảng có rowspan
+  // Group rows theo saleId để render bảng có rowspan.
+  // Sort theo subtype trước (member trên, pt dưới) — bảng sẽ render liền 2 nhóm.
   const groupedRows = useMemo(() => {
-    const groups: { saleId: string; saleName: string; rows: { row: RowData; idx: number }[] }[] = [];
+    const groups: { saleId: string; saleName: string; saleSubtype: 'member' | 'pt'; rows: { row: RowData; idx: number }[] }[] = [];
     rows.forEach((r, idx) => {
       let g = groups.find((x) => x.saleId === r.saleId);
       if (!g) {
-        g = { saleId: r.saleId, saleName: r.saleName, rows: [] };
+        g = { saleId: r.saleId, saleName: r.saleName, saleSubtype: r.saleSubtype, rows: [] };
         groups.push(g);
       }
       g.rows.push({ row: r, idx });
     });
-    return groups;
+    // Member trước, PT sau (PT chỉ có ở cơ sở 24)
+    return groups.sort((a, b) => {
+      if (a.saleSubtype !== b.saleSubtype) return a.saleSubtype === 'member' ? -1 : 1;
+      return a.saleName.localeCompare(b.saleName, 'vi');
+    });
   }, [rows]);
+
+  // Có sale PT trong danh sách không? — để render separator header trong bảng
+  const hasPTGroup = useMemo(() => groupedRows.some((g) => g.saleSubtype === 'pt'), [groupedRows]);
+  const firstPTSaleId = useMemo(() => groupedRows.find((g) => g.saleSubtype === 'pt')?.saleId ?? null, [groupedRows]);
 
   // Totals per row + per sale + grand
   const totals = useMemo(() => {
@@ -471,8 +485,24 @@ export function NhapClient(props: Props) {
               </tr>
             </thead>
             <tbody>
+              {/* Separator header trước nhóm Member (nếu cũng có nhóm PT — vd cơ sở 24) */}
+              {hasPTGroup && groupedRows.some((g) => g.saleSubtype === 'member') && (
+                <tr className="bg-emerald-50">
+                  <td colSpan={5} className="p-2 border border-slate-300 font-bold uppercase tracking-wider text-xs text-emerald-800">
+                    Sale Thẻ Member
+                  </td>
+                </tr>
+              )}
               {groupedRows.map((g) => (
                 <Fragment key={g.saleId}>
+                  {/* Separator header trước nhóm PT đầu tiên */}
+                  {g.saleId === firstPTSaleId && (
+                    <tr className="bg-amber-50">
+                      <td colSpan={5} className="p-2 border border-slate-300 font-bold uppercase tracking-wider text-xs text-amber-800">
+                        Sale PT Gym (cơ sở 24)
+                      </td>
+                    </tr>
+                  )}
                   {g.rows.map((rg, i) => {
                     const r = rg.row;
                     return (

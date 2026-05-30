@@ -1,4 +1,5 @@
 import { canAccessRoute, canSeeAllFacilities, isQLCS, isTP } from '@/lib/permissions';
+import { isSaleRole } from '@/lib/sales-roles';
 import { requireAuthedProfile } from '@/lib/firebase/current-profile';
 import { getFirebaseAdminDb } from '@/lib/firebase/admin';
 import { COLLECTIONS } from '@/lib/firebase/collections';
@@ -30,7 +31,7 @@ export default async function NhapDoanhSoPage() {
     db.collection(COLLECTIONS.USERS).get(),
   ]);
   const branches = branchesSnap.docs.map((d) => ({ id: d.id, name: d.data().name ?? d.id }));
-  // Chỉ NV_SALE — thống nhất với /doanh-so dashboard và ManageSalesModal.
+  // NV_SALE (Member) + NV_SALE_PT (PT Gym, chỉ cơ sở 24) — thống nhất với /doanh-so dashboard và ManageSalesModal.
   // Bao gồm cả inactive để admin có thể reactivate qua modal (form nhập filter active ở client).
   const staffUsers = usersSnap.docs
     .map((d) => {
@@ -43,7 +44,7 @@ export default async function NhapDoanhSoPage() {
         status: x.status ?? 'active',
       };
     })
-    .filter((u) => u.roleId === 'NV_SALE');
+    .filter((u) => isSaleRole(u.roleId));
 
   // Scope branches user được nhập
   const isAdmin = canSeeAllFacilities(profile.roleCode);

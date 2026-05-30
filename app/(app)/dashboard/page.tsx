@@ -69,11 +69,12 @@ export default async function DashboardPage() {
     fetchTaskCounts(profile.id, profile.roleCode),
   ]);
 
-  // Aggregate revenue summary — LIÊN THÔNG với /doanh-so: filter active NV_SALE (loại inactive sale's historical)
+  // Aggregate revenue summary — LIÊN THÔNG với /doanh-so: filter active sale roles (NV_SALE + NV_SALE_PT)
   // để 2 trang show cùng 1 số. Lý do: mergeRegistry ở /doanh-so chỉ tính active sales — dashboard phải khớp.
   const db = getFirebaseAdminDb();
+  const { SALE_ROLE_CODES } = await import('@/lib/sales-roles');
   const usersSnap = await db.collection(COLLECTIONS.USERS)
-    .where('status', '==', 'active').where('roleId', '==', 'NV_SALE').get();
+    .where('status', '==', 'active').where('roleId', 'in', SALE_ROLE_CODES as unknown as string[]).get();
   const activeByBranch: Record<string, Set<string>> = {};
   for (const d of usersSnap.docs) {
     const x = d.data();

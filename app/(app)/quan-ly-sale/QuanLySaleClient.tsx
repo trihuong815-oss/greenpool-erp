@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { isSaleRole } from '@/lib/sales-roles';
 import {
   Loader2, UserPlus, UserMinus, UserCheck, AlertCircle, Copy, Pencil, Check, X,
 } from 'lucide-react';
@@ -40,9 +41,9 @@ export function QuanLySaleClient({ allowedBranches, staffUsers }: Props) {
 
   const branchName = allowedBranches.find((b) => b.id === branchId)?.name ?? branchId;
 
-  // NV_SALE thuộc branch hiện tại — cả active + inactive (cho admin reactivate).
+  // Sale roles (NV_SALE + NV_SALE_PT) thuộc branch hiện tại — cả active + inactive (cho admin reactivate).
   const branchSales = useMemo(
-    () => staffUsers.filter((s) => s.roleId === 'NV_SALE' && s.branchId === branchId)
+    () => staffUsers.filter((s) => isSaleRole(s.roleId) && s.branchId === branchId)
       .sort((a, b) => {
         // Active lên đầu, sau đó theo tên
         const aActive = (a.status ?? 'active') === 'active';
@@ -52,10 +53,15 @@ export function QuanLySaleClient({ allowedBranches, staffUsers }: Props) {
       }),
     [staffUsers, branchId],
   );
+  // Phase 2026-05-30 — tách nhóm Sale Member / Sale PT để hiển thị thành 2 bảng riêng
+  const branchSalesMember = useMemo(() => branchSales.filter((s) => s.roleId === 'NV_SALE'), [branchSales]);
+  const branchSalesPT = useMemo(() => branchSales.filter((s) => s.roleId === 'NV_SALE_PT'), [branchSales]);
 
   const activeCount = branchSales.filter((s) => (s.status ?? 'active') === 'active').length;
   const inactiveCount = branchSales.length - activeCount;
 
+  // newRole: 'NV_SALE' (Member) hoặc 'NV_SALE_PT' (PT — chỉ cơ sở 24). Mặc định Member.
+  const [newRole, setNewRole] = useState<'NV_SALE' | 'NV_SALE_PT'>('NV_SALE');
   async function addSale() {
     if (!newName.trim()) { setError('Nhập họ tên'); return; }
     setBusy('add');
@@ -64,7 +70,7 @@ export function QuanLySaleClient({ allowedBranches, staffUsers }: Props) {
       const res = await fetch('/api/sales-staff', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ branchId, fullName: newName.trim() }),
+        body: JSON.stringify({ branchId, fullName: newName.trim(), roleId: newRole }),
       });
       const j = await res.json();
       if (!res.ok) throw new Error(j?.error ?? `HTTP ${res.status}`);
@@ -194,13 +200,24 @@ export function QuanLySaleClient({ allowedBranches, staffUsers }: Props) {
         <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
           Thêm sale mới vào {branchId} · {branchName}
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          {/* Cơ sở 24 hỗ trợ thêm Sale PT; cơ sở khác chỉ Member */}
+          {branchId === '24' && (
+            <select
+              value={newRole}
+              onChange={(e) => setNewRole(e.target.value as 'NV_SALE' | 'NV_SALE_PT')}
+              className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-400 outline-none bg-white"
+            >
+              <option value="NV_SALE">Sale Thẻ Member</option>
+              <option value="NV_SALE_PT">Sale PT Gym</option>
+            </select>
+          )}
           <input
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && !busy) { e.preventDefault(); addSale(); } }}
             placeholder="Họ tên đầy đủ (vd: Nguyễn Văn A)"
-            className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-400 outline-none"
+            className="flex-1 min-w-[200px] px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-400 outline-none"
           />
           <button
             onClick={addSale}
@@ -216,96 +233,90 @@ export function QuanLySaleClient({ allowedBranches, staffUsers }: Props) {
         </p>
       </div>
 
-      {/* Danh sách sale */}
-      <div className="card">
-        <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">
-          Danh sách Sale của {branchId} · {branchName} ({branchSales.length})
-        </div>
-        {branchSales.length === 0 ? (
-          <div className="text-center py-8 text-sm text-slate-400">
-            Cơ sở chưa có sale nào. Nhập họ tên ở trên để thêm.
+      {/* Danh sách sale — tách 2 nhóm Member / PT (sau 2026-05-30 thêm role NV_SALE_PT cho cơ sở 24) */}
+      {(() => {
+        const renderRow = (s: typeof branchSales[number]) => {
+          const isInactive = s.status === 'inactive';
+          const isBusy = busy === s.id;
+          const isEditing = editingUid === s.id;
+          return (
+            <li
+              key={s.id}
+              className={`flex items-center gap-2 p-2.5 rounded-lg border ${
+                isInactive ? 'bg-slate-50 border-slate-200'
+                : isEditing ? 'bg-emerald-50/40 border-emerald-300'
+                : 'bg-white border-slate-200 hover:border-emerald-300'
+              }`}
+            >
+              <UserCheck size={14} className={isInactive ? 'text-slate-400' : 'text-emerald-600'} />
+              {isEditing ? (
+                <>
+                  <input
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !isBusy) { e.preventDefault(); saveEdit(s.id, s.name); }
+                      else if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); }
+                    }}
+                    autoFocus
+                    disabled={isBusy}
+                    className="flex-1 px-2 py-1 text-sm border border-emerald-300 rounded focus:ring-2 focus:ring-emerald-400 outline-none"
+                  />
+                  <button onClick={() => saveEdit(s.id, s.name)} disabled={isBusy || !editName.trim()} title="Lưu (Enter)"
+                    className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50">
+                    {isBusy ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />} Lưu
+                  </button>
+                  <button onClick={cancelEdit} disabled={isBusy} title="Huỷ (Esc)"
+                    className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-50">
+                    <X size={11} /> Huỷ
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span className={`flex-1 text-sm font-medium ${isInactive ? 'line-through text-slate-400' : 'text-slate-800'}`}>
+                    {s.name}
+                    {isInactive && <span className="ml-2 text-[10px] uppercase tracking-wider text-rose-600">(đã tắt)</span>}
+                  </span>
+                  <button onClick={() => startEdit(s.id, s.name)} disabled={isBusy || editingUid !== null} title="Sửa tên"
+                    className="inline-flex items-center justify-center w-7 h-7 rounded text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 disabled:opacity-30">
+                    <Pencil size={12} />
+                  </button>
+                  <button onClick={() => toggleStatus(s.id, s.status)} disabled={isBusy || editingUid !== null}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded ${
+                      isInactive ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'bg-rose-50 text-rose-700 hover:bg-rose-100'
+                    } disabled:opacity-50`}>
+                    {isBusy ? <Loader2 size={11} className="animate-spin" /> : isInactive ? <UserCheck size={11} /> : <UserMinus size={11} />}
+                    {isInactive ? 'Bật lại' : 'Tắt'}
+                  </button>
+                </>
+              )}
+            </li>
+          );
+        };
+        const renderGroup = (title: string, accent: string, list: typeof branchSales) => (
+          <div className="card">
+            <div className={`text-xs font-bold uppercase tracking-wider mb-3 ${accent}`}>
+              {title} ({list.length})
+            </div>
+            {list.length === 0 ? (
+              <div className="text-center py-6 text-sm text-slate-400">
+                Cơ sở chưa có {title.toLowerCase()} nào.
+              </div>
+            ) : (
+              <ul className="space-y-1.5">{list.map(renderRow)}</ul>
+            )}
           </div>
-        ) : (
-          <ul className="space-y-1.5">
-            {branchSales.map((s) => {
-              const isInactive = s.status === 'inactive';
-              const isBusy = busy === s.id;
-              const isEditing = editingUid === s.id;
-              return (
-                <li
-                  key={s.id}
-                  className={`flex items-center gap-2 p-2.5 rounded-lg border ${
-                    isInactive ? 'bg-slate-50 border-slate-200'
-                    : isEditing ? 'bg-emerald-50/40 border-emerald-300'
-                    : 'bg-white border-slate-200 hover:border-emerald-300'
-                  }`}
-                >
-                  <UserCheck size={14} className={isInactive ? 'text-slate-400' : 'text-emerald-600'} />
-                  {isEditing ? (
-                    <>
-                      <input
-                        value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !isBusy) { e.preventDefault(); saveEdit(s.id, s.name); }
-                          else if (e.key === 'Escape') { e.preventDefault(); cancelEdit(); }
-                        }}
-                        autoFocus
-                        disabled={isBusy}
-                        className="flex-1 px-2 py-1 text-sm border border-emerald-300 rounded focus:ring-2 focus:ring-emerald-400 outline-none"
-                      />
-                      <button
-                        onClick={() => saveEdit(s.id, s.name)}
-                        disabled={isBusy || !editName.trim()}
-                        title="Lưu (Enter)"
-                        className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
-                      >
-                        {isBusy ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
-                        Lưu
-                      </button>
-                      <button
-                        onClick={cancelEdit}
-                        disabled={isBusy}
-                        title="Huỷ (Esc)"
-                        className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-50"
-                      >
-                        <X size={11} /> Huỷ
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <span className={`flex-1 text-sm font-medium ${isInactive ? 'line-through text-slate-400' : 'text-slate-800'}`}>
-                        {s.name}
-                        {isInactive && <span className="ml-2 text-[10px] uppercase tracking-wider text-rose-600">(đã tắt)</span>}
-                      </span>
-                      <button
-                        onClick={() => startEdit(s.id, s.name)}
-                        disabled={isBusy || editingUid !== null}
-                        title="Sửa tên"
-                        className="inline-flex items-center justify-center w-7 h-7 rounded text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 disabled:opacity-30"
-                      >
-                        <Pencil size={12} />
-                      </button>
-                      <button
-                        onClick={() => toggleStatus(s.id, s.status)}
-                        disabled={isBusy || editingUid !== null}
-                        className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded ${
-                          isInactive
-                            ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                            : 'bg-rose-50 text-rose-700 hover:bg-rose-100'
-                        } disabled:opacity-50`}
-                      >
-                        {isBusy ? <Loader2 size={11} className="animate-spin" /> : isInactive ? <UserCheck size={11} /> : <UserMinus size={11} />}
-                        {isInactive ? 'Bật lại' : 'Tắt'}
-                      </button>
-                    </>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
+        );
+        return (
+          <>
+            {renderGroup(`Sale Thẻ Member · ${branchId} · ${branchName}`, 'text-emerald-700', branchSalesMember)}
+            {/* Sale PT chỉ hiển thị ở cơ sở 24 (hiện duy nhất có nhóm này). Cơ sở khác không có thì ẩn cho gọn. */}
+            {(branchId === '24' || branchSalesPT.length > 0) &&
+              renderGroup(`Sale PT Gym · ${branchId} · ${branchName}`, 'text-amber-700', branchSalesPT)
+            }
+          </>
+        );
+      })()}
 
       {/* Note */}
       <div className="text-[11px] text-slate-500 italic space-y-0.5 px-2">

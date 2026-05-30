@@ -1,7 +1,8 @@
-// POST /api/sales-staff  body: { branchId, fullName }
-//   Tạo nhanh 1 NV_SALE user gắn vào branch chỉ định.
+// POST /api/sales-staff  body: { branchId, fullName, roleId? }
+//   Tạo nhanh 1 sale user (NV_SALE Member hoặc NV_SALE_PT) gắn vào branch chỉ định.
 //   Admin only (CEO/GD_KD/GD_VP). Email auto-gen, password mặc định Greenpool@2026.
 //   Idempotent: nếu email đã tồn tại → trả lỗi 409.
+//   roleId mặc định 'NV_SALE'. 'NV_SALE_PT' chỉ chấp nhận cho cơ sở 24 (Sale PT Gym).
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getFirebaseAdminDb, getFirebaseAdminAuth } from '@/lib/firebase/admin';
@@ -9,6 +10,7 @@ import { COLLECTIONS } from '@/lib/firebase/collections';
 import { writeAuditLog } from '@/lib/firebase/audit-log';
 import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-auth';
 import { isAdmin } from '@/lib/firebase/checklist-scope';
+import { isSaleRole } from '@/lib/sales-roles';
 
 const ALLOWED_BRANCH_IDS = new Set(['HM', 'TK', 'CTT', '24', 'TT']);
 const DEFAULT_PASSWORD = 'Greenpool@2026';
@@ -33,9 +35,17 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const branchId: string = String(body?.branchId ?? '').trim();
     const fullName: string = String(body?.fullName ?? '').trim();
+    const roleId: string = String(body?.roleId ?? 'NV_SALE').trim();
 
     if (!ALLOWED_BRANCH_IDS.has(branchId)) {
       return NextResponse.json({ error: 'branchId không hợp lệ' }, { status: 400 });
+    }
+    if (!isSaleRole(roleId)) {
+      return NextResponse.json({ error: 'roleId phải là NV_SALE hoặc NV_SALE_PT' }, { status: 400 });
+    }
+    // Sale PT (Gym) chỉ áp dụng cho cơ sở 24 (chỉ 24 có dịch vụ dạy PT)
+    if (roleId === 'NV_SALE_PT' && branchId !== '24') {
+      return NextResponse.json({ error: 'Sale PT Gym chỉ áp dụng cho cơ sở 24 NCT' }, { status: 400 });
     }
     if (!fullName || fullName.length < 2 || fullName.length > 100) {
       return NextResponse.json({ error: 'Họ tên 2-100 ký tự' }, { status: 400 });
@@ -45,7 +55,10 @@ export async function POST(req: NextRequest) {
     if (!slug) {
       return NextResponse.json({ error: 'Họ tên không hợp lệ (không tạo được email)' }, { status: 400 });
     }
-    const email = `${slug}.${branchId.toLowerCase()}@${EMAIL_DOMAIN}`;
+    // Email suffix: branchId (vd 'nguyena.24@greenpool.vn') cho Member; thêm '.pt' cho PT để tránh trùng
+    // (vd 'nguyena.24.pt@greenpool.vn')
+    const emailSuffix = roleId === 'NV_SALE_PT' ? `${branchId.toLowerCase()}.pt` : branchId.toLowerCase();
+    const email = `${slug}.${emailSuffix}@${EMAIL_DOMAIN}`;
 
     const auth = getFirebaseAdminAuth();
     // Check duplicate email
@@ -64,7 +77,7 @@ export async function POST(req: NextRequest) {
       emailVerified: true,
     });
     await auth.setCustomUserClaims(created.uid, {
-      role: 'NV_SALE',
+      role: roleId,
       branchId,
       departmentId: null,
     });
@@ -82,7 +95,7 @@ export async function POST(req: NextRequest) {
     await db.collection(COLLECTIONS.USERS).doc(created.uid).set({
       email,
       displayName: fullName,
-      roleId: 'NV_SALE',
+      roleId,
       branchId,
       branchName,
       departmentId: null,
@@ -104,7 +117,7 @@ export async function POST(req: NextRequest) {
       userId: caller.profile.uid,
       branchId,
       before: null,
-      after: { uid: created.uid, email, fullName },
+      after: { uid: created.uid, email, fullName, roleId },
       actorName: caller.actorName,
       actorRole: caller.actorRole,
       source: 'api',
