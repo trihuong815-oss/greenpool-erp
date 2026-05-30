@@ -508,8 +508,11 @@ export function NhapClient(props: Props) {
                     return (
                       <tr key={`${g.saleId}__${r.source}`} className="hover:bg-slate-50">
                         {i === 0 && (
-                          <td rowSpan={g.rows.length} className="p-2 border border-slate-300 font-semibold text-slate-800 align-top bg-emerald-50/50">
+                          <td rowSpan={g.rows.length} className={`p-2 border border-slate-300 font-semibold text-slate-800 align-top ${g.saleSubtype === 'pt' ? 'bg-amber-50/60' : 'bg-emerald-50/50'}`}>
                             {g.saleName}
+                            {g.saleSubtype === 'pt' && (
+                              <span className="ml-1.5 inline-flex items-center px-1.5 py-0.5 text-[10px] font-bold rounded bg-amber-200 text-amber-900 align-middle">PT</span>
+                            )}
                           </td>
                         )}
                         <td className="p-2 border border-slate-300 text-slate-600">{SOURCE_LABEL[r.source]}</td>
@@ -524,7 +527,9 @@ export function NhapClient(props: Props) {
                   })}
                   {/* Subtotal per sale */}
                   <tr key={`${g.saleId}__subtotal`} className="bg-slate-50 font-semibold">
-                    <td colSpan={2} className="p-2 border border-slate-300 text-right text-slate-700">Tổng {g.saleName}</td>
+                    <td colSpan={2} className="p-2 border border-slate-300 text-right text-slate-700">
+                      Tổng {g.saleName}{g.saleSubtype === 'pt' && <span className="ml-1 text-[10px] font-bold text-amber-700">(PT)</span>}
+                    </td>
                     <td className="p-2 border border-slate-300 text-right tabular-nums">{totals.perSale[g.saleId]?.leads ?? 0}</td>
                     <td className="p-2 border border-slate-300 text-right text-emerald-700 tabular-nums">{totals.perSale[g.saleId]?.closed ?? 0}</td>
                     <td className="p-2 border border-slate-300 text-right text-amber-700 tabular-nums">{totals.perSale[g.saleId]?.notClosed ?? 0}</td>
