@@ -1318,7 +1318,7 @@ function PackageRevSummaryTable({ rows, loading }: {
     }
     return Array.from(byGroup.entries()).map(([gid, items]) => ({
       groupId: gid,
-      groupName: items[0].groupName,
+      groupName: items[0]?.groupName ?? '(không có tên)',
       items: [...items].sort((a, b) => (b.revenue ?? 0) - (a.revenue ?? 0)),
       groupTotal: items.reduce((s, x) => s + (x.revenue ?? 0), 0),
     })).sort((a, b) => b.groupTotal - a.groupTotal);

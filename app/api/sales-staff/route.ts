@@ -35,7 +35,15 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const branchId: string = String(body?.branchId ?? '').trim();
     const fullName: string = String(body?.fullName ?? '').trim();
-    const roleId: string = String(body?.roleId ?? 'NV_SALE').trim();
+    const roleIdRaw = body?.roleId;
+    // Cơ sở 24 có 2 loại Sale → bắt buộc client phải truyền roleId rõ ràng (không default silent
+    // để tránh tạo nhầm Member khi user định tạo PT). Cơ sở khác chỉ NV_SALE → cho phép default.
+    if (branchId === '24' && (typeof roleIdRaw !== 'string' || !roleIdRaw.trim())) {
+      return NextResponse.json({
+        error: 'Cơ sở 24 NCT có cả Sale Member và Sale PT — vui lòng chỉ định roleId (NV_SALE hoặc NV_SALE_PT).',
+      }, { status: 400 });
+    }
+    const roleId: string = String(roleIdRaw ?? 'NV_SALE').trim();
 
     if (!ALLOWED_BRANCH_IDS.has(branchId)) {
       return NextResponse.json({ error: 'branchId không hợp lệ' }, { status: 400 });

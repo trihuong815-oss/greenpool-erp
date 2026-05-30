@@ -73,13 +73,20 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
     // Reopen (done → in_progress) hoặc restore (cancelled → pending) cần quyền cao hơn.
     const isReopen = (cur === 'done' && newStatus === 'in_progress') ||
                      (cur === 'cancelled' && newStatus === 'pending');
+    // Resubmit sau bổ sung (requested_revision → pending): CHỈ creator được làm
+    // (recipient không được tự đánh dấu creator đã bổ sung xong).
+    const isResubmit = cur === 'requested_revision' && newStatus === 'pending';
     const allowed = isReopen
       ? canReopenTask(caller.profile, scope)
-      : canUpdateTaskStatus(caller.profile, scope);
+      : isResubmit
+        ? (data.createdBy === caller.profile.uid || caller.profile.role_code === 'ADMIN')
+        : canUpdateTaskStatus(caller.profile, scope);
     if (!allowed) {
       const msg = isReopen
         ? 'Chỉ GĐ Khối / CEO / ADMIN được mở lại nhiệm vụ đã đóng.'
-        : 'Bạn không có quyền cập nhật trạng thái.';
+        : isResubmit
+          ? 'Chỉ người tạo đề xuất được gửi lại sau khi bổ sung.'
+          : 'Bạn không có quyền cập nhật trạng thái.';
       return NextResponse.json({ error: msg }, { status: 403 });
     }
 

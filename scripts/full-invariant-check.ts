@@ -22,9 +22,9 @@ const YEAR = 2026;
 (async () => {
   console.log(`\n🔬 INVARIANT CHECK — Year ${YEAR}, 5 cơ sở\n`);
 
-  // Load active NV_SALE registry
+  // Load active sale roles (NV_SALE + NV_SALE_PT) — đồng bộ với app code (lib/sales-roles.ts)
   const usersSnap = await db.collection('users')
-    .where('status', '==', 'active').where('roleId', '==', 'NV_SALE').get();
+    .where('status', '==', 'active').where('roleId', 'in', ['NV_SALE', 'NV_SALE_PT']).get();
   const activeByBranch: Record<string, Set<string>> = {};
   for (const d of usersSnap.docs) {
     const b: string | null = d.data().branchId ?? null;
