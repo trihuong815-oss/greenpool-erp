@@ -99,6 +99,7 @@ type SourceStat = {
   source: LeadSource;
   targetLeads: number;
   actualLeads: number;
+  actualClosed: number;     // số chốt thật — hiển thị bên cạnh tổng (anh chốt 2026-05-30)
   closeRatePct: number;
 };
 
@@ -589,6 +590,7 @@ function BranchCard({
       source: src,
       targetLeads: rs?.targetLeadsYear ?? 0,
       actualLeads,
+      actualClosed: closed,
       closeRatePct: actualLeads > 0 ? Math.round((closed / actualLeads) * 100) : 0,
     };
   });
@@ -648,7 +650,7 @@ function BranchCard({
           <h4 className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
             Nguồn khách hàng
           </h4>
-          <span className="text-[10px] text-slate-400">tỷ lệ chốt</span>
+          <span className="text-[10px] text-slate-400">tổng · chốt · tỷ lệ</span>
         </div>
         <ul className="space-y-1.5">
           {sources.map((s) => {
@@ -664,8 +666,11 @@ function BranchCard({
                 </span>
                 <DotScale pct={s.closeRatePct} hex={BRAND_EMERALD} />
                 <span className="ml-auto flex items-center gap-2 tabular-nums">
-                  <span className="text-slate-400 text-[11px]">
-                    {s.actualLeads.toLocaleString("vi-VN")}/{s.targetLeads.toLocaleString("vi-VN")}
+                  {/* Tổng (xám) · Chốt (xanh emerald, in đậm) */}
+                  <span className="text-[11px]">
+                    <span className="text-slate-400">{s.actualLeads.toLocaleString("vi-VN")}</span>
+                    <span className="text-slate-300 mx-0.5">·</span>
+                    <span className="font-semibold text-emerald-700" title="Số đã chốt">{s.actualClosed.toLocaleString("vi-VN")}</span>
                   </span>
                   <span
                     className="w-10 text-right text-[11px] font-bold"
