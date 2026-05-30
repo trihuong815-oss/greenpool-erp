@@ -57,7 +57,10 @@ export async function pushToUsers(uids: string[], payload: PushPayload): Promise
     for (const s of snaps) {
       if (!s.exists) continue;
       const x = s.data();
-      const tk = Array.isArray(x?.fcmTokens) ? x.fcmTokens.filter((t: any) => typeof t === 'string' && t.length > 20) : [];
+      // Dedup tokens — fcmTokens có thể có duplicate nếu user re-register token cũ → tránh push lặp
+      const tk = Array.isArray(x?.fcmTokens)
+        ? Array.from(new Set(x.fcmTokens.filter((t: any) => typeof t === 'string' && t.length > 20))) as string[]
+        : [];
       if (tk.length === 0) continue;
       tokenMap.set(s.id, tk);
       allTokens.push(...tk);

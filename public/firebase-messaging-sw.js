@@ -28,24 +28,12 @@ self.addEventListener('activate', (event) => {
     if (!cfg?.apiKey || !cfg?.projectId) return;
 
     firebase.initializeApp(cfg);
-    const messaging = firebase.messaging();
-
-    // Khi nhận background message → show notification.
-    messaging.onBackgroundMessage((payload) => {
-      const title = payload?.notification?.title ?? 'Green Pool';
-      const body = payload?.notification?.body ?? '';
-      const icon = payload?.notification?.icon ?? '/icon-192.png';
-      const tag = payload?.data?.taskId ?? payload?.data?.kind ?? 'green-pool';
-      const link = payload?.fcmOptions?.link ?? payload?.webpush?.fcmOptions?.link ?? '/cong-viec-ca-nhan';
-
-      self.registration.showNotification(title, {
-        body,
-        icon,
-        badge: icon,
-        tag,
-        data: { link },
-      });
-    });
+    firebase.messaging();
+    // KHÔNG gọi messaging.onBackgroundMessage() + showNotification() —
+    // payload server đã có `notification` field, FCM SDK tự render notification.
+    // Nếu thêm showNotification() thủ công → noti hiện 2 lần trên cùng device.
+    // (Bug user báo 2026-05-30: QLCS gửi đề xuất, GĐ_KD nhận 2 noti cùng nội dung.)
+    // notificationclick handler bên dưới chỉ xử lý URL khi user bấm — không tạo noti mới.
   } catch (e) {
     console.error('[fcm-sw] init error', e);
   }
