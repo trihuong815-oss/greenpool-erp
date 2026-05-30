@@ -224,7 +224,7 @@ export function GiaoViecClient(props: Props) {
           onClick={() => jumpToTab('proposal')}
         />
         <CategoryCard
-          title="Giao việc tôi giao"
+          title="Giao việc"
           subtitle="Theo dõi tiến độ thực hiện"
           icon={Send}
           stats={statsByCategory.assignment}
