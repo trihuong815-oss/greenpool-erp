@@ -1,10 +1,11 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import type { Facility, Task } from '@/lib/types';
 import {
   Building2, BarChart3, ListChecks,
-  TrendingUp, Clock, ShieldCheck, AlertTriangle,
+  TrendingUp, Clock, ShieldCheck, AlertTriangle, X, Loader2, CalendarDays, ChevronRight,
   type LucideIcon,
 } from 'lucide-react';
 import { KTDashboardSection } from './KTDashboardSection';
@@ -192,48 +193,144 @@ function RevenueCard({ label, actual, target, rate, sub, icon: Icon }: {
 // ============================================================================
 // TASKS SECTION
 // ============================================================================
-// Tile click → mở /giao-viec với query param `focus=<type>` → GiaoViecClient tự chuyển tab + filter.
+type ModalKind = 'approval' | 'received' | 'pending' | 'inprogress';
+interface TaskListItem {
+  id: string;
+  title: string;
+  status: string;
+  priority?: string;
+  dueDate?: string | null;
+  createdByName?: string;
+}
+
 function TasksSection({ counts, roleCode }: { counts: TaskCounts; roleCode: string }) {
   const isApprover = ['ADMIN', 'CEO', 'GD_KD', 'GD_VP'].includes(roleCode);
+  const [modal, setModal] = useState<ModalKind | null>(null);
+  const [list, setList] = useState<TaskListItem[] | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  // Fetch lazy khi modal mở
+  useEffect(() => {
+    if (!modal) { setList(null); return; }
+    let cancelled = false;
+    setLoading(true);
+    setList(null);
+    const apiMode = modal === 'approval' ? 'pending_approval' : 'assigned';
+    fetch(`/api/tasks?mode=${apiMode}`, { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((j) => {
+        if (cancelled) return;
+        const rows: TaskListItem[] = Array.isArray(j?.rows) ? j.rows : [];
+        let filtered = rows;
+        if (modal === 'pending') filtered = rows.filter((r) => r.status === 'pending');
+        else if (modal === 'inprogress') filtered = rows.filter((r) => r.status === 'in_progress');
+        setList(filtered);
+      })
+      .catch(() => { if (!cancelled) setList([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [modal]);
+
+  const titles: Record<ModalKind, string> = {
+    approval: '📋 Đề xuất / Nhiệm vụ chờ bạn duyệt',
+    received: '📥 Tất cả nhiệm vụ bạn được giao',
+    pending: '⏳ Nhiệm vụ chờ xử lý (bạn chưa bắt đầu)',
+    inprogress: '🔄 Nhiệm vụ đang triển khai',
+  };
+  const subtitles: Record<ModalKind, string> = {
+    approval: 'Click vào nhiệm vụ để mở chi tiết + duyệt/từ chối',
+    received: 'Click vào nhiệm vụ để mở chi tiết',
+    pending: 'Click vào nhiệm vụ để mở chi tiết + bắt đầu thực hiện',
+    inprogress: 'Click vào nhiệm vụ để cập nhật tiến độ',
+  };
+
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      {isApprover && (
-        <TaskTile
-          icon={ShieldCheck}
-          label="Chờ tôi duyệt"
-          value={counts.approvalNeeded}
-          accent={counts.approvalNeeded > 0 ? 'amber' : 'slate'}
-          href="/giao-viec?focus=approval"
+    <>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {isApprover && (
+          <TaskTile icon={ShieldCheck} label="Chờ tôi duyệt" value={counts.approvalNeeded}
+            accent={counts.approvalNeeded > 0 ? 'amber' : 'slate'}
+            onClick={counts.approvalNeeded > 0 ? () => setModal('approval') : undefined}
+            href="/giao-viec?focus=approval"
+          />
+        )}
+        <TaskTile icon={ListChecks} label="Tôi đang được giao" value={counts.myTotal}
+          sub={`${counts.myPending} chờ · ${counts.myInProgress} làm`} accent="emerald"
+          onClick={counts.myTotal > 0 ? () => setModal('received') : undefined}
+          href="/giao-viec?focus=received"
         />
-      )}
-      <TaskTile
-        icon={ListChecks}
-        label="Tôi đang được giao"
-        value={counts.myTotal}
-        sub={`${counts.myPending} chờ · ${counts.myInProgress} làm`}
-        accent="emerald"
-        href="/giao-viec?focus=received"
-      />
-      <TaskTile
-        icon={Clock}
-        label="Đang triển khai"
-        value={counts.myInProgress}
-        accent="sky"
-        href="/giao-viec?focus=inprogress"
-      />
-      <TaskTile
-        icon={AlertTriangle}
-        label="Chờ xử lý"
-        value={counts.myPending}
-        accent={counts.myPending > 0 ? 'amber' : 'slate'}
-        href="/giao-viec?focus=pending"
-      />
-      <div className="col-span-2 lg:col-span-4 text-right">
-        <Link href="/giao-viec" className="text-xs text-emerald-700 hover:underline font-semibold">
-          Xem chi tiết công việc →
-        </Link>
+        <TaskTile icon={Clock} label="Đang triển khai" value={counts.myInProgress} accent="sky"
+          onClick={counts.myInProgress > 0 ? () => setModal('inprogress') : undefined}
+          href="/giao-viec?focus=inprogress"
+        />
+        <TaskTile icon={AlertTriangle} label="Chờ xử lý" value={counts.myPending}
+          accent={counts.myPending > 0 ? 'amber' : 'slate'}
+          onClick={counts.myPending > 0 ? () => setModal('pending') : undefined}
+          href="/giao-viec?focus=pending"
+        />
+        <div className="col-span-2 lg:col-span-4 text-right">
+          <Link href="/giao-viec" className="text-xs text-emerald-700 hover:underline font-semibold">
+            Xem chi tiết công việc →
+          </Link>
+        </div>
       </div>
-    </div>
+
+      {/* Modal hiện danh sách task khi click tile có value > 0 */}
+      {modal && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setModal(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="px-5 py-3 border-b border-slate-200 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="font-bold text-slate-800 text-sm">
+                  {titles[modal]} <span className="text-slate-400 font-normal">({list?.length ?? 0})</span>
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">{subtitles[modal]}</p>
+              </div>
+              <button onClick={() => setModal(null)} className="text-slate-400 hover:text-slate-600 -mt-1"><X size={20} /></button>
+            </div>
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto px-3 py-2 bg-slate-50/40">
+              {loading ? (
+                <div className="flex items-center justify-center py-16 text-slate-400 text-sm">
+                  <Loader2 size={18} className="animate-spin mr-2" /> Đang tải…
+                </div>
+              ) : !list || list.length === 0 ? (
+                <div className="text-center text-slate-400 py-16 text-sm">Không có nhiệm vụ nào.</div>
+              ) : (
+                <ul className="space-y-1.5">
+                  {list.map((t) => (
+                    <Link
+                      key={t.id}
+                      href={`/giao-viec?taskId=${encodeURIComponent(t.id)}`}
+                      onClick={() => setModal(null)}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-white border border-slate-200 hover:border-emerald-300 hover:shadow-sm transition"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm text-slate-800 truncate">{t.title}</div>
+                        <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
+                          {t.dueDate && <span className="inline-flex items-center gap-1"><CalendarDays size={11} />{t.dueDate}</span>}
+                          {t.priority && <span>Ưu tiên: {t.priority}</span>}
+                          {t.createdByName && <span>· bởi {t.createdByName}</span>}
+                        </div>
+                      </div>
+                      <ChevronRight size={16} className="text-slate-300 flex-shrink-0" />
+                    </Link>
+                  ))}
+                </ul>
+              )}
+            </div>
+            {/* Footer */}
+            <div className="px-5 py-2.5 border-t border-slate-200 bg-slate-50 flex justify-between items-center">
+              <span className="text-[11px] text-slate-400">Click một mục để mở chi tiết</span>
+              <Link href={`/giao-viec?focus=${modal}`} className="text-xs text-emerald-700 hover:underline font-semibold" onClick={() => setModal(null)}>
+                Mở trang Giao việc →
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
