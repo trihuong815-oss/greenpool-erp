@@ -192,6 +192,7 @@ function RevenueCard({ label, actual, target, rate, sub, icon: Icon }: {
 // ============================================================================
 // TASKS SECTION
 // ============================================================================
+// Tile click → mở /giao-viec với query param `focus=<type>` → GiaoViecClient tự chuyển tab + filter.
 function TasksSection({ counts, roleCode }: { counts: TaskCounts; roleCode: string }) {
   const isApprover = ['ADMIN', 'CEO', 'GD_KD', 'GD_VP'].includes(roleCode);
   return (
@@ -202,7 +203,7 @@ function TasksSection({ counts, roleCode }: { counts: TaskCounts; roleCode: stri
           label="Chờ tôi duyệt"
           value={counts.approvalNeeded}
           accent={counts.approvalNeeded > 0 ? 'amber' : 'slate'}
-          href="/giao-viec"
+          href="/giao-viec?focus=approval"
         />
       )}
       <TaskTile
@@ -211,21 +212,21 @@ function TasksSection({ counts, roleCode }: { counts: TaskCounts; roleCode: stri
         value={counts.myTotal}
         sub={`${counts.myPending} chờ · ${counts.myInProgress} làm`}
         accent="emerald"
-        href="/giao-viec"
+        href="/giao-viec?focus=received"
       />
       <TaskTile
         icon={Clock}
         label="Đang triển khai"
         value={counts.myInProgress}
         accent="sky"
-        href="/giao-viec"
+        href="/giao-viec?focus=inprogress"
       />
       <TaskTile
         icon={AlertTriangle}
         label="Chờ xử lý"
         value={counts.myPending}
         accent={counts.myPending > 0 ? 'amber' : 'slate'}
-        href="/giao-viec"
+        href="/giao-viec?focus=pending"
       />
       <div className="col-span-2 lg:col-span-4 text-right">
         <Link href="/giao-viec" className="text-xs text-emerald-700 hover:underline font-semibold">
@@ -236,9 +237,11 @@ function TasksSection({ counts, roleCode }: { counts: TaskCounts; roleCode: stri
   );
 }
 
-function TaskTile({ icon: Icon, label, value, sub, accent, href }: {
+function TaskTile({ icon: Icon, label, value, sub, accent, href, onClick }: {
   icon: LucideIcon; label: string; value: number; sub?: string;
   accent: 'emerald' | 'sky' | 'amber' | 'rose' | 'slate'; href: string;
+  /** Khi có onClick → click sẽ mở modal thay vì nhảy URL. href vẫn dùng cho long-press / fallback. */
+  onClick?: () => void;
 }) {
   const A = {
     emerald: { bg: 'bg-emerald-50', text: 'text-emerald-700', ring: 'ring-emerald-100' },
@@ -247,11 +250,8 @@ function TaskTile({ icon: Icon, label, value, sub, accent, href }: {
     rose:    { bg: 'bg-rose-50',    text: 'text-rose-700',    ring: 'ring-rose-100' },
     slate:   { bg: 'bg-slate-50',   text: 'text-slate-600',   ring: 'ring-slate-100' },
   }[accent];
-  return (
-    <Link
-      href={href}
-      className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-emerald-300 hover:shadow-md group"
-    >
+  const inner = (
+    <>
       <div className="flex items-start justify-between mb-2">
         <div className={`flex h-9 w-9 items-center justify-center rounded-lg ring-1 ${A.bg} ${A.text} ${A.ring}`}>
           <Icon size={16} />
@@ -260,8 +260,13 @@ function TaskTile({ icon: Icon, label, value, sub, accent, href }: {
       <div className="text-3xl font-bold tabular-nums text-slate-900 leading-tight">{value}</div>
       <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500 mt-0.5 truncate">{label}</div>
       {sub && <div className="text-[10px] text-slate-400 mt-1 truncate">{sub}</div>}
-    </Link>
+    </>
   );
+  const cls = 'rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-emerald-300 hover:shadow-md group text-left w-full';
+  if (onClick) {
+    return <button type="button" onClick={onClick} className={cls}>{inner}</button>;
+  }
+  return <Link href={href} className={cls}>{inner}</Link>;
 }
 
 // ============================================================================

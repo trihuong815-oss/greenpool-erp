@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   Plus, Search, X, ListChecks, Inbox, Send, ShieldCheck,
   Loader2, ArrowRight, CalendarDays, AlertTriangle, CheckCircle2,
@@ -82,6 +83,21 @@ export function GiaoViecClient(props: Props) {
   }
   const [view, setView] = useState<ViewMode>('list');
   const [statusFilter, setStatusFilter] = useState<TaskStatus | 'all'>('all');
+
+  // Deep-link: Dashboard tile click → /giao-viec?focus=<type> → tự jump tab + filter
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const focus = searchParams.get('focus');
+    if (!focus) return;
+    if (focus === 'approval' && showApprovalTab) { setTab('approval'); setStatusFilter('all'); }
+    else if (focus === 'received')   { setTab('received'); setStatusFilter('all'); }
+    else if (focus === 'pending')    { setTab('received'); setStatusFilter('pending'); }
+    else if (focus === 'inprogress') { setTab('received'); setStatusFilter('in_progress'); }
+    requestAnimationFrame(() => {
+      tabSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
   const [keyword, setKeyword] = useState('');
   const [loading, setLoading] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
