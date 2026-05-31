@@ -1,4 +1,5 @@
 import { AppTopBar } from '@/components/AppTopBar';
+import { EnableNotiBanner } from '@/components/EnableNotiBanner';
 import { canSeeAllFacilities, getVisibleFacilities } from '@/lib/permissions';
 import { requireAuthedProfile } from '@/lib/firebase/current-profile';
 import { getFirebaseAdminDb } from '@/lib/firebase/admin';
@@ -114,6 +115,8 @@ export default async function DashboardPage() {
         icon="home"
       />
       <div className="flex-1 overflow-y-auto p-3 md:p-6 bg-slate-50">
+        {/* Cảnh báo thiết bị chưa bật notification — hiện cho mọi user nếu chưa grant FCM */}
+        <EnableNotiBanner />
         {isSystemAdmin && systemErrorCount > 0 && (
           <div className="mb-4 rounded-lg ring-1 ring-rose-300 bg-rose-50 px-4 py-3 flex items-start gap-3 text-rose-900">
             <span className="text-xl shrink-0">⚠️</span>
