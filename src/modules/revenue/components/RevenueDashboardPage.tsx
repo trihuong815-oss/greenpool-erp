@@ -650,11 +650,12 @@ function BranchCard({
           <h4 className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
             Nguồn khách hàng
           </h4>
-          <span className="text-[10px] text-slate-400">tổng · chốt · tỷ lệ</span>
+          <span className="text-[10px] text-slate-400">tổng · chốt / chưa chốt · tỷ lệ</span>
         </div>
         <ul className="space-y-1.5">
           {sources.map((s) => {
             const Icon = SOURCE_ICON[s.source];
+            const notClosed = Math.max(0, s.actualLeads - s.actualClosed);
             // Màu phải khớp với CON SỐ hiển thị bên cạnh = closeRatePct.
             // Multiplier 1.5 để 60%≈good, 40%≈warning (theo convention của SourceCell elsewhere).
             const closeHex = STATUS_BAR_HEX[statusKey(s.closeRatePct * 1.5)];
@@ -666,11 +667,13 @@ function BranchCard({
                 </span>
                 <DotScale pct={s.closeRatePct} hex={BRAND_EMERALD} />
                 <span className="ml-auto flex items-center gap-2 tabular-nums">
-                  {/* Tổng (xám) · Chốt (xanh emerald, in đậm) */}
+                  {/* Tổng (xám) · Chốt (xanh emerald) / Chưa chốt (amber) */}
                   <span className="text-[11px]">
                     <span className="text-slate-400">{s.actualLeads.toLocaleString("vi-VN")}</span>
                     <span className="text-slate-300 mx-0.5">·</span>
-                    <span className="font-semibold text-emerald-700" title="Số đã chốt">{s.actualClosed.toLocaleString("vi-VN")}</span>
+                    <span className="font-semibold text-emerald-700" title="Đã chốt">{s.actualClosed.toLocaleString("vi-VN")}</span>
+                    <span className="text-slate-300 mx-0.5">/</span>
+                    <span className="font-semibold text-amber-700" title="Chưa chốt">{notClosed.toLocaleString("vi-VN")}</span>
                   </span>
                   <span
                     className="w-10 text-right text-[11px] font-bold"
