@@ -187,6 +187,15 @@
         { "fieldPath": "role", "order": "ASCENDING" },
         { "fieldPath": "submittedAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "_comment": "Chat Phase 13: list conv tôi tham gia — where(participantIds array-contains uid) orderBy(lastMessageAt desc)",
+      "collectionGroup": "conversations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "participantIds", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "lastMessageAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

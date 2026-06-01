@@ -35,6 +35,7 @@ export const COLLECTIONS = {
   AI_ASSISTANT_LOGS: 'aiAssistantLogs',   // (Phase 9 — log AI cá nhân, owner-only)
   CHECKLIST_RUNS_V2: 'checklistRunsV2',   // (Phase 10 — module Checklist v2 spec 2026-05-28; song song /checklist cũ)
   CHECKLIST_NOTIFICATIONS_V2: 'checklistNotificationsV2', // (Phase 10 — thông báo cấp trên khi user submit)
+  CONVERSATIONS: 'conversations',         // (Phase 13 — Chat: 1-1 + group. Subcollection messages.)
 } as const;
 
 // Subcollection names — đứng trong context của doc cha.
@@ -42,4 +43,5 @@ export const SUBCOLLECTIONS = {
   ITEMS: 'items',                       // checklists/{id}/items + templates/{id}/items
   EVIDENCE_FILES: 'evidenceFiles',      // checklists/{id}/evidenceFiles
   COMMENTS: 'comments',                 // tasks/{id}/comments — timeline + status change + approval
+  MESSAGES: 'messages',                 // conversations/{cid}/messages — Phase 13 chat
 } as const;

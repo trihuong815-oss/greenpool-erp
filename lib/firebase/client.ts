@@ -3,6 +3,7 @@
 
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
 import { getAuth, type Auth } from 'firebase/auth';
+import { getFirestore, type Firestore } from 'firebase/firestore';
 
 interface ClientConfig {
   apiKey: string;
@@ -42,6 +43,14 @@ export function getFirebaseClient(): FirebaseApp {
 
 export function getFirebaseClientAuth(): Auth {
   return getAuth(getFirebaseClient());
+}
+
+let _db: Firestore | null = null;
+/** Client Firestore — dùng cho realtime listener (onSnapshot) trong UI. */
+export function getFirebaseClientDb(): Firestore {
+  if (_db) return _db;
+  _db = getFirestore(getFirebaseClient());
+  return _db;
 }
 
 export function isFirebaseClientReady(): boolean {

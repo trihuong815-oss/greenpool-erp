@@ -4,11 +4,12 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { effectiveMenu } from '@/lib/permissions';
 import {
-  Home, BarChart3, CheckSquare, FileText, ListTodo,
+  Home, BarChart3, CheckSquare, FileText, ListTodo, MessageCircle,
   Users, DollarSign, FileBarChart, GraduationCap, Megaphone, Settings, LogOut, UserCog, UserPlus, Wrench, KeyRound, X, Briefcase,
   type LucideIcon,
 } from 'lucide-react';
 import { TasksBadge } from './TasksBadge';
+import { ChatUnreadBadge } from './ChatUnreadBadge';
 import { useMobileNav } from './MobileNavContext';
 
 interface MenuItem {
@@ -28,6 +29,7 @@ const MENU_SECTIONS: MenuSection[] = [
     title: 'Tổng quan',
     items: [
       { route: 'dashboard',         label: 'Dashboard',          icon: Home },
+      { route: 'tin-nhan',          label: 'Tin nhắn',           icon: MessageCircle },
       { route: 'cong-viec-ca-nhan', label: 'Công việc cá nhân', icon: Briefcase },
     ],
   },
@@ -169,6 +171,7 @@ export function Sidebar({ userName, userRole, roleCode, menuOverrides }: Sidebar
                       />
                       <span className="truncate">{item.label}</span>
                       {item.route === 'giao-viec' && <TasksBadge roleCode={roleCode} />}
+                      {item.route === 'tin-nhan' && <ChatUnreadBadge />}
                     </Link>
                   </li>
                 );
