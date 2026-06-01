@@ -21,11 +21,12 @@ const BRANCH_LABEL: Record<string, string> = {
   TT:  'Thanh Trì',
 };
 
+// Path khớp 100% file trong public/ — KHÔNG tự đoán đuôi/space, dùng `ls public` để verify.
 const BRANCH_PHOTOS: Record<string, string> = {
-  HM:  '/hoàng mai.png',
-  TK:  '/20 thụy khuê.png',
+  HM:  '/hoàng mai.png.jpg',
+  TK:  '/thụy khuê.png.jpg',
   CTT: '/CTT.png',
-  '24':'/24NCT.png',
+  '24':'/24 NCT.png',
   TT:  '/thanh trì.png',
 };
 const BRANCH_FALLBACK: Record<string, string> = {
