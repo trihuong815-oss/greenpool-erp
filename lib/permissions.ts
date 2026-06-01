@@ -33,20 +33,22 @@ export const MENU_PERMISSIONS: Record<string, string[]> = {
 
   TP_KT:     ['dashboard','checklist-v2','quy-trinh','giao-viec','quan-ly-cong-viec','bao-cao','ky-thuat','cong-viec-ca-nhan'],
   // Phó phòng KT (Hệ thống / Xử lý nước) — xem toàn module ky-thuat, không xem doanh số.
-  PP_HT:     ['dashboard','checklist-v2','quy-trinh','giao-viec','quan-ly-cong-viec','bao-cao','ky-thuat','cong-viec-ca-nhan'],
-  PP_XLN:    ['dashboard','checklist-v2','quy-trinh','giao-viec','quan-ly-cong-viec','bao-cao','ky-thuat','cong-viec-ca-nhan'],
+  // Phó phòng KT — chỉ dùng giao-viec / báo-cáo / đề-xuất trong /ky-thuat module.
+  // Module /giao-viec chính (vận hành) KHÔNG hiện cho khối KT (anh chốt 2026-06-01).
+  PP_HT:     ['dashboard','checklist-v2','quy-trinh','quan-ly-cong-viec','bao-cao','ky-thuat','cong-viec-ca-nhan'],
+  PP_XLN:    ['dashboard','checklist-v2','quy-trinh','quan-ly-cong-viec','bao-cao','ky-thuat','cong-viec-ca-nhan'],
   // Kỹ thuật viên cơ sở (Hệ thống / Xử lý nước) — chỉ xem ky-thuat scope cơ sở của mình.
   // Convention: KT_HT_HM, KT_HT_TK,... và KT_XLN_HM,... khớp QLCS_*. Permission scope ở backend.
-  KT_HT_HM:    ['dashboard','giao-viec','ky-thuat'],
-  KT_HT_TK:    ['dashboard','giao-viec','ky-thuat'],
-  KT_HT_CTT:   ['dashboard','giao-viec','ky-thuat'],
-  KT_HT_24NCT: ['dashboard','giao-viec','ky-thuat'],
-  KT_HT_TT:    ['dashboard','giao-viec','ky-thuat'],
-  KT_XLN_HM:    ['dashboard','giao-viec','ky-thuat'],
-  KT_XLN_TK:    ['dashboard','giao-viec','ky-thuat'],
-  KT_XLN_CTT:   ['dashboard','giao-viec','ky-thuat'],
-  KT_XLN_24NCT: ['dashboard','giao-viec','ky-thuat'],
-  KT_XLN_TT:    ['dashboard','giao-viec','ky-thuat'],
+  KT_HT_HM:    ['dashboard','ky-thuat'],
+  KT_HT_TK:    ['dashboard','ky-thuat'],
+  KT_HT_CTT:   ['dashboard','ky-thuat'],
+  KT_HT_24NCT: ['dashboard','ky-thuat'],
+  KT_HT_TT:    ['dashboard','ky-thuat'],
+  KT_XLN_HM:    ['dashboard','ky-thuat'],
+  KT_XLN_TK:    ['dashboard','ky-thuat'],
+  KT_XLN_CTT:   ['dashboard','ky-thuat'],
+  KT_XLN_24NCT: ['dashboard','ky-thuat'],
+  KT_XLN_TT:    ['dashboard','ky-thuat'],
   TP_DT:     ['dashboard','quy-trinh','giao-viec','quan-ly-cong-viec','bao-cao','daotao','cong-viec-ca-nhan'],
   TP_MKT:    ['dashboard','quy-trinh','giao-viec','quan-ly-cong-viec','bao-cao','mkt','cong-viec-ca-nhan'],
   TIBAN_TT:  ['dashboard','quy-trinh','giao-viec','quan-ly-cong-viec','bao-cao','cong-viec-ca-nhan'],
