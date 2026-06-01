@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { Sidebar } from './Sidebar';
 import { MobileNavContext } from './MobileNavContext';
+import { MfaRequiredBanner } from './MfaRequiredBanner';
 
 interface AppShellProps {
   userName: string;
@@ -59,6 +60,7 @@ export function AppShell({ userName, userRole, roleCode, menuOverrides, children
 
         {/* Main content area */}
         <main className="flex-1 flex flex-col overflow-hidden min-w-0">
+          <MfaRequiredBanner roleCode={roleCode} />
           {children}
         </main>
       </div>

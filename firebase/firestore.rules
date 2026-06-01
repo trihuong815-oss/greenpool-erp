@@ -301,6 +301,15 @@ service cloud.firestore {
       }
     }
 
+    // ---- Chat access logs (Phase 13.5 — Security audit) ----
+    // Append-only audit log: ai đọc/gửi/react/upload tin nhắn vào conv nào.
+    // CHỈ admin (CEO/GD) đọc được — KHÔNG ai khác kể cả người trong conv.
+    // WRITE: server Admin SDK only (bypass rules).
+    match /chatAccessLogs/{logId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     // ---- Conversations + Messages (Phase 13 — Chat) ----
     // Schema: participantIds[] (sorted), participantNames{}, lastMessage,
     //         lastMessageAt, readBy{uid:ts}, typing{uid:ts}, channel?, type, ...

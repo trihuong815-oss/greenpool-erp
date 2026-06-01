@@ -54,6 +54,21 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ cid: string
       });
       if (rows.length >= MAX_RESULTS) break;
     }
+
+    // Audit search (fire-and-forget)
+    {
+      const { logChatAccess, extractRequestMeta } = await import('@/lib/firebase/chat-audit');
+      const meta = extractRequestMeta(req);
+      logChatAccess({
+        uid: caller.profile.uid,
+        userName: caller.actorName ?? '',
+        userRole: caller.profile.role_code,
+        action: 'search',
+        cid,
+        ip: meta.ip, userAgent: meta.userAgent,
+      });
+    }
+
     return NextResponse.json({ rows, scanned: snap.size, truncated: snap.size === SCAN_LIMIT });
   } catch (e: any) {
     if (e instanceof UnauthorizedError) return NextResponse.json({ error: e.message }, { status: e.status });

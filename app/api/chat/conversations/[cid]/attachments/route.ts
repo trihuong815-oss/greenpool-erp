@@ -32,6 +32,15 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ cid: strin
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    // Rate limit: 30 file/giờ/user — chống abuse Storage.
+    const { checkRateLimit } = await import('@/lib/rate-limit');
+    const rl = checkRateLimit(`chat_upload:${caller.profile.uid}`, 30, 3600);
+    if (!rl.ok) {
+      return NextResponse.json({
+        error: `Upload quá nhanh. Thử lại sau ${rl.retryAfter} giây.`,
+      }, { status: 429, headers: { 'Retry-After': String(rl.retryAfter ?? 60) } });
+    }
+
     const form = await req.formData();
     const file = form.get('file');
     if (!(file instanceof File)) return NextResponse.json({ error: 'Thiếu file' }, { status: 400 });
@@ -57,6 +66,20 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ cid: strin
     const kind = detectKind(mime, kindHint);
     const attachment: Record<string, unknown> = { path, fileName, mime, size, kind };
     if (kind === 'voice' && typeof duration === 'number' && duration > 0) attachment.duration = duration;
+
+    // Audit upload (fire-and-forget)
+    {
+      const { logChatAccess, extractRequestMeta } = await import('@/lib/firebase/chat-audit');
+      const meta = extractRequestMeta(req);
+      logChatAccess({
+        uid: caller.profile.uid,
+        userName: caller.actorName ?? '',
+        userRole: caller.profile.role_code,
+        action: 'upload',
+        cid,
+        ip: meta.ip, userAgent: meta.userAgent,
+      });
+    }
 
     return NextResponse.json({ ok: true, attachment });
   } catch (e: any) {

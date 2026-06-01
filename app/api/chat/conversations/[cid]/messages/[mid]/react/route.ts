@@ -12,6 +12,13 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ cid: strin
   try {
     const caller = await getAuthedCaller();
     const { cid, mid } = await ctx.params;
+    // Rate limit: 120 react/phút/user — react là toggle nhanh, cho ngưỡng cao hơn message.
+    const { checkRateLimit } = await import('@/lib/rate-limit');
+    const rl = checkRateLimit(`chat_react:${caller.profile.uid}`, 120, 60);
+    if (!rl.ok) {
+      return NextResponse.json({ error: 'Quá nhanh' }, { status: 429, headers: { 'Retry-After': String(rl.retryAfter ?? 30) } });
+    }
+
     const body = await req.json();
     const emoji = String(body?.emoji ?? '');
     if (!isAllowedReaction(emoji)) {
@@ -30,6 +37,20 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ cid: strin
     const msgRef = convRef.collection(SUBCOLLECTIONS.MESSAGES).doc(mid);
     // Transaction: read reactions hiện tại → toggle uid → write.
     // Tránh race khi 2 user react cùng lúc cùng emoji.
+    // Audit (fire-and-forget)
+    {
+      const { logChatAccess, extractRequestMeta } = await import('@/lib/firebase/chat-audit');
+      const meta = extractRequestMeta(req);
+      logChatAccess({
+        uid: caller.profile.uid,
+        userName: caller.actorName ?? '',
+        userRole: caller.profile.role_code,
+        action: 'react',
+        cid, mid,
+        ip: meta.ip, userAgent: meta.userAgent,
+      });
+    }
+
     await db.runTransaction(async (tx) => {
       const snap = await tx.get(msgRef);
       if (!snap.exists) throw new Error('Message không tồn tại');

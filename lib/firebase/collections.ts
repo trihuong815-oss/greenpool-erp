@@ -36,6 +36,8 @@ export const COLLECTIONS = {
   CHECKLIST_RUNS_V2: 'checklistRunsV2',   // (Phase 10 — module Checklist v2 spec 2026-05-28; song song /checklist cũ)
   CHECKLIST_NOTIFICATIONS_V2: 'checklistNotificationsV2', // (Phase 10 — thông báo cấp trên khi user submit)
   CONVERSATIONS: 'conversations',         // (Phase 13 — Chat: 1-1 + group. Subcollection messages.)
+  CHAT_ACCESS_LOGS: 'chatAccessLogs',     // (Phase 13.5 — security audit: log mọi truy cập tin nhắn)
+  RATE_LIMITS: 'rateLimits',              // (Phase 13.5 — rate limit counter per user+endpoint)
 } as const;
 
 // Subcollection names — đứng trong context của doc cha.

@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { effectiveMenu } from '@/lib/permissions';
 import {
   Home, BarChart3, CheckSquare, FileText, ListTodo, MessageCircle,
-  Users, DollarSign, FileBarChart, GraduationCap, Megaphone, Settings, LogOut, UserCog, UserPlus, Wrench, KeyRound, X, Briefcase,
+  Users, DollarSign, FileBarChart, GraduationCap, Megaphone, Settings, LogOut, UserCog, UserPlus, Wrench, KeyRound, X, Briefcase, ShieldCheck,
   type LucideIcon,
 } from 'lucide-react';
 import { TasksBadge } from './TasksBadge';
@@ -31,6 +31,7 @@ const MENU_SECTIONS: MenuSection[] = [
       { route: 'dashboard',         label: 'Dashboard',          icon: Home },
       { route: 'tin-nhan',          label: 'Tin nhắn',           icon: MessageCircle },
       { route: 'cong-viec-ca-nhan', label: 'Công việc cá nhân', icon: Briefcase },
+      { route: 'bao-mat',           label: 'Bảo mật (2FA)',      icon: ShieldCheck },
     ],
   },
   {

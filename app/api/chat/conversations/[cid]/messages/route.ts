@@ -112,6 +112,21 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ cid: string
     }
     const snap = await q.get();
     const rows = snap.docs.map((d) => serMsg(d.id, d.data())).reverse();   // reverse → cũ→mới cho UI
+
+    // Audit: log read_conv CHỈ khi không paginate (không có before) — tránh log mỗi scroll.
+    if (!beforeIso) {
+      const { logChatAccess, extractRequestMeta } = await import('@/lib/firebase/chat-audit');
+      const meta = extractRequestMeta(req);
+      logChatAccess({
+        uid: caller.profile.uid,
+        userName: caller.actorName ?? '',
+        userRole: caller.profile.role_code,
+        action: 'read_conv',
+        cid,
+        ip: meta.ip,
+        userAgent: meta.userAgent,
+      });
+    }
     return NextResponse.json({ rows });
   } catch (e: any) {
     if (e instanceof UnauthorizedError) return NextResponse.json({ error: e.message }, { status: e.status });
@@ -124,6 +139,15 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ cid: strin
   try {
     const caller = await getAuthedCaller();
     const { cid } = await ctx.params;
+    // Rate limit: 60 tin/phút/user — chống spam + bot scan.
+    const { checkRateLimit } = await import('@/lib/rate-limit');
+    const rl = checkRateLimit(`chat_msg:${caller.profile.uid}`, 60, 60);
+    if (!rl.ok) {
+      return NextResponse.json({
+        error: `Bạn gửi tin quá nhanh. Thử lại sau ${rl.retryAfter} giây.`,
+      }, { status: 429, headers: { 'Retry-After': String(rl.retryAfter ?? 60) } });
+    }
+
     const body = await req.json();
     const text = String(body?.text ?? '');
     const attachments = sanitizeAttachments(body?.attachments);
@@ -173,6 +197,26 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ cid: strin
       [`readBy.${caller.profile.uid}`]: now,
     });
     await batch.commit();
+
+    // Audit log: send_msg / send_voice / send_sticker / forward
+    {
+      const { logChatAccess, extractRequestMeta } = await import('@/lib/firebase/chat-audit');
+      const meta = extractRequestMeta(req);
+      let action: 'send_msg' | 'send_voice' | 'send_sticker' | 'forward' = 'send_msg';
+      if (forwardedFrom) action = 'forward';
+      else if (sticker) action = 'send_sticker';
+      else if (attachments.some((a) => a.kind === 'voice')) action = 'send_voice';
+      logChatAccess({
+        uid: caller.profile.uid,
+        userName: caller.actorName ?? '',
+        userRole: caller.profile.role_code,
+        action,
+        cid,
+        mid: msgRef.id,
+        ip: meta.ip,
+        userAgent: meta.userAgent,
+      });
+    }
 
     // Push noti tới participants khác (fire-and-forget)
     const recipients: string[] = (Array.isArray(conv.participantIds) ? conv.participantIds : [])
