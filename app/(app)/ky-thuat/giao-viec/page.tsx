@@ -94,27 +94,35 @@ export default async function GiaoViecPage({ searchParams }: PageProps) {
   const userCanCreateTask = canCreateTask(callerProfile);
   let assignees: AssigneeOption[] = [];
   if (userCanCreateTask) {
+    // Firestore 'in' limit 10 → chia 2 batch.
+    // PP_HT + PP_XLN (Phó phòng) thuộc cấp khối, branchId=null → giao việc xuyên cơ sở.
     const techRoles = ['KT_HT_HM', 'KT_HT_TK', 'KT_HT_CTT', 'KT_HT_24NCT', 'KT_HT_TT',
-      'KT_XLN_HM', 'KT_XLN_TK', 'KT_XLN_CTT', 'KT_XLN_24NCT'];
-    const techRoles2 = ['KT_XLN_TT'];
+      'KT_XLN_HM', 'KT_XLN_TK', 'KT_XLN_CTT', 'KT_XLN_24NCT', 'KT_XLN_TT'];
+    const techRoles2 = ['PP_HT', 'PP_XLN'];
     const [s1, s2] = await Promise.all([
       db.collection(COLLECTIONS.USERS).where('roleId', 'in', techRoles).where('status', '==', 'active').get(),
       db.collection(COLLECTIONS.USERS).where('roleId', 'in', techRoles2).where('status', '==', 'active').get(),
     ]);
     const raw = [...s1.docs, ...s2.docs].map((d) => {
       const x = d.data();
+      const roleId: string = x.roleId ?? '';
+      const spec: 'HT' | 'XLN' | null =
+        /^KT_HT_/.test(roleId) || roleId === 'PP_HT' ? 'HT' :
+        /^KT_XLN_/.test(roleId) || roleId === 'PP_XLN' ? 'XLN' : null;
       return {
         uid: d.id,
         displayName: x.displayName ?? '(không tên)',
-        roleId: x.roleId ?? '',
+        roleId,
         branchId: x.branchId ?? null,
-        specialization: (/^KT_HT_/.test(x.roleId) ? 'HT' : /^KT_XLN_/.test(x.roleId) ? 'XLN' : null) as 'HT' | 'XLN' | null,
+        specialization: spec,
       };
     });
-    // QLCS chỉ thấy KTV cơ sở mình
+    // QLCS chỉ thấy người ở cơ sở mình + PP cấp khối (branchId=null).
+    // ADMIN/CEO/TP_KT (scope.branchIds === null) thấy tất cả.
     assignees = raw.filter((u) => {
       if (scope.branchIds === null) return true;
-      return u.branchId && scope.branchIds.includes(u.branchId);
+      if (u.branchId === null) return true;        // PP cấp khối — hiện ở mọi cơ sở
+      return scope.branchIds.includes(u.branchId);
     });
   }
 

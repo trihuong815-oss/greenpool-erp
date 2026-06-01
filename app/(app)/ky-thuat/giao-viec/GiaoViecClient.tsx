@@ -578,9 +578,10 @@ function TaskModal(props: {
   const [dueDate, setDueDate] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // KTV/PP filter theo branch + specialization
+  // KTV/PP filter theo branch + specialization.
+  // PP_HT/PP_XLN có branchId=null (cấp khối) → hiển thị ở MỌI cơ sở.
   const filteredAssignees = useMemo(() => assignees.filter((a) => {
-    if (a.branchId !== branchId) return false;
+    if (a.branchId !== null && a.branchId !== branchId) return false;
     if (specialization && a.specialization !== specialization) return false;
     return true;
   }), [assignees, branchId, specialization]);
