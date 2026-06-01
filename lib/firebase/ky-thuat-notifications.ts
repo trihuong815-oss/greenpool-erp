@@ -52,9 +52,10 @@ export async function notifyKtTaskCreated(task: WorkDoc): Promise<void> {
 
 /** Proposal KT được tạo — push approver. */
 export async function notifyKtProposalCreated(prop: WorkDoc): Promise<void> {
-  // Expense → QLCS của branch + TP_KT + ADMIN/CEO
-  // Professional → PP cùng specialization + TP_KT + ADMIN/CEO
-  const approvers: string[] = ['TP_KT', 'ADMIN', 'CEO'];
+  // Expense → QLCS của branch + TP_KT + GD_KD + ADMIN/CEO
+  // Professional → PP cùng specialization + TP_KT + GD_KD + ADMIN/CEO
+  // GD_KD là cấp trên trực tiếp của khối KD (TP_KT thuộc) → phải biết mọi đề xuất KT.
+  const approvers: string[] = ['TP_KT', 'GD_KD', 'ADMIN', 'CEO'];
   if (prop.proposalType === 'expense') {
     // QLCS của branch — query thêm ngoài role
     const QLCS_BY_BRANCH: Record<string, string> = {
