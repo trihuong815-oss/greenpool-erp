@@ -4,6 +4,7 @@
 import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app';
 import { getAuth, type Auth } from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
+import { getStorage, type FirebaseStorage } from 'firebase/storage';
 
 interface ClientConfig {
   apiKey: string;
@@ -51,6 +52,14 @@ export function getFirebaseClientDb(): Firestore {
   if (_db) return _db;
   _db = getFirestore(getFirebaseClient());
   return _db;
+}
+
+let _storage: FirebaseStorage | null = null;
+/** Client Firebase Storage — dùng cho getDownloadURL() trong UI để render ảnh chat. */
+export function getFirebaseClientStorage(): FirebaseStorage {
+  if (_storage) return _storage;
+  _storage = getStorage(getFirebaseClient());
+  return _storage;
 }
 
 export function isFirebaseClientReady(): boolean {

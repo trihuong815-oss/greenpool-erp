@@ -6,10 +6,19 @@
 // Mỗi side dùng Firestore Web SDK listener riêng → tự cleanup khi unmount/switch conv.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { MessageCircle, Plus, Users, Send, Loader2, X, Search, AlertCircle, ChevronLeft, Hash, RefreshCw } from 'lucide-react';
+import { MessageCircle, Plus, Users, Send, Loader2, X, Search, AlertCircle, ChevronLeft, Hash, RefreshCw, Paperclip, ImageIcon, Smile, FileText, Download } from 'lucide-react';
 import { collection, doc, onSnapshot, orderBy, query, limit, where, Timestamp } from 'firebase/firestore';
-import { getFirebaseClientDb } from '@/lib/firebase/client';
-import { chatApi, type ChatConversation, type ChatMessage, type ChatUser } from '@/lib/services/chat/api-client';
+import { ref as storageRef, getDownloadURL } from 'firebase/storage';
+import { getFirebaseClientDb, getFirebaseClientStorage } from '@/lib/firebase/client';
+import { chatApi, type ChatConversation, type ChatMessage, type ChatUser, type ChatAttachment } from '@/lib/services/chat/api-client';
+
+const REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'] as const;
+
+function fmtSize(n: number): string {
+  if (n < 1024) return n + ' B';
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+  return (n / 1024 / 1024).toFixed(2) + ' MB';
+}
 
 type Tab = 'all' | 'unread';
 
@@ -310,6 +319,12 @@ function MessageThread({ conv, currentUserId, onBack }: { conv: ChatConversation
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** File user đã chọn nhưng CHƯA gửi. Bấm "Gửi" mới upload tuần tự → send message. */
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  /** Emoji picker đang mở cho message nào (mid) */
+  const [reactPickerFor, setReactPickerFor] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const dispName = convDisplayName(conv, currentUserId);
@@ -336,7 +351,9 @@ function MessageThread({ conv, currentUserId, onBack }: { conv: ChatConversation
               conversationId: conv.id,
               senderId: x.senderId,
               senderName: x.senderName,
-              text: x.text,
+              text: x.text ?? '',
+              attachments: Array.isArray(x.attachments) ? x.attachments : [],
+              reactions: x.reactions && typeof x.reactions === 'object' ? x.reactions : {},
               sentAt: x.sentAt instanceof Timestamp ? x.sentAt.toDate().toISOString() : x.sentAt,
             };
           }).reverse();   // cũ → mới
@@ -364,15 +381,42 @@ function MessageThread({ conv, currentUserId, onBack }: { conv: ChatConversation
 
   async function send() {
     const text = input.trim();
-    if (!text || sending) return;
+    if ((!text && pendingFiles.length === 0) || sending) return;
     setSending(true);
     setError(null);
     try {
-      await chatApi.sendMessage(conv.id, text);
+      // 1. Upload tuần tự — pattern an toàn nếu giữa chừng fail thì file đã upload vẫn nằm trong Storage nhưng không gắn vào message nào (orphan, không lỗi UX).
+      const uploaded: ChatAttachment[] = [];
+      for (const f of pendingFiles) {
+        uploaded.push(await chatApi.uploadAttachment(conv.id, f));
+      }
+      // 2. Send message (text + attachments). Nếu text rỗng, server vẫn chấp nhận vì có attachments.
+      await chatApi.sendMessage(conv.id, text, uploaded.length > 0 ? uploaded : undefined);
       setInput('');
+      setPendingFiles([]);
     } catch (e: any) {
       setError(e.message);
     } finally { setSending(false); }
+  }
+
+  function pickFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const fl = e.target.files;
+    if (!fl) return;
+    const arr = Array.from(fl);
+    setPendingFiles((prev) => [...prev, ...arr].slice(0, 10));
+    e.target.value = '';
+  }
+  function removePending(idx: number) {
+    setPendingFiles((prev) => prev.filter((_, i) => i !== idx));
+  }
+
+  async function toggleReact(mid: string, emoji: string) {
+    setReactPickerFor(null);
+    try {
+      await chatApi.reactMessage(conv.id, mid, emoji);
+    } catch (e: any) {
+      setError(e.message);
+    }
   }
 
   return (
@@ -416,21 +460,79 @@ function MessageThread({ conv, currentUserId, onBack }: { conv: ChatConversation
         {messages.map((m, i) => {
           const isMine = m.senderId === currentUserId;
           const prev = messages[i - 1];
-          const showSender = conv.type === 'group' && !isMine && (!prev || prev.senderId !== m.senderId);
+          const showSender = (conv.type === 'group' || conv.type === 'channel') && !isMine && (!prev || prev.senderId !== m.senderId);
+          const images = (m.attachments ?? []).filter((a) => a.kind === 'image');
+          const files = (m.attachments ?? []).filter((a) => a.kind === 'file');
+          const reactionEntries = Object.entries(m.reactions ?? {}).filter(([, uids]) => Array.isArray(uids) && uids.length > 0);
           return (
-            <div key={m.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
-              <div className="max-w-[70%]">
+            <div key={m.id} className={`group flex ${isMine ? 'justify-end' : 'justify-start'} relative`}>
+              <div className="max-w-[75%] flex flex-col gap-1 items-stretch">
                 {showSender && (
                   <div className="text-[10px] text-slate-500 mb-0.5 ml-3">{m.senderName}</div>
                 )}
-                <div className={`px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap break-words ${
-                  isMine
-                    ? 'bg-emerald-600 text-white rounded-br-sm'
-                    : 'bg-white ring-1 ring-slate-200 text-slate-800 rounded-bl-sm'
-                }`}>
-                  {m.text}
-                </div>
-                <div className={`text-[10px] text-slate-400 mt-0.5 ${isMine ? 'text-right mr-1' : 'ml-3'}`}>{fmtMsgTime(m.sentAt)}</div>
+                {/* Ảnh: grid theo số lượng */}
+                {images.length > 0 && (
+                  <div className={`grid gap-1 ${
+                    images.length === 1 ? 'grid-cols-1' :
+                    images.length === 2 ? 'grid-cols-2' : 'grid-cols-2'
+                  }`}>
+                    {images.map((a) => <ChatImage key={a.path} attachment={a} />)}
+                  </div>
+                )}
+                {/* File */}
+                {files.length > 0 && (
+                  <div className="space-y-1">
+                    {files.map((a) => <ChatFile key={a.path} attachment={a} isMine={isMine} />)}
+                  </div>
+                )}
+                {/* Text bubble — chỉ hiển thị nếu có text */}
+                {m.text && (
+                  <div className={`px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap break-words ${
+                    isMine
+                      ? 'bg-emerald-600 text-white rounded-br-sm'
+                      : 'bg-white ring-1 ring-slate-200 text-slate-800 rounded-bl-sm'
+                  } ${isMine ? 'self-end' : 'self-start'}`}>
+                    {m.text}
+                  </div>
+                )}
+                {/* Reactions pills */}
+                {reactionEntries.length > 0 && (
+                  <div className={`flex flex-wrap gap-1 ${isMine ? 'justify-end' : 'justify-start'}`}>
+                    {reactionEntries.map(([emoji, uids]) => {
+                      const reacted = uids.includes(currentUserId);
+                      return (
+                        <button
+                          key={emoji}
+                          onClick={() => toggleReact(m.id, emoji)}
+                          className={`text-xs px-2 py-0.5 rounded-full ring-1 inline-flex items-center gap-1 ${
+                            reacted ? 'bg-emerald-50 ring-emerald-300 text-emerald-700' : 'bg-white ring-slate-200 text-slate-600 hover:bg-slate-50'
+                          }`}
+                        >
+                          <span>{emoji}</span><span className="font-semibold">{uids.length}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                <div className={`text-[10px] text-slate-400 ${isMine ? 'text-right mr-1' : 'ml-3'}`}>{fmtMsgTime(m.sentAt)}</div>
+              </div>
+              {/* Hover/Tap → emoji picker */}
+              <div className={`absolute top-0 ${isMine ? 'right-full mr-1' : 'left-full ml-1'} opacity-0 group-hover:opacity-100 transition`}>
+                <button
+                  onClick={() => setReactPickerFor(reactPickerFor === m.id ? null : m.id)}
+                  className="p-1 rounded-full bg-white ring-1 ring-slate-200 hover:bg-slate-50 text-slate-500"
+                  title="React"
+                >
+                  <Smile size={14} />
+                </button>
+                {reactPickerFor === m.id && (
+                  <div className="absolute top-7 left-1/2 -translate-x-1/2 bg-white ring-1 ring-slate-200 shadow-lg rounded-full px-2 py-1 flex gap-1 z-10">
+                    {REACTIONS.map((e) => (
+                      <button key={e} onClick={() => toggleReact(m.id, e)}
+                        className="text-lg hover:scale-125 transition">{e}</button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           );
@@ -440,7 +542,35 @@ function MessageThread({ conv, currentUserId, onBack }: { conv: ChatConversation
       {error && (
         <div className="mx-4 mb-2 p-2 text-xs bg-rose-50 ring-1 ring-rose-200 rounded text-rose-700">{error}</div>
       )}
+      {/* Preview pending files trước khi gửi */}
+      {pendingFiles.length > 0 && (
+        <div className="px-3 py-2 border-t border-slate-100 bg-slate-50 flex flex-wrap gap-2">
+          {pendingFiles.map((f, i) => (
+            <div key={i} className="flex items-center gap-2 bg-white ring-1 ring-slate-200 rounded-lg px-2 py-1 text-xs">
+              {f.type.startsWith('image/') ? <ImageIcon size={12} className="text-emerald-600" /> : <FileText size={12} className="text-slate-500" />}
+              <span className="max-w-[140px] truncate">{f.name}</span>
+              <span className="text-slate-400">{fmtSize(f.size)}</span>
+              <button onClick={() => removePending(i)} className="text-slate-400 hover:text-rose-600">
+                <X size={12} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="border-t border-slate-200 bg-white p-3 flex items-end gap-2">
+        <input ref={imageInputRef} type="file" accept="image/*" multiple hidden onChange={pickFiles} />
+        <input ref={fileInputRef} type="file" multiple hidden onChange={pickFiles}
+          accept="application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip" />
+        <button
+          onClick={() => imageInputRef.current?.click()} disabled={sending}
+          title="Đính ảnh"
+          className="p-2 rounded-full hover:bg-slate-100 text-slate-500 disabled:opacity-40"
+        ><ImageIcon size={18} /></button>
+        <button
+          onClick={() => fileInputRef.current?.click()} disabled={sending}
+          title="Đính file"
+          className="p-2 rounded-full hover:bg-slate-100 text-slate-500 disabled:opacity-40"
+        ><Paperclip size={18} /></button>
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -454,7 +584,7 @@ function MessageThread({ conv, currentUserId, onBack }: { conv: ChatConversation
         />
         <button
           onClick={send}
-          disabled={sending || !input.trim()}
+          disabled={sending || (!input.trim() && pendingFiles.length === 0)}
           className="p-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-40 shrink-0"
         >
           {sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
@@ -623,5 +753,83 @@ function NewGroupModal({ onClose, onCreated }: { onClose: () => void; onCreated:
         </div>
       </div>
     </div>
+  );
+}
+
+// ─────────── ChatImage ───────────
+// Lazy load download URL từ Firebase Storage client SDK (cùng project, cùng auth).
+// Tốt hơn API signed URL: không tốn round-trip server, dùng cache CDN của Firebase Hosting.
+function ChatImage({ attachment }: { attachment: ChatAttachment }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const storage = getFirebaseClientStorage();
+        const r = storageRef(storage, attachment.path);
+        const u = await getDownloadURL(r);
+        if (!cancelled) setUrl(u);
+      } catch (e: any) {
+        if (!cancelled) setErr(e.message ?? 'Lỗi tải ảnh');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [attachment.path]);
+
+  if (err) return (
+    <div className="text-xs text-rose-600 bg-rose-50 ring-1 ring-rose-200 rounded p-2">
+      ⚠ {attachment.fileName}: {err}
+    </div>
+  );
+  if (!url) return (
+    <div className="bg-slate-100 rounded animate-pulse w-full" style={{ aspectRatio: '4/3', minHeight: 100 }} />
+  );
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <a href={url} target="_blank" rel="noopener noreferrer" className="block">
+      <img src={url} alt={attachment.fileName}
+        className="rounded-lg object-cover w-full max-h-72 hover:opacity-90 transition" />
+    </a>
+  );
+}
+
+// ─────────── ChatFile ───────────
+function ChatFile({ attachment, isMine }: { attachment: ChatAttachment; isMine: boolean }) {
+  const [url, setUrl] = useState<string | null>(null);
+
+  async function fetchUrl() {
+    if (url) return url;
+    const storage = getFirebaseClientStorage();
+    const r = storageRef(storage, attachment.path);
+    const u = await getDownloadURL(r);
+    setUrl(u);
+    return u;
+  }
+
+  async function open() {
+    try {
+      const u = await fetchUrl();
+      window.open(u, '_blank');
+    } catch {}
+  }
+
+  return (
+    <button
+      onClick={open}
+      className={`flex items-center gap-2 px-3 py-2 rounded-lg ring-1 text-left ${
+        isMine
+          ? 'bg-emerald-600 text-white ring-emerald-600 hover:bg-emerald-700'
+          : 'bg-white text-slate-800 ring-slate-200 hover:bg-slate-50'
+      }`}
+    >
+      <FileText size={18} className={isMine ? 'text-white' : 'text-slate-500'} />
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-medium truncate">{attachment.fileName}</div>
+        <div className={`text-[10px] ${isMine ? 'text-emerald-50/80' : 'text-slate-400'}`}>{fmtSize(attachment.size)}</div>
+      </div>
+      <Download size={14} className={isMine ? 'text-emerald-50' : 'text-slate-400'} />
+    </button>
   );
 }

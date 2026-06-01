@@ -25,12 +25,22 @@ export interface ChatConversation {
   channel?: { kind: 'company' | 'branch' | 'department'; branchId?: string; departmentId?: string };
 }
 
+export interface ChatAttachment {
+  path: string;
+  fileName: string;
+  mime: string;
+  size: number;
+  kind: 'image' | 'file';
+}
+
 export interface ChatMessage {
   id: string;
   conversationId: string;
   senderId: string;
   senderName: string;
   text: string;
+  attachments?: ChatAttachment[];
+  reactions?: Record<string, string[]>;   // emoji → uid[]
   sentAt: string;
 }
 
@@ -78,14 +88,36 @@ export const chatApi = {
     return (await jsonOrThrow<{ rows: ChatMessage[] }>(await fetch(url, { cache: 'no-store' }))).rows;
   },
 
-  async sendMessage(cid: string, text: string): Promise<{ id: string }> {
+  async sendMessage(cid: string, text: string, attachments?: ChatAttachment[]): Promise<{ id: string }> {
     const res = await jsonOrThrow<{ ok: true; id: string }>(
       await fetch(`/api/chat/conversations/${encodeURIComponent(cid)}/messages`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, attachments: attachments ?? [] }),
       }),
     );
     return { id: res.id };
+  },
+
+  /** Upload 1 file vào conv → server lưu Storage + trả metadata (chưa tạo message). */
+  async uploadAttachment(cid: string, file: File): Promise<ChatAttachment> {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await jsonOrThrow<{ ok: true; attachment: ChatAttachment }>(
+      await fetch(`/api/chat/conversations/${encodeURIComponent(cid)}/attachments`, {
+        method: 'POST',
+        body: form,
+      }),
+    );
+    return res.attachment;
+  },
+
+  async reactMessage(cid: string, mid: string, emoji: string): Promise<void> {
+    await jsonOrThrow<{ ok: true }>(
+      await fetch(`/api/chat/conversations/${encodeURIComponent(cid)}/messages/${encodeURIComponent(mid)}/react`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emoji }),
+      }),
+    );
   },
 
   async markRead(cid: string): Promise<void> {

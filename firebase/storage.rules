@@ -108,6 +108,19 @@ service firebase.storage {
       allow write: if false;          // chặn client ghi trực tiếp — bắt buộc qua signed URL
     }
 
+    // ---- Chat attachments (Phase 13) ----
+    // Path: chat-attachments/{conversationId}/{fileName}
+    // Client read trực tiếp qua getDownloadURL() — cần allow read cho participant.
+    // Upload qua server API (Admin SDK) — chặn client write trực tiếp.
+    match /chat-attachments/{cid}/{fileName} {
+      // READ: signed-in user thuộc participantIds của conv.
+      // Note: firestore.get() count vào Firestore reads → mỗi lần load ảnh = 1 read.
+      // Trade-off chấp nhận được cho MVP (chat thường <50 ảnh / load).
+      allow read: if isSignedIn() &&
+        request.auth.uid in firestore.get(/databases/(default)/documents/conversations/$(cid)).data.participantIds;
+      allow write: if false;
+    }
+
     // ---- Catch-all deny: không cho truy cập đối tượng nào khác ----
     match /{allPaths=**} {
       allow read, write: if false;

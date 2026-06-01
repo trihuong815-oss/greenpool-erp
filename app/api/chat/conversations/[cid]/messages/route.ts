@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getFirebaseAdminDb } from '@/lib/firebase/admin';
 import { COLLECTIONS, SUBCOLLECTIONS } from '@/lib/firebase/collections';
 import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-auth';
-import { isParticipant, previewText, validateMessageText } from '@/lib/firebase/chat-scope';
+import { isParticipant, previewMessage, validateMessagePayload, type MessageAttachment } from '@/lib/firebase/chat-scope';
 import { Timestamp } from 'firebase-admin/firestore';
 
 const COL = COLLECTIONS.CONVERSATIONS;
@@ -19,9 +19,23 @@ function serMsg(id: string, d: Record<string, any>) {
     conversationId: d.conversationId,
     senderId: d.senderId,
     senderName: d.senderName,
-    text: d.text,
+    text: d.text ?? '',
+    attachments: Array.isArray(d.attachments) ? d.attachments : [],
+    reactions: d.reactions && typeof d.reactions === 'object' ? d.reactions : {},
     sentAt: d.sentAt instanceof Timestamp ? d.sentAt.toDate().toISOString() : d.sentAt,
   };
+}
+
+function sanitizeAttachments(input: unknown): MessageAttachment[] {
+  if (!Array.isArray(input)) return [];
+  return input.slice(0, 10).map((x) => {
+    if (!x || typeof x !== 'object') return null;
+    const a = x as any;
+    if (typeof a.path !== 'string' || typeof a.fileName !== 'string' || typeof a.mime !== 'string'
+        || typeof a.size !== 'number') return null;
+    const kind: 'image' | 'file' = a.mime.startsWith('image/') ? 'image' : 'file';
+    return { path: a.path, fileName: a.fileName, mime: a.mime, size: a.size, kind };
+  }).filter((x): x is MessageAttachment => x !== null);
 }
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ cid: string }> }) {
@@ -61,7 +75,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ cid: strin
     const { cid } = await ctx.params;
     const body = await req.json();
     const text = String(body?.text ?? '');
-    const err = validateMessageText(text);
+    const attachments = sanitizeAttachments(body?.attachments);
+    const err = validateMessagePayload(text, attachments);
     if (err) return NextResponse.json({ error: err }, { status: 400 });
 
     const db = getFirebaseAdminDb();
@@ -76,7 +91,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ cid: strin
     const now = Timestamp.now();
     const msgRef = convRef.collection(SUB).doc();
     const trimmed = text.trim();
-    const preview = previewText(trimmed);
+    const preview = previewMessage(trimmed, attachments);
 
     // Batch: insert message + update conv summary + mark sender đã đọc (last read = now).
     const batch = db.batch();
@@ -85,6 +100,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ cid: strin
       senderId: caller.profile.uid,
       senderName: caller.actorName ?? '',
       text: trimmed,
+      attachments,
+      reactions: {},
       sentAt: now,
     });
     batch.update(convRef, {

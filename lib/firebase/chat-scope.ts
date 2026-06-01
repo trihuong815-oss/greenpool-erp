@@ -45,13 +45,60 @@ export interface Conversation {
   systemManaged?: boolean;
 }
 
+export type AttachmentKind = 'image' | 'file';
+
+export interface MessageAttachment {
+  path: string;           // Firebase Storage path
+  fileName: string;
+  mime: string;
+  size: number;
+  kind: AttachmentKind;
+  /** Ảnh: width/height nếu detect được client-side trước khi upload */
+  width?: number;
+  height?: number;
+}
+
 export interface Message {
   id: string;
   conversationId: string;
   senderId: string;
   senderName: string;
-  text: string;           // ≤ 2000 ký tự
-  sentAt: string;         // ISO
+  text: string;                           // có thể rỗng nếu chỉ gửi ảnh/file
+  attachments?: MessageAttachment[];
+  /** Map emoji → uid[] — uid xuất hiện 1 lần per emoji (toggle) */
+  reactions?: Record<string, string[]>;
+  sentAt: string;
+}
+
+/** 6 emoji được phép react (Phase 3 MVP — chốt 2026-06-01). */
+export const ALLOWED_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'] as const;
+export type AllowedReaction = typeof ALLOWED_REACTIONS[number];
+
+export function isAllowedReaction(e: string): e is AllowedReaction {
+  return (ALLOWED_REACTIONS as readonly string[]).includes(e);
+}
+
+/** Validation message: cho phép text rỗng nếu có ≥ 1 attachment. */
+export function validateMessagePayload(text: string, attachments?: MessageAttachment[]): string | null {
+  const t = (text ?? '').trim();
+  const hasAttach = Array.isArray(attachments) && attachments.length > 0;
+  if (!t && !hasAttach) return 'Tin nhắn phải có nội dung hoặc đính kèm';
+  if (t.length > 2000) return 'Tin nhắn quá dài (≤ 2000 ký tự)';
+  if (hasAttach && attachments!.length > 10) return 'Tối đa 10 file đính kèm / tin';
+  return null;
+}
+
+/** Preview cho lastMessage: ưu tiên text, không có thì show file/ảnh đầu. */
+export function previewMessage(text: string, attachments?: MessageAttachment[]): string {
+  const t = (text ?? '').trim();
+  if (t) return previewText(t);
+  if (Array.isArray(attachments) && attachments.length > 0) {
+    const first = attachments[0];
+    const tag = first.kind === 'image' ? '📷' : '📎';
+    if (attachments.length === 1) return `${tag} ${first.kind === 'image' ? 'Ảnh' : first.fileName}`;
+    return `${tag} ${attachments.length} ${first.kind === 'image' ? 'ảnh' : 'file'}`;
+  }
+  return '';
 }
 
 /** Sorted unique array — dùng làm canonical participantIds. */
