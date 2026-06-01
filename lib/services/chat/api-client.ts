@@ -10,7 +10,7 @@ export interface ChatUser {
 
 export interface ChatConversation {
   id: string;
-  type: '1-1' | 'group';
+  type: '1-1' | 'group' | 'channel';
   name?: string;
   participantIds: string[];
   participantNames: Record<string, string>;
@@ -21,6 +21,8 @@ export interface ChatConversation {
   createdBy: string;
   createdByName: string;
   ownerId?: string;
+  systemManaged?: boolean;
+  channel?: { kind: 'company' | 'branch' | 'department'; branchId?: string; departmentId?: string };
 }
 
 export interface ChatMessage {
@@ -90,6 +92,11 @@ export const chatApi = {
     await jsonOrThrow<{ ok: true }>(await fetch(`/api/chat/conversations/${encodeURIComponent(cid)}/read`, {
       method: 'POST',
     }));
+  },
+
+  // ─── Admin ───
+  async syncChannels(): Promise<{ results: Array<{ id: string; name: string; members: number; created: boolean; added: number; removed: number }> }> {
+    return jsonOrThrow(await fetch('/api/chat/admin/sync-channels', { method: 'POST' }));
   },
 
   // ─── Users ───

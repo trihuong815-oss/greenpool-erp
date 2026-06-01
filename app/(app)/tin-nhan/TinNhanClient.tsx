@@ -6,7 +6,7 @@
 // Mỗi side dùng Firestore Web SDK listener riêng → tự cleanup khi unmount/switch conv.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { MessageCircle, Plus, Users, Send, Loader2, X, Search, AlertCircle, ChevronLeft } from 'lucide-react';
+import { MessageCircle, Plus, Users, Send, Loader2, X, Search, AlertCircle, ChevronLeft, Hash, RefreshCw } from 'lucide-react';
 import { collection, doc, onSnapshot, orderBy, query, limit, where, Timestamp } from 'firebase/firestore';
 import { getFirebaseClientDb } from '@/lib/firebase/client';
 import { chatApi, type ChatConversation, type ChatMessage, type ChatUser } from '@/lib/services/chat/api-client';
@@ -16,6 +16,7 @@ type Tab = 'all' | 'unread';
 interface Props {
   currentUserId: string;
   currentUserName: string;
+  currentUserRole: string;
 }
 
 function fmtTime(iso: string | null | undefined): string {
@@ -35,9 +36,16 @@ function fmtMsgTime(iso: string): string {
 }
 
 function convDisplayName(c: ChatConversation, currentUid: string): string {
-  if (c.type === 'group') return c.name ?? 'Nhóm';
+  if (c.type === 'group' || c.type === 'channel') return c.name ?? (c.type === 'channel' ? 'Kênh' : 'Nhóm');
   const other = c.participantIds.find((u) => u !== currentUid);
   return (other && c.participantNames[other]) || 'Người dùng';
+}
+
+/** Avatar bg + icon theo loại conv */
+function convAvatarStyle(type: ChatConversation['type']) {
+  if (type === 'channel') return { bg: 'bg-amber-100 text-amber-700', icon: <Hash size={16} /> };
+  if (type === 'group') return { bg: 'bg-indigo-100 text-indigo-700', icon: <Users size={16} /> };
+  return { bg: 'bg-emerald-100 text-emerald-700', icon: null };
 }
 
 function isUnread(c: ChatConversation, currentUid: string): boolean {
@@ -48,15 +56,30 @@ function isUnread(c: ChatConversation, currentUid: string): boolean {
   return new Date(c.lastMessage.sentAt) > new Date(lastRead);
 }
 
-export function TinNhanClient({ currentUserId, currentUserName }: Props) {
+export function TinNhanClient({ currentUserId, currentUserName, currentUserRole }: Props) {
   void currentUserName;
+  const isAdmin = currentUserRole === 'ADMIN' || currentUserRole === 'CEO';
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
   const [convLoading, setConvLoading] = useState(true);
   const [activeCid, setActiveCid] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('all');
   const [showNew, setShowNew] = useState(false);
   const [showGroup, setShowGroup] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  async function handleSyncChannels() {
+    if (syncing) return;
+    setSyncing(true);
+    setError(null);
+    try {
+      const res = await chatApi.syncChannels();
+      const totalAdded = res.results.reduce((s, r) => s + r.added, 0);
+      const totalRemoved = res.results.reduce((s, r) => s + r.removed, 0);
+      alert(`Đã sync ${res.results.length} kênh · +${totalAdded} thành viên, -${totalRemoved}.`);
+    } catch (e: any) { setError(e.message); }
+    finally { setSyncing(false); }
+  }
 
   // ─── Conversations realtime ───
   useEffect(() => {
@@ -147,6 +170,12 @@ export function TinNhanClient({ currentUserId, currentUserName }: Props) {
         <div className="p-3 border-b border-slate-100">
           <div className="flex items-center gap-2 mb-2">
             <h2 className="font-bold text-slate-800 flex-1">Tin nhắn</h2>
+            {isAdmin && (
+              <button onClick={handleSyncChannels} disabled={syncing} title="Sync kênh (theo cơ sở/phòng)"
+                className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600 disabled:opacity-50">
+                {syncing ? <Loader2 size={18} className="animate-spin" /> : <RefreshCw size={18} />}
+              </button>
+            )}
             <button onClick={() => setShowGroup(true)} title="Tạo nhóm"
               className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600">
               <Users size={18} />
@@ -184,44 +213,57 @@ export function TinNhanClient({ currentUserId, currentUserName }: Props) {
               {tab === 'unread' ? 'Không có tin chưa đọc' : 'Chưa có cuộc trò chuyện. Bấm + để bắt đầu.'}
             </div>
           )}
-          <ul className="divide-y divide-slate-100">
-            {filteredConvs.map((c) => {
-              const dispName = convDisplayName(c, currentUserId);
-              const unread = isUnread(c, currentUserId);
-              const isActive = c.id === activeCid;
-              return (
-                <li key={c.id}>
-                  <button
-                    onClick={() => setActiveCid(c.id)}
-                    className={`w-full text-left px-3 py-2.5 hover:bg-slate-50 ${isActive ? 'bg-emerald-50' : ''}`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold shrink-0 ${
-                        c.type === 'group' ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700'
-                      }`}>
-                        {c.type === 'group' ? <Users size={16} /> : (dispName[0]?.toUpperCase() ?? '?')}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className={`text-sm truncate ${unread ? 'font-bold text-slate-900' : 'font-medium text-slate-800'}`}>{dispName}</span>
-                          <span className="text-[10px] text-slate-400 ml-auto shrink-0">{fmtTime(c.lastMessageAt)}</span>
-                        </div>
-                        <div className={`text-xs truncate ${unread ? 'text-slate-700 font-medium' : 'text-slate-500'}`}>
-                          {c.lastMessage ? (
-                            <>
-                              {c.lastMessage.senderId === currentUserId ? 'Bạn: ' : (c.type === 'group' ? `${c.lastMessage.senderName.split(' ').pop()}: ` : '')}
-                              {c.lastMessage.text}
-                            </>
-                          ) : <span className="italic text-slate-400">Chưa có tin nhắn</span>}
-                        </div>
-                      </div>
-                      {unread && <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />}
-                    </div>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+          {/* Group conv theo type: Kênh (channel) → Nhóm (group) → Tin nhắn (1-1) */}
+          {(['channel', 'group', '1-1'] as const).map((sec) => {
+            const list = filteredConvs.filter((c) => c.type === sec);
+            if (list.length === 0) return null;
+            const secLabel = sec === 'channel' ? 'Kênh' : sec === 'group' ? 'Nhóm' : 'Tin nhắn';
+            return (
+              <div key={sec}>
+                <div className="px-3 pt-3 pb-1 text-[10px] uppercase tracking-wider text-slate-400 font-semibold flex items-center gap-1">
+                  {sec === 'channel' ? <Hash size={11} /> : sec === 'group' ? <Users size={11} /> : <MessageCircle size={11} />}
+                  {secLabel} · {list.length}
+                </div>
+                <ul className="divide-y divide-slate-100">
+                  {list.map((c) => {
+                    const dispName = convDisplayName(c, currentUserId);
+                    const unread = isUnread(c, currentUserId);
+                    const isActive = c.id === activeCid;
+                    const av = convAvatarStyle(c.type);
+                    return (
+                      <li key={c.id}>
+                        <button
+                          onClick={() => setActiveCid(c.id)}
+                          className={`w-full text-left px-3 py-2.5 hover:bg-slate-50 ${isActive ? 'bg-emerald-50' : ''}`}
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold shrink-0 ${av.bg}`}>
+                              {av.icon ?? (dispName[0]?.toUpperCase() ?? '?')}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className={`text-sm truncate ${unread ? 'font-bold text-slate-900' : 'font-medium text-slate-800'}`}>{dispName}</span>
+                                <span className="text-[10px] text-slate-400 ml-auto shrink-0">{fmtTime(c.lastMessageAt)}</span>
+                              </div>
+                              <div className={`text-xs truncate ${unread ? 'text-slate-700 font-medium' : 'text-slate-500'}`}>
+                                {c.lastMessage ? (
+                                  <>
+                                    {c.lastMessage.senderId === currentUserId ? 'Bạn: ' : ((c.type === 'group' || c.type === 'channel') ? `${c.lastMessage.senderName.split(' ').pop()}: ` : '')}
+                                    {c.lastMessage.text}
+                                  </>
+                                ) : <span className="italic text-slate-400">Chưa có tin nhắn</span>}
+                              </div>
+                            </div>
+                            {unread && <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />}
+                          </div>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -339,15 +381,25 @@ function MessageThread({ conv, currentUserId, onBack }: { conv: ChatConversation
         <button onClick={onBack} className="md:hidden p-1 rounded hover:bg-slate-100 text-slate-600">
           <ChevronLeft size={20} />
         </button>
-        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold ${
-          conv.type === 'group' ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700'
-        }`}>
-          {conv.type === 'group' ? <Users size={15} /> : (dispName[0]?.toUpperCase() ?? '?')}
-        </div>
+        {(() => {
+          const av = convAvatarStyle(conv.type);
+          return (
+            <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold ${av.bg}`}>
+              {av.icon ?? (dispName[0]?.toUpperCase() ?? '?')}
+            </div>
+          );
+        })()}
         <div className="flex-1 min-w-0">
-          <div className="font-semibold text-slate-800 truncate">{dispName}</div>
+          <div className="font-semibold text-slate-800 truncate inline-flex items-center gap-1.5">
+            {conv.type === 'channel' && <Hash size={14} className="text-amber-600" />}
+            {dispName}
+          </div>
           <div className="text-xs text-slate-500">
-            {conv.type === 'group' ? `${memberCount} thành viên` : conv.participantNames[conv.participantIds.find((u) => u !== currentUserId) ?? '']}
+            {conv.type === 'channel'
+              ? `Kênh chung · ${memberCount} thành viên`
+              : conv.type === 'group'
+                ? `Nhóm · ${memberCount} thành viên`
+                : conv.participantNames[conv.participantIds.find((u) => u !== currentUserId) ?? '']}
           </div>
         </div>
       </div>

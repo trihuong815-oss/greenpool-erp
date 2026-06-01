@@ -1,7 +1,19 @@
-// Chat (Phase 13 — 1-1 + Group) — types, helpers, permission scope.
+// Chat (Phase 13 — 1-1 + Group + Channel) — types, helpers, permission scope.
 // Anh chốt 2026-06-01: mọi user active đều nhắn nhau được (không hạn chế cấp bậc).
 
-export type ConversationType = '1-1' | 'group';
+export type ConversationType = '1-1' | 'group' | 'channel';
+
+/** Channel = group đặc biệt do system tạo & maintain (theo cơ sở/phòng/công ty).
+ *  User không tự rời, ADMIN/CEO quản lý. participantIds resync khi đổi branch/dept. */
+export type ChannelKind = 'company' | 'branch' | 'department';
+
+export interface ChannelMeta {
+  kind: ChannelKind;
+  /** Required khi kind='branch' (HM/TK/CTT/24/TT). */
+  branchId?: string;
+  /** Required khi kind='department' (KT/DT/MKT/KE/NS/GS/TTNB). */
+  departmentId?: string;
+}
 
 export interface Conversation {
   id: string;
@@ -26,6 +38,11 @@ export interface Conversation {
   createdByName: string;
   /** Group only: chỉ owner add/remove member, đổi tên. */
   ownerId?: string;
+  /** Channel only — metadata để resync participants. */
+  channel?: ChannelMeta;
+  /** Channel only — true để UI khoá nút "Rời nhóm" + add member tự do.
+   *  System channels (do seed/admin sync tạo) luôn = true. */
+  systemManaged?: boolean;
 }
 
 export interface Message {
@@ -49,6 +66,32 @@ export function oneToOneConversationId(uidA: string, uidB: string): string {
   const [a, b] = [uidA, uidB].sort();
   return `dm_${a}__${b}`;
 }
+
+/** Deterministic doc id cho channel — re-seed idempotent. */
+export function channelConversationId(meta: ChannelMeta): string {
+  if (meta.kind === 'company') return 'ch_company_general';
+  if (meta.kind === 'branch') return `ch_branch_${meta.branchId}`;
+  if (meta.kind === 'department') return `ch_dept_${meta.departmentId}`;
+  throw new Error('Invalid channel meta');
+}
+
+/** 13 channels chuẩn (chốt 2026-06-01 — Phase 13.2):
+ *  1 toàn công ty + 5 cơ sở + 7 phòng ban. */
+export const STANDARD_CHANNELS: Array<{ name: string; meta: ChannelMeta }> = [
+  { name: 'Thông báo chung — Toàn công ty', meta: { kind: 'company' } },
+  { name: 'Cơ sở Hoàng Mai',     meta: { kind: 'branch', branchId: 'HM'  } },
+  { name: 'Cơ sở Thuỵ Khuê',     meta: { kind: 'branch', branchId: 'TK'  } },
+  { name: 'Cơ sở CTT Mỹ Đình',   meta: { kind: 'branch', branchId: 'CTT' } },
+  { name: 'Cơ sở 24 NCT',        meta: { kind: 'branch', branchId: '24'  } },
+  { name: 'Cơ sở Thanh Trì',     meta: { kind: 'branch', branchId: 'TT'  } },
+  { name: 'Phòng Kỹ thuật',       meta: { kind: 'department', departmentId: 'KT'   } },
+  { name: 'Phòng Đào tạo',        meta: { kind: 'department', departmentId: 'DT'   } },
+  { name: 'Phòng Marketing',      meta: { kind: 'department', departmentId: 'MKT'  } },
+  { name: 'Phòng Kế toán',        meta: { kind: 'department', departmentId: 'KE'   } },
+  { name: 'Phòng Nhân sự',        meta: { kind: 'department', departmentId: 'NS'   } },
+  { name: 'Phòng Giám sát',       meta: { kind: 'department', departmentId: 'GS'   } },
+  { name: 'Tổ Trang trí Nội bộ',  meta: { kind: 'department', departmentId: 'TTNB' } },
+];
 
 /** Cắt preview text cho lastMessage (200 ký tự). */
 export function previewText(text: string): string {

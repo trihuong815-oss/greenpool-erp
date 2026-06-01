@@ -15,6 +15,7 @@ export default async function TinNhanPage() {
         <TinNhanClient
           currentUserId={profile.id}
           currentUserName={profile.displayName ?? profile.email ?? ''}
+          currentUserRole={profile.roleCode}
         />
       </div>
     </>
