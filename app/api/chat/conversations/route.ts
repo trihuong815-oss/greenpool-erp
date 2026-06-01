@@ -114,13 +114,22 @@ export async function POST(req: NextRequest) {
     const all = sortedParticipants([caller.profile.uid, ...memberUids]).slice(0, 100);
     if (all.length < 2) return NextResponse.json({ error: 'Nhóm cần ≥ 2 người' }, { status: 400 });
 
-    // Lookup names cho participants
+    // SECURITY: validate mọi member tồn tại + status=active.
+    // Tránh client gửi uid bịa → conversation có người không tồn tại, hoặc gửi tin tới user đã off.
     const userDocs = await Promise.all(all.map((u) => db.collection(COLLECTIONS.USERS).doc(u).get()));
     const participantNames: Record<string, string> = {};
-    for (const d of userDocs) {
-      if (!d.exists) continue;
+    const invalid: string[] = [];
+    for (let i = 0; i < userDocs.length; i++) {
+      const d = userDocs[i];
+      if (!d.exists) { invalid.push(all[i]); continue; }
       const x = d.data()!;
+      if (x.status !== 'active') { invalid.push(all[i]); continue; }
       participantNames[d.id] = x.displayName ?? x.email ?? '?';
+    }
+    if (invalid.length > 0) {
+      return NextResponse.json({
+        error: `${invalid.length} thành viên không tồn tại hoặc đã ngừng hoạt động`,
+      }, { status: 400 });
     }
 
     const ref = db.collection(COL).doc();

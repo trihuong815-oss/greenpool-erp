@@ -301,6 +301,26 @@ service cloud.firestore {
       }
     }
 
+    // ---- Conversations + Messages (Phase 13 — Chat) ----
+    // Schema: participantIds[] (sorted), participantNames{}, lastMessage,
+    //         lastMessageAt, readBy{uid:ts}, typing{uid:ts}, channel?, type, ...
+    // READ:  CHỈ participant (uid trong participantIds). Áp dụng cho cả 1-1, group, channel.
+    // WRITE: CHỈ server (Admin SDK qua API routes /api/chat/*). Client-side write deny tuyệt đối.
+    // Pattern: subcollection messages dùng get() để kiểm tra membership của parent conv.
+    match /conversations/{cid} {
+      allow read:  if isSignedIn()
+        && request.auth.uid in resource.data.participantIds;
+      allow write: if false;
+
+      match /messages/{mid} {
+        // Subcollection — phải get() parent conv để check participant.
+        // 1 read parent per query (Firestore cache trong cùng request).
+        allow read:  if isSignedIn()
+          && request.auth.uid in get(/databases/$(database)/documents/conversations/$(cid)).data.participantIds;
+        allow write: if false;
+      }
+    }
+
     // ---- Catch-all deny ----
     match /{document=**} {
       allow read, write: if false;
