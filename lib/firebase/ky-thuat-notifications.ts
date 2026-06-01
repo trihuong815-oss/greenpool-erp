@@ -11,10 +11,20 @@ interface WorkDoc {
   branchId: string;
   createdBy: string;
   createdByName?: string;
-  assigneeId?: string | null;
-  assigneeName?: string;
+  // Multi-assignee (canonical từ 2026-06-01). Legacy: assigneeId (single).
+  assigneeIds?: string[];
+  assigneeNames?: string[];
+  assigneeId?: string | null;     // legacy — read-only fallback
+  assigneeName?: string;          // legacy
   proposalType?: 'expense' | 'professional';
   specialization?: 'HT' | 'XLN' | null;
+}
+
+// Đọc canonical assigneeIds, fallback assigneeId cho doc legacy.
+function getAssigneeIds(t: WorkDoc): string[] {
+  if (Array.isArray(t.assigneeIds) && t.assigneeIds.length > 0) return t.assigneeIds;
+  if (t.assigneeId) return [t.assigneeId];
+  return [];
 }
 
 const KIND_LABEL: Record<WorkDoc['kind'], string> = {
@@ -27,11 +37,11 @@ function workLink(): string {
   return '/ky-thuat/giao-viec';
 }
 
-/** Task KT được tạo — push assignee. */
+/** Task KT được tạo — push tất cả assignee (multi-assignee). */
 export async function notifyKtTaskCreated(task: WorkDoc): Promise<void> {
-  if (!task.assigneeId) return;
-  if (task.assigneeId === task.createdBy) return;
-  await pushToUser(task.assigneeId, {
+  const ids = getAssigneeIds(task).filter((u) => u !== task.createdBy);
+  if (ids.length === 0) return;
+  await pushToUsers(ids, {
     title: `${KIND_LABEL.task} mới`,
     body: `"${task.title}" — ${task.createdByName ?? 'cấp trên'} giao @${task.branchId}`,
     link: workLink(),
@@ -73,7 +83,7 @@ export async function notifyKtStatusChanged(
 ): Promise<void> {
   const recipients = new Set<string>();
   if (task.createdBy && task.createdBy !== actor.uid) recipients.add(task.createdBy);
-  if (task.assigneeId && task.assigneeId !== actor.uid) recipients.add(task.assigneeId);
+  for (const uid of getAssigneeIds(task)) if (uid !== actor.uid) recipients.add(uid);
   if (recipients.size === 0) return;
   const label = newStatus === 'done' ? '✓ hoàn thành'
     : newStatus === 'in_progress' ? '🔄 đang làm'

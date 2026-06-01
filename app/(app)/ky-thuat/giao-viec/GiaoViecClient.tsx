@@ -27,9 +27,11 @@ export interface WorkRow {
   createdBy: string;
   createdByName: string;
   createdByRole: string;
-  // task
-  assigneeId?: string | null;
-  assigneeName?: string;
+  // task — multi-assignee (canonical) + legacy fallback
+  assigneeIds?: string[];
+  assigneeNames?: string[];
+  assigneeId?: string | null;     // legacy
+  assigneeName?: string;          // legacy
   priority?: 'low' | 'normal' | 'high';
   specialization?: 'HT' | 'XLN' | null;
   dueDate?: string | null;
@@ -358,8 +360,14 @@ function WorkRowItem(props: {
   const busy = busyId === row.id;
 
   const isAdmin = myRoleCode === 'ADMIN' || myRoleCode === 'CEO' || myRoleCode === 'GD_KD' || myRoleCode === 'GD_VP' || myRoleCode === 'TP_KT';
+  const isAdminSystem = myRoleCode === 'ADMIN';
   const isCreator = row.createdBy === currentUserId;
-  const isAssignee = row.assigneeId === currentUserId;
+  // Multi-assignee: dùng assigneeIds nếu có, fallback assigneeId (legacy).
+  const assigneeIds: string[] = Array.isArray(row.assigneeIds) ? row.assigneeIds
+    : (row.assigneeId ? [row.assigneeId] : []);
+  const assigneeNames: string[] = Array.isArray(row.assigneeNames) && row.assigneeNames.length > 0 ? row.assigneeNames
+    : (row.assigneeName ? [row.assigneeName] : []);
+  const isAssignee = assigneeIds.includes(currentUserId);
 
   // Quyền duyệt proposal: TP_KT/admin any; QLCS branch mình cho expense; PP đúng specialization cho professional
   const canApproveThis = (() => {
@@ -375,7 +383,12 @@ function WorkRowItem(props: {
     return false;
   })();
 
-  const canChangeStatus = row.kind === 'task' && (isAssignee || isCreator || isAdmin);
+  // Quyền (anh chốt 2026-06-01):
+  //  - "Bắt đầu" + "Hoàn thành" → CHỈ assignee (người được giao). ADMIN system bypass cho data lỗi.
+  //  - "Huỷ" → creator (rút lệnh) hoặc assignee (từ chối) hoặc ADMIN.
+  //  - TP_KT/PP (người giao việc) KHÔNG ấn được Bắt đầu/Hoàn thành.
+  const canStartOrComplete = row.kind === 'task' && (isAssignee || isAdminSystem);
+  const canCancel = row.kind === 'task' && (isAssignee || isCreator || isAdminSystem);
   const canDelete = isCreator || isAdmin;
 
   return (
@@ -417,8 +430,8 @@ function WorkRowItem(props: {
           <div className="flex items-center gap-3 mt-2 text-xs text-slate-500 flex-wrap">
             <span className="inline-flex items-center gap-1"><UserCircle2 size={13} /> {row.createdByName} ({row.createdByRole})</span>
             <span className="inline-flex items-center gap-1"><Calendar size={13} /> {fmtDateTime(row.createdAt)}</span>
-            {row.kind === 'task' && row.assigneeName && (
-              <span className="inline-flex items-center gap-1 text-cyan-700">→ {row.assigneeName}</span>
+            {row.kind === 'task' && assigneeNames.length > 0 && (
+              <span className="inline-flex items-center gap-1 text-cyan-700">→ {assigneeNames.join(', ')}</span>
             )}
             {row.kind === 'task' && row.dueDate && (
               <span className="text-amber-700">Hạn: {row.dueDate}</span>
@@ -441,18 +454,24 @@ function WorkRowItem(props: {
 
         {/* Actions */}
         <div className="flex flex-col gap-1.5 items-end">
-          {canChangeStatus && row.kind === 'task' && row.status !== 'done' && row.status !== 'cancelled' && (
+          {row.kind === 'task' && row.status !== 'done' && row.status !== 'cancelled' && (
             <div className="flex gap-1.5">
-              {row.status === 'open' && (
+              {canStartOrComplete && row.status === 'open' && (
                 <button disabled={busy} onClick={() => onTaskStatusChange(row, 'in_progress')}
                   className="px-2.5 py-1 text-xs rounded-md bg-amber-50 text-amber-700 ring-1 ring-amber-200 hover:bg-amber-100 disabled:opacity-50">
                   Bắt đầu
                 </button>
               )}
-              {(row.status === 'open' || row.status === 'in_progress') && (
+              {canStartOrComplete && (row.status === 'open' || row.status === 'in_progress') && (
                 <button disabled={busy} onClick={() => onTaskStatusChange(row, 'done')}
                   className="px-2.5 py-1 text-xs rounded-md bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100 disabled:opacity-50">
                   Hoàn tất
+                </button>
+              )}
+              {canCancel && (
+                <button disabled={busy} onClick={() => onTaskStatusChange(row, 'cancelled')}
+                  className="px-2.5 py-1 text-xs rounded-md bg-slate-100 text-slate-600 ring-1 ring-slate-200 hover:bg-slate-200 disabled:opacity-50">
+                  Huỷ
                 </button>
               )}
             </div>
@@ -495,27 +514,34 @@ function TaskModal(props: {
   const [branchId, setBranchId] = useState(defaultBranchId ?? visibleBranchIds[0] ?? 'HM');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [assigneeId, setAssigneeId] = useState<string>('');
+  // Multi-assignee (anh chốt 2026-06-01): có thể giao cho nhiều người (vd PP + KTV).
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
   const [priority, setPriority] = useState<'low' | 'normal' | 'high'>('normal');
   const [specialization, setSpecialization] = useState<'HT' | 'XLN' | ''>('');
   const [dueDate, setDueDate] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // KTV filter theo branch + specialization
+  // KTV/PP filter theo branch + specialization
   const filteredAssignees = useMemo(() => assignees.filter((a) => {
     if (a.branchId !== branchId) return false;
     if (specialization && a.specialization !== specialization) return false;
     return true;
   }), [assignees, branchId, specialization]);
 
+  function toggleAssignee(uid: string) {
+    setAssigneeIds((prev) => prev.includes(uid) ? prev.filter((x) => x !== uid) : [...prev, uid]);
+  }
+
   async function save() {
     if (!title.trim()) { onError('Nhập tiêu đề'); return; }
+    if (assigneeIds.length === 0) { onError('Phải chọn ít nhất 1 người được giao'); return; }
     setSaving(true);
     try {
-      const a = filteredAssignees.find((x) => x.uid === assigneeId);
+      const chosen = filteredAssignees.filter((x) => assigneeIds.includes(x.uid));
       await workApi.createTask({
         branchId, title: title.trim(), description: description.trim() || undefined,
-        assigneeId: a?.uid ?? null, assigneeName: a?.displayName ?? '',
+        assigneeIds: chosen.map((a) => a.uid),
+        assigneeNames: chosen.map((a) => a.displayName),
         priority, specialization: specialization || null,
         dueDate: dueDate || null,
       });
@@ -529,7 +555,7 @@ function TaskModal(props: {
     <ModalShell title="Giao việc mới" onClose={onClose}>
       <div className="space-y-3">
         <Field label="Cơ sở">
-          <select value={branchId} onChange={(e) => { setBranchId(e.target.value); setAssigneeId(''); }} className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm">
+          <select value={branchId} onChange={(e) => { setBranchId(e.target.value); setAssigneeIds([]); }} className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm">
             {visibleBranchIds.map((b) => <option key={b} value={b}>{branchLabels[b] ?? b}</option>)}
           </select>
         </Field>
@@ -543,7 +569,7 @@ function TaskModal(props: {
         </Field>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Field label="Chuyên môn">
-            <select value={specialization} onChange={(e) => { setSpecialization(e.target.value as any); setAssigneeId(''); }}
+            <select value={specialization} onChange={(e) => { setSpecialization(e.target.value as any); setAssigneeIds([]); }}
               className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm">
               <option value="">— Cả 2 —</option>
               <option value="HT">Hệ thống</option>
@@ -559,18 +585,27 @@ function TaskModal(props: {
             </select>
           </Field>
         </div>
-        <Field label="Giao cho KTV">
-          <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}
-            className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm">
-            <option value="">— Không gán cụ thể —</option>
-            {filteredAssignees.map((a) => (
-              <option key={a.uid} value={a.uid}>
-                {a.displayName} · {a.specialization ?? '?'} · {a.roleId}
-              </option>
-            ))}
-          </select>
-          {filteredAssignees.length === 0 && (
-            <p className="text-xs text-slate-500 mt-1">Không có KTV phù hợp ở cơ sở này.</p>
+        <Field label="Giao cho (chọn ≥1 người)">
+          {filteredAssignees.length === 0 ? (
+            <p className="text-xs text-slate-500 py-2">Không có người phù hợp ở cơ sở này.</p>
+          ) : (
+            <div className="border border-slate-300 rounded-md max-h-48 overflow-auto divide-y divide-slate-100">
+              {filteredAssignees.map((a) => {
+                const checked = assigneeIds.includes(a.uid);
+                return (
+                  <label key={a.uid} className={`flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-slate-50 ${checked ? 'bg-cyan-50' : ''}`}>
+                    <input type="checkbox" checked={checked} onChange={() => toggleAssignee(a.uid)} className="rounded" />
+                    <span className="flex-1">
+                      <span className="font-medium text-slate-800">{a.displayName}</span>
+                      <span className="text-xs text-slate-500 ml-2">{a.specialization ?? '—'} · {a.roleId}</span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+          {assigneeIds.length > 0 && (
+            <p className="text-xs text-cyan-700 mt-1">Đã chọn {assigneeIds.length} người</p>
           )}
         </Field>
         <Field label="Hạn hoàn thành">

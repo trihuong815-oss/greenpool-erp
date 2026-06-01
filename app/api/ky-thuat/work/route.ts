@@ -106,8 +106,16 @@ export async function POST(req: NextRequest) {
     };
 
     if (kind === 'task') {
-      doc.assigneeId = String(body?.assigneeId ?? '').trim() || null;
-      doc.assigneeName = String(body?.assigneeName ?? '').trim();
+      // Multi-assignee (anh chốt 2026-06-01): 1 task có thể giao cho N người (vd PP + KTV).
+      const rawIds = Array.isArray(body?.assigneeIds) ? body.assigneeIds : [];
+      const rawNames = Array.isArray(body?.assigneeNames) ? body.assigneeNames : [];
+      const assigneeIds: string[] = rawIds.filter((x: unknown) => typeof x === 'string' && x.trim().length > 0).slice(0, 20);
+      const assigneeNames: string[] = rawNames.filter((x: unknown) => typeof x === 'string').slice(0, 20);
+      if (assigneeIds.length === 0) {
+        return NextResponse.json({ error: 'Phải chọn ít nhất 1 người được giao' }, { status: 400 });
+      }
+      doc.assigneeIds = assigneeIds;
+      doc.assigneeNames = assigneeNames;
       doc.priority = String(body?.priority ?? 'normal');
       doc.specialization = body?.specialization === 'HT' || body?.specialization === 'XLN' ? body.specialization : null;
       doc.dueDate = String(body?.dueDate ?? '').trim() || null;
@@ -143,8 +151,8 @@ export async function POST(req: NextRequest) {
       await ktNoti.notifyKtTaskCreated({
         id: ref.id, kind: 'task', title, branchId,
         createdBy: caller.profile.uid, createdByName: caller.actorName,
-        assigneeId: (doc as any).assigneeId,
-        assigneeName: (doc as any).assigneeName,
+        assigneeIds: (doc as any).assigneeIds,
+        assigneeNames: (doc as any).assigneeNames,
       });
     } else if (kind === 'proposal') {
       await ktNoti.notifyKtProposalCreated({
@@ -185,12 +193,26 @@ export async function PATCH(req: NextRequest) {
     if (action === 'status_change') {
       const newStatus = String(body?.status ?? '');
       if (!VALID_STATUS.has(newStatus)) return NextResponse.json({ error: 'status không hợp lệ' }, { status: 400 });
-      // Permission: assignee có thể đổi task status; admin/creator có thể cancel.
-      const isAssignee = data.assigneeId === caller.profile.uid;
+      // Quyền (anh chốt 2026-06-01):
+      //  - "Bắt đầu" (open→in_progress) + "Hoàn thành" (in_progress→done): CHỈ assignee.
+      //  - "Huỷ" (→cancelled): cho phép cả creator (rút lệnh) + assignee (từ chối) + ADMIN.
+      //  - Người giao việc (TP_KT, PP, …) KHÔNG được ấn bắt đầu/hoàn thành thay assignee.
+      // Backward read: assigneeIds (array, canonical) HOẶC assigneeId (single, legacy).
+      const aIds: string[] = Array.isArray(data.assigneeIds) ? data.assigneeIds : (data.assigneeId ? [data.assigneeId] : []);
+      const isAssignee = aIds.includes(caller.profile.uid);
       const isCreator = data.createdBy === caller.profile.uid;
+      const isAdminSystem = caller.profile.role_code === 'ADMIN';
       if (data.kind === 'task') {
-        if (!isAssignee && !isCreator && !canCreateTask(caller.profile)) {
-          return NextResponse.json({ error: 'Không có quyền đổi status' }, { status: 403 });
+        const isCancelling = newStatus === 'cancelled';
+        if (isCancelling) {
+          if (!isAssignee && !isCreator && !isAdminSystem) {
+            return NextResponse.json({ error: 'Chỉ người được giao, người giao, hoặc admin được huỷ' }, { status: 403 });
+          }
+        } else {
+          // Bắt đầu / Hoàn thành: CHỈ assignee (ADMIN system bypass cho data lỗi)
+          if (!isAssignee && !isAdminSystem) {
+            return NextResponse.json({ error: 'Chỉ người được giao việc mới được ấn Bắt đầu/Hoàn thành. Người giao việc không được thay thế.' }, { status: 403 });
+          }
         }
         // Enforce flow: open → in_progress → done. Cho phép cancel ở mọi trạng thái chưa done.
         // Không cho phép quay lại (done → in_progress / open) hoặc skip giai đoạn.

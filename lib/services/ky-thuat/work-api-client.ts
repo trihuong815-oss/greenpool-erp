@@ -20,9 +20,11 @@ export interface WorkItem {
   createdByRole: string;
   updatedAt?: string;
 
-  // task
-  assigneeId?: string | null;
-  assigneeName?: string;
+  // task — multi-assignee canonical từ 2026-06-01 (legacy: assigneeId/assigneeName)
+  assigneeIds?: string[];
+  assigneeNames?: string[];
+  assigneeId?: string | null;     // legacy read-only
+  assigneeName?: string;          // legacy read-only
   priority?: 'low' | 'normal' | 'high';
   specialization?: Specialization | null;
   dueDate?: string | null;
@@ -65,8 +67,8 @@ export const workApi = {
     branchId: string;
     title: string;
     description?: string;
-    assigneeId?: string | null;
-    assigneeName?: string;
+    assigneeIds: string[];
+    assigneeNames: string[];
     priority?: 'low' | 'normal' | 'high';
     specialization?: Specialization | null;
     dueDate?: string | null;
