@@ -23,6 +23,8 @@ export interface ChatConversation {
   ownerId?: string;
   systemManaged?: boolean;
   channel?: { kind: 'company' | 'branch' | 'department'; branchId?: string; departmentId?: string };
+  /** Map uid → ISO timestamp lần báo typing cuối. UI filter > 8s là stale. */
+  typing?: Record<string, string>;
 }
 
 export interface ChatAttachment {
@@ -30,7 +32,28 @@ export interface ChatAttachment {
   fileName: string;
   mime: string;
   size: number;
-  kind: 'image' | 'file';
+  kind: 'image' | 'file' | 'voice';
+  width?: number;
+  height?: number;
+  duration?: number;
+}
+
+export interface ChatReplyRef {
+  id: string;
+  text: string;
+  senderName: string;
+  preview: 'image' | 'file' | 'voice' | 'sticker' | 'text';
+}
+
+export interface ChatForwardRef {
+  senderName: string;
+  fromConversationName?: string;
+  forwardedAt: string;
+}
+
+export interface ChatStickerRef {
+  packId: string;
+  stickerId: string;
 }
 
 export interface ChatMessage {
@@ -41,6 +64,9 @@ export interface ChatMessage {
   text: string;
   attachments?: ChatAttachment[];
   reactions?: Record<string, string[]>;   // emoji → uid[]
+  replyTo?: ChatReplyRef | null;
+  forwardedFrom?: ChatForwardRef | null;
+  sticker?: ChatStickerRef | null;
   sentAt: string;
 }
 
@@ -88,25 +114,42 @@ export const chatApi = {
     return (await jsonOrThrow<{ rows: ChatMessage[] }>(await fetch(url, { cache: 'no-store' }))).rows;
   },
 
-  async sendMessage(cid: string, text: string, attachments?: ChatAttachment[]): Promise<{ id: string }> {
+  async sendMessage(
+    cid: string,
+    text: string,
+    opts?: {
+      attachments?: ChatAttachment[];
+      replyTo?: ChatReplyRef;
+      forwardedFrom?: ChatForwardRef;
+      sticker?: ChatStickerRef;
+    },
+  ): Promise<{ id: string }> {
     const res = await jsonOrThrow<{ ok: true; id: string }>(
       await fetch(`/api/chat/conversations/${encodeURIComponent(cid)}/messages`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, attachments: attachments ?? [] }),
+        body: JSON.stringify({
+          text,
+          attachments: opts?.attachments ?? [],
+          replyTo: opts?.replyTo,
+          forwardedFrom: opts?.forwardedFrom,
+          sticker: opts?.sticker,
+        }),
       }),
     );
     return { id: res.id };
   },
 
-  /** Upload 1 file vào conv → server lưu Storage + trả metadata (chưa tạo message). */
-  async uploadAttachment(cid: string, file: File): Promise<ChatAttachment> {
+  /** Upload 1 file vào conv → server lưu Storage + trả metadata (chưa tạo message).
+   *  opts.kind='voice' → server gắn kind='voice' (file phải có mime audio/*). */
+  async uploadAttachment(cid: string, file: File, opts?: { kind?: 'voice'; duration?: number }): Promise<ChatAttachment> {
     const form = new FormData();
     form.append('file', file);
+    const qs = new URLSearchParams();
+    if (opts?.kind) qs.set('kind', opts.kind);
+    if (typeof opts?.duration === 'number') qs.set('duration', String(opts.duration));
+    const url = `/api/chat/conversations/${encodeURIComponent(cid)}/attachments${qs.toString() ? '?' + qs.toString() : ''}`;
     const res = await jsonOrThrow<{ ok: true; attachment: ChatAttachment }>(
-      await fetch(`/api/chat/conversations/${encodeURIComponent(cid)}/attachments`, {
-        method: 'POST',
-        body: form,
-      }),
+      await fetch(url, { method: 'POST', body: form }),
     );
     return res.attachment;
   },
@@ -124,6 +167,22 @@ export const chatApi = {
     await jsonOrThrow<{ ok: true }>(await fetch(`/api/chat/conversations/${encodeURIComponent(cid)}/read`, {
       method: 'POST',
     }));
+  },
+
+  async setTyping(cid: string, on: boolean): Promise<void> {
+    // Fire-and-forget — typing state không critical, không await error.
+    fetch(`/api/chat/conversations/${encodeURIComponent(cid)}/typing`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ on }),
+    }).catch(() => {});
+  },
+
+  // ─── Search ───
+  async searchInConv(cid: string, q: string): Promise<Array<{ id: string; senderId: string; senderName: string; text: string; sentAt: string }>> {
+    const url = `/api/chat/conversations/${encodeURIComponent(cid)}/search?q=${encodeURIComponent(q)}`;
+    return (await jsonOrThrow<{ rows: Array<{ id: string; senderId: string; senderName: string; text: string; sentAt: string }> }>(
+      await fetch(url, { cache: 'no-store' }),
+    )).rows;
   },
 
   // ─── Admin ───

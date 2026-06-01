@@ -45,7 +45,7 @@ export interface Conversation {
   systemManaged?: boolean;
 }
 
-export type AttachmentKind = 'image' | 'file';
+export type AttachmentKind = 'image' | 'file' | 'voice';
 
 export interface MessageAttachment {
   path: string;           // Firebase Storage path
@@ -56,6 +56,31 @@ export interface MessageAttachment {
   /** Ảnh: width/height nếu detect được client-side trước khi upload */
   width?: number;
   height?: number;
+  /** Voice: thời lượng (giây) — cho UI hiển thị "0:12" trước khi play */
+  duration?: number;
+}
+
+/** Snapshot tin gốc khi user reply — KHÔNG resolve lại live (tránh stale khi tin gốc bị xoá/edit). */
+export interface MessageReplyRef {
+  id: string;
+  text: string;                          // preview ≤ 200 ký tự
+  senderName: string;
+  /** 'image' | 'file' | 'voice' | 'text' | 'sticker' — để hiển thị icon đúng trong quote */
+  preview: 'image' | 'file' | 'voice' | 'text' | 'sticker';
+}
+
+/** Khi tin được forward sang conv khác. */
+export interface MessageForwardRef {
+  senderName: string;
+  /** Conv gốc — chỉ name (không link, người nhận chưa chắc thuộc conv gốc) */
+  fromConversationName?: string;
+  forwardedAt: string;                   // ISO
+}
+
+/** Sticker — Phase 4. Pack ID + sticker ID nội bộ (vd 'gp' / 'thumbs-up-1'). */
+export interface StickerRef {
+  packId: string;
+  stickerId: string;
 }
 
 export interface Message {
@@ -63,10 +88,16 @@ export interface Message {
   conversationId: string;
   senderId: string;
   senderName: string;
-  text: string;                           // có thể rỗng nếu chỉ gửi ảnh/file
+  text: string;                           // có thể rỗng nếu chỉ gửi ảnh/file/voice/sticker
   attachments?: MessageAttachment[];
   /** Map emoji → uid[] — uid xuất hiện 1 lần per emoji (toggle) */
   reactions?: Record<string, string[]>;
+  /** Reply quote tin trước đó */
+  replyTo?: MessageReplyRef;
+  /** Tin được chuyển tiếp từ conv khác */
+  forwardedFrom?: MessageForwardRef;
+  /** Sticker — single sticker per message */
+  sticker?: StickerRef;
   sentAt: string;
 }
 
@@ -78,27 +109,53 @@ export function isAllowedReaction(e: string): e is AllowedReaction {
   return (ALLOWED_REACTIONS as readonly string[]).includes(e);
 }
 
-/** Validation message: cho phép text rỗng nếu có ≥ 1 attachment. */
-export function validateMessagePayload(text: string, attachments?: MessageAttachment[]): string | null {
+/** Validation message: cho phép text rỗng nếu có ≥ 1 attachment hoặc sticker. */
+export function validateMessagePayload(
+  text: string,
+  attachments?: MessageAttachment[],
+  sticker?: StickerRef,
+): string | null {
   const t = (text ?? '').trim();
   const hasAttach = Array.isArray(attachments) && attachments.length > 0;
-  if (!t && !hasAttach) return 'Tin nhắn phải có nội dung hoặc đính kèm';
+  const hasSticker = !!sticker;
+  if (!t && !hasAttach && !hasSticker) return 'Tin nhắn phải có nội dung, đính kèm hoặc sticker';
   if (t.length > 2000) return 'Tin nhắn quá dài (≤ 2000 ký tự)';
   if (hasAttach && attachments!.length > 10) return 'Tối đa 10 file đính kèm / tin';
+  // Voice: chỉ 1 file/tin (UX Zalo)
+  const voiceCount = (attachments ?? []).filter((a) => a.kind === 'voice').length;
+  if (voiceCount > 1) return 'Mỗi tin nhắn chỉ chứa 1 file thoại';
   return null;
 }
 
-/** Preview cho lastMessage: ưu tiên text, không có thì show file/ảnh đầu. */
-export function previewMessage(text: string, attachments?: MessageAttachment[]): string {
+/** Preview cho lastMessage: ưu tiên text, không có thì show file/ảnh/voice/sticker. */
+export function previewMessage(text: string, attachments?: MessageAttachment[], sticker?: StickerRef): string {
   const t = (text ?? '').trim();
   if (t) return previewText(t);
+  if (sticker) return '🎨 Sticker';
   if (Array.isArray(attachments) && attachments.length > 0) {
     const first = attachments[0];
+    if (first.kind === 'voice') return '🎙️ Tin thoại';
     const tag = first.kind === 'image' ? '📷' : '📎';
     if (attachments.length === 1) return `${tag} ${first.kind === 'image' ? 'Ảnh' : first.fileName}`;
     return `${tag} ${attachments.length} ${first.kind === 'image' ? 'ảnh' : 'file'}`;
   }
   return '';
+}
+
+/** Snapshot tin gốc khi user reply — chốt preview tại thời điểm reply (immutable). */
+export function buildReplyRef(msg: Message): MessageReplyRef {
+  let preview: MessageReplyRef['preview'] = 'text';
+  if (msg.sticker) preview = 'sticker';
+  else if (Array.isArray(msg.attachments) && msg.attachments.length > 0) {
+    const k = msg.attachments[0].kind;
+    preview = k === 'image' ? 'image' : k === 'voice' ? 'voice' : 'file';
+  }
+  return {
+    id: msg.id,
+    text: previewText(msg.text || ''),
+    senderName: msg.senderName,
+    preview,
+  };
 }
 
 /** Sorted unique array — dùng làm canonical participantIds. */

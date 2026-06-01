@@ -13,8 +13,10 @@ function sanitize(name: string): string {
   return name.replace(/[^\w.\-]/g, '_').slice(0, 100);
 }
 
-function detectKind(mime: string): 'image' | 'file' {
-  return mime.startsWith('image/') ? 'image' : 'file';
+function detectKind(mime: string, hint?: string | null): 'image' | 'file' | 'voice' {
+  if (hint === 'voice' && mime.startsWith('audio/')) return 'voice';
+  if (mime.startsWith('image/')) return 'image';
+  return 'file';
 }
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ cid: string }> }) {
@@ -33,10 +35,14 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ cid: strin
     const form = await req.formData();
     const file = form.get('file');
     if (!(file instanceof File)) return NextResponse.json({ error: 'Thiếu file' }, { status: 400 });
+    const kindHint = req.nextUrl.searchParams.get('kind');   // 'voice' để mark voice msg
+    const durationRaw = req.nextUrl.searchParams.get('duration');
+    const duration = durationRaw ? Math.max(0, Math.round(Number(durationRaw))) : undefined;
+
     const fileName = file.name;
     const mime = file.type || 'application/octet-stream';
     const size = file.size;
-    // Tái sử dụng validator (ảnh + PDF + Office + ZIP, ≤ 20MB) — phù hợp scope chat.
+    // Tái sử dụng validator (ảnh + PDF + Office + ZIP + audio, ≤ 20MB) — phù hợp scope chat.
     const err = validateTaskAttachment({ type: mime, size });
     if (err) return NextResponse.json({ error: err }, { status: 400 });
 
@@ -48,10 +54,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ cid: strin
       metadata: { contentType: mime },
     });
 
-    return NextResponse.json({
-      ok: true,
-      attachment: { path, fileName, mime, size, kind: detectKind(mime) },
-    });
+    const kind = detectKind(mime, kindHint);
+    const attachment: Record<string, unknown> = { path, fileName, mime, size, kind };
+    if (kind === 'voice' && typeof duration === 'number' && duration > 0) attachment.duration = duration;
+
+    return NextResponse.json({ ok: true, attachment });
   } catch (e: any) {
     if (e instanceof UnauthorizedError) return NextResponse.json({ error: e.message }, { status: e.status });
     console.error('[chat attachments POST]', e?.code, e?.message);

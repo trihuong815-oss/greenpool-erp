@@ -6,11 +6,12 @@
 // Mỗi side dùng Firestore Web SDK listener riêng → tự cleanup khi unmount/switch conv.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { MessageCircle, Plus, Users, Send, Loader2, X, Search, AlertCircle, ChevronLeft, Hash, RefreshCw, Paperclip, ImageIcon, Smile, FileText, Download } from 'lucide-react';
+import { MessageCircle, Plus, Users, Send, Loader2, X, Search, AlertCircle, ChevronLeft, Hash, RefreshCw, Paperclip, ImageIcon, Smile, FileText, Download, CornerUpLeft, Forward, Mic, Square, Play, Pause, CheckCheck, Sticker } from 'lucide-react';
 import { collection, doc, onSnapshot, orderBy, query, limit, where, Timestamp } from 'firebase/firestore';
 import { ref as storageRef, getDownloadURL } from 'firebase/storage';
 import { getFirebaseClientDb, getFirebaseClientStorage } from '@/lib/firebase/client';
-import { chatApi, type ChatConversation, type ChatMessage, type ChatUser, type ChatAttachment } from '@/lib/services/chat/api-client';
+import { chatApi, type ChatConversation, type ChatMessage, type ChatUser, type ChatAttachment, type ChatReplyRef } from '@/lib/services/chat/api-client';
+import { STICKER_PACK, STICKER_PACK_ID, findSticker } from '@/lib/stickers';
 
 const REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🎉'] as const;
 
@@ -110,6 +111,10 @@ export function TinNhanClient({ currentUserId, currentUserName, currentUserRole 
             if (x.readBy) for (const [k, v] of Object.entries(x.readBy)) {
               readBy[k] = v instanceof Timestamp ? v.toDate().toISOString() : (v as any);
             }
+            const typing: Record<string, string> = {};
+            if (x.typing) for (const [k, v] of Object.entries(x.typing)) {
+              typing[k] = v instanceof Timestamp ? v.toDate().toISOString() : (v as any);
+            }
             return {
               id: d.id,
               type: x.type,
@@ -124,6 +129,7 @@ export function TinNhanClient({ currentUserId, currentUserName, currentUserRole 
               } : null,
               lastMessageAt: x.lastMessageAt instanceof Timestamp ? x.lastMessageAt.toDate().toISOString() : x.lastMessageAt,
               readBy,
+              typing,
               createdAt: x.createdAt instanceof Timestamp ? x.createdAt.toDate().toISOString() : x.createdAt,
               createdBy: x.createdBy,
               createdByName: x.createdByName ?? '',
@@ -323,6 +329,25 @@ function MessageThread({ conv, currentUserId, onBack }: { conv: ChatConversation
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   /** Emoji picker đang mở cho message nào (mid) */
   const [reactPickerFor, setReactPickerFor] = useState<string | null>(null);
+  /** Reply quote — set khi user click "Trả lời" trên 1 message; clear sau khi send. */
+  const [replyingTo, setReplyingTo] = useState<ChatReplyRef | null>(null);
+  /** Message đang chuyển tiếp — set khi user click "Chuyển tiếp" → mở modal chọn conv đích. */
+  const [forwardingMsg, setForwardingMsg] = useState<ChatMessage | null>(null);
+  /** Sticker picker open state */
+  const [stickerPickerOpen, setStickerPickerOpen] = useState(false);
+  /** Search panel state */
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQ, setSearchQ] = useState('');
+  const [searchResults, setSearchResults] = useState<Array<{ id: string; senderId: string; senderName: string; text: string; sentAt: string }>>([]);
+  const [searching, setSearching] = useState(false);
+  /** Voice recorder state */
+  const [recording, setRecording] = useState(false);
+  const [recordSeconds, setRecordSeconds] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaChunksRef = useRef<Blob[]>([]);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const recordTickRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recordStartRef = useRef<number>(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -391,12 +416,174 @@ function MessageThread({ conv, currentUserId, onBack }: { conv: ChatConversation
         uploaded.push(await chatApi.uploadAttachment(conv.id, f));
       }
       // 2. Send message (text + attachments). Nếu text rỗng, server vẫn chấp nhận vì có attachments.
-      await chatApi.sendMessage(conv.id, text, uploaded.length > 0 ? uploaded : undefined);
+      await chatApi.sendMessage(conv.id, text, {
+        attachments: uploaded.length > 0 ? uploaded : undefined,
+        replyTo: replyingTo ?? undefined,
+      });
       setInput('');
       setPendingFiles([]);
+      setReplyingTo(null);
+      stopTyping();
     } catch (e: any) {
       setError(e.message);
     } finally { setSending(false); }
+  }
+
+  // ── Typing indicator (throttle) ──
+  // Gọi setTyping(on=true) lần đầu user gõ → cooldown 4s không gọi lại.
+  // Khi user ngừng gõ 5s hoặc blur/send → setTyping(on=false).
+  const typingOnRef = useRef(false);
+  const typingResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function pingTyping() {
+    if (!typingOnRef.current) {
+      typingOnRef.current = true;
+      chatApi.setTyping(conv.id, true);
+    }
+    if (typingResetTimer.current) clearTimeout(typingResetTimer.current);
+    typingResetTimer.current = setTimeout(() => {
+      typingOnRef.current = false;
+      chatApi.setTyping(conv.id, false);
+    }, 5000);
+  }
+  function stopTyping() {
+    if (typingResetTimer.current) { clearTimeout(typingResetTimer.current); typingResetTimer.current = null; }
+    if (typingOnRef.current) {
+      typingOnRef.current = false;
+      chatApi.setTyping(conv.id, false);
+    }
+  }
+  // Cleanup khi đổi conv hoặc unmount
+  useEffect(() => () => stopTyping(), [conv.id]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Voice recording ──
+  async function startRecord() {
+    if (recording) return;
+    setError(null);
+    try {
+      if (typeof window === 'undefined' || !navigator.mediaDevices || typeof MediaRecorder === 'undefined') {
+        setError('Trình duyệt không hỗ trợ ghi âm (cần Chrome/Edge/Safari mới)');
+        return;
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+      // Chọn mime tốt nhất browser hỗ trợ
+      const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'];
+      const mime = candidates.find((m) => MediaRecorder.isTypeSupported(m)) ?? '';
+      const mr = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+      mediaChunksRef.current = [];
+      mr.ondataavailable = (e) => { if (e.data.size > 0) mediaChunksRef.current.push(e.data); };
+      mr.start();
+      mediaRecorderRef.current = mr;
+      setRecording(true);
+      recordStartRef.current = Date.now();
+      setRecordSeconds(0);
+      recordTickRef.current = setInterval(() => {
+        setRecordSeconds(Math.floor((Date.now() - recordStartRef.current) / 1000));
+      }, 250);
+    } catch (e: any) {
+      setError(e?.message ?? 'Không truy cập được mic');
+      setRecording(false);
+    }
+  }
+
+  function cleanupRecord() {
+    if (recordTickRef.current) { clearInterval(recordTickRef.current); recordTickRef.current = null; }
+    if (mediaStreamRef.current) {
+      for (const t of mediaStreamRef.current.getTracks()) t.stop();
+      mediaStreamRef.current = null;
+    }
+    mediaRecorderRef.current = null;
+    mediaChunksRef.current = [];
+    setRecording(false);
+    setRecordSeconds(0);
+  }
+
+  async function stopAndSendVoice() {
+    const mr = mediaRecorderRef.current;
+    if (!mr) { cleanupRecord(); return; }
+    const duration = Math.max(1, Math.floor((Date.now() - recordStartRef.current) / 1000));
+    setSending(true);
+    try {
+      const finalBlob: Blob = await new Promise((resolve) => {
+        mr.onstop = () => {
+          const type = mr.mimeType || 'audio/webm';
+          resolve(new Blob(mediaChunksRef.current, { type }));
+        };
+        mr.stop();
+      });
+      cleanupRecord();
+      const ext = finalBlob.type.includes('mp4') ? 'm4a' : finalBlob.type.includes('ogg') ? 'ogg' : 'webm';
+      const file = new File([finalBlob], `voice_${Date.now()}.${ext}`, { type: finalBlob.type });
+      const att = await chatApi.uploadAttachment(conv.id, file, { kind: 'voice', duration });
+      await chatApi.sendMessage(conv.id, '', { attachments: [att] });
+    } catch (e: any) {
+      setError(e?.message ?? 'Lỗi gửi tin thoại');
+      cleanupRecord();
+    } finally { setSending(false); }
+  }
+
+  function cancelRecord() {
+    const mr = mediaRecorderRef.current;
+    if (mr && mr.state !== 'inactive') { try { mr.stop(); } catch {} }
+    cleanupRecord();
+  }
+
+  // Cleanup mic khi unmount / đổi conv
+  useEffect(() => () => cleanupRecord(), [conv.id]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function runSearch(q: string) {
+    setSearchQ(q);
+    if (!q.trim()) { setSearchResults([]); return; }
+    setSearching(true);
+    try {
+      const rows = await chatApi.searchInConv(conv.id, q.trim());
+      setSearchResults(rows);
+    } catch (e: any) {
+      setError(e.message);
+    } finally { setSearching(false); }
+  }
+
+  function jumpToMsg(mid: string) {
+    setSearchOpen(false);
+    setTimeout(() => {
+      const el = document.getElementById(`msg-${mid}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Flash highlight
+        el.classList.add('ring-2', 'ring-amber-400', 'rounded-lg');
+        setTimeout(() => el.classList.remove('ring-2', 'ring-amber-400', 'rounded-lg'), 2000);
+      }
+    }, 50);
+  }
+
+  async function sendSticker(stickerId: string) {
+    if (sending) return;
+    setSending(true);
+    setError(null);
+    try {
+      await chatApi.sendMessage(conv.id, '', {
+        sticker: { packId: STICKER_PACK_ID, stickerId },
+      });
+      setStickerPickerOpen(false);
+    } catch (e: any) {
+      setError(e.message);
+    } finally { setSending(false); }
+  }
+
+  function startReply(m: ChatMessage) {
+    // Snapshot tin gốc → quote sẽ ổn ngay cả khi tin gốc bị xoá sau này.
+    let preview: ChatReplyRef['preview'] = 'text';
+    if (m.sticker) preview = 'sticker';
+    else if ((m.attachments ?? []).length > 0) {
+      const k = m.attachments![0].kind;
+      preview = k === 'image' ? 'image' : k === 'voice' ? 'voice' : 'file';
+    }
+    setReplyingTo({
+      id: m.id,
+      text: (m.text || '').slice(0, 200),
+      senderName: m.senderName,
+      preview,
+    });
   }
 
   function pickFiles(e: React.ChangeEvent<HTMLInputElement>) {
@@ -439,14 +626,80 @@ function MessageThread({ conv, currentUserId, onBack }: { conv: ChatConversation
             {dispName}
           </div>
           <div className="text-xs text-slate-500">
-            {conv.type === 'channel'
-              ? `Kênh chung · ${memberCount} thành viên`
-              : conv.type === 'group'
-                ? `Nhóm · ${memberCount} thành viên`
-                : conv.participantNames[conv.participantIds.find((u) => u !== currentUserId) ?? '']}
+            {(() => {
+              // Người khác đang nhập (lọc stale > 8s + bỏ self)
+              const now = Date.now();
+              const typingNames = Object.entries(conv.typing ?? {})
+                .filter(([uid, iso]) => uid !== currentUserId && (now - new Date(iso).getTime()) < 8000)
+                .map(([uid]) => conv.participantNames[uid]?.split(' ').pop() ?? '?')
+                .slice(0, 3);
+              if (typingNames.length > 0) {
+                return <span className="text-emerald-600 italic">{typingNames.join(', ')} đang nhập...</span>;
+              }
+              return conv.type === 'channel'
+                ? `Kênh chung · ${memberCount} thành viên`
+                : conv.type === 'group'
+                  ? `Nhóm · ${memberCount} thành viên`
+                  : conv.participantNames[conv.participantIds.find((u) => u !== currentUserId) ?? ''];
+            })()}
           </div>
         </div>
+        <button
+          onClick={() => setSearchOpen((v) => !v)}
+          title="Tìm tin nhắn"
+          className={`p-2 rounded-full hover:bg-slate-100 ${searchOpen ? 'text-emerald-600 bg-slate-100' : 'text-slate-500'}`}
+        >
+          <Search size={18} />
+        </button>
       </div>
+
+      {searchOpen && (
+        <div className="border-b border-slate-200 bg-slate-50 p-3">
+          <div className="relative mb-2">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              autoFocus
+              value={searchQ}
+              onChange={(e) => runSearch(e.target.value)}
+              placeholder="Tìm trong cuộc trò chuyện..."
+              className="w-full pl-9 pr-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+            {searching && <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 animate-spin" />}
+          </div>
+          {searchQ.trim() && !searching && (
+            <div className="text-xs text-slate-500 mb-1">{searchResults.length} kết quả</div>
+          )}
+          {searchResults.length > 0 && (
+            <div className="max-h-64 overflow-y-auto bg-white ring-1 ring-slate-200 rounded-lg divide-y divide-slate-100">
+              {searchResults.map((r) => {
+                // Highlight keyword trong text
+                const idx = r.text.toLowerCase().indexOf(searchQ.toLowerCase());
+                return (
+                  <button
+                    key={r.id}
+                    onClick={() => jumpToMsg(r.id)}
+                    className="w-full text-left px-3 py-2 hover:bg-slate-50 text-xs"
+                  >
+                    <div className="font-semibold text-slate-700 flex items-center gap-2">
+                      {r.senderName}
+                      <span className="text-slate-400 font-normal">{fmtMsgTime(r.sentAt)}</span>
+                    </div>
+                    <div className="text-slate-600 mt-0.5 line-clamp-2">
+                      {idx >= 0 ? (
+                        <>
+                          {r.text.slice(Math.max(0, idx - 30), idx)}
+                          <mark className="bg-amber-200 text-amber-900 rounded px-0.5">{r.text.slice(idx, idx + searchQ.length)}</mark>
+                          {r.text.slice(idx + searchQ.length, idx + searchQ.length + 80)}
+                        </>
+                      ) : r.text.slice(0, 120)}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-2">
         {loading && (
@@ -463,12 +716,48 @@ function MessageThread({ conv, currentUserId, onBack }: { conv: ChatConversation
           const showSender = (conv.type === 'group' || conv.type === 'channel') && !isMine && (!prev || prev.senderId !== m.senderId);
           const images = (m.attachments ?? []).filter((a) => a.kind === 'image');
           const files = (m.attachments ?? []).filter((a) => a.kind === 'file');
+          const voices = (m.attachments ?? []).filter((a) => a.kind === 'voice');
           const reactionEntries = Object.entries(m.reactions ?? {}).filter(([, uids]) => Array.isArray(uids) && uids.length > 0);
+          // Read receipt: chỉ hiển thị dưới tin CUỐI của tôi (tránh spam under mọi tin)
+          let isLastMine = false;
+          if (isMine) {
+            isLastMine = true;
+            for (let j = i + 1; j < messages.length; j++) {
+              if (messages[j].senderId === currentUserId) { isLastMine = false; break; }
+            }
+          }
           return (
-            <div key={m.id} className={`group flex ${isMine ? 'justify-end' : 'justify-start'} relative`}>
+            <div key={m.id} id={`msg-${m.id}`} className={`group flex ${isMine ? 'justify-end' : 'justify-start'} relative`}>
               <div className="max-w-[75%] flex flex-col gap-1 items-stretch">
                 {showSender && (
                   <div className="text-[10px] text-slate-500 mb-0.5 ml-3">{m.senderName}</div>
+                )}
+                {/* Forwarded badge — hiện trên cùng nếu tin là forward */}
+                {m.forwardedFrom && (
+                  <div className={`${isMine ? 'self-end' : 'self-start'} text-[10px] text-slate-500 italic inline-flex items-center gap-1`}>
+                    <Forward size={10} /> Chuyển tiếp từ {m.forwardedFrom.senderName}
+                    {m.forwardedFrom.fromConversationName ? ` · ${m.forwardedFrom.fromConversationName}` : ''}
+                  </div>
+                )}
+                {/* Quote tin được reply (snapshot) — click để scroll tới tin gốc */}
+                {m.replyTo && (
+                  <button
+                    onClick={() => document.getElementById(`msg-${m.replyTo!.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+                    className={`${isMine ? 'self-end' : 'self-start'} text-left px-3 py-1.5 rounded-lg border-l-2 text-xs max-w-full ${
+                      isMine
+                        ? 'bg-emerald-100/60 border-emerald-400 hover:bg-emerald-100'
+                        : 'bg-slate-100 border-slate-400 hover:bg-slate-200'
+                    }`}
+                  >
+                    <div className="font-semibold text-slate-700 truncate">↩ {m.replyTo.senderName}</div>
+                    <div className="text-slate-600 truncate">
+                      {m.replyTo.preview === 'image' ? '📷 Ảnh'
+                        : m.replyTo.preview === 'voice' ? '🎙️ Tin thoại'
+                        : m.replyTo.preview === 'sticker' ? '🎨 Sticker'
+                        : m.replyTo.preview === 'file' ? '📎 File'
+                        : m.replyTo.text || '(không có nội dung)'}
+                    </div>
+                  </button>
                 )}
                 {/* Ảnh: grid theo số lượng */}
                 {images.length > 0 && (
@@ -485,6 +774,21 @@ function MessageThread({ conv, currentUserId, onBack }: { conv: ChatConversation
                     {files.map((a) => <ChatFile key={a.path} attachment={a} isMine={isMine} />)}
                   </div>
                 )}
+                {/* Voice */}
+                {voices.length > 0 && (
+                  <div className="space-y-1">
+                    {voices.map((a) => <ChatVoice key={a.path} attachment={a} isMine={isMine} />)}
+                  </div>
+                )}
+                {/* Sticker */}
+                {m.sticker && (() => {
+                  const s = findSticker(m.sticker.stickerId);
+                  return (
+                    <div className={`text-6xl ${isMine ? 'self-end' : 'self-start'} select-none leading-none`} title={s?.label ?? ''}>
+                      {s?.glyph ?? '❓'}
+                    </div>
+                  );
+                })()}
                 {/* Text bubble — chỉ hiển thị nếu có text */}
                 {m.text && (
                   <div className={`px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap break-words ${
@@ -514,25 +818,56 @@ function MessageThread({ conv, currentUserId, onBack }: { conv: ChatConversation
                     })}
                   </div>
                 )}
-                <div className={`text-[10px] text-slate-400 ${isMine ? 'text-right mr-1' : 'ml-3'}`}>{fmtMsgTime(m.sentAt)}</div>
+                <div className={`text-[10px] text-slate-400 ${isMine ? 'text-right mr-1' : 'ml-3'} inline-flex items-center gap-1 ${isMine ? 'self-end' : 'self-start'}`}>
+                  {fmtMsgTime(m.sentAt)}
+                  {isLastMine && (() => {
+                    // Đếm số participant (trừ tôi) đã đọc — readBy[uid] >= m.sentAt
+                    const sentAtMs = new Date(m.sentAt).getTime();
+                    const others = conv.participantIds.filter((u) => u !== currentUserId);
+                    const seenBy = others.filter((u) => {
+                      const r = conv.readBy[u];
+                      return r && new Date(r).getTime() >= sentAtMs;
+                    });
+                    if (seenBy.length === 0) return <span className="text-slate-400">· đã gửi</span>;
+                    if (conv.type === '1-1') {
+                      const ts = conv.readBy[seenBy[0]];
+                      return <span className="inline-flex items-center gap-0.5 text-emerald-600"><CheckCheck size={11} /> Đã xem {fmtMsgTime(ts)}</span>;
+                    }
+                    return <span className="inline-flex items-center gap-0.5 text-emerald-600"><CheckCheck size={11} /> Đã xem {seenBy.length}/{others.length}</span>;
+                  })()}
+                </div>
               </div>
-              {/* Hover/Tap → emoji picker */}
-              <div className={`absolute top-0 ${isMine ? 'right-full mr-1' : 'left-full ml-1'} opacity-0 group-hover:opacity-100 transition`}>
+              {/* Hover/Tap → action bar (Reply + Forward + React) */}
+              <div className={`absolute top-0 ${isMine ? 'right-full mr-1' : 'left-full ml-1'} opacity-0 group-hover:opacity-100 transition flex gap-1`}>
+                <button
+                  onClick={() => startReply(m)}
+                  className="p-1 rounded-full bg-white ring-1 ring-slate-200 hover:bg-slate-50 text-slate-500"
+                  title="Trả lời"
+                >
+                  <CornerUpLeft size={14} />
+                </button>
+                <button
+                  onClick={() => setForwardingMsg(m)}
+                  className="p-1 rounded-full bg-white ring-1 ring-slate-200 hover:bg-slate-50 text-slate-500"
+                  title="Chuyển tiếp"
+                >
+                  <Forward size={14} />
+                </button>
                 <button
                   onClick={() => setReactPickerFor(reactPickerFor === m.id ? null : m.id)}
-                  className="p-1 rounded-full bg-white ring-1 ring-slate-200 hover:bg-slate-50 text-slate-500"
-                  title="React"
+                  className="p-1 rounded-full bg-white ring-1 ring-slate-200 hover:bg-slate-50 text-slate-500 relative"
+                  title="Reaction"
                 >
                   <Smile size={14} />
+                  {reactPickerFor === m.id && (
+                    <div className="absolute top-7 left-1/2 -translate-x-1/2 bg-white ring-1 ring-slate-200 shadow-lg rounded-full px-2 py-1 flex gap-1 z-10">
+                      {REACTIONS.map((e) => (
+                        <button key={e} onClick={() => toggleReact(m.id, e)}
+                          className="text-lg hover:scale-125 transition">{e}</button>
+                      ))}
+                    </div>
+                  )}
                 </button>
-                {reactPickerFor === m.id && (
-                  <div className="absolute top-7 left-1/2 -translate-x-1/2 bg-white ring-1 ring-slate-200 shadow-lg rounded-full px-2 py-1 flex gap-1 z-10">
-                    {REACTIONS.map((e) => (
-                      <button key={e} onClick={() => toggleReact(m.id, e)}
-                        className="text-lg hover:scale-125 transition">{e}</button>
-                    ))}
-                  </div>
-                )}
               </div>
             </div>
           );
@@ -542,6 +877,26 @@ function MessageThread({ conv, currentUserId, onBack }: { conv: ChatConversation
       {error && (
         <div className="mx-4 mb-2 p-2 text-xs bg-rose-50 ring-1 ring-rose-200 rounded text-rose-700">{error}</div>
       )}
+      {/* Reply quote bar — hiện ngay trên textarea khi user click "Trả lời" */}
+      {replyingTo && (
+        <div className="px-3 py-2 border-t border-slate-100 bg-emerald-50/60 flex items-start gap-2">
+          <CornerUpLeft size={14} className="text-emerald-600 mt-1 shrink-0" />
+          <div className="flex-1 min-w-0 text-xs">
+            <div className="font-semibold text-emerald-700">Trả lời {replyingTo.senderName}</div>
+            <div className="text-slate-600 truncate">
+              {replyingTo.preview === 'image' ? '📷 Ảnh'
+                : replyingTo.preview === 'voice' ? '🎙️ Tin thoại'
+                : replyingTo.preview === 'sticker' ? '🎨 Sticker'
+                : replyingTo.preview === 'file' ? '📎 File'
+                : replyingTo.text || '(không có nội dung)'}
+            </div>
+          </div>
+          <button onClick={() => setReplyingTo(null)} className="text-slate-400 hover:text-slate-600 shrink-0">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       {/* Preview pending files trước khi gửi */}
       {pendingFiles.length > 0 && (
         <div className="px-3 py-2 border-t border-slate-100 bg-slate-50 flex flex-wrap gap-2">
@@ -561,35 +916,101 @@ function MessageThread({ conv, currentUserId, onBack }: { conv: ChatConversation
         <input ref={imageInputRef} type="file" accept="image/*" multiple hidden onChange={pickFiles} />
         <input ref={fileInputRef} type="file" multiple hidden onChange={pickFiles}
           accept="application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip" />
-        <button
-          onClick={() => imageInputRef.current?.click()} disabled={sending}
-          title="Đính ảnh"
-          className="p-2 rounded-full hover:bg-slate-100 text-slate-500 disabled:opacity-40"
-        ><ImageIcon size={18} /></button>
-        <button
-          onClick={() => fileInputRef.current?.click()} disabled={sending}
-          title="Đính file"
-          className="p-2 rounded-full hover:bg-slate-100 text-slate-500 disabled:opacity-40"
-        ><Paperclip size={18} /></button>
-        <textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
-          }}
-          placeholder="Nhập tin nhắn... (Enter để gửi, Shift+Enter xuống dòng)"
-          rows={1}
-          maxLength={2000}
-          className="flex-1 resize-none border border-slate-300 rounded-2xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 max-h-32"
-        />
-        <button
-          onClick={send}
-          disabled={sending || (!input.trim() && pendingFiles.length === 0)}
-          className="p-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-40 shrink-0"
-        >
-          {sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
-        </button>
+        {recording ? (
+          // Khi đang ghi âm — toàn bộ input bar thành record UI
+          <div className="flex-1 flex items-center gap-3 bg-rose-50 ring-1 ring-rose-200 rounded-2xl px-4 py-2">
+            <span className="inline-flex items-center gap-1 text-rose-700">
+              <span className="w-2 h-2 rounded-full bg-rose-600 animate-pulse" />
+              <span className="text-xs font-semibold tabular-nums">{String(Math.floor(recordSeconds/60)).padStart(2,'0')}:{String(recordSeconds%60).padStart(2,'0')}</span>
+            </span>
+            <span className="text-xs text-rose-700 italic flex-1">Đang ghi âm...</span>
+            <button onClick={cancelRecord} className="p-1.5 rounded-full hover:bg-rose-100 text-rose-700"
+              title="Huỷ ghi âm">
+              <X size={16} />
+            </button>
+            <button onClick={stopAndSendVoice} disabled={sending}
+              className="p-2 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-40"
+              title="Dừng & Gửi">
+              {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+            </button>
+          </div>
+        ) : (
+          <>
+            <button
+              onClick={() => imageInputRef.current?.click()} disabled={sending}
+              title="Đính ảnh"
+              className="p-2 rounded-full hover:bg-slate-100 text-slate-500 disabled:opacity-40"
+            ><ImageIcon size={18} /></button>
+            <button
+              onClick={() => fileInputRef.current?.click()} disabled={sending}
+              title="Đính file"
+              className="p-2 rounded-full hover:bg-slate-100 text-slate-500 disabled:opacity-40"
+            ><Paperclip size={18} /></button>
+            <button
+              onClick={startRecord} disabled={sending}
+              title="Ghi âm tin thoại"
+              className="p-2 rounded-full hover:bg-slate-100 text-slate-500 disabled:opacity-40"
+            ><Mic size={18} /></button>
+            <div className="relative">
+              <button
+                onClick={() => setStickerPickerOpen((v) => !v)} disabled={sending}
+                title="Sticker"
+                className={`p-2 rounded-full hover:bg-slate-100 disabled:opacity-40 ${stickerPickerOpen ? 'bg-slate-100 text-emerald-600' : 'text-slate-500'}`}
+              ><Sticker size={18} /></button>
+              {stickerPickerOpen && (
+                <div className="absolute bottom-full left-0 mb-2 bg-white ring-1 ring-slate-200 shadow-lg rounded-xl p-2 z-20 w-64">
+                  <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold px-1 pb-1">Green Pool stickers</div>
+                  <div className="grid grid-cols-4 gap-1">
+                    {STICKER_PACK.map((s) => (
+                      <button
+                        key={s.id}
+                        onClick={() => sendSticker(s.id)}
+                        disabled={sending}
+                        title={s.label}
+                        className="aspect-square text-3xl flex items-center justify-center rounded-lg hover:bg-slate-100 disabled:opacity-40"
+                      >{s.glyph}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            <textarea
+              value={input}
+              onChange={(e) => { setInput(e.target.value); if (e.target.value.length > 0) pingTyping(); else stopTyping(); }}
+              onBlur={stopTyping}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+              }}
+              placeholder="Nhập tin nhắn... (Enter để gửi, Shift+Enter xuống dòng)"
+              rows={1}
+              maxLength={2000}
+              className="flex-1 resize-none border border-slate-300 rounded-2xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 max-h-32"
+            />
+            <button
+              onClick={send}
+              disabled={sending || (!input.trim() && pendingFiles.length === 0)}
+              className="p-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-40 shrink-0"
+            >
+              {sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+            </button>
+          </>
+        )}
       </div>
+
+      {forwardingMsg && (
+        <ForwardMessageModal
+          msg={forwardingMsg}
+          fromConvName={convDisplayName(conv, currentUserId)}
+          currentUserId={currentUserId}
+          onClose={() => setForwardingMsg(null)}
+          onSent={(cid) => {
+            setForwardingMsg(null);
+            // Báo cho user biết đã chuyển; có thể giữ thread hiện tại hoặc chuyển sang conv đích.
+            // Em chọn không chuyển → user vẫn ở conv gốc, đỡ disorient.
+            void cid;
+          }}
+        />
+      )}
     </>
   );
 }
@@ -831,5 +1252,219 @@ function ChatFile({ attachment, isMine }: { attachment: ChatAttachment; isMine: 
       </div>
       <Download size={14} className={isMine ? 'text-emerald-50' : 'text-slate-400'} />
     </button>
+  );
+}
+
+// ─────────── ChatVoice ───────────
+// Voice player: load downloadURL lazy, play/pause + progress bar + duration.
+function ChatVoice({ attachment, isMine }: { attachment: ChatAttachment; isMine: boolean }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);          // 0..1
+  const [currentTime, setCurrentTime] = useState(0);    // giây
+  const [err, setErr] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const totalSec = attachment.duration ?? 0;
+
+  async function ensureUrl(): Promise<string | null> {
+    if (url) return url;
+    try {
+      const storage = getFirebaseClientStorage();
+      const r = storageRef(storage, attachment.path);
+      const u = await getDownloadURL(r);
+      setUrl(u);
+      return u;
+    } catch (e: any) { setErr(e?.message ?? 'Lỗi tải'); return null; }
+  }
+
+  async function toggle() {
+    const u = await ensureUrl();
+    if (!u) return;
+    let a = audioRef.current;
+    if (!a) {
+      a = new Audio(u);
+      audioRef.current = a;
+      a.ontimeupdate = () => {
+        if (a!.duration && Number.isFinite(a!.duration)) {
+          setProgress(a!.currentTime / a!.duration);
+          setCurrentTime(a!.currentTime);
+        }
+      };
+      a.onended = () => { setPlaying(false); setProgress(0); setCurrentTime(0); };
+      a.onpause = () => setPlaying(false);
+      a.onplay = () => setPlaying(true);
+    }
+    if (a.paused) { try { await a.play(); } catch (e: any) { setErr(e?.message ?? 'Không play được'); } }
+    else a.pause();
+  }
+
+  // Cleanup khi unmount — dừng audio nếu đang play
+  useEffect(() => () => {
+    if (audioRef.current) {
+      try { audioRef.current.pause(); } catch {}
+      audioRef.current = null;
+    }
+  }, []);
+
+  function fmtTime(s: number): string {
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    return `${m}:${String(sec).padStart(2, '0')}`;
+  }
+
+  return (
+    <div className={`flex items-center gap-2 px-3 py-2 rounded-2xl min-w-[200px] ${
+      isMine ? 'bg-emerald-600 text-white' : 'bg-white text-slate-800 ring-1 ring-slate-200'
+    }`}>
+      <button onClick={toggle}
+        className={`p-1.5 rounded-full shrink-0 ${
+          isMine ? 'bg-white/20 hover:bg-white/30' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+        }`}
+      >
+        {playing ? <Pause size={14} /> : <Play size={14} />}
+      </button>
+      <div className="flex-1 min-w-0">
+        <div className={`h-1.5 rounded-full overflow-hidden ${isMine ? 'bg-white/30' : 'bg-slate-200'}`}>
+          <div className={`h-full ${isMine ? 'bg-white' : 'bg-emerald-600'} transition-all`} style={{ width: `${progress * 100}%` }} />
+        </div>
+        <div className={`text-[10px] mt-0.5 ${isMine ? 'text-emerald-50/80' : 'text-slate-500'} tabular-nums`}>
+          {fmtTime(playing || progress > 0 ? currentTime : totalSec)}
+          {totalSec > 0 && ` / ${fmtTime(totalSec)}`}
+        </div>
+        {err && <div className="text-[10px] text-rose-200 mt-0.5">{err}</div>}
+      </div>
+      <Mic size={14} className={isMine ? 'text-emerald-50/80' : 'text-slate-400'} />
+    </div>
+  );
+}
+
+// ─────────── ForwardMessageModal ───────────
+// Chọn conv đích → call sendMessage với forwardedFrom (preserve text/attachments/sticker).
+// Realtime: list conv của user (cùng query với conv list chính).
+function ForwardMessageModal({ msg, fromConvName, currentUserId, onClose, onSent }: {
+  msg: ChatMessage;
+  fromConvName: string;
+  currentUserId: string;
+  onClose: () => void;
+  onSent: (cid: string) => void;
+}) {
+  const [convs, setConvs] = useState<ChatConversation[]>([]);
+  const [q, setQ] = useState('');
+  const [sending, setSending] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let unsub: (() => void) | null = null;
+    try {
+      const db = getFirebaseClientDb();
+      const qy = query(
+        collection(db, 'conversations'),
+        where('participantIds', 'array-contains', currentUserId),
+        orderBy('lastMessageAt', 'desc'),
+        limit(100),
+      );
+      unsub = onSnapshot(qy, (snap) => {
+        const rows: ChatConversation[] = snap.docs.map((d) => {
+          const x = d.data() as any;
+          const lm = x.lastMessage as any;
+          const readBy: Record<string, string> = {};
+          if (x.readBy) for (const [k, v] of Object.entries(x.readBy)) {
+            readBy[k] = v instanceof Timestamp ? v.toDate().toISOString() : (v as any);
+          }
+          return {
+            id: d.id, type: x.type, name: x.name,
+            participantIds: x.participantIds ?? [],
+            participantNames: x.participantNames ?? {},
+            lastMessage: lm ? { text: lm.text, senderId: lm.senderId, senderName: lm.senderName,
+              sentAt: lm.sentAt instanceof Timestamp ? lm.sentAt.toDate().toISOString() : lm.sentAt } : null,
+            lastMessageAt: x.lastMessageAt instanceof Timestamp ? x.lastMessageAt.toDate().toISOString() : x.lastMessageAt,
+            readBy,
+            createdAt: x.createdAt instanceof Timestamp ? x.createdAt.toDate().toISOString() : x.createdAt,
+            createdBy: x.createdBy, createdByName: x.createdByName ?? '',
+          };
+        });
+        setConvs(rows);
+      });
+    } catch (e: any) { setError(e.message); }
+    return () => { if (unsub) unsub(); };
+  }, [currentUserId]);
+
+  const filtered = useMemo(() => {
+    if (!q.trim()) return convs;
+    const t = q.toLowerCase();
+    return convs.filter((c) => convDisplayName(c, currentUserId).toLowerCase().includes(t));
+  }, [convs, q, currentUserId]);
+
+  async function forwardTo(cid: string) {
+    if (sending) return;
+    setSending(cid);
+    setError(null);
+    try {
+      // Preserve text + attachments + sticker; reset reactions + replyTo (không chuyển reply context).
+      await chatApi.sendMessage(cid, msg.text || '', {
+        attachments: (msg.attachments && msg.attachments.length > 0) ? msg.attachments : undefined,
+        sticker: msg.sticker ?? undefined,
+        forwardedFrom: {
+          senderName: msg.senderName,
+          fromConversationName: fromConvName,
+          forwardedAt: new Date().toISOString(),
+        },
+      });
+      onSent(cid);
+    } catch (e: any) {
+      setError(e.message); setSending(null);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+          <h3 className="font-semibold text-slate-800 inline-flex items-center gap-2"><Forward size={16} /> Chuyển tiếp</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
+        </div>
+        <div className="px-3 py-2 bg-slate-50 border-b border-slate-100 text-xs text-slate-600">
+          <span className="font-semibold">Từ {msg.senderName}:</span>{' '}
+          {msg.text ? <span className="italic">"{msg.text.slice(0, 100)}{msg.text.length > 100 ? '...' : ''}"</span>
+            : msg.sticker ? '🎨 Sticker'
+            : (msg.attachments?.[0]?.kind === 'image' ? '📷 Ảnh' : msg.attachments?.[0]?.kind === 'voice' ? '🎙️ Tin thoại' : '📎 File')}
+        </div>
+        <div className="p-3 border-b border-slate-100">
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm cuộc trò chuyện..."
+            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+        </div>
+        {error && <div className="mx-3 mt-2 p-2 text-xs bg-rose-50 text-rose-700 rounded">{error}</div>}
+        <div className="flex-1 overflow-y-auto">
+          {filtered.length === 0 && (
+            <div className="p-6 text-center text-sm text-slate-400">Không có cuộc trò chuyện phù hợp</div>
+          )}
+          <ul className="divide-y divide-slate-100">
+            {filtered.map((c) => {
+              const dispName = convDisplayName(c, currentUserId);
+              const av = convAvatarStyle(c.type);
+              const isSending = sending === c.id;
+              return (
+                <li key={c.id}>
+                  <button
+                    onClick={() => forwardTo(c.id)}
+                    disabled={!!sending}
+                    className="w-full text-left px-3 py-2.5 hover:bg-slate-50 disabled:opacity-50 flex items-center gap-3"
+                  >
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold shrink-0 ${av.bg}`}>
+                      {av.icon ?? (dispName[0]?.toUpperCase() ?? '?')}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-slate-800 truncate">{dispName}</div>
+                      <div className="text-[10px] text-slate-500">{c.type === 'channel' ? 'Kênh' : c.type === 'group' ? 'Nhóm' : 'Tin nhắn'}</div>
+                    </div>
+                    {isSending && <Loader2 size={14} className="animate-spin text-emerald-600" />}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -6,7 +6,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getFirebaseAdminDb } from '@/lib/firebase/admin';
 import { COLLECTIONS, SUBCOLLECTIONS } from '@/lib/firebase/collections';
 import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-auth';
-import { isParticipant, previewMessage, validateMessagePayload, type MessageAttachment } from '@/lib/firebase/chat-scope';
+import {
+  isParticipant, previewMessage, validateMessagePayload,
+  type MessageAttachment, type MessageReplyRef, type MessageForwardRef, type StickerRef,
+} from '@/lib/firebase/chat-scope';
 import { Timestamp } from 'firebase-admin/firestore';
 
 const COL = COLLECTIONS.CONVERSATIONS;
@@ -22,20 +25,68 @@ function serMsg(id: string, d: Record<string, any>) {
     text: d.text ?? '',
     attachments: Array.isArray(d.attachments) ? d.attachments : [],
     reactions: d.reactions && typeof d.reactions === 'object' ? d.reactions : {},
+    replyTo: d.replyTo ?? null,
+    forwardedFrom: d.forwardedFrom ?? null,
+    sticker: d.sticker ?? null,
     sentAt: d.sentAt instanceof Timestamp ? d.sentAt.toDate().toISOString() : d.sentAt,
   };
 }
 
 function sanitizeAttachments(input: unknown): MessageAttachment[] {
   if (!Array.isArray(input)) return [];
-  return input.slice(0, 10).map((x) => {
-    if (!x || typeof x !== 'object') return null;
+  const out: MessageAttachment[] = [];
+  for (const x of input.slice(0, 10)) {
+    if (!x || typeof x !== 'object') continue;
     const a = x as any;
     if (typeof a.path !== 'string' || typeof a.fileName !== 'string' || typeof a.mime !== 'string'
-        || typeof a.size !== 'number') return null;
-    const kind: 'image' | 'file' = a.mime.startsWith('image/') ? 'image' : 'file';
-    return { path: a.path, fileName: a.fileName, mime: a.mime, size: a.size, kind };
-  }).filter((x): x is MessageAttachment => x !== null);
+        || typeof a.size !== 'number') continue;
+    // Voice: client phải truyền kind='voice' tường minh (vì mime audio/* không đảm bảo là voice).
+    const kind: MessageAttachment['kind'] = a.kind === 'voice'
+      ? 'voice'
+      : a.mime.startsWith('image/') ? 'image' : 'file';
+    const att: MessageAttachment = { path: a.path, fileName: a.fileName, mime: a.mime, size: a.size, kind };
+    if (kind === 'voice' && typeof a.duration === 'number' && a.duration > 0) att.duration = Math.round(a.duration);
+    if (kind === 'image') {
+      if (typeof a.width === 'number') att.width = a.width;
+      if (typeof a.height === 'number') att.height = a.height;
+    }
+    out.push(att);
+  }
+  return out;
+}
+
+function sanitizeReplyTo(input: unknown): MessageReplyRef | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+  const r = input as any;
+  if (typeof r.id !== 'string' || typeof r.senderName !== 'string') return undefined;
+  const preview: MessageReplyRef['preview'] = (['image','file','voice','sticker','text'] as const).includes(r.preview)
+    ? r.preview : 'text';
+  return {
+    id: r.id,
+    text: typeof r.text === 'string' ? r.text.slice(0, 200) : '',
+    senderName: r.senderName.slice(0, 100),
+    preview,
+  };
+}
+
+function sanitizeForwardedFrom(input: unknown): MessageForwardRef | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+  const f = input as any;
+  if (typeof f.senderName !== 'string') return undefined;
+  return {
+    senderName: f.senderName.slice(0, 100),
+    fromConversationName: typeof f.fromConversationName === 'string' ? f.fromConversationName.slice(0, 100) : undefined,
+    forwardedAt: new Date().toISOString(),
+  };
+}
+
+function sanitizeSticker(input: unknown): StickerRef | undefined {
+  if (!input || typeof input !== 'object') return undefined;
+  const s = input as any;
+  if (typeof s.packId !== 'string' || typeof s.stickerId !== 'string') return undefined;
+  // Whitelist: pack 'gp' (Green Pool default) — Phase 13.4 chỉ có 1 pack.
+  if (s.packId !== 'gp') return undefined;
+  return { packId: s.packId, stickerId: s.stickerId.slice(0, 50) };
 }
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ cid: string }> }) {
@@ -76,7 +127,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ cid: strin
     const body = await req.json();
     const text = String(body?.text ?? '');
     const attachments = sanitizeAttachments(body?.attachments);
-    const err = validateMessagePayload(text, attachments);
+    const replyTo = sanitizeReplyTo(body?.replyTo);
+    const forwardedFrom = sanitizeForwardedFrom(body?.forwardedFrom);
+    const sticker = sanitizeSticker(body?.sticker);
+    const err = validateMessagePayload(text, attachments, sticker);
     if (err) return NextResponse.json({ error: err }, { status: 400 });
 
     const db = getFirebaseAdminDb();
@@ -91,11 +145,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ cid: strin
     const now = Timestamp.now();
     const msgRef = convRef.collection(SUB).doc();
     const trimmed = text.trim();
-    const preview = previewMessage(trimmed, attachments);
+    const preview = previewMessage(trimmed, attachments, sticker);
 
     // Batch: insert message + update conv summary + mark sender đã đọc (last read = now).
     const batch = db.batch();
-    batch.set(msgRef, {
+    const msgDoc: Record<string, unknown> = {
       conversationId: cid,
       senderId: caller.profile.uid,
       senderName: caller.actorName ?? '',
@@ -103,7 +157,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ cid: strin
       attachments,
       reactions: {},
       sentAt: now,
-    });
+    };
+    if (replyTo) msgDoc.replyTo = replyTo;
+    if (forwardedFrom) msgDoc.forwardedFrom = forwardedFrom;
+    if (sticker) msgDoc.sticker = sticker;
+    batch.set(msgRef, msgDoc);
     batch.update(convRef, {
       lastMessage: {
         text: preview,

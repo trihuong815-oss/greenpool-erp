@@ -104,6 +104,11 @@ const TASK_ALLOWED_MIME = new Set([
   'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   'text/plain', 'text/csv',
   'application/zip', 'application/x-zip-compressed',
+  // Phase 13.4 — voice message từ MediaRecorder. Tuỳ browser:
+  //   Chrome: 'audio/webm;codecs=opus' → 'audio/webm'
+  //   Safari: 'audio/mp4' / 'audio/aac' / 'audio/wav'
+  //   Firefox: 'audio/ogg'
+  'audio/webm', 'audio/ogg', 'audio/mp4', 'audio/wav', 'audio/x-wav', 'audio/aac', 'audio/mpeg',
 ]);
 const TASK_MAX_SIZE = 20 * 1024 * 1024; // 20 MB
 
