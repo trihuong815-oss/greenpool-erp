@@ -263,13 +263,22 @@ export async function POST(req: NextRequest) {
     if (description.length > 5000) {
       return NextResponse.json({ error: 'Mô tả quá dài (≤ 5000 ký tự)' }, { status: 400 });
     }
-    const assigneeBlock = body?.assigneeBlock as Block;
+    // Proposal v2 (anh chốt 2026-06-01): với kind='proposal' thì creator = người thực thi sau khi duyệt.
+    // → Force assignee = creator để không xảy ra trường hợp approver trùng assignee → khoá nút Duyệt.
+    // Field assigneeDeptId/assigneeFacilityId/assigneeUserIds từ client bị bỏ qua với proposal.
+    const isProposal = kind === 'proposal';
+    const creatorBlockForAssignee = getBlockOf(caller.profile.role_code) ?? 'all';
+    const assigneeBlock = isProposal
+      ? (creatorBlockForAssignee === 'all' ? 'KD' : creatorBlockForAssignee as Block)
+      : body?.assigneeBlock as Block;
     if (!VALID_BLOCKS.has(assigneeBlock)) {
       return NextResponse.json({ error: 'assigneeBlock phải là KD hoặc VP' }, { status: 400 });
     }
-    const assigneeDeptId = body?.assigneeDeptId ?? null;
-    const assigneeFacilityId = body?.assigneeFacilityId ?? null;
-    const assigneeUserIds = Array.isArray(body?.assigneeUserIds) ? body.assigneeUserIds.filter((x: unknown) => typeof x === 'string').slice(0, 50) : [];
+    const assigneeDeptId = isProposal ? null : (body?.assigneeDeptId ?? null);
+    const assigneeFacilityId = isProposal ? null : (body?.assigneeFacilityId ?? null);
+    const assigneeUserIds = isProposal
+      ? [caller.profile.uid]
+      : (Array.isArray(body?.assigneeUserIds) ? body.assigneeUserIds.filter((x: unknown) => typeof x === 'string').slice(0, 50) : []);
 
     if (assigneeDeptId !== null) {
       if (!DEPT_BLOCK[assigneeDeptId]) {
@@ -323,7 +332,8 @@ export async function POST(req: NextRequest) {
     }
 
     // CEO restriction (spec 2026-05-27): CEO chỉ được giao việc cho GĐ Khối (GD_KD/GD_VP) cá nhân.
-    if (caller.profile.role_code === 'CEO') {
+    // Proposal exempt: CEO tạo đề xuất → assignee = chính CEO (force ở trên), không qua rule này.
+    if (caller.profile.role_code === 'CEO' && !isProposal) {
       if (assigneeDeptId || assigneeFacilityId) {
         return NextResponse.json({
           error: 'CEO chỉ giao việc cho GĐ Khối cụ thể (không phải phòng/cơ sở)',

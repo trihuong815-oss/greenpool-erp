@@ -174,7 +174,11 @@ export function TaskCreateModal(props: {
     let deptId: string | null = null;
     let facilityId: string | null = null;
     let userIds: string[] = [];
-    if (assigneeKind === 'department') {
+    if (kind === 'proposal') {
+      // Đề xuất v2 (2026-06-01): creator = executor. Server tự force assigneeUserIds=[creator].
+      // Approver tính theo proposalType + nhóm chi (xem computeApprovalPreview / API POST).
+      // Form không cần chọn assignee.
+    } else if (assigneeKind === 'department') {
       if (!assigneeDeptId) { setError('Chọn phòng ban'); return; }
       deptId = assigneeDeptId;
     } else if (assigneeKind === 'facility') {
@@ -182,14 +186,6 @@ export function TaskCreateModal(props: {
       facilityId = assigneeFacilityId;
     } else {
       if (assigneeUserIds.length === 0) { setError('Chọn ít nhất 1 người'); return; }
-      // Đề xuất: validate người nhận phải ≥ cấp người gửi
-      if (kind === 'proposal') {
-        const wrong = assigneeUserIds.find((uid) => {
-          const u = users.find((x) => x.id === uid);
-          return u && getRoleLevel(u.roleId) < myLevel;
-        });
-        if (wrong) { setError('Đề xuất chỉ được gửi cho người ngang cấp hoặc cấp trên — không gửi xuống cấp dưới.'); return; }
-      }
       userIds = assigneeUserIds;
     }
     // Đề xuất v2: tài chính + chi khác bắt buộc số tiền > 0; chi thường xuyên cost optional
@@ -353,103 +349,92 @@ export function TaskCreateModal(props: {
             </>
           )}
 
-          {/* Block radio */}
-          <Field label="Khối nhận">
-            <div className="flex gap-2">
-              {(['KD', 'VP'] as const).map((b) => (
+          {/* Block radio — chỉ cho giao việc; đề xuất không cần (creator = executor). */}
+          {kind !== 'proposal' && (
+            <Field label="Khối nhận">
+              <div className="flex gap-2">
+                {(['KD', 'VP'] as const).map((b) => (
+                  <button
+                    key={b}
+                    onClick={() => {
+                      setAssigneeBlock(b);
+                      setAssigneeDeptId('');
+                      setAssigneeFacilityId('');
+                      setAssigneeUserIds([]);
+                    }}
+                    className={`flex-1 px-4 py-2 rounded-lg text-sm font-semibold ring-1 transition ${
+                      assigneeBlock === b
+                        ? 'bg-emerald-600 text-white ring-emerald-600 shadow-sm'
+                        : 'bg-white text-slate-600 ring-slate-200 hover:ring-emerald-300 hover:text-emerald-700'
+                    }`}
+                  >
+                    {b === 'KD' ? '💼 Khối Kinh Doanh' : '📑 Khối Văn Phòng'}
+                    {b !== myBlock && myBlock !== 'all' && (
+                      <span className="ml-1 text-[10px] opacity-75">(liên khối)</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </Field>
+          )}
+
+          {/* Đề xuất: thông báo creator = executor — KHÔNG có "Gửi cho" vì đề xuất là xin duyệt, không phải giao việc */}
+          {kind === 'proposal' && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-900">
+              <div className="font-semibold mb-1">👤 Người thực hiện: Bạn (người tạo đề xuất)</div>
+              <div className="text-xs text-blue-700">
+                Sau khi đề xuất được duyệt, bạn vào chi tiết và ấn "Hoàn thành" khi đã thực hiện xong. Người duyệt sẽ tự xác định theo luồng phía trên.
+              </div>
+            </div>
+          )}
+
+          {/* Assignee kind picker — CHỈ cho giao việc. Proposal đã thông báo creator = executor ở trên. */}
+          {kind !== 'proposal' && (
+          <Field label="Giao cho">
+            <div className="flex gap-1 mb-2 bg-slate-100 p-1 rounded-lg">
+              {(['department', 'facility', 'user'] as const).map((k) => (
                 <button
-                  key={b}
-                  onClick={() => {
-                    setAssigneeBlock(b);
-                    setAssigneeDeptId('');
-                    setAssigneeFacilityId('');
-                    setAssigneeUserIds([]);
-                  }}
-                  className={`flex-1 px-4 py-2 rounded-lg text-sm font-semibold ring-1 transition ${
-                    assigneeBlock === b
-                      ? 'bg-emerald-600 text-white ring-emerald-600 shadow-sm'
-                      : 'bg-white text-slate-600 ring-slate-200 hover:ring-emerald-300 hover:text-emerald-700'
+                  key={k}
+                  onClick={() => { setAssigneeKind(k); setAssigneeUserIds([]); }}
+                  className={`flex-1 py-1.5 text-xs rounded font-medium ${
+                    assigneeKind === k ? 'bg-white shadow text-emerald-700' : 'text-slate-600 hover:bg-white/50'
                   }`}
                 >
-                  {b === 'KD' ? '💼 Khối Kinh Doanh' : '📑 Khối Văn Phòng'}
-                  {b !== myBlock && myBlock !== 'all' && (
-                    <span className="ml-1 text-[10px] opacity-75">(liên khối)</span>
-                  )}
+                  {k === 'department' ? 'Phòng ban' : k === 'facility' ? 'Cơ sở' : 'Cá nhân'}
                 </button>
               ))}
             </div>
-          </Field>
-
-          {/* Assignee kind picker — proposal: 3 nhóm rõ ràng (gửi TP phòng / QLCS cơ sở / Lãnh đạo cá nhân) */}
-          <Field label={kind === 'proposal' ? 'Gửi cho' : 'Giao cho'}>
-            <div className="flex gap-1 mb-2 bg-slate-100 p-1 rounded-lg">
-              {(['department', 'facility', 'user'] as const).map((k) => {
-                const labels = kind === 'proposal'
-                  ? { department: 'Phòng ban', facility: 'Cơ sở', user: 'Lãnh đạo' }
-                  : { department: 'Phòng ban', facility: 'Cơ sở', user: 'Cá nhân' };
-                return (
-                  <button
-                    key={k}
-                    onClick={() => { setAssigneeKind(k); setAssigneeUserIds([]); }}
-                    className={`flex-1 py-1.5 text-xs rounded font-medium ${
-                      assigneeKind === k ? 'bg-white shadow text-emerald-700' : 'text-slate-600 hover:bg-white/50'
-                    }`}
-                  >
-                    {labels[k]}
-                  </button>
-                );
-              })}
-            </div>
 
             {assigneeKind === 'department' && (
-              <>
-                <select
-                  value={assigneeDeptId}
-                  onChange={(e) => setAssigneeDeptId(e.target.value)}
-                  className={inputCls}
-                >
-                  <option value="">-- Chọn phòng --</option>
-                  {deptsInBlock.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name}{d.id === currentDepartmentId ? ' (phòng của bạn)' : ''}
-                    </option>
-                  ))}
-                </select>
-                {kind === 'proposal' && assigneeDeptId && (
-                  <div className={`mt-1.5 text-xs px-2 py-1.5 rounded ${autoResolvedRecipient ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>
-                    {autoResolvedRecipient ? `→ Gửi cho TP: ${autoResolvedRecipient}` : '⚠ Phòng này chưa có Trưởng phòng — đề xuất sẽ không có người nhận'}
-                  </div>
-                )}
-              </>
+              <select
+                value={assigneeDeptId}
+                onChange={(e) => setAssigneeDeptId(e.target.value)}
+                className={inputCls}
+              >
+                <option value="">-- Chọn phòng --</option>
+                {deptsInBlock.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}{d.id === currentDepartmentId ? ' (phòng của bạn)' : ''}
+                  </option>
+                ))}
+              </select>
             )}
             {assigneeKind === 'facility' && (
-              <>
-                <select
-                  value={assigneeFacilityId}
-                  onChange={(e) => setAssigneeFacilityId(e.target.value)}
-                  className={inputCls}
-                >
-                  <option value="">-- Chọn cơ sở --</option>
-                  {branches.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.id} · {b.name}{b.id === currentBranchId ? ' (cơ sở của bạn)' : ''}
-                    </option>
-                  ))}
-                </select>
-                {kind === 'proposal' && assigneeFacilityId && (
-                  <div className={`mt-1.5 text-xs px-2 py-1.5 rounded ${autoResolvedRecipient ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'}`}>
-                    {autoResolvedRecipient ? `→ Gửi cho QLCS: ${autoResolvedRecipient}` : '⚠ Cơ sở này chưa có QLCS — đề xuất sẽ không có người nhận'}
-                  </div>
-                )}
-              </>
+              <select
+                value={assigneeFacilityId}
+                onChange={(e) => setAssigneeFacilityId(e.target.value)}
+                className={inputCls}
+              >
+                <option value="">-- Chọn cơ sở --</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.id} · {b.name}{b.id === currentBranchId ? ' (cơ sở của bạn)' : ''}
+                  </option>
+                ))}
+              </select>
             )}
             {assigneeKind === 'user' && (
               <div className="max-h-40 overflow-auto border border-slate-200 rounded-lg p-2 bg-slate-50/40 space-y-1">
-                {kind === 'proposal' && (
-                  <div className="text-[10px] uppercase tracking-wider text-slate-500 px-2 pb-1 font-semibold">
-                    Lãnh đạo cấp trên
-                  </div>
-                )}
                 {usersInScope.length === 0 && (
                   <div className="text-xs text-slate-400 text-center py-3">Không có người nhận phù hợp</div>
                 )}
@@ -473,6 +458,7 @@ export function TaskCreateModal(props: {
               </div>
             )}
           </Field>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <Field label="Ưu tiên">
