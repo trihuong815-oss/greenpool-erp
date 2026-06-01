@@ -229,7 +229,12 @@ export async function PATCH(req: NextRequest) {
           }, { status: 400 });
         }
         patch.status = newStatus;
-        if (newStatus === 'done') patch.completedAt = now;
+        if (newStatus === 'done') {
+          patch.completedAt = now;
+          // Ghi chú khi hoàn thành (optional, max 2000 ký tự)
+          const note = String(body?.completionNote ?? '').trim().slice(0, 2000);
+          if (note) patch.completionNote = note;
+        }
       } else {
         return NextResponse.json({ error: 'status_change chỉ áp dụng cho task' }, { status: 400 });
       }

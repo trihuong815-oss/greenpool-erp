@@ -106,11 +106,41 @@ export const workApi = {
     }));
   },
 
-  async updateTaskStatus(id: string, status: WorkStatus): Promise<void> {
+  async updateTaskStatus(id: string, status: WorkStatus, completionNote?: string): Promise<void> {
     await jsonOrThrow<{ ok: true }>(await fetch('/api/ky-thuat/work', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, action: 'status_change', status }),
+      body: JSON.stringify({ id, action: 'status_change', status, completionNote }),
     }));
+  },
+
+  // ── Completion attachments (file báo cáo kết quả khi hoàn thành) ──
+  async uploadCompletionAttachment(id: string, file: File): Promise<void> {
+    const form = new FormData();
+    form.append('file', file);
+    await jsonOrThrow<{ ok: true; path: string }>(
+      await fetch(`/api/ky-thuat/work/${id}/attachments`, {
+        method: 'POST',
+        body: form,
+        // KHÔNG set Content-Type — browser tự add boundary cho multipart
+      }),
+    );
+  },
+
+  async listCompletionAttachments(id: string): Promise<Array<{
+    path: string; fileName: string; mime: string; size: number;
+    uploadedAt: string; uploadedBy: string; uploadedByName: string;
+    downloadUrl: string;
+  }>> {
+    return (await jsonOrThrow<{ rows: any[] }>(
+      await fetch(`/api/ky-thuat/work/${id}/attachments`, { cache: 'no-store' }),
+    )).rows;
+  },
+
+  async deleteCompletionAttachment(id: string, path: string): Promise<void> {
+    await jsonOrThrow<{ ok: true }>(await fetch(
+      `/api/ky-thuat/work/${id}/attachments?path=${encodeURIComponent(path)}`,
+      { method: 'DELETE' },
+    ));
   },
 
   async approveProposal(id: string, approvalNotes?: string): Promise<void> {

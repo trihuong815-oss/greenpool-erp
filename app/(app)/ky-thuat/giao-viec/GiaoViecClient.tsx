@@ -36,6 +36,12 @@ export interface WorkRow {
   specialization?: 'HT' | 'XLN' | null;
   dueDate?: string | null;
   completedAt?: string;
+  // Báo cáo kết quả khi hoàn thành (anh chốt 2026-06-01)
+  completionNote?: string;
+  completionAttachments?: Array<{
+    path: string; fileName: string; mime: string; size: number;
+    uploadedAt?: string; uploadedBy?: string; uploadedByName?: string;
+  }>;
   // report
   reportType?: 'checklist' | 'incident';
   // proposal
@@ -112,6 +118,8 @@ export function GiaoViecClient(props: Props) {
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const [modal, setModal] = useState<null | 'task' | 'report' | 'proposal'>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // Modal hoàn thành: assignee nhập note + đính kèm file kết quả
+  const [completionRow, setCompletionRow] = useState<WorkRow | null>(null);
 
   function showToast(t: 'success' | 'error', msg: string) {
     setToast({ type: t, msg });
@@ -143,10 +151,33 @@ export function GiaoViecClient(props: Props) {
   const currentList = tab === 'tasks' ? tasks : tab === 'reports' ? reports : proposals;
 
   async function handleTaskStatusChange(row: WorkRow, status: WorkStatus) {
+    // "Hoàn tất" → mở CompletionModal để nhập note + đính kèm file kết quả.
+    // Các trạng thái khác (in_progress, cancelled) đổi trực tiếp.
+    if (status === 'done') {
+      setCompletionRow(row);
+      return;
+    }
     setBusyId(row.id);
     try {
       await workApi.updateTaskStatus(row.id, status);
       showToast('success', 'Đã đổi trạng thái');
+      router.refresh();
+    } catch (e: any) {
+      showToast('error', e.message);
+    } finally { setBusyId(null); }
+  }
+
+  async function handleCompleteWithFiles(row: WorkRow, note: string, files: File[]) {
+    setBusyId(row.id);
+    try {
+      // Upload file tuần tự trước (gắn vào completionAttachments), rồi mark done với note.
+      // Pattern này tránh case: status=done nhưng file upload fail giữa chừng → khó retry.
+      for (let i = 0; i < files.length; i++) {
+        await workApi.uploadCompletionAttachment(row.id, files[i]);
+      }
+      await workApi.updateTaskStatus(row.id, 'done', note || undefined);
+      setCompletionRow(null);
+      showToast('success', `Đã hoàn thành${files.length ? ` (đính kèm ${files.length} file)` : ''}`);
       router.refresh();
     } catch (e: any) {
       showToast('error', e.message);
@@ -303,6 +334,14 @@ export function GiaoViecClient(props: Props) {
           onError={(m) => showToast('error', m)}
         />
       )}
+      {completionRow && (
+        <CompletionModal
+          row={completionRow}
+          busy={busyId === completionRow.id}
+          onClose={() => setCompletionRow(null)}
+          onSubmit={(note, files) => handleCompleteWithFiles(completionRow, note, files)}
+        />
+      )}
 
       {toast && (
         <div className={`fixed bottom-6 right-6 z-50 px-4 py-3 rounded-lg shadow-lg ring-1 inline-flex items-center gap-2 text-sm ${
@@ -440,6 +479,24 @@ function WorkRowItem(props: {
               <span className="inline-flex items-center gap-1 text-violet-700"><Banknote size={13} /> {fmtMoney(row.expenseAmount!)}</span>
             )}
           </div>
+
+          {/* Báo cáo kết quả (khi task done) — note + file đính kèm. File hiển thị tên,
+              link download lấy lazy qua /api/ky-thuat/work/[id]/attachments GET (signed URL). */}
+          {row.kind === 'task' && row.status === 'done' && (
+            (row.completionNote || (row.completionAttachments?.length ?? 0) > 0) && (
+              <div className="mt-2 text-xs bg-emerald-50 ring-1 ring-emerald-200 rounded p-2 text-emerald-900">
+                <div className="font-semibold mb-1 inline-flex items-center gap-1">
+                  <CheckCircle2 size={12} /> Báo cáo kết quả
+                </div>
+                {row.completionNote && (
+                  <div className="whitespace-pre-wrap italic">{row.completionNote}</div>
+                )}
+                {(row.completionAttachments?.length ?? 0) > 0 && (
+                  <CompletionFiles taskId={row.id} count={row.completionAttachments!.length} />
+                )}
+              </div>
+            )
+          )}
 
           {/* Approval result */}
           {row.kind === 'proposal' && (row.status === 'approved' || row.status === 'rejected') && (
@@ -677,6 +734,120 @@ function ReportModal(props: {
   );
 }
 
+// ─────────── CompletionFiles ───────────
+// Hiển thị danh sách file đính kèm khi task done. Lazy fetch signed URL khi expand
+// (tránh load mọi URL cho mọi task done trong list).
+function CompletionFiles({ taskId, count }: { taskId: string; count: number }) {
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [rows, setRows] = useState<Array<{ fileName: string; size: number; downloadUrl: string; path: string }>>([]);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function toggle() {
+    if (open) { setOpen(false); return; }
+    setOpen(true);
+    if (rows.length > 0) return;   // đã fetch, dùng cache
+    setLoading(true); setErr(null);
+    try {
+      const data = await workApi.listCompletionAttachments(taskId);
+      setRows(data.map((r) => ({ fileName: r.fileName, size: r.size, downloadUrl: r.downloadUrl, path: r.path })));
+    } catch (e: any) {
+      setErr(e.message);
+    } finally { setLoading(false); }
+  }
+  function fmtSize(n: number): string {
+    if (n < 1024) return n + ' B';
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+    return (n / 1024 / 1024).toFixed(2) + ' MB';
+  }
+
+  return (
+    <div className="mt-1.5">
+      <button type="button" onClick={toggle} className="text-emerald-700 hover:text-emerald-900 font-medium inline-flex items-center gap-1">
+        📎 {count} file đính kèm {open ? '▴' : '▾'}
+      </button>
+      {open && (
+        <div className="mt-1 space-y-1">
+          {loading && <div className="text-slate-500 italic">Đang tải...</div>}
+          {err && <div className="text-rose-600">{err}</div>}
+          {!loading && !err && rows.map((r) => (
+            <a key={r.path} href={r.downloadUrl} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-2 text-xs bg-white ring-1 ring-emerald-200 rounded px-2 py-1 hover:bg-emerald-100">
+              <span className="flex-1 truncate text-emerald-800 underline">{r.fileName}</span>
+              <span className="text-slate-500">{fmtSize(r.size)}</span>
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────── CompletionModal ───────────
+// Khi assignee bấm "Hoàn tất" → mở modal nhập ghi chú + đính kèm file kết quả.
+// Pattern upload tuần tự (xem handleCompleteWithFiles): file lên trước, status=done sau.
+function CompletionModal(props: {
+  row: WorkRow;
+  busy: boolean;
+  onClose: () => void;
+  onSubmit: (note: string, files: File[]) => void;
+}) {
+  const { row, busy, onClose, onSubmit } = props;
+  const [note, setNote] = useState('');
+  const [files, setFiles] = useState<File[]>([]);
+
+  function pickFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const fl = e.target.files;
+    if (!fl) return;
+    const arr = Array.from(fl);
+    setFiles((prev) => [...prev, ...arr].slice(0, 10));   // giới hạn 10 file/lần
+    e.target.value = '';
+  }
+  function removeFile(idx: number) {
+    setFiles((prev) => prev.filter((_, i) => i !== idx));
+  }
+  function fmtSize(n: number): string {
+    if (n < 1024) return n + ' B';
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+    return (n / 1024 / 1024).toFixed(2) + ' MB';
+  }
+
+  return (
+    <ModalShell title={`Hoàn thành: ${row.title}`} onClose={onClose}>
+      <div className="space-y-3">
+        <Field label="Ghi chú kết quả (tuỳ chọn)">
+          <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000} rows={4}
+            className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
+            placeholder="VD: Đã thay bơm 5HP, vận hành ổn định, không còn rung lắc..." />
+        </Field>
+        <Field label="Đính kèm file (ảnh, PDF, Office… — tối đa 20MB/file)">
+          <input type="file" multiple onChange={pickFiles}
+            accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip"
+            className="w-full text-sm" />
+          {files.length > 0 && (
+            <ul className="mt-2 space-y-1">
+              {files.map((f, i) => (
+                <li key={i} className="flex items-center gap-2 text-xs text-slate-700 bg-slate-50 ring-1 ring-slate-200 rounded px-2 py-1">
+                  <span className="flex-1 truncate">{f.name}</span>
+                  <span className="text-slate-500">{fmtSize(f.size)}</span>
+                  <button type="button" onClick={() => removeFile(i)}
+                    className="text-rose-600 hover:text-rose-700">✕</button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Field>
+      </div>
+      <ModalFooter
+        onClose={onClose}
+        onSave={() => onSubmit(note.trim(), files)}
+        saving={busy}
+        saveLabel={files.length > 0 ? `Upload ${files.length} file + Hoàn tất` : 'Hoàn tất'}
+      />
+    </ModalShell>
+  );
+}
+
 // ─────────── ProposalModal ───────────
 function ProposalModal(props: {
   onClose: () => void;
@@ -759,7 +930,7 @@ function ModalShell(props: { title: string; onClose: () => void; children: React
     </div>
   );
 }
-function ModalFooter(props: { onClose: () => void; onSave: () => void; saving: boolean }) {
+function ModalFooter(props: { onClose: () => void; onSave: () => void; saving: boolean; saveLabel?: string }) {
   return (
     <div className="flex items-center justify-end gap-2 mt-5 pt-3 border-t border-slate-100">
       <button onClick={props.onClose} disabled={props.saving} className="px-4 py-2 text-sm rounded-md ring-1 ring-slate-200 text-slate-700 hover:bg-slate-50 disabled:opacity-50">
@@ -767,7 +938,7 @@ function ModalFooter(props: { onClose: () => void; onSave: () => void; saving: b
       </button>
       <button onClick={props.onSave} disabled={props.saving} className="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-md bg-cyan-600 hover:bg-cyan-700 text-white font-semibold disabled:opacity-50">
         {props.saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-        Lưu
+        {props.saveLabel ?? 'Lưu'}
       </button>
     </div>
   );
