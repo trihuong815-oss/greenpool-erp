@@ -3,13 +3,22 @@
 //
 // Config Firebase được fetch từ /api/fcm-config (server-side render env) để
 // tránh hardcode credentials vào file public.
+//
+// PATTERN (sửa 2026-06-01 — root cause user báo iOS PWA không nhận noti):
+// Server gửi DATA-ONLY payload (không có 'notification' field).
+// SW phải gọi showNotification thủ công qua onBackgroundMessage. Cách này:
+//   - iOS Safari PWA render đúng (trước đây Apple drop notification khi có `notification` field
+//     mà SW không handle thủ công).
+//   - Chrome desktop / Android render đúng vì SW handler.
+//   - KHÔNG duplicate vì SDK không tự render khi payload data-only.
+// Trước đây bug "2 noti" được fix bằng cách BỎ onBackgroundMessage → vô tình làm iOS hỏng.
+// Cách đúng: vẫn có handler nhưng đảm bảo payload data-only ở server.
 
 /* global importScripts firebase clients */
 
 importScripts('https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js');
 
-// Fetch config rồi init. SW không có process.env nên phải fetch.
 self.addEventListener('install', (event) => {
   event.waitUntil(self.skipWaiting());
 });
@@ -28,28 +37,42 @@ self.addEventListener('activate', (event) => {
     if (!cfg?.apiKey || !cfg?.projectId) return;
 
     firebase.initializeApp(cfg);
-    firebase.messaging();
-    // KHÔNG gọi messaging.onBackgroundMessage() + showNotification() —
-    // payload server đã có `notification` field, FCM SDK tự render notification.
-    // Nếu thêm showNotification() thủ công → noti hiện 2 lần trên cùng device.
-    // (Bug user báo 2026-05-30: QLCS gửi đề xuất, GĐ_KD nhận 2 noti cùng nội dung.)
-    // notificationclick handler bên dưới chỉ xử lý URL khi user bấm — không tạo noti mới.
+    const messaging = firebase.messaging();
+
+    // Background message handler — render thủ công vì server gửi data-only payload.
+    messaging.onBackgroundMessage((payload) => {
+      const d = (payload && payload.data) || {};
+      const title = d.title || 'Green Pool';
+      const opts = {
+        body: d.body || '',
+        icon: '/icon-192.png',
+        badge: '/icon-192.png',
+        tag: d.tag || 'green-pool',
+        requireInteraction: false,
+        data: { link: d.link || '/dashboard', ...d },
+      };
+      // self.registration.showNotification → trigger OS notification banner.
+      return self.registration.showNotification(title, opts);
+    });
   } catch (e) {
     console.error('[fcm-sw] init error', e);
   }
 })();
 
-// Click notification → mở /cong-viec-ca-nhan hoặc focus tab đã mở.
+// Click notification → mở link trong data hoặc focus tab đã mở.
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const link = event.notification.data?.link || '/cong-viec-ca-nhan';
+  const link = (event.notification.data && event.notification.data.link) || '/dashboard';
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
-      // Nếu có tab đang mở → focus
+      // Nếu có tab đang mở app này → focus + navigate
       for (const w of wins) {
-        if (w.url.includes(link) && 'focus' in w) return w.focus();
+        if ('focus' in w && w.url.indexOf(self.location.origin) === 0) {
+          w.focus();
+          if ('navigate' in w) return w.navigate(link);
+          return;
+        }
       }
-      // Mở tab mới
       if (self.clients.openWindow) return self.clients.openWindow(link);
     })
   );

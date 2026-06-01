@@ -143,12 +143,15 @@ export async function subscribeForegroundMessages(
   const messaging = await loadMessaging();
   if (!messaging) return () => {};
   const { onMessage } = await import('firebase/messaging');
+  // Server gửi DATA-ONLY (sửa 2026-06-01) — đọc từ payload.data, KHÔNG payload.notification.
+  // payload.notification sẽ luôn undefined với pattern data-only.
   const unsub = onMessage(messaging, (payload) => {
+    const d = payload.data ?? {};
     handler({
-      title: payload.notification?.title ?? 'Green Pool',
-      body: payload.notification?.body ?? '',
-      taskId: payload.data?.taskId,
-      kind: payload.data?.kind,
+      title: d.title ?? payload.notification?.title ?? 'Green Pool',
+      body: d.body ?? payload.notification?.body ?? '',
+      taskId: d.taskId,
+      kind: d.kind,
     });
   });
   return unsub;

@@ -69,21 +69,28 @@ export async function pushToUsers(uids: string[], payload: PushPayload): Promise
 
     getFirebaseAdmin();
     const messaging = getMessaging();
+    // DATA-ONLY pattern (sửa 2026-06-01): gửi MỌI thông tin qua `data` field, KHÔNG dùng
+    // `notification` field. Lý do:
+    //   - iOS Safari PWA: FCM SDK KHÔNG tự render notification khi payload có `notification` field
+    //     → service worker phải handle thủ công qua onBackgroundMessage + showNotification.
+    //   - Nếu vừa có `notification` vừa SW handle → noti hiện 2 lần (bug 30/5 đã fix bằng cách
+    //     bỏ SW handler — nhưng gây phụ tác: iOS không hiện noti).
+    // Solution: data-only + SW luôn showNotification → works cả iOS lẫn Chrome desktop, không duplicate.
+    const title = sanitize(payload.title).slice(0, 100);
+    const body = sanitize(payload.body).slice(0, 240);
+    const link = payload.link ?? '/dashboard';
+    const tag = payload.tag ?? 'green-pool';
     const res = await messaging.sendEachForMulticast({
-      notification: {
-        title: sanitize(payload.title).slice(0, 100),
-        body: sanitize(payload.body).slice(0, 240),
+      data: {
+        title, body, link, tag,
+        ...(payload.data ?? {}),
       },
+      // KHÔNG có `notification` field — SW sẽ tự render qua onBackgroundMessage.
+      // KHÔNG có `webpush.notification` cho cùng lý do.
       webpush: {
-        fcmOptions: { link: payload.link ?? '/dashboard' },
-        notification: {
-          icon: '/icon-192.png',
-          badge: '/icon-192.png',
-          tag: payload.tag ?? 'green-pool',
-          requireInteraction: false,
-        },
+        // headers Urgency=high → push tới sớm hơn (iOS thường delay nếu Urgency=normal)
+        headers: { Urgency: 'high' },
       },
-      data: payload.data ?? {},
       tokens: allTokens,
     });
 
