@@ -226,7 +226,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ cid: strin
       notifyNewMessage({
         conversationId: cid,
         conversationType: conv.type,
-        conversationName: conv.type === 'group' ? conv.name : null,
+        // group + channel đều có name; 1-1 không có (UI tự render tên đối phương)
+        conversationName: (conv.type === 'group' || conv.type === 'channel') ? conv.name : null,
         recipients,
         senderName: caller.actorName ?? '',
         text: preview,
