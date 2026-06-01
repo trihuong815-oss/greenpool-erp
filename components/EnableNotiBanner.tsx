@@ -17,6 +17,7 @@ import { Bell, X, Loader2, CheckCircle2 } from 'lucide-react';
 import { enablePushNotifications, getNotificationPermission, isFcmSupported } from '@/lib/firebase/messaging-client';
 
 const DISMISS_KEY = 'enable_noti_banner_dismissed_at';
+const PERMANENT_DISMISS_KEY = 'enable_noti_banner_dismissed_permanent';
 const DISMISS_HOURS = 24;
 
 export function EnableNotiBanner() {
@@ -26,22 +27,44 @@ export function EnableNotiBanner() {
 
   useEffect(() => {
     if (!isFcmSupported()) return;
-    // Check dismiss timestamp
-    try {
-      const dismissedAt = localStorage.getItem(DISMISS_KEY);
-      if (dismissedAt) {
-        const ms = Date.now() - Number(dismissedAt);
-        if (ms < DISMISS_HOURS * 3600_000) return;   // còn trong 24h dismiss → ẩn
+    let cancelled = false;
+    (async () => {
+      // 1. Vĩnh viễn ẩn nếu user đã chọn "Tôi đã bật ở thiết bị khác"
+      try {
+        if (localStorage.getItem(PERMANENT_DISMISS_KEY) === '1') return;
+      } catch {}
+      // 2. Dismiss 24h thường
+      try {
+        const dismissedAt = localStorage.getItem(DISMISS_KEY);
+        if (dismissedAt) {
+          const ms = Date.now() - Number(dismissedAt);
+          if (ms < DISMISS_HOURS * 3600_000) return;
+        }
+      } catch {}
+      // 3. Permission + token cache LOCAL
+      const perm = getNotificationPermission();
+      let cachedToken: string | null = null;
+      try { cachedToken = localStorage.getItem('fcm_token_registered'); } catch {}
+      const localOK = perm === 'granted' && !!cachedToken;
+      if (localOK) return;   // device này đã bật rồi
+
+      // 4. Check server: user đã có token ở DEVICE NÀO khác chưa?
+      //    Nếu có ≥ 1 token → user nhận noti được ở device khác → KHÔNG cần ép bật ở đây.
+      try {
+        const res = await fetch('/api/personal/fcm-token', { cache: 'no-store' });
+        if (res.ok) {
+          const j = await res.json() as { hasAny?: boolean };
+          if (j.hasAny) return;       // đã có ≥ 1 device → không hiện banner
+        }
+      } catch { /* network fail → fall through */ }
+
+      // 5. Mới tới đây: chưa có token ở bất kỳ device nào → hiện banner
+      if (cancelled) return;
+      if (perm === 'default' || (perm === 'granted' && !cachedToken)) {
+        setShow(true);
       }
-    } catch {}
-    // Check permission + token cache
-    const perm = getNotificationPermission();
-    let cachedToken: string | null = null;
-    try { cachedToken = localStorage.getItem('fcm_token_registered'); } catch {}
-    // Hiện banner nếu: chưa hỏi (default) HOẶC đã grant nhưng chưa register token
-    if (perm === 'default' || (perm === 'granted' && !cachedToken)) {
-      setShow(true);
-    }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   async function handleEnable() {
@@ -65,6 +88,11 @@ export function EnableNotiBanner() {
 
   function handleDismiss() {
     try { localStorage.setItem(DISMISS_KEY, String(Date.now())); } catch {}
+    setShow(false);
+  }
+
+  function handleDismissPermanent() {
+    try { localStorage.setItem(PERMANENT_DISMISS_KEY, '1'); } catch {}
     setShow(false);
   }
 
@@ -110,6 +138,14 @@ export function EnableNotiBanner() {
               className="px-2 py-1.5 text-xs text-amber-700 hover:bg-amber-100 rounded"
             >
               Để sau (24h)
+            </button>
+            <button
+              type="button"
+              onClick={handleDismissPermanent}
+              className="px-2 py-1.5 text-xs text-amber-700 hover:bg-amber-100 rounded underline"
+              title="Ẩn vĩnh viễn trên thiết bị này. Mở lại trong /bao-mat nếu cần."
+            >
+              Đã bật ở thiết bị khác
             </button>
           </div>
         </div>
