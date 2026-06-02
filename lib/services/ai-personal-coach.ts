@@ -130,7 +130,7 @@ async function askAnthropic(system: string, userMsg: string, apiKey: string): Pr
     },
     body: JSON.stringify({
       model,
-      max_tokens: 1024,
+      max_tokens: 4096,
       system,
       messages: [{ role: 'user', content: userMsg.slice(0, 5000) }],
     }),
@@ -155,7 +155,7 @@ async function askGemini(system: string, userMsg: string, apiKey: string): Promi
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: system }] },
       contents: [{ role: 'user', parts: [{ text: userMsg.slice(0, 5000) }] }],
-      generationConfig: { maxOutputTokens: 1024, temperature: 0.7 },
+      generationConfig: { maxOutputTokens: 4096, temperature: 0.7 },
       safetySettings: [
         // Để model không từ chối tư vấn thường — cho phép medium harassment/sexual/hate threshold.
         { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' },
@@ -185,7 +185,7 @@ async function askGroq(system: string, userMsg: string, apiKey: string): Promise
     },
     body: JSON.stringify({
       model,
-      max_tokens: 1024,
+      max_tokens: 4096,
       temperature: 0.7,
       messages: [
         { role: 'system', content: system },
@@ -211,7 +211,7 @@ async function askOpenAI(system: string, userMsg: string, apiKey: string): Promi
     },
     body: JSON.stringify({
       model: 'gpt-4o-mini',
-      max_tokens: 1024,
+      max_tokens: 4096,
       messages: [
         { role: 'system', content: system },
         { role: 'user', content: userMsg.slice(0, 5000) },
