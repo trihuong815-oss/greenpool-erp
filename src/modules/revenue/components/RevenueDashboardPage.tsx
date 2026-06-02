@@ -2129,7 +2129,10 @@ export function RevenueDashboardPage({ viewer, realBranches, initialYear, staleD
                     closed: s.totalClosed ?? 0,
                   }));
                 return (
-                  <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                  // Anh chốt 2026-06-02: stack dọc 1 cột (không side-by-side) → mỗi ô full width
+                  // → tên Sale dài (vd "Nguyễn Thị Thanh Huyền") có chỗ hiển thị đầy đủ.
+                  // Thứ tự: Doanh số trước (trên), Lead sau (dưới).
+                  <div className="mt-4 flex flex-col gap-4">
                     <div className="rounded-xl border-2 border-emerald-200 bg-white p-5 shadow-sm">
                       <SaleHorizontalBarChart
                         title={`Tổng doanh số năm ${year} theo Sale`}
