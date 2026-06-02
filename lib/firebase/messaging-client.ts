@@ -50,11 +50,19 @@ async function loadMessaging(): Promise<Messaging | null> {
   }
 }
 
+// Bump SW_VERSION mỗi khi sửa firebase-messaging-sw.js → iOS Safari PWA buộc tải SW mới
+// (Apple cache SW rất aggressive — không bump version sẽ giữ SW cũ tới 24h+).
+const SW_VERSION = '2026-06-02-data-only-v2';
+
 async function ensureSWRegistration(): Promise<ServiceWorkerRegistration | null> {
   if (_swReg) return _swReg;
   if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return null;
   try {
-    _swReg = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+    // Query string với version → browser nhìn URL khác = tải SW mới
+    const swUrl = `/firebase-messaging-sw.js?v=${SW_VERSION}`;
+    _swReg = await navigator.serviceWorker.register(swUrl, { scope: '/' });
+    // Trigger explicit update check — iOS không tự check như Chrome
+    try { await _swReg.update(); } catch { /* ignore */ }
     // Wait for active SW
     if (_swReg.installing) {
       await new Promise<void>((resolve) => {
@@ -68,6 +76,29 @@ async function ensureSWRegistration(): Promise<ServiceWorkerRegistration | null>
   } catch (e) {
     console.warn('[messaging-client] SW register failed', e);
     return null;
+  }
+}
+
+/** Force update SW + re-register token. Gọi từ banner hoặc settings khi user báo noti không tới.
+ *  Trả {updated: boolean, newToken?: string}. */
+export async function forceRefreshPushSetup(): Promise<{ updated: boolean; newToken?: string; error?: string }> {
+  try {
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
+      return { updated: false, error: 'Trình duyệt không hỗ trợ' };
+    }
+    // 1. Unregister tất cả SW cũ
+    const regs = await navigator.serviceWorker.getRegistrations();
+    for (const r of regs) await r.unregister();
+    // 2. Clear cache + memory
+    _swReg = null;
+    _messaging = null;
+    _currentToken = null;
+    try { localStorage.removeItem('fcm_token_registered'); } catch {}
+    // 3. Register lại + lấy token mới
+    const res = await enablePushNotifications();
+    return { updated: true, newToken: res.token, error: res.reason };
+  } catch (e: any) {
+    return { updated: false, error: e?.message ?? 'unknown' };
   }
 }
 

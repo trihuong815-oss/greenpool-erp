@@ -9,7 +9,8 @@
 //   Authentication → Sign-in method → Multi-factor → Enable "TOTP".
 
 import { useEffect, useState } from 'react';
-import { Shield, ShieldCheck, ShieldAlert, KeyRound, Loader2, Copy, Check, AlertCircle, X } from 'lucide-react';
+import { Shield, ShieldCheck, ShieldAlert, KeyRound, Loader2, Copy, Check, AlertCircle, X, Bell, RefreshCw } from 'lucide-react';
+import { forceRefreshPushSetup } from '@/lib/firebase/messaging-client';
 import {
   getAuth, multiFactor, TotpMultiFactorGenerator,
   type MultiFactorInfo, type TotpSecret,
@@ -38,6 +39,25 @@ export function SecurityClient({ email, displayName, roleCode, mfaRequired }: Pr
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [secretCopied, setSecretCopied] = useState(false);
+  // Push refresh state
+  const [pushRefreshing, setPushRefreshing] = useState(false);
+  const [pushMsg, setPushMsg] = useState<string | null>(null);
+
+  async function handleRefreshPush() {
+    setPushRefreshing(true); setPushMsg(null);
+    try {
+      const res = await forceRefreshPushSetup();
+      if (res.updated && res.newToken) {
+        setPushMsg('✓ Đã làm mới push noti. Lần tới có sự kiện sẽ tới điện thoại.');
+      } else if (res.error === 'denied') {
+        setPushMsg('⚠ Bạn đã chặn notification. Vào cài đặt trình duyệt → cho phép thông báo cho trang này.');
+      } else {
+        setPushMsg('⚠ Lỗi: ' + (res.error ?? 'unknown'));
+      }
+    } catch (e: any) {
+      setPushMsg('⚠ Lỗi: ' + (e?.message ?? 'unknown'));
+    } finally { setPushRefreshing(false); }
+  }
 
   function refreshFactors() {
     const auth = getAuth(getFirebaseClient());
@@ -144,6 +164,31 @@ export function SecurityClient({ email, displayName, roleCode, mfaRequired }: Pr
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Push notification — làm mới khi điện thoại không nhận noti */}
+      <div className="bg-white rounded-xl ring-1 ring-slate-200 p-4">
+        <h3 className="font-bold text-sm text-slate-800 mb-2 inline-flex items-center gap-2">
+          <Bell size={16} /> Thông báo trên điện thoại (Push)
+        </h3>
+        <p className="text-xs text-slate-600 mb-3">
+          Nếu điện thoại không nhận được tin nhắn báo về khi có sự kiện (đề xuất, tin nhắn mới…),
+          bấm <strong>"Làm mới push noti"</strong> bên dưới. Lệnh này sẽ xoá Service Worker cũ + tải mới + đăng ký lại token FCM.
+        </p>
+        <button
+          onClick={handleRefreshPush}
+          disabled={pushRefreshing}
+          className="inline-flex items-center gap-2 px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg disabled:opacity-50"
+        >
+          {pushRefreshing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+          Làm mới push noti
+        </button>
+        {pushMsg && (
+          <div className={`mt-2 text-xs px-2 py-1.5 rounded ${
+            pushMsg.startsWith('✓') ? 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200'
+              : 'bg-rose-50 text-rose-800 ring-1 ring-rose-200'
+          }`}>{pushMsg}</div>
+        )}
       </div>
 
       {/* Danh sách factors */}
