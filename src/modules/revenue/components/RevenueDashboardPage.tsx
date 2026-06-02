@@ -733,7 +733,10 @@ function SaleHorizontalBarChart({
             const pct = (d.value / max) * 100;
             return (
               <li key={d.name} className="flex items-center gap-2 text-xs">
-                <span className="w-24 shrink-0 truncate font-medium text-slate-700" title={d.name}>
+                {/* Tên Sale: cho phép wrap (xuống dòng) nếu dài hơn 11rem ~ 176px,
+                    không truncate. Đảm bảo tên Sale dài (vd "Nguyễn Thị Thanh Huyền")
+                    luôn hiển thị đầy đủ — anh chốt 2026-06-02. */}
+                <span className="w-44 shrink-0 font-medium text-slate-700 break-words leading-tight" title={d.name}>
                   {d.name}
                 </span>
                 <div className="relative h-5 flex-1 overflow-hidden rounded bg-slate-100">
@@ -742,7 +745,7 @@ function SaleHorizontalBarChart({
                     style={{ width: `${Math.max(2, pct)}%`, backgroundColor: color }}
                   />
                 </div>
-                <span className="w-24 shrink-0 text-right text-[11px] font-semibold tabular-nums text-slate-700">
+                <span className="w-28 shrink-0 text-right text-[11px] font-semibold tabular-nums text-slate-700">
                   {formatValue(d.value)}{unit ? ` ${unit}` : ''}
                   {d.sub && <span className="ml-1 block text-[9px] font-normal text-slate-400">{d.sub}</span>}
                 </span>
