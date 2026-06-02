@@ -572,19 +572,21 @@ export function TaskDetailModal(props: {
                     <div className="text-xs text-slate-400 text-center py-3">Chưa có hoạt động</div>
                   )}
                 </div>
-                {/* New comment */}
-                <div className="mt-3 flex gap-2">
-                  <input
+                {/* New comment — textarea multiline để nội dung dài xuống dòng + scroll trong ô */}
+                <div className="mt-3 flex gap-2 items-end">
+                  <textarea
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); postComment(); } }}
-                    placeholder="Nhập trao đổi…"
-                    className="flex-1 text-sm px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-400 outline-none"
+                    placeholder="Nhập trao đổi… (Enter để gửi, Shift+Enter xuống dòng)"
+                    rows={2}
+                    maxLength={2000}
+                    className="flex-1 text-sm px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-400 outline-none resize-y min-h-[60px] max-h-48"
                   />
                   <button
                     disabled={!newComment.trim() || busy === 'comment'}
                     onClick={postComment}
-                    className="px-3 py-2 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-700 disabled:opacity-50 inline-flex items-center gap-1"
+                    className="px-3 py-2 bg-emerald-600 text-white text-sm rounded-lg hover:bg-emerald-700 disabled:opacity-50 inline-flex items-center gap-1 shrink-0"
                   >
                     {busy === 'comment' ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                   </button>
