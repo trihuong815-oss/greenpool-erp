@@ -51,6 +51,13 @@ self.addEventListener('activate', (event) => {
         requireInteraction: false,
         data: { link: d.link || '/dashboard', ...d },
       };
+      // Increment badge số đỏ trên icon PWA (iOS 16.4+ / Android Chrome)
+      try {
+        if ('setAppBadge' in self.navigator) {
+          // SW không có state persist → đọc-tăng-set; nếu lỗi thì set=1
+          (self.navigator).setAppBadge && (self.navigator).setAppBadge();
+        }
+      } catch (_) { /* silent */ }
       // self.registration.showNotification → trigger OS notification banner.
       return self.registration.showNotification(title, opts);
     });

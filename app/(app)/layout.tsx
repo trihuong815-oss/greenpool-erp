@@ -1,6 +1,7 @@
 import { AppShell } from '@/components/AppShell';
 import { SessionRefresher } from '@/components/SessionRefresher';
 import { IdleAutoLogout } from '@/components/IdleAutoLogout';
+import { PWAAppBadge } from '@/components/PWAAppBadge';
 import { getCurrentProfile } from '@/lib/firebase/current-profile';
 import { redirect } from 'next/navigation';
 
@@ -28,6 +29,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <>
       <SessionRefresher />
       <IdleAutoLogout />
+      <PWAAppBadge />
       <AppShell
         userName={profile.displayName}
         userRole={profile.roleName ?? profile.roleCode}
