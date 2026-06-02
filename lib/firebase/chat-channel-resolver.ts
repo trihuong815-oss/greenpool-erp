@@ -37,6 +37,21 @@ export async function resolveChannelParticipants(meta: ChannelMeta): Promise<Res
     // Toàn công ty — không cần thêm leader vì đã include hết
     const snap = await db.collection(COLLECTIONS.USERS).where('status', '==', 'active').get();
     for (const d of snap.docs) addUser(d.id, d.data().displayName, d.data().email);
+  } else if (meta.kind === 'roleSet') {
+    // Query theo roleIds (Firestore 'in' limit 30 — chia chunk nếu cần)
+    if (!meta.roleIds || meta.roleIds.length === 0) throw new Error('roleSet channel cần roleIds');
+    const chunks: string[][] = [];
+    for (let i = 0; i < meta.roleIds.length; i += 30) chunks.push(meta.roleIds.slice(i, i + 30));
+    const mainSnaps = await Promise.all(
+      chunks.map((c) => db.collection(COLLECTIONS.USERS).where('status', '==', 'active').where('roleId', 'in', c).get()),
+    );
+    for (const snap of mainSnaps) {
+      for (const d of snap.docs) addUser(d.id, d.data().displayName, d.data().email);
+    }
+    // Auto include ADMIN + CEO (top of company) — KHÔNG include GD_KD/GD_VP để giữ scope channel rõ.
+    const adminCeo = await db.collection(COLLECTIONS.USERS)
+      .where('status', '==', 'active').where('roleId', 'in', ['ADMIN', 'CEO']).get();
+    for (const d of adminCeo.docs) addUser(d.id, d.data().displayName, d.data().email);
   } else {
     // Branch / Department: query 2 nhánh rồi merge.
     let mainQ: FirebaseFirestore.Query = db.collection(COLLECTIONS.USERS).where('status', '==', 'active');

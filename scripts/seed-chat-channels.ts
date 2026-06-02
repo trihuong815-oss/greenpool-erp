@@ -31,6 +31,17 @@ async function resolveChannelParticipants(meta: ChannelMeta): Promise<{ ids: str
   if (meta.kind === 'company') {
     const snap = await db.collection('users').where('status', '==', 'active').get();
     for (const d of snap.docs) addUser(d.id, d.data());
+  } else if (meta.kind === 'roleSet') {
+    if (!meta.roleIds || meta.roleIds.length === 0) throw new Error('roleSet channel cần roleIds');
+    const chunks: string[][] = [];
+    for (let i = 0; i < meta.roleIds.length; i += 30) chunks.push(meta.roleIds.slice(i, i + 30));
+    const mainSnaps = await Promise.all(
+      chunks.map((c) => db.collection('users').where('status', '==', 'active').where('roleId', 'in', c).get()),
+    );
+    for (const snap of mainSnaps) for (const d of snap.docs) addUser(d.id, d.data());
+    // Auto include ADMIN + CEO
+    const adminCeo = await db.collection('users').where('status', '==', 'active').where('roleId', 'in', ['ADMIN','CEO']).get();
+    for (const d of adminCeo.docs) addUser(d.id, d.data());
   } else {
     let mainQ: FirebaseFirestore.Query = db.collection('users').where('status', '==', 'active');
     if (meta.kind === 'branch') {

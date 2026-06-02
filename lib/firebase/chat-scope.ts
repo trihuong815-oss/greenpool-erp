@@ -3,9 +3,9 @@
 
 export type ConversationType = '1-1' | 'group' | 'channel';
 
-/** Channel = group đặc biệt do system tạo & maintain (theo cơ sở/phòng/công ty).
- *  User không tự rời, ADMIN/CEO quản lý. participantIds resync khi đổi branch/dept. */
-export type ChannelKind = 'company' | 'branch' | 'department';
+/** Channel = group đặc biệt do system tạo & maintain (theo cơ sở/phòng/công ty/nhóm role).
+ *  User không tự rời, ADMIN/CEO quản lý. participantIds resync khi đổi branch/dept/role. */
+export type ChannelKind = 'company' | 'branch' | 'department' | 'roleSet';
 
 export interface ChannelMeta {
   kind: ChannelKind;
@@ -13,6 +13,10 @@ export interface ChannelMeta {
   branchId?: string;
   /** Required khi kind='department' (KT/DT/MKT/KE/NS/GS/TTNB). */
   departmentId?: string;
+  /** Required khi kind='roleSet' — slug stable cho deterministic doc id (vd 'kd_management'). */
+  id?: string;
+  /** Required khi kind='roleSet' — danh sách roleId được include vào channel. */
+  roleIds?: string[];
 }
 
 export interface Conversation {
@@ -176,11 +180,12 @@ export function channelConversationId(meta: ChannelMeta): string {
   if (meta.kind === 'company') return 'ch_company_general';
   if (meta.kind === 'branch') return `ch_branch_${meta.branchId}`;
   if (meta.kind === 'department') return `ch_dept_${meta.departmentId}`;
+  if (meta.kind === 'roleSet') return `ch_role_${meta.id}`;
   throw new Error('Invalid channel meta');
 }
 
-/** 13 channels chuẩn (chốt 2026-06-01 — Phase 13.2):
- *  1 toàn công ty + 5 cơ sở + 7 phòng ban. */
+/** 10 channels chuẩn (chốt 2026-06-02 anh update):
+ *  1 toàn công ty + 5 cơ sở + 3 phòng (KT/DT/KE/NS/GS — bỏ MKT + TTNB) + 1 điều hành khối KD. */
 export const STANDARD_CHANNELS: Array<{ name: string; meta: ChannelMeta }> = [
   { name: 'Thông báo chung — Toàn công ty', meta: { kind: 'company' } },
   { name: 'Cơ sở Hoàng Mai',     meta: { kind: 'branch', branchId: 'HM'  } },
@@ -190,11 +195,25 @@ export const STANDARD_CHANNELS: Array<{ name: string; meta: ChannelMeta }> = [
   { name: 'Cơ sở Thanh Trì',     meta: { kind: 'branch', branchId: 'TT'  } },
   { name: 'Phòng Kỹ thuật',       meta: { kind: 'department', departmentId: 'KT'   } },
   { name: 'Phòng Đào tạo',        meta: { kind: 'department', departmentId: 'DT'   } },
-  { name: 'Phòng Marketing',      meta: { kind: 'department', departmentId: 'MKT'  } },
   { name: 'Phòng Kế toán',        meta: { kind: 'department', departmentId: 'KE'   } },
   { name: 'Phòng Nhân sự',        meta: { kind: 'department', departmentId: 'NS'   } },
   { name: 'Phòng Giám sát',       meta: { kind: 'department', departmentId: 'GS'   } },
-  { name: 'Tổ Trang trí Nội bộ',  meta: { kind: 'department', departmentId: 'TTNB' } },
+  // Channel điều hành khối Kinh Doanh: GĐ KD + TP phòng + Phó phòng + QLCS các cơ sở.
+  // Auto include ADMIN/CEO (resolver tự thêm). KHÔNG include GD_VP vì đây là channel khối KD riêng.
+  {
+    name: 'Điều hành khối Kinh Doanh',
+    meta: {
+      kind: 'roleSet',
+      id: 'kd_management',
+      roleIds: [
+        'GD_KD',
+        'TP_DT', 'PP_DT_CM', 'PP_DT_TC',
+        'TP_KT',
+        'TP_MKT',
+        'QLCS_HM', 'QLCS_TK', 'QLCS_CTT', 'QLCS_24NCT', 'QLCS_TT',
+      ],
+    },
+  },
 ];
 
 /** Cắt preview text cho lastMessage (200 ký tự). */
