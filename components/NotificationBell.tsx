@@ -15,10 +15,10 @@
 // Click outside / Escape → đóng.
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Bell, Inbox, ClipboardCheck, CheckSquare, ChevronRight, Loader2 } from 'lucide-react';
+import { Bell, Inbox, ClipboardCheck, CheckSquare, ChevronRight, Loader2, Wrench } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
-type Source = 'approval' | 'assigned' | 'checklist';
+type Source = 'approval' | 'assigned' | 'kt_proposal' | 'kt_task' | 'checklist';
 
 interface NotiItem {
   id: string;
@@ -30,9 +30,11 @@ interface NotiItem {
 }
 
 const SOURCE_META: Record<Source, { label: string; icon: typeof Inbox; color: string }> = {
-  approval:  { label: 'Cần duyệt',           icon: Inbox,          color: 'text-amber-600 bg-amber-50' },
-  assigned:  { label: 'Nhiệm vụ chờ tôi',    icon: ClipboardCheck, color: 'text-cyan-600 bg-cyan-50' },
-  checklist: { label: 'Checklist cần kiểm',  icon: CheckSquare,    color: 'text-emerald-600 bg-emerald-50' },
+  approval:    { label: 'Đề xuất / Giao việc chờ duyệt', icon: Inbox,          color: 'text-amber-600 bg-amber-50' },
+  assigned:    { label: 'Nhiệm vụ chờ tôi',              icon: ClipboardCheck, color: 'text-cyan-600 bg-cyan-50' },
+  kt_proposal: { label: 'Đề xuất kỹ thuật chờ duyệt',    icon: Wrench,         color: 'text-violet-600 bg-violet-50' },
+  kt_task:     { label: 'Nhiệm vụ kỹ thuật chờ tôi',     icon: Wrench,         color: 'text-violet-600 bg-violet-50' },
+  checklist:   { label: 'Checklist cần kiểm',            icon: CheckSquare,    color: 'text-emerald-600 bg-emerald-50' },
 };
 
 function fmtTime(iso?: string): string {
@@ -92,7 +94,43 @@ export function NotificationBell() {
         }
       }
     } catch {}
-    // 3. Checklist v2 unseen
+    // 3. TechWork — KT proposals chờ duyệt
+    try {
+      const res = await fetch('/api/ky-thuat/work?kind=proposal&status=pending_approval', { cache: 'no-store' });
+      if (res.ok) {
+        const j = await res.json();
+        const arr = Array.isArray(j.rows) ? j.rows : [];
+        for (const t of arr.slice(0, 10)) {
+          next.push({
+            id: `ktp-${t.id}`,
+            source: 'kt_proposal',
+            title: t.title ?? '(không tên)',
+            subtitle: `Từ ${t.createdByName ?? '?'} @ ${t.branchId ?? '?'}`,
+            time: t.createdAt,
+            link: '/ky-thuat/giao-viec?tab=proposals',
+          });
+        }
+      }
+    } catch {}
+    // 4. TechWork — KT tasks assigned to me (status=open)
+    try {
+      const res = await fetch('/api/ky-thuat/work?kind=task&status=open', { cache: 'no-store' });
+      if (res.ok) {
+        const j = await res.json();
+        const arr = Array.isArray(j.rows) ? j.rows : [];
+        for (const t of arr.slice(0, 10)) {
+          next.push({
+            id: `ktt-${t.id}`,
+            source: 'kt_task',
+            title: t.title ?? '(không tên)',
+            subtitle: `Từ ${t.createdByName ?? '?'} @ ${t.branchId ?? '?'}`,
+            time: t.createdAt,
+            link: '/ky-thuat/giao-viec?tab=tasks',
+          });
+        }
+      }
+    } catch {}
+    // 5. Checklist v2 unseen
     try {
       const res = await fetch('/api/checklist-v2/notifications?onlyUnseen=1', { cache: 'no-store' });
       if (res.ok) {
@@ -189,7 +227,7 @@ export function NotificationBell() {
               </div>
             )}
 
-            {(['approval', 'assigned', 'checklist'] as Source[]).map((src) => {
+            {(['approval', 'assigned', 'kt_proposal', 'kt_task', 'checklist'] as Source[]).map((src) => {
               const list = grouped[src] ?? [];
               if (list.length === 0) return null;
               const meta = SOURCE_META[src];
