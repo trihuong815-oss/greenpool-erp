@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
       userId: ctx.profile.id,
       roleId: ctx.profile.roleCode,
       question: question.slice(0, 5000),
-      answer: result.answer.slice(0, 10000),
+      answer: result.answer.slice(0, 30000),    // ~ 8192 tokens output không bị truncated khi log
       category,
       provider: result.provider,
       createdAt: new Date(),
