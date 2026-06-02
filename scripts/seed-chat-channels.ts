@@ -16,22 +16,34 @@ const db = getFirestore();
 const APPLY = process.argv.includes('--apply');
 
 // Inline resolver — script chạy CLI, không qua lib/firebase/admin (file đó có 'server-only').
+// Logic giống lib/firebase/chat-channel-resolver.ts: thêm TOP_LEADER_ROLES vào branch/dept channels.
+const TOP_LEADER_ROLES = ['ADMIN', 'CEO', 'GD_KD', 'GD_VP'];
 async function resolveChannelParticipants(meta: ChannelMeta): Promise<{ ids: string[]; names: Record<string, string> }> {
-  let q: FirebaseFirestore.Query = db.collection('users').where('status', '==', 'active');
-  if (meta.kind === 'branch') {
-    if (!meta.branchId) throw new Error('branch channel cần branchId');
-    q = q.where('branchId', '==', meta.branchId);
-  } else if (meta.kind === 'department') {
-    if (!meta.departmentId) throw new Error('department channel cần departmentId');
-    q = q.where('departmentId', '==', meta.departmentId);
-  }
-  const snap = await q.get();
   const ids: string[] = [];
   const names: Record<string, string> = {};
-  for (const d of snap.docs) {
-    const x = d.data();
-    ids.push(d.id);
-    names[d.id] = x.displayName ?? x.email ?? '?';
+  const seen = new Set<string>();
+  const addUser = (docId: string, d: any) => {
+    if (seen.has(docId)) return;
+    seen.add(docId); ids.push(docId);
+    names[docId] = d.displayName ?? d.email ?? '?';
+  };
+
+  if (meta.kind === 'company') {
+    const snap = await db.collection('users').where('status', '==', 'active').get();
+    for (const d of snap.docs) addUser(d.id, d.data());
+  } else {
+    let mainQ: FirebaseFirestore.Query = db.collection('users').where('status', '==', 'active');
+    if (meta.kind === 'branch') {
+      if (!meta.branchId) throw new Error('branch channel cần branchId');
+      mainQ = mainQ.where('branchId', '==', meta.branchId);
+    } else {
+      if (!meta.departmentId) throw new Error('department channel cần departmentId');
+      mainQ = mainQ.where('departmentId', '==', meta.departmentId);
+    }
+    const leaderQ = db.collection('users').where('status', '==', 'active').where('roleId', 'in', TOP_LEADER_ROLES);
+    const [mainSnap, leaderSnap] = await Promise.all([mainQ.get(), leaderQ.get()]);
+    for (const d of mainSnap.docs) addUser(d.id, d.data());
+    for (const d of leaderSnap.docs) addUser(d.id, d.data());
   }
   ids.sort();
   return { ids, names };
