@@ -702,10 +702,13 @@ function SimpleRevenueSection({ branchId, period, periodType, periodLabel, staff
         existing = await packageSalesApi.list({ period, periodType, branchId });
       }
       // Sum revenue per saleId (legacy data có thể chứa nhiều record/sale khác package — gộp lại 1 dòng).
+      // Guard NaN: e.revenue có thể null/undefined trong doc legacy → bỏ qua để không poison tổng.
       const revBySale = new Map<string, number>();
       for (const e of existing) {
         if (e.saleId === '__aggregate') continue; // bỏ aggregate cũ — form mới chỉ per-sale
-        revBySale.set(e.saleId, (revBySale.get(e.saleId) ?? 0) + e.revenue);
+        const r = Number(e.revenue);
+        if (!Number.isFinite(r)) continue;
+        revBySale.set(e.saleId, (revBySale.get(e.saleId) ?? 0) + r);
       }
       setRows(staff.map((s) => ({
         saleId: s.id,

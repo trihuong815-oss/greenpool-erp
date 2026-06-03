@@ -120,11 +120,15 @@ export async function fetchSalesReport(
       pkgQ = pkgQ.where('branchId', '==', scope.branchIds[0]);
       tgtQ = tgtQ.where('branchId', '==', scope.branchIds[0]);
       qtyQ = qtyQ.where('branchId', '==', scope.branchIds[0]);
+    } else if (scope.branchIds.length <= 10) {
+      // Firestore `in` clause: max 10 elements. Hệ thống GreenPool có 5 cơ sở cố định nên luôn ≤ 10.
+      leadQ = leadQ.where('branchId', 'in', scope.branchIds);
+      pkgQ = pkgQ.where('branchId', 'in', scope.branchIds);
+      tgtQ = tgtQ.where('branchId', 'in', scope.branchIds);
+      qtyQ = qtyQ.where('branchId', 'in', scope.branchIds);
     } else {
-      leadQ = leadQ.where('branchId', 'in', scope.branchIds.slice(0, 10));
-      pkgQ = pkgQ.where('branchId', 'in', scope.branchIds.slice(0, 10));
-      tgtQ = tgtQ.where('branchId', 'in', scope.branchIds.slice(0, 10));
-      qtyQ = qtyQ.where('branchId', 'in', scope.branchIds.slice(0, 10));
+      // Defensive: nếu tương lai > 10 cơ sở, KHÔNG silent drop — throw để dev biết phải chunked query.
+      throw new Error(`branchIds > 10 (got ${scope.branchIds.length}) — cần implement chunked query, không thể dùng "in" clause trực tiếp.`);
     }
   }
   const [leadSnap, pkgSnap, tgtSnap, qtySnap] = await Promise.all([leadQ.get(), pkgQ.get(), tgtQ.get(), qtyQ.get()]);

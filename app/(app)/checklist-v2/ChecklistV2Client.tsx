@@ -55,7 +55,13 @@ export function ChecklistV2Client({
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
 
-  const currentTemplate = templates.find((t) => t.shift === shift)!;
+  // Guard null deref: nếu template thiếu thì fallback safe defaults thay vì crash
+  const currentTemplate = templates.find((t) => t.shift === shift) ?? {
+    shift,
+    deadlineHour: 23,
+    deadlineMinute: 59,
+    items: [] as any[],
+  } as (typeof templates)[number];
 
   function showToast(t: 'success' | 'error', msg: string) {
     setToast({ type: t, msg });
