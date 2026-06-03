@@ -122,6 +122,9 @@ export interface TaskCreate {
   proposalType?: ProposalType | null;
   financialGroup?: FinancialGroup | null;
   estimatedCost?: number | null;
+  // Phase 12.5 (2026-06-03): chuỗi UID người duyệt theo thứ tự (chỉ dùng cho kind='proposal').
+  // Empty/undefined = không cần duyệt → đi thẳng pending. Server force assignee=creator.
+  approverUserIds?: string[];
 }
 
 export interface TaskUpdate {

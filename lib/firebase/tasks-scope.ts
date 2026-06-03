@@ -39,6 +39,19 @@ export interface TaskForScope {
   assigneeUserIds: string[];
   status: TaskStatus;
   approvalRequiredFrom: string | null;
+  // Phase 12.5 (2026-06-03): chain entry dạng "user:UID" | "role:GD_KD" | legacy "GD_KD".
+  // Khi có currentApprover thì ưu tiên dùng nó; nếu null thì fallback approvalRequiredFrom.
+  currentApprover?: string | null;
+}
+
+// Phase 12.5 (2026-06-03): mỗi approver trong chain có thể là user cụ thể hoặc role.
+// Format "user:<uid>" hoặc "role:<roleCode>"; legacy doc chỉ lưu roleCode thuần.
+export function matchApprover(entry: string | null | undefined, uid: string, roleCode: string): boolean {
+  if (!entry) return false;
+  if (entry.startsWith('user:')) return entry.slice(5) === uid;
+  if (entry.startsWith('role:')) return entry.slice(5) === roleCode;
+  // Legacy doc lưu roleCode thuần (vd 'GD_KD')
+  return entry === roleCode;
 }
 
 // ---- READ scope ----
@@ -147,6 +160,16 @@ export function canApproveTask(p: CallerProfile, t: TaskForScope): boolean {
   // Quy tắc nghiệp vụ: creator + assignee không tự duyệt
   if (t.createdBy === p.uid) return false;
   if (t.assigneeUserIds.includes(p.uid)) return false;
+  // Phase 12.5: currentApprover (uid/role) > approvalRequiredFrom (legacy role).
+  // CEO bypass CHỈ khi không có currentApprover user-cụ thể (để creator chỉ đích danh ai duyệt thì ko bị CEO chen ngang).
+  if (t.currentApprover) {
+    if (t.currentApprover.startsWith('user:')) {
+      return t.currentApprover.slice(5) === p.uid;
+    }
+    if (matchApprover(t.currentApprover, p.uid, p.role_code)) return true;
+    if (isCEO(p)) return true;
+    return false;
+  }
   if (isCEO(p)) return true;
   return t.approvalRequiredFrom === p.role_code;
 }

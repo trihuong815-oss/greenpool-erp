@@ -20,6 +20,7 @@ function asScope(d: Record<string, any>): TaskForScope {
     assigneeUserIds: Array.isArray(d.assigneeUserIds) ? d.assigneeUserIds : [],
     status: d.status,
     approvalRequiredFrom: d.approvalRequiredFrom ?? null,
+    currentApprover: d.currentApprover ?? null,
   };
 }
 
@@ -70,7 +71,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
         // Còn cấp tiếp → giữ pending_approval, chuyển currentApprover
         update.status = 'pending_approval';
         update.currentApprover = nextApprover;
-        update.approvalRequiredFrom = nextApprover;   // sync để canApproveTask cũ work
+        // approvalRequiredFrom = role nếu nextApprover là role-key; null nếu user-key
+        update.approvalRequiredFrom = nextApprover.startsWith('role:')
+          ? nextApprover.slice(5)
+          : (nextApprover.startsWith('user:') ? null : nextApprover);
       } else {
         // Hết chain → đến recipient
         update.status = 'pending';

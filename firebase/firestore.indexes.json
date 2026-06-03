@@ -11,6 +11,16 @@
       ]
     },
     {
+      "_comment": "Phase 12.5 — tasks: list pending_approval theo user (đề xuất chọn người duyệt cụ thể) — where(status) where(currentApprover='user:UID') orderBy(createdAt)",
+      "collectionGroup": "tasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "currentApprover", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "_comment": "tasks: CEO list pending_approval — where(status) orderBy(createdAt)",
       "collectionGroup": "tasks",
       "queryScope": "COLLECTION",

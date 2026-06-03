@@ -20,6 +20,7 @@ function asScope(d: Record<string, any>): TaskForScope {
     assigneeUserIds: Array.isArray(d.assigneeUserIds) ? d.assigneeUserIds : [],
     status: d.status,
     approvalRequiredFrom: d.approvalRequiredFrom ?? null,
+    currentApprover: d.currentApprover ?? null,
   };
 }
 

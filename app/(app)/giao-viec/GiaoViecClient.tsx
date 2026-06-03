@@ -138,7 +138,11 @@ export function GiaoViecClient(props: Props) {
     let cancelled = false;
     tasksApi.list({ mode: 'pending_approval' })
       .then((rows) => { if (!cancelled) setApprovalCount(rows.length); })
-      .catch(() => {});
+      .catch((e) => {
+        // KHÔNG silent — log để dev biết approval count đang sai. UI giữ giá trị cũ
+        // thay vì reset 0 (tránh user tưởng không còn gì cần duyệt).
+        console.warn('[GiaoViec] load approval count fail:', e?.message ?? e);
+      });
     return () => { cancelled = true; };
   }, [showApprovalTab, refreshKey]);
 
@@ -395,6 +399,7 @@ export function GiaoViecClient(props: Props) {
       {showCreate && (
         <TaskCreateModal
           kind={showCreate}
+          currentUserId={currentUserId}
           currentUserRole={currentUserRole}
           currentDepartmentId={currentDepartmentId}
           currentBranchId={currentBranchId}

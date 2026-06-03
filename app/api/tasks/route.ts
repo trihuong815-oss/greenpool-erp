@@ -60,6 +60,7 @@ function asTaskForScope(d: Record<string, any>): TaskForScope {
     assigneeUserIds: Array.isArray(d.assigneeUserIds) ? d.assigneeUserIds : [],
     status: d.status,
     approvalRequiredFrom: d.approvalRequiredFrom ?? null,
+    currentApprover: d.currentApprover ?? null,
   };
 }
 
@@ -86,10 +87,9 @@ export async function GET(req: NextRequest) {
 
     if (mode === 'pending_approval') {
       // ─── PENDING APPROVAL ───
-      // CEO: tất cả task status=pending_approval
-      //   query: where(status) + orderBy(createdAt) → index (status ASC, createdAt DESC)
-      // GĐ Khối: thêm filter approvalRequiredFrom == role mình
-      //   query: where(status) + where(approvalRequiredFrom) + orderBy(createdAt) → index 3-field
+      // Phase 12.5: approver có thể là user cụ thể (user:UID) hoặc role (GD_KD / GD_VP).
+      // CEO/ADMIN: tất cả task pending_approval.
+      // Mọi role khác: query theo (status, currentApprover) cho cả user-key và role-key, merge.
       if (isCEO(caller.profile)) {
         const snap = await colRef
           .where('status', '==', 'pending_approval')
@@ -97,16 +97,39 @@ export async function GET(req: NextRequest) {
           .limit(LIST_LIMIT)
           .get();
         addDocs(snap.docs);
-      } else if (isGD(caller.profile)) {
-        const snap = await colRef
-          .where('status', '==', 'pending_approval')
-          .where('approvalRequiredFrom', '==', caller.profile.role_code)
-          .orderBy('createdAt', 'desc')
-          .limit(LIST_LIMIT)
-          .get();
-        addDocs(snap.docs);
+      } else {
+        // Q1: currentApprover == "user:<uid>"  → user được chỉ định duyệt cụ thể
+        const queries: Promise<FirebaseFirestore.QuerySnapshot>[] = [
+          colRef
+            .where('status', '==', 'pending_approval')
+            .where('currentApprover', '==', `user:${caller.profile.uid}`)
+            .orderBy('createdAt', 'desc')
+            .limit(LIST_LIMIT)
+            .get(),
+        ];
+        // Q2 (chỉ GĐ Khối): currentApprover == "role:<roleCode>" hoặc legacy roleCode thuần
+        if (isGD(caller.profile)) {
+          queries.push(
+            colRef
+              .where('status', '==', 'pending_approval')
+              .where('currentApprover', '==', `role:${caller.profile.role_code}`)
+              .orderBy('createdAt', 'desc')
+              .limit(LIST_LIMIT)
+              .get(),
+          );
+          // Q3 (legacy): approvalRequiredFrom == roleCode (doc cũ chưa có currentApprover)
+          queries.push(
+            colRef
+              .where('status', '==', 'pending_approval')
+              .where('approvalRequiredFrom', '==', caller.profile.role_code)
+              .orderBy('createdAt', 'desc')
+              .limit(LIST_LIMIT)
+              .get(),
+          );
+        }
+        const results = await Promise.all(queries);
+        results.forEach((snap) => addDocs(snap.docs));
       }
-      // Roles khác → empty (không có task chờ duyệt nào nằm trong scope).
     } else if (mode === 'created') {
       // ─── CREATED BY ME ───
       // query: where(createdBy) + orderBy(createdAt) → index (createdBy ASC, createdAt DESC)
@@ -370,35 +393,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'dueDate phải định dạng YYYY-MM-DD hoặc null' }, { status: 400 });
     }
 
-    // Đề xuất v2 (anh chốt 2026-05-30): nội dung tài chính/vận hành + nhóm chi + chi phí
-    // → quyết định approvalChain (0/1/2 cấp duyệt).
+    // Phase 12.6 (2026-06-03): BỎ phân biệt loại + nhóm chi + cost. Chỉ giữ field null cho mọi proposal mới.
+    // Backward compat: nếu client cũ gửi 3 field này thì validate nhẹ rồi lưu (không reject).
     const VALID_PROPOSAL_TYPE = new Set(['tai_chinh', 'van_hanh']);
     const VALID_FINANCIAL_GROUP = new Set(['chi_thuong_xuyen', 'chi_khac']);
-    const AUTO_APPROVE_THRESHOLD = 5_000_000;   // chi khác ≤ ngưỡng → tự quyết
     let proposalType: string | null = null;
     let financialGroup: string | null = null;
     let estimatedCost: number | null = null;
     if (kind === 'proposal') {
-      if (typeof body?.proposalType !== 'string' || !VALID_PROPOSAL_TYPE.has(body.proposalType)) {
-        return NextResponse.json({ error: 'proposalType phải là tai_chinh hoặc van_hanh' }, { status: 400 });
+      if (typeof body?.proposalType === 'string' && VALID_PROPOSAL_TYPE.has(body.proposalType)) {
+        proposalType = body.proposalType;
       }
-      proposalType = body.proposalType;
-      if (proposalType === 'tai_chinh') {
-        if (typeof body?.financialGroup !== 'string' || !VALID_FINANCIAL_GROUP.has(body.financialGroup)) {
-          return NextResponse.json({ error: 'Đề xuất tài chính bắt buộc financialGroup (chi_thuong_xuyen hoặc chi_khac)' }, { status: 400 });
-        }
+      if (typeof body?.financialGroup === 'string' && VALID_FINANCIAL_GROUP.has(body.financialGroup)) {
         financialGroup = body.financialGroup;
       }
       if (body?.estimatedCost != null) {
         const n = Number(body.estimatedCost);
-        if (!Number.isFinite(n) || n < 0) {
-          return NextResponse.json({ error: 'estimatedCost phải là số ≥ 0' }, { status: 400 });
-        }
-        estimatedCost = n;
-      }
-      // chi khác: bắt buộc cost > 0
-      if (proposalType === 'tai_chinh' && financialGroup === 'chi_khac' && (estimatedCost === null || estimatedCost <= 0)) {
-        return NextResponse.json({ error: 'Đề xuất chi khác bắt buộc nhập chi phí dự kiến (> 0).' }, { status: 400 });
+        if (Number.isFinite(n) && n >= 0) estimatedCost = n;
       }
     }
 
@@ -423,32 +434,60 @@ export async function POST(req: NextRequest) {
     let currentApprover: string | null = null;
 
     if (kind === 'proposal') {
-      // Đề xuất v2: tự tính approvalChain dựa vào loại + nhóm chi + chi phí + cross-block + role creator
-      const isCreatorTopAdmin = caller.profile.role_code === 'CEO' || caller.profile.role_code === 'ADMIN';
-      const isFinanceAutoApprove = proposalType === 'tai_chinh' &&
-        (financialGroup === 'chi_thuong_xuyen' ||
-         (financialGroup === 'chi_khac' && estimatedCost !== null && estimatedCost <= AUTO_APPROVE_THRESHOLD));
-      if (isCreatorTopAdmin || isFinanceAutoApprove) {
-        approvalChain = [];
-      } else if (creatorBlock !== assigneeBlock && creatorBlock !== 'all') {
-        // Cross-block: GĐ block creator duyệt trước → GĐ block assignee duyệt → đến recipient
-        const creatorGD = creatorBlock === 'KD' ? 'GD_KD' : 'GD_VP';
-        const assigneeGD = assigneeBlock === 'KD' ? 'GD_KD' : 'GD_VP';
-        approvalChain = creatorGD === assigneeGD ? [creatorGD] : [creatorGD, assigneeGD];
-      } else {
-        const gd = assigneeBlock === 'KD' ? 'GD_KD' : 'GD_VP';
-        approvalChain = [gd];
+      // Đề xuất v2.5 (anh chốt 2026-06-03): người tạo CHỌN người duyệt (ngang cấp hoặc cấp trên).
+      //   - approverUserIds[]: mảng UID theo thứ tự duyệt (cấp 1 → cấp 2 → ...)
+      //   - Empty array → không cần duyệt, chuyển thẳng pending
+      //   - Validate: mỗi UID phải tồn tại + KHÔNG được trùng creator (tự duyệt)
+      // Phase 12.6 (2026-06-03): KHÔNG auto-approve theo loại nữa — user chọn người duyệt.
+      const approverIds: string[] = Array.isArray(body?.approverUserIds)
+        ? body.approverUserIds.filter((x: unknown) => typeof x === 'string').slice(0, 10)
+        : [];
+      // Dedup giữ thứ tự
+      const seen = new Set<string>();
+      const dedupApprovers: string[] = [];
+      for (const uid of approverIds) {
+        if (uid === caller.profile.uid) {
+          return NextResponse.json({ error: 'Không thể tự duyệt đề xuất của mình — bỏ tên mình khỏi danh sách người duyệt' }, { status: 400 });
+        }
+        if (!seen.has(uid)) { seen.add(uid); dedupApprovers.push(uid); }
       }
-      // Override status từ legacy: dùng chain thay vì approvalRequiredFrom đơn cấp
-      if (approvalChain.length === 0) {
-        status = 'pending';
-        approvalRequiredFrom = null;
-        currentApprover = null;
-      } else {
-        status = 'pending_approval';
-        currentApprover = approvalChain[0];
-        approvalRequiredFrom = approvalChain[0];   // backward compat với UI cũ + canApproveTask
+      // Validate user tồn tại + lấy roleId để sort theo cấp bậc.
+      // Quy tắc (anh chốt 2026-06-03): CẤP CAO DUYỆT TRƯỚC (GĐ → TP/QLCS → NV).
+      if (dedupApprovers.length > 0) {
+        const db = getFirebaseAdminDb();
+        const approverDocs = await Promise.all(
+          dedupApprovers.map((uid) => db.collection(COLLECTIONS.USERS).doc(uid).get()),
+        );
+        const ROLE_LEVEL: Record<string, number> = {
+          ADMIN: 10, CEO: 10,
+          GD_KD: 8, GD_VP: 8,
+          TP_KT: 6, TP_DT: 6, TP_MKT: 6, TP_GS: 6, TP_KE: 6, TP_NS: 6, TIBAN_TT: 6,
+          PP_HT: 5, PP_XLN: 5, PP_DT_CM: 5, PP_DT_TC: 5,
+          QLCS_HM: 5, QLCS_TK: 5, QLCS_CTT: 5, QLCS_24NCT: 5, QLCS_TT: 5,
+          TT_LT: 4, TT_AS: 4, TT_DT: 4,
+        };
+        const uidToLevel = new Map<string, number>();
+        for (const d of approverDocs) {
+          if (!d.exists) return NextResponse.json({ error: `Người duyệt không tồn tại (uid=${d.id})` }, { status: 400 });
+          if (d.data()?.disabled) return NextResponse.json({ error: `Người duyệt đã bị khoá: ${d.data()?.displayName ?? d.id}` }, { status: 400 });
+          uidToLevel.set(d.id, ROLE_LEVEL[d.data()?.roleId ?? ''] ?? 3);
+        }
+        // Sort: cấp cao (level lớn) duyệt trước. Stable sort giữ thứ tự nhập cho cùng level.
+        const sortedWithIdx = dedupApprovers.map((uid, idx) => ({ uid, idx, lvl: uidToLevel.get(uid) ?? 3 }));
+        sortedWithIdx.sort((a, b) => b.lvl - a.lvl || a.idx - b.idx);
+        dedupApprovers.length = 0;
+        sortedWithIdx.forEach((x) => dedupApprovers.push(x.uid));
       }
+      // Quy tắc nghiệp vụ (anh chốt 2026-06-03): đã là đề xuất thì BẮT BUỘC có ≥1 người duyệt.
+      // CEO/ADMIN cũng phải chọn (vì họ không đề xuất cho bản thân — không có usecase).
+      if (dedupApprovers.length === 0) {
+        return NextResponse.json({ error: 'Đề xuất bắt buộc phải có ít nhất 1 người duyệt' }, { status: 400 });
+      }
+      approvalChain = dedupApprovers.map((uid) => `user:${uid}`);
+      status = 'pending_approval';
+      currentApprover = approvalChain[0];
+      // approvalRequiredFrom null cho user-based — query pending_approval phải dùng currentApprover
+      approvalRequiredFrom = null;
       crossBlock = creatorBlock !== assigneeBlock && creatorBlock !== 'all';
     }
 

@@ -50,7 +50,7 @@ export function TaskDetailModal(props: {
   const {
     task: initialTask, currentUserId, currentUserRole,
     currentDepartmentId, currentBranchId,
-    departments, branches, onClose, onChange,
+    departments, branches, users, onClose, onChange,
   } = props;
 
   const [task, setTask] = useState<Task>(initialTask);
@@ -68,12 +68,24 @@ export function TaskDetailModal(props: {
   const [expectedCompletionDate, setExpectedCompletionDate] = useState('');
   const [showRevisionForm, setShowRevisionForm] = useState(false);
   const [revisionMessage, setRevisionMessage] = useState('');
+  // Phase 12.5 — approver action: ghi chú khi Duyệt (optional)
+  const [showApprove, setShowApprove] = useState(false);
+  const [approveComment, setApproveComment] = useState('');
 
   const isCEO = currentUserRole === 'CEO' || currentUserRole === 'ADMIN';
   const isGD = GD_ROLES.has(currentUserRole);
   const isAdmin = ADMIN.has(currentUserRole);
   const isAdminSystem = currentUserRole === 'ADMIN';
-  const isMyBlockApprover = isGD && task.approvalRequiredFrom === currentUserRole;
+  // Phase 12.5: currentApprover có thể là "user:UID" | "role:RC" | legacy "RC"
+  const cur = task.currentApprover ?? null;
+  const isMyTurnByUid = !!cur && cur.startsWith('user:') && cur.slice(5) === currentUserId;
+  const isMyTurnByRole = !!cur && (
+    (cur.startsWith('role:') && cur.slice(5) === currentUserRole) ||
+    (!cur.startsWith('user:') && !cur.startsWith('role:') && cur === currentUserRole)
+  );
+  // Legacy fallback: approvalRequiredFrom == role (doc cũ không có currentApprover)
+  const isLegacyRoleApprover = !cur && isGD && task.approvalRequiredFrom === currentUserRole;
+  const isMyBlockApprover = (isGD && isMyTurnByRole) || isLegacyRoleApprover;
 
   const isCreator = task.createdBy === currentUserId;
   const isAssigneeUser = task.assigneeUserIds.includes(currentUserId);
@@ -89,10 +101,15 @@ export function TaskDetailModal(props: {
     !!isAssigneeFacility;
 
   // Quy tắc: creator + assignee KHÔNG tự duyệt task của mình.
+  // Phase 12.5: thêm user-based approver (isMyTurnByUid). CEO bypass CHỈ khi chain không chỉ đích danh user khác.
   const canApprove = task.status === 'pending_approval'
     && !isCreator
     && !isAssigneeUser
-    && (isCEO || isMyBlockApprover);
+    && (
+      isMyTurnByUid                                             // được chỉ đích danh
+      || isMyBlockApprover                                       // đến lượt role mình (GĐ Khối)
+      || (isCEO && !(cur && cur.startsWith('user:')))            // CEO bypass nếu chain không chỉ user khác
+    );
   const canDelete = isAdmin || isCreator;
 
   const assigneeLabel = task.assigneeDeptId
@@ -150,8 +167,12 @@ export function TaskDetailModal(props: {
 
   async function approve() {
     setBusy('approve');
-    try { await tasksApi.approve(task.id); await refresh(); }
-    catch (e: any) { setError(e.message); } finally { setBusy(null); }
+    try {
+      await tasksApi.approve(task.id, approveComment.trim() || undefined);
+      setShowApprove(false);
+      setApproveComment('');
+      await refresh();
+    } catch (e: any) { setError(e.message); } finally { setBusy(null); }
   }
   async function reject() {
     if (!rejectReason.trim()) { setError('Vui lòng nhập lý do từ chối'); return; }
@@ -259,23 +280,39 @@ export function TaskDetailModal(props: {
                 </Meta>
               </div>
 
-              {/* Phase 12 — Luồng duyệt đề xuất (chain) */}
+              {/* Phase 12.5 — Luồng duyệt đề xuất (chain) — entry: "user:UID" | "role:RC" | legacy "RC" */}
               {task.kind === 'proposal' && task.approvalChain && task.approvalChain.length > 0 && (
                 <div className="rounded-lg border border-blue-200 bg-blue-50/40 p-3">
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-blue-700 mb-2">Luồng duyệt</div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-blue-700 mb-2">Luồng duyệt ({task.approvalChain.length} cấp)</div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    {task.approvalChain.map((role, i) => {
-                      const done = (task.approvalsCompleted ?? []).find((s) => s.role === role);
-                      const isCurrent = task.currentApprover === role && !done;
+                    {task.approvalChain.map((entry, i) => {
+                      // Parse entry: user:UID | role:RC | legacy RC
+                      const isUserEntry = entry.startsWith('user:');
+                      const isRoleEntry = entry.startsWith('role:');
+                      const uid = isUserEntry ? entry.slice(5) : null;
+                      const roleCode = isRoleEntry ? entry.slice(5) : (!isUserEntry ? entry : null);
+                      // Tìm display name: nếu user → tên user; nếu role → label role
+                      const user = uid ? users.find((u) => u.id === uid) : null;
+                      const display = user
+                        ? `${user.name} (${user.roleId})`
+                        : roleCode ? roleLabelVN(roleCode) : entry;
+                      // Match completed: check uid match HOẶC role match (legacy)
+                      const done = (task.approvalsCompleted ?? []).find((s) => {
+                        if (uid && s.uid === uid) return true;
+                        if (roleCode && s.role === roleCode) return true;
+                        return false;
+                      });
+                      const isCurrent = task.currentApprover === entry && !done;
                       return (
                         <div key={i} className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-bold text-slate-400">{i + 1}.</span>
                           <div className={`px-2.5 py-1 rounded-md text-xs font-semibold ring-1 ${
                             done ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
                             : isCurrent ? 'bg-amber-50 text-amber-700 ring-amber-300 animate-pulse'
                             : 'bg-slate-50 text-slate-500 ring-slate-200'
                           }`}>
-                            {done ? '✓ ' : isCurrent ? '⏳ ' : ''}{roleLabelVN(role)}
-                            {done && <span className="ml-1 font-normal text-emerald-600">· {done.name}</span>}
+                            {done ? '✓ ' : isCurrent ? '⏳ ' : ''}{display}
+                            {done && done.name && !user && <span className="ml-1 font-normal text-emerald-600">· {done.name}</span>}
                           </div>
                           {i < task.approvalChain!.length - 1 && <ArrowRight size={12} className="text-slate-400" />}
                         </div>
@@ -431,8 +468,99 @@ export function TaskDetailModal(props: {
                 </div>
               )}
 
-              {/* Phase 12 — Form "Yêu cầu bổ sung" cho recipient (đề xuất) */}
-              {showRevisionForm && (
+              {/* Phase 12.5 — Approval block: 3 hành động cho người duyệt (Duyệt/Từ chối/Bổ sung) + ghi chú */}
+              {canApprove && (
+                <div className="rounded-lg border-2 border-amber-300 bg-amber-50/60 p-3 space-y-2">
+                  <div className="text-xs font-bold uppercase tracking-wider text-amber-800 flex items-center gap-1">
+                    <AlertTriangle size={12} /> Đến lượt bạn duyệt
+                  </div>
+
+                  {/* IDLE: 3 nút action */}
+                  {!showApprove && !showReject && !showRevisionForm && (
+                    <div className="grid grid-cols-3 gap-2">
+                      <button onClick={() => setShowApprove(true)} className={btnSuccess}>
+                        <CheckCircle2 size={14} /> Duyệt
+                      </button>
+                      <button onClick={() => setShowRevisionForm(true)} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-semibold rounded-lg bg-orange-600 hover:bg-orange-700 text-white shadow-sm">
+                        <AlertTriangle size={14} /> Bổ sung
+                      </button>
+                      <button onClick={() => setShowReject(true)} className={btnDanger}>
+                        <XCircle size={14} /> Từ chối
+                      </button>
+                    </div>
+                  )}
+
+                  {/* DUYỆT — ghi chú optional */}
+                  {showApprove && (
+                    <div className="space-y-2">
+                      <div className="text-xs font-semibold text-emerald-800">Ghi chú khi duyệt (tuỳ chọn)</div>
+                      <textarea
+                        value={approveComment}
+                        onChange={(e) => setApproveComment(e.target.value)}
+                        placeholder="Vd: Đồng ý phương án, lưu ý ... (có thể bỏ trống)"
+                        rows={2}
+                        maxLength={1000}
+                        className="w-full text-sm border border-emerald-300 rounded-lg p-2 focus:ring-2 focus:ring-emerald-400 outline-none"
+                      />
+                      <div className="flex gap-2 justify-end">
+                        <button onClick={() => { setShowApprove(false); setApproveComment(''); }} className={btnSecondary}>Huỷ</button>
+                        <button disabled={busy === 'approve'} onClick={approve} className={btnSuccess}>
+                          {busy === 'approve' && <Loader2 size={14} className="animate-spin" />}
+                          <CheckCircle2 size={14} /> Xác nhận duyệt
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* BỔ SUNG — yêu cầu creator chỉnh sửa, gửi lại */}
+                  {showRevisionForm && (
+                    <div className="space-y-2">
+                      <div className="text-xs font-semibold text-orange-800">Nội dung cần bổ sung (bắt buộc)</div>
+                      <p className="text-[11px] text-slate-600">Đề xuất sẽ chuyển trạng thái "Yêu cầu bổ sung". Người tạo bổ sung rồi gửi lại cho bạn duyệt.</p>
+                      <textarea
+                        value={revisionMessage}
+                        onChange={(e) => setRevisionMessage(e.target.value)}
+                        placeholder="Nêu rõ thông tin/chi tiết cần bổ sung..."
+                        rows={3}
+                        maxLength={1000}
+                        className="w-full text-sm border border-orange-300 rounded-lg p-2 focus:ring-2 focus:ring-orange-400 outline-none"
+                      />
+                      <div className="flex gap-2 justify-end">
+                        <button onClick={() => { setShowRevisionForm(false); setRevisionMessage(''); }} className={btnSecondary}>Huỷ</button>
+                        <button disabled={busy === 'request-revision' || !revisionMessage.trim()} onClick={requestRevision} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold rounded-lg bg-orange-600 hover:bg-orange-700 text-white shadow-sm disabled:opacity-50">
+                          {busy === 'request-revision' && <Loader2 size={14} className="animate-spin" />}
+                          <AlertTriangle size={14} /> Gửi yêu cầu
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* TỪ CHỐI — lý do bắt buộc */}
+                  {showReject && (
+                    <div className="space-y-2">
+                      <div className="text-xs font-semibold text-rose-800">Lý do từ chối (bắt buộc)</div>
+                      <textarea
+                        value={rejectReason}
+                        onChange={(e) => setRejectReason(e.target.value)}
+                        placeholder="Lý do từ chối đề xuất..."
+                        rows={2}
+                        maxLength={1000}
+                        className="w-full text-sm border border-rose-300 rounded-lg p-2 focus:ring-2 focus:ring-rose-400 outline-none"
+                      />
+                      <div className="flex gap-2 justify-end">
+                        <button onClick={() => { setShowReject(false); setRejectReason(''); }} className={btnSecondary}>Huỷ</button>
+                        <button disabled={busy === 'reject' || !rejectReason.trim()} onClick={reject} className={btnDanger}>
+                          {busy === 'reject' && <Loader2 size={14} className="animate-spin" />}
+                          <XCircle size={14} /> Xác nhận từ chối
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Form "Yêu cầu bổ sung" CHO RECIPIENT (đề xuất đã duyệt — recipient yêu cầu creator bổ sung) */}
+              {!canApprove && showRevisionForm && (
                 <div className="rounded-lg border-2 border-orange-300 bg-orange-50/60 p-3 space-y-2">
                   <div className="text-xs font-bold uppercase tracking-wider text-orange-800 flex items-center gap-1">
                     <AlertTriangle size={12} /> Yêu cầu người gửi bổ sung
@@ -453,45 +581,6 @@ export function TaskDetailModal(props: {
                       <AlertTriangle size={14} /> Gửi yêu cầu
                     </button>
                   </div>
-                </div>
-              )}
-
-              {/* Approval block */}
-              {canApprove && (
-                <div className="rounded-lg border-2 border-amber-300 bg-amber-50/60 p-3 space-y-2">
-                  <div className="text-xs font-bold uppercase tracking-wider text-amber-800 flex items-center gap-1">
-                    <AlertTriangle size={12} /> Việc liên khối — chờ bạn duyệt
-                  </div>
-                  {!showReject ? (
-                    <div className="flex gap-2">
-                      <button disabled={busy === 'approve'} onClick={approve} className={btnSuccess}>
-                        {busy === 'approve' && <Loader2 size={14} className="animate-spin" />}
-                        <CheckCircle2 size={14} /> Duyệt
-                      </button>
-                      <button onClick={() => setShowReject(true)} className={btnDanger}>
-                        <XCircle size={14} /> Từ chối
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <textarea
-                        value={rejectReason}
-                        onChange={(e) => setRejectReason(e.target.value)}
-                        placeholder="Lý do từ chối (bắt buộc)"
-                        rows={2}
-                        className="w-full text-sm border border-rose-300 rounded-lg p-2 focus:ring-2 focus:ring-rose-400 outline-none"
-                      />
-                      <div className="flex gap-2">
-                        <button disabled={busy === 'reject'} onClick={reject} className={btnDanger}>
-                          {busy === 'reject' && <Loader2 size={14} className="animate-spin" />}
-                          Xác nhận từ chối
-                        </button>
-                        <button onClick={() => { setShowReject(false); setRejectReason(''); }} className={btnSecondary}>
-                          Huỷ
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
 

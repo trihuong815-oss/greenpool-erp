@@ -1,12 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { X, Loader2, Paperclip, Trash2 } from 'lucide-react';
+import { X, Loader2, Paperclip, Trash2, Plus } from 'lucide-react';
 import {
   tasksApi,
   type Block, type TaskPriority, type TaskKind,
-  type ProposalType, type FinancialGroup,
-  PROPOSAL_TYPE_LABEL, FINANCIAL_GROUP_LABEL, AUTO_APPROVE_THRESHOLD,
 } from '@/lib/services/tasks/api-client';
 import { ROLE_BLOCK } from '@/lib/permissions';
 
@@ -24,40 +22,6 @@ function getRoleLevel(roleCode: string): number {
   return ROLE_LEVEL[roleCode] ?? 3; // mặc định nhân viên cấp 3
 }
 
-const PROPOSAL_TYPES: ProposalType[] = ['tai_chinh', 'van_hanh'];
-const FINANCIAL_GROUPS: FinancialGroup[] = ['chi_thuong_xuyen', 'chi_khac'];
-
-/** Tính trước "đề xuất này có cần duyệt không, qua bao nhiêu cấp" để hiển thị cho user
- *  ngay trước khi submit. Mirror logic server (POST /api/tasks). */
-function computeApprovalPreview(
-  creatorRole: string,
-  creatorBlock: 'KD' | 'VP' | 'all',
-  proposalType: ProposalType,
-  financialGroup: FinancialGroup | null,
-  estimatedCost: number | null,
-  assigneeBlock: Block,
-): { chain: string[]; reason: string } {
-  // Skip: creator đã ở top
-  if (creatorRole === 'CEO' || creatorRole === 'ADMIN') return { chain: [], reason: 'Bạn ở cấp cao nhất — không cần duyệt' };
-  // Skip: chi thường xuyên
-  if (proposalType === 'tai_chinh' && financialGroup === 'chi_thuong_xuyen') {
-    return { chain: [], reason: 'Chi hoạt động thường xuyên — QLCS tự quyết, không cần duyệt' };
-  }
-  // Skip: chi khác ≤ 5tr
-  if (proposalType === 'tai_chinh' && financialGroup === 'chi_khac' && estimatedCost != null && estimatedCost <= AUTO_APPROVE_THRESHOLD) {
-    return { chain: [], reason: `Chi ≤ ${(AUTO_APPROVE_THRESHOLD / 1_000_000).toFixed(0)}tr — QLCS tự quyết, không cần duyệt` };
-  }
-  // Cross-block: 2 cấp duyệt
-  if (creatorBlock !== assigneeBlock && creatorBlock !== 'all') {
-    const creatorGD = creatorBlock === 'KD' ? 'GD_KD' : 'GD_VP';
-    const assigneeGD = assigneeBlock === 'KD' ? 'GD_KD' : 'GD_VP';
-    return { chain: [creatorGD, assigneeGD], reason: `Cross-block: ${creatorGD} duyệt → ${assigneeGD} duyệt → đến người nhận` };
-  }
-  // Same block: 1 cấp
-  const gd = assigneeBlock === 'KD' ? 'GD_KD' : 'GD_VP';
-  return { chain: [gd], reason: `Cần ${gd} duyệt → đến người nhận` };
-}
-
 interface Department { id: string; name: string; blockId: 'KD' | 'VP' | null; }
 interface Branch { id: string; name: string; }
 interface User { id: string; name: string; roleId: string; branchId: string | null; departmentId: string | null; }
@@ -66,6 +30,7 @@ type AssigneeKind = 'department' | 'facility' | 'user';
 
 export function TaskCreateModal(props: {
   kind: TaskKind;
+  currentUserId: string;
   currentUserRole: string;
   currentDepartmentId: string | null;
   currentBranchId: string | null;
@@ -76,7 +41,7 @@ export function TaskCreateModal(props: {
   onCreated: () => void;
 }) {
   const {
-    kind, currentUserRole, currentDepartmentId, currentBranchId,
+    kind, currentUserId, currentUserRole, currentDepartmentId, currentBranchId,
     departments, branches, users, onClose, onCreated,
   } = props;
   const kindLabel = kind === 'proposal' ? 'đề xuất' : 'giao việc';
@@ -102,12 +67,69 @@ export function TaskCreateModal(props: {
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Đề xuất v2: nội dung (tài chính/vận hành) + nhóm chi + số tiền
-  const [proposalType, setProposalType] = useState<ProposalType>('van_hanh');
-  const [financialGroup, setFinancialGroup] = useState<FinancialGroup>('chi_thuong_xuyen');
-  const [estimatedCost, setEstimatedCost] = useState<string>('');
+  // Phase 12.6 (2026-06-03): BỎ phân biệt loại/nhóm chi/cost. Đề xuất chỉ còn tiêu đề + mô tả + người duyệt + file.
+  // Đề xuất v2.5 (2026-06-03): người tạo CHỌN chuỗi người duyệt (ngang cấp + cấp trên).
+  // Mảng UID theo thứ tự duyệt. Empty = không cần duyệt → đi thẳng pending.
+  const [approverUserIds, setApproverUserIds] = useState<string[]>([]);
 
   // Cấp bậc người tạo — dùng để filter "Gửi cho" cho đề xuất (ngang cấp hoặc cấp trên)
   const myLevel = getRoleLevel(currentUserRole);
+
+  // Phase 12.5: candidate người duyệt cho đề xuất — ngang cấp + cấp trên (level >= myLevel),
+  // KHÔNG phải creator. Hiển thị mọi khối (anh chốt 2026-06-03 không phân biệt cross-block).
+  const approverCandidates = useMemo(() => {
+    return users
+      .filter((u) => u.id !== currentUserId)
+      .filter((u) => getRoleLevel(u.roleId) >= myLevel)
+      .sort((a, b) => {
+        const la = getRoleLevel(a.roleId);
+        const lb = getRoleLevel(b.roleId);
+        if (la !== lb) return lb - la; // cấp cao trước
+        return a.name.localeCompare(b.name, 'vi');
+      });
+  }, [users, myLevel, currentUserId]);
+
+  // Phase 12.5 (2026-06-03 v2): sort 2 tầng:
+  //   1. Cùng khối creator ưu tiên trước (vd creator KD: KD trước VP)
+  //   2. Trong mỗi nhóm: cấp cao trước cấp dưới
+  // Ví dụ: creator KD chọn [GD_KD, GD_VP, TP_KE]
+  //   → GD_KD (KD, 8) → GD_VP (VP, 8) → TP_KE (VP, 6)
+  // Block 'all' (CEO/ADMIN) coi như cùng khối creator (ưu tiên).
+  function sortApproversByLevel(uids: string[]): string[] {
+    return [...uids].sort((a, b) => {
+      const ua = users.find((u) => u.id === a);
+      const ub = users.find((u) => u.id === b);
+      const ba = ua ? (ROLE_BLOCK[ua.roleId] ?? 'all') : 'all';
+      const bb = ub ? (ROLE_BLOCK[ub.roleId] ?? 'all') : 'all';
+      const sameA = ba === myBlock || ba === 'all' ? 0 : 1;
+      const sameB = bb === myBlock || bb === 'all' ? 0 : 1;
+      if (sameA !== sameB) return sameA - sameB; // cùng khối creator trước
+      const la = ua ? getRoleLevel(ua.roleId) : 0;
+      const lb = ub ? getRoleLevel(ub.roleId) : 0;
+      return lb - la; // cấp cao trước
+    });
+  }
+  function addApprover() {
+    const firstAvailable = approverCandidates.find((u) => !approverUserIds.includes(u.id));
+    if (firstAvailable) setApproverUserIds((p) => sortApproversByLevel([...p, firstAvailable.id]));
+  }
+  // Auto-add cấp 1 khi mở form Đề xuất (bắt buộc ≥1 người duyệt)
+  useEffect(() => {
+    if (kind === 'proposal' && approverUserIds.length === 0 && approverCandidates.length > 0) {
+      setApproverUserIds([approverCandidates[0].id]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind]);
+  function removeApprover(idx: number) {
+    setApproverUserIds((p) => p.filter((_, i) => i !== idx));
+  }
+  function changeApprover(idx: number, uid: string) {
+    setApproverUserIds((p) => {
+      const next = [...p];
+      next[idx] = uid;
+      return sortApproversByLevel(next);
+    });
+  }
 
   // Filter departments theo khối nhận
   const deptsInBlock = useMemo(
@@ -175,9 +197,11 @@ export function TaskCreateModal(props: {
     let facilityId: string | null = null;
     let userIds: string[] = [];
     if (kind === 'proposal') {
-      // Đề xuất v2 (2026-06-01): creator = executor. Server tự force assigneeUserIds=[creator].
-      // Approver tính theo proposalType + nhóm chi (xem computeApprovalPreview / API POST).
-      // Form không cần chọn assignee.
+      // Đề xuất v2.5 (2026-06-03): creator = executor + BẮT BUỘC chọn ≥1 người duyệt.
+      if (approverUserIds.length === 0) {
+        setError('Đã là đề xuất thì phải có ít nhất 1 người duyệt — bấm "+ Thêm cấp duyệt"');
+        return;
+      }
     } else if (assigneeKind === 'department') {
       if (!assigneeDeptId) { setError('Chọn phòng ban'); return; }
       deptId = assigneeDeptId;
@@ -188,16 +212,7 @@ export function TaskCreateModal(props: {
       if (assigneeUserIds.length === 0) { setError('Chọn ít nhất 1 người'); return; }
       userIds = assigneeUserIds;
     }
-    // Đề xuất v2: tài chính + chi khác bắt buộc số tiền > 0; chi thường xuyên cost optional
-    let cost: number | null = null;
-    if (kind === 'proposal' && proposalType === 'tai_chinh' && financialGroup === 'chi_khac') {
-      const n = Number(estimatedCost.replace(/[^\d]/g, ''));
-      if (!Number.isFinite(n) || n <= 0) { setError('Đề xuất chi khác bắt buộc nhập chi phí dự kiến (VND > 0).'); return; }
-      cost = n;
-    } else if (kind === 'proposal' && estimatedCost) {
-      const n = Number(estimatedCost.replace(/[^\d]/g, ''));
-      if (Number.isFinite(n) && n > 0) cost = n;
-    }
+    // Phase 12.6 (2026-06-03): BỎ phân biệt loại + nhóm chi + cost. Tất cả null cho proposal mới.
     setSaving(true);
     try {
       const { id } = await tasksApi.create({
@@ -210,9 +225,10 @@ export function TaskCreateModal(props: {
         assigneeUserIds: userIds,
         priority,
         dueDate: dueDate || null,
-        proposalType: kind === 'proposal' ? proposalType : null,
-        financialGroup: kind === 'proposal' && proposalType === 'tai_chinh' ? financialGroup : null,
-        estimatedCost: cost,
+        proposalType: null,
+        financialGroup: null,
+        estimatedCost: null,
+        approverUserIds: kind === 'proposal' ? approverUserIds : undefined,
       });
       // Upload attachments tuần tự (đơn giản, ít edge case)
       if (files.length > 0) {
@@ -250,9 +266,11 @@ export function TaskCreateModal(props: {
           <div>
             <h2 className="text-base font-bold">Tạo {kindLabel} mới</h2>
             <p className="text-xs text-emerald-50/90 mt-0.5">
-              {willNeedApproval
-                ? (isCrossBlock ? `Liên khối → ${targetGDLabel} sẽ duyệt` : `Liên phòng/cơ sở → ${targetGDLabel} sẽ duyệt`)
-                : 'Đi thẳng đến người nhận, không cần duyệt'}
+              {kind === 'proposal'
+                ? `Đi qua ${approverUserIds.length || 1} cấp duyệt → bạn thực hiện`
+                : (willNeedApproval
+                    ? (isCrossBlock ? `Liên khối → ${targetGDLabel} sẽ duyệt` : `Liên phòng/cơ sở → ${targetGDLabel} sẽ duyệt`)
+                    : 'Đi thẳng đến người nhận, không cần duyệt')}
             </p>
           </div>
           <button onClick={onClose} className="text-white/80 hover:text-white"><X size={20} /></button>
@@ -287,67 +305,8 @@ export function TaskCreateModal(props: {
             />
           </Field>
 
-          {/* Đề xuất v2: nội dung + nhóm chi + số tiền (tài chính) */}
-          {kind === 'proposal' && (
-            <>
-              <Field label="Nội dung đề xuất *">
-                <div className="grid grid-cols-2 gap-2">
-                  {PROPOSAL_TYPES.map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => setProposalType(t)}
-                      className={`px-3 py-2 rounded-lg text-sm font-semibold ring-1 transition ${
-                        proposalType === t
-                          ? 'bg-amber-50 text-amber-800 ring-amber-300'
-                          : 'bg-white text-slate-600 ring-slate-200 hover:ring-amber-200'
-                      }`}
-                    >
-                      {t === 'tai_chinh' ? '💰 ' : '⚙️ '}{PROPOSAL_TYPE_LABEL[t]}
-                    </button>
-                  ))}
-                </div>
-              </Field>
-              {proposalType === 'tai_chinh' && (
-                <>
-                  <Field label="Nhóm chi *">
-                    <select
-                      value={financialGroup}
-                      onChange={(e) => setFinancialGroup(e.target.value as FinancialGroup)}
-                      className={inputCls}
-                    >
-                      {FINANCIAL_GROUPS.map((g) => (
-                        <option key={g} value={g}>{FINANCIAL_GROUP_LABEL[g]}</option>
-                      ))}
-                    </select>
-                  </Field>
-                  <Field label={financialGroup === 'chi_khac' ? 'Chi phí dự kiến (VND) *' : 'Chi phí dự kiến (VND, tùy chọn)'}>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={estimatedCost}
-                      onChange={(e) => {
-                        const raw = e.target.value.replace(/[^\d]/g, '');
-                        setEstimatedCost(raw ? Number(raw).toLocaleString('vi-VN') : '');
-                      }}
-                      placeholder="vd: 5.000.000"
-                      className={inputCls}
-                    />
-                  </Field>
-                </>
-              )}
-              {/* Preview luồng duyệt — minh bạch trước khi gửi */}
-              {(() => {
-                const costNum = estimatedCost ? Number(estimatedCost.replace(/[^\d]/g, '')) : null;
-                const preview = computeApprovalPreview(currentUserRole, myBlock, proposalType, proposalType === 'tai_chinh' ? financialGroup : null, costNum, assigneeBlock);
-                return (
-                  <div className={`text-xs rounded-lg p-2.5 ${preview.chain.length === 0 ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-amber-50 text-amber-800 border border-amber-200'}`}>
-                    <span className="font-semibold">{preview.chain.length === 0 ? '✓ Không cần duyệt:' : `📋 Cần duyệt (${preview.chain.length} cấp):`}</span> {preview.reason}
-                  </div>
-                );
-              })()}
-            </>
-          )}
+          {/* Phase 12.6 (2026-06-03): BỎ phân biệt loại/nhóm chi/cost. Đề xuất chỉ tiêu đề + mô tả + người duyệt + file. */}
+
 
           {/* Block radio — chỉ cho giao việc; đề xuất không cần (creator = executor). */}
           {kind !== 'proposal' && (
@@ -378,14 +337,57 @@ export function TaskCreateModal(props: {
             </Field>
           )}
 
-          {/* Đề xuất: thông báo creator = executor — KHÔNG có "Gửi cho" vì đề xuất là xin duyệt, không phải giao việc */}
+          {/* Đề xuất: chọn chuỗi người duyệt (BẮT BUỘC ≥ 1 cấp) */}
           {kind === 'proposal' && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-900">
-              <div className="font-semibold mb-1">👤 Người thực hiện: Bạn (người tạo đề xuất)</div>
-              <div className="text-xs text-blue-700">
-                Sau khi đề xuất được duyệt, bạn vào chi tiết và ấn "Hoàn thành" khi đã thực hiện xong. Người duyệt sẽ tự xác định theo luồng phía trên.
+            <Field label={`Người duyệt * (${approverUserIds.length} cấp)`}>
+              <div className="space-y-2">
+                {approverUserIds.length === 0 && (
+                  <div className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-lg p-2.5">
+                    ⚠ Bắt buộc chọn ít nhất 1 người duyệt — đã là đề xuất thì phải có người duyệt.
+                  </div>
+                )}
+                {approverUserIds.map((uid, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-amber-700 bg-amber-100 rounded px-2 py-1 min-w-[42px] text-center">
+                      Cấp {idx + 1}
+                    </span>
+                    <select
+                      value={uid}
+                      onChange={(e) => changeApprover(idx, e.target.value)}
+                      className={`${inputCls} flex-1`}
+                    >
+                      {approverCandidates
+                        .filter((u) => u.id === uid || !approverUserIds.includes(u.id))
+                        .map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.name} · {u.roleId}
+                          </option>
+                        ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => removeApprover(idx)}
+                      className="text-slate-400 hover:text-rose-600 p-1"
+                      title="Xoá cấp duyệt này"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+                {approverCandidates.length > approverUserIds.length && (
+                  <button
+                    type="button"
+                    onClick={addApprover}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg"
+                  >
+                    <Plus size={12} /> Thêm cấp duyệt
+                  </button>
+                )}
               </div>
-            </div>
+              <p className="mt-1.5 text-[11px] text-slate-500">
+                Bắt buộc ít nhất 1 người duyệt. Chọn ngang cấp hoặc cấp trên — hệ thống tự sắp xếp <strong>cấp cao duyệt trước</strong> (GĐ → TP/QLCS → NV). Sau khi tất cả duyệt xong, bạn vào chi tiết và ấn "Hoàn thành".
+              </p>
+            </Field>
           )}
 
           {/* Assignee kind picker — CHỈ cho giao việc. Proposal đã thông báo creator = executor ở trên. */}
@@ -523,7 +525,9 @@ export function TaskCreateModal(props: {
             className="px-5 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-50 shadow-sm inline-flex items-center gap-2"
           >
             {saving && <Loader2 size={14} className="animate-spin" />}
-            {willNeedApproval ? 'Gửi để duyệt' : `Tạo ${kindLabel}`}
+            {kind === 'proposal'
+              ? 'Gửi để duyệt'
+              : (willNeedApproval ? 'Gửi để duyệt' : `Tạo ${kindLabel}`)}
           </button>
         </div>
       </div>
