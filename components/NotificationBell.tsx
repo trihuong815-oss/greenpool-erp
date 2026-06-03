@@ -57,98 +57,62 @@ export function NotificationBell() {
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
+    // Phase 13.6: Promise.allSettled + log per-endpoint failures.
+    // Trước đây 5 fetch silent catch → 1 endpoint fail = badge count sai âm thầm.
+    // Giờ: gom partial errors + báo qua console (dev xem được) + giữ data đã fetch được.
+    type Job = { source: Source; url: string; parse: (j: any) => NotiItem[] };
+    const jobs: Job[] = [
+      { source: 'approval', url: '/api/tasks?mode=pending_approval',
+        parse: (j) => (Array.isArray(j?.rows) ? j.rows.slice(0, 10) : []).map((t: any) => ({
+          id: `appr-${t.id}`, source: 'approval',
+          title: t.title ?? '(không tên)',
+          subtitle: `${t.kind === 'proposal' ? '📥 Đề xuất' : '📌 Giao việc'} từ ${t.createdByName ?? '?'}`,
+          time: t.createdAt,
+          link: `/giao-viec?taskId=${encodeURIComponent(t.id)}`,
+        })) },
+      { source: 'assigned', url: '/api/tasks?mode=assigned&status=pending',
+        parse: (j) => (Array.isArray(j?.rows) ? j.rows.slice(0, 10) : []).map((t: any) => ({
+          id: `asgn-${t.id}`, source: 'assigned',
+          title: t.title ?? '(không tên)',
+          subtitle: `Từ ${t.createdByName ?? '?'}`,
+          time: t.createdAt,
+          link: `/giao-viec?taskId=${encodeURIComponent(t.id)}`,
+        })) },
+      { source: 'kt_proposal', url: '/api/ky-thuat/work?kind=proposal&status=pending_approval',
+        parse: (j) => (Array.isArray(j?.rows) ? j.rows.slice(0, 10) : []).map((t: any) => ({
+          id: `ktp-${t.id}`, source: 'kt_proposal',
+          title: t.title ?? '(không tên)',
+          subtitle: `Từ ${t.createdByName ?? '?'} @ ${t.branchId ?? '?'}`,
+          time: t.createdAt,
+          link: '/ky-thuat/giao-viec?tab=proposals',
+        })) },
+      { source: 'kt_task', url: '/api/ky-thuat/work?kind=task&status=open',
+        parse: (j) => (Array.isArray(j?.rows) ? j.rows.slice(0, 10) : []).map((t: any) => ({
+          id: `ktt-${t.id}`, source: 'kt_task',
+          title: t.title ?? '(không tên)',
+          subtitle: `Từ ${t.createdByName ?? '?'} @ ${t.branchId ?? '?'}`,
+          time: t.createdAt,
+          link: '/ky-thuat/giao-viec?tab=tasks',
+        })) },
+      { source: 'checklist', url: '/api/checklist-v2/notifications?onlyUnseen=1',
+        parse: (j) => (Array.isArray(j?.notifications) ? j.notifications.slice(0, 10) : []).map((n: any) => ({
+          id: `cl-${n.id}`, source: 'checklist',
+          title: n.runTitle ?? n.title ?? 'Checklist mới',
+          subtitle: `Từ ${n.submittedByName ?? '?'} @ ${n.branchId ?? '?'}`,
+          time: n.submittedAt,
+          link: '/checklist-v2',
+        })) },
+    ];
+    const results = await Promise.allSettled(jobs.map(async (j) => {
+      const res = await fetch(j.url, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return j.parse(await res.json());
+    }));
     const next: NotiItem[] = [];
-    // 1. Tasks pending_approval
-    try {
-      const res = await fetch('/api/tasks?mode=pending_approval', { cache: 'no-store' });
-      if (res.ok) {
-        const j = await res.json();
-        const arr = Array.isArray(j.rows) ? j.rows : [];
-        for (const t of arr.slice(0, 10)) {
-          next.push({
-            id: `appr-${t.id}`,
-            source: 'approval',
-            title: t.title ?? '(không tên)',
-            subtitle: `${t.kind === 'proposal' ? '📥 Đề xuất' : '📌 Giao việc'} từ ${t.createdByName ?? '?'}`,
-            time: t.createdAt,
-            link: `/giao-viec?taskId=${encodeURIComponent(t.id)}`,
-          });
-        }
-      }
-    } catch {}
-    // 2. Tasks assigned (chưa start)
-    try {
-      const res = await fetch('/api/tasks?mode=assigned&status=pending', { cache: 'no-store' });
-      if (res.ok) {
-        const j = await res.json();
-        const arr = Array.isArray(j.rows) ? j.rows : [];
-        for (const t of arr.slice(0, 10)) {
-          next.push({
-            id: `asgn-${t.id}`,
-            source: 'assigned',
-            title: t.title ?? '(không tên)',
-            subtitle: `Từ ${t.createdByName ?? '?'}`,
-            time: t.createdAt,
-            link: `/giao-viec?taskId=${encodeURIComponent(t.id)}`,
-          });
-        }
-      }
-    } catch {}
-    // 3. TechWork — KT proposals chờ duyệt
-    try {
-      const res = await fetch('/api/ky-thuat/work?kind=proposal&status=pending_approval', { cache: 'no-store' });
-      if (res.ok) {
-        const j = await res.json();
-        const arr = Array.isArray(j.rows) ? j.rows : [];
-        for (const t of arr.slice(0, 10)) {
-          next.push({
-            id: `ktp-${t.id}`,
-            source: 'kt_proposal',
-            title: t.title ?? '(không tên)',
-            subtitle: `Từ ${t.createdByName ?? '?'} @ ${t.branchId ?? '?'}`,
-            time: t.createdAt,
-            link: '/ky-thuat/giao-viec?tab=proposals',
-          });
-        }
-      }
-    } catch {}
-    // 4. TechWork — KT tasks assigned to me (status=open)
-    try {
-      const res = await fetch('/api/ky-thuat/work?kind=task&status=open', { cache: 'no-store' });
-      if (res.ok) {
-        const j = await res.json();
-        const arr = Array.isArray(j.rows) ? j.rows : [];
-        for (const t of arr.slice(0, 10)) {
-          next.push({
-            id: `ktt-${t.id}`,
-            source: 'kt_task',
-            title: t.title ?? '(không tên)',
-            subtitle: `Từ ${t.createdByName ?? '?'} @ ${t.branchId ?? '?'}`,
-            time: t.createdAt,
-            link: '/ky-thuat/giao-viec?tab=tasks',
-          });
-        }
-      }
-    } catch {}
-    // 5. Checklist v2 unseen
-    try {
-      const res = await fetch('/api/checklist-v2/notifications?onlyUnseen=1', { cache: 'no-store' });
-      if (res.ok) {
-        const j = await res.json();
-        const arr = Array.isArray(j.notifications) ? j.notifications : [];
-        for (const n of arr.slice(0, 10)) {
-          next.push({
-            id: `cl-${n.id}`,
-            source: 'checklist',
-            title: n.runTitle ?? n.title ?? 'Checklist mới',
-            subtitle: `Từ ${n.submittedByName ?? '?'} @ ${n.branchId ?? '?'}`,
-            time: n.submittedAt,
-            link: '/checklist-v2',
-          });
-        }
-      }
-    } catch {}
-    // Sort theo time desc (mới nhất trên)
+    results.forEach((r, i) => {
+      if (r.status === 'fulfilled') next.push(...r.value);
+      else console.warn(`[NotificationBell] ${jobs[i].source} fail:`, (r.reason as any)?.message ?? r.reason);
+    });
     next.sort((a, b) => (b.time ?? '').localeCompare(a.time ?? ''));
     setItems(next);
     setLoading(false);

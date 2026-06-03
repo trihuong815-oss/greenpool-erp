@@ -63,12 +63,18 @@ async function ensureSWRegistration(): Promise<ServiceWorkerRegistration | null>
     _swReg = await navigator.serviceWorker.register(swUrl, { scope: '/' });
     // Trigger explicit update check — iOS không tự check như Chrome
     try { await _swReg.update(); } catch { /* ignore */ }
-    // Wait for active SW
+    // Wait for active SW — có timeout 10s. iOS Safari đôi khi không trigger statechange =>
+    // promise hang vô hạn. Modern browsers auto-activate trong dưới 1s; nếu quá 10s
+    // coi như SW init xong (token sẽ register, nếu fail thì caller retry).
     if (_swReg.installing) {
       await new Promise<void>((resolve) => {
         const sw = _swReg!.installing!;
+        const timer = setTimeout(() => {
+          console.warn('[messaging-client] SW activation timeout 10s, proceed anyway');
+          resolve();
+        }, 10000);
         sw.addEventListener('statechange', () => {
-          if (sw.state === 'activated') resolve();
+          if (sw.state === 'activated') { clearTimeout(timer); resolve(); }
         });
       });
     }
@@ -177,13 +183,18 @@ export async function subscribeForegroundMessages(
   // Server gửi DATA-ONLY (sửa 2026-06-01) — đọc từ payload.data, KHÔNG payload.notification.
   // payload.notification sẽ luôn undefined với pattern data-only.
   const unsub = onMessage(messaging, (payload) => {
-    const d = payload.data ?? {};
-    handler({
-      title: d.title ?? payload.notification?.title ?? 'Green Pool',
-      body: d.body ?? payload.notification?.body ?? '',
-      taskId: d.taskId,
-      kind: d.kind,
-    });
+    try {
+      const d = payload.data ?? {};
+      handler({
+        title: d.title ?? payload.notification?.title ?? 'Green Pool',
+        body: d.body ?? payload.notification?.body ?? '',
+        taskId: d.taskId,
+        kind: d.kind,
+      });
+    } catch (e) {
+      // Handler throw không được phá hỏng subscription — log + skip 1 message
+      console.warn('[messaging-client] foreground handler threw:', e);
+    }
   });
   return unsub;
 }

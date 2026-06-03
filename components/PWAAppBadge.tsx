@@ -73,35 +73,40 @@ export function PWAAppBadge() {
     });
 
     // ─── Source 2-4: Tasks + TechWork + Checklist (poll API mỗi 60s) ───
+    // Phase 13.6: Promise.allSettled per-endpoint → 1 endpoint fail không kéo cả badge sai.
+    // Mỗi endpoint giữ giá trị cache cũ nếu lần fetch này fail (tránh badge nhảy 0 vô lý).
     async function fetchAll() {
-      try {
-        const [approvalRes, assignedRes, techWorkApprovalRes, techWorkAssignedRes, checklistRes] = await Promise.all([
-          // /giao-viec — tasks chờ tôi duyệt + tasks giao cho tôi pending
-          fetch('/api/tasks?mode=pending_approval', { cache: 'no-store' }),
-          fetch('/api/tasks?mode=assigned&status=pending', { cache: 'no-store' }),
-          // /ky-thuat — proposals chờ duyệt + tasks KT chờ tôi (status=open)
-          fetch('/api/ky-thuat/work?kind=proposal&status=pending_approval', { cache: 'no-store' }),
-          fetch('/api/ky-thuat/work?kind=task&status=open', { cache: 'no-store' }),
-          // Checklist v2 supervisor notifications chưa seen
-          fetch('/api/checklist-v2/notifications?onlyUnseen=1', { cache: 'no-store' }),
-        ]);
-        // Tasks count
-        let tasksN = 0;
-        if (approvalRes.ok) { const j = await approvalRes.json(); tasksN += Array.isArray(j.rows) ? j.rows.length : 0; }
-        if (assignedRes.ok) { const j = await assignedRes.json(); tasksN += Array.isArray(j.rows) ? j.rows.length : 0; }
-        totalTasks = tasksN;
-        // TechWork count
-        let twN = 0;
-        if (techWorkApprovalRes.ok) { const j = await techWorkApprovalRes.json(); twN += Array.isArray(j.rows) ? j.rows.length : 0; }
-        if (techWorkAssignedRes.ok) { const j = await techWorkAssignedRes.json(); twN += Array.isArray(j.rows) ? j.rows.length : 0; }
-        totalTechWork = twN;
-        // Checklist v2 count
-        if (checklistRes.ok) {
-          const j = await checklistRes.json();
-          totalChecklist = Array.isArray(j.notifications) ? j.notifications.length : 0;
+      const jobs = [
+        { label: 'tasks:approval', url: '/api/tasks?mode=pending_approval' },
+        { label: 'tasks:assigned', url: '/api/tasks?mode=assigned&status=pending' },
+        { label: 'kt:proposal', url: '/api/ky-thuat/work?kind=proposal&status=pending_approval' },
+        { label: 'kt:task', url: '/api/ky-thuat/work?kind=task&status=open' },
+        { label: 'checklist', url: '/api/checklist-v2/notifications?onlyUnseen=1' },
+      ];
+      const results = await Promise.allSettled(jobs.map(async (j) => {
+        const res = await fetch(j.url, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        return { label: j.label, count: Array.isArray(data?.rows) ? data.rows.length : Array.isArray(data?.notifications) ? data.notifications.length : 0 };
+      }));
+      let tasksN: number | null = null;
+      let techN: number | null = null;
+      let clN: number | null = null;
+      results.forEach((r, i) => {
+        if (r.status === 'fulfilled') {
+          const { label, count } = r.value;
+          if (label === 'tasks:approval' || label === 'tasks:assigned') tasksN = (tasksN ?? 0) + count;
+          else if (label === 'kt:proposal' || label === 'kt:task') techN = (techN ?? 0) + count;
+          else if (label === 'checklist') clN = count;
+        } else {
+          console.warn(`[PWAAppBadge] ${jobs[i].label} fail:`, (r.reason as any)?.message ?? r.reason);
         }
-        applyBadge();
-      } catch { /* silent — không spam noti khi network fail */ }
+      });
+      // Chỉ overwrite các nguồn fetch thành công; giữ giá trị cũ cho nguồn fail
+      if (tasksN !== null) totalTasks = tasksN;
+      if (techN !== null) totalTechWork = techN;
+      if (clN !== null) totalChecklist = clN;
+      applyBadge();
     }
     fetchAll();
     pollTimer = setInterval(fetchAll, 60_000);

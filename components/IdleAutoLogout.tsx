@@ -31,8 +31,14 @@ export function IdleAutoLogout() {
   }, [warning]);
 
   const doLogout = useCallback(async () => {
+    // Broadcast trước khi sign out để các listener (chat, noti) tự cleanup gọn gàng,
+    // tránh listener mồ côi gửi request sau khi token đã chết → spam log error.
+    try {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('gp:before-logout'));
+      }
+    } catch { /* ignore */ }
     try { await signOut(getFirebaseClientAuth()); } catch {}
-    // Hard redirect để clear hết state client
     if (typeof window !== 'undefined') window.location.href = '/login?reason=idle';
     else router.push('/login?reason=idle');
   }, [router]);

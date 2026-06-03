@@ -7,10 +7,11 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { MessageCircle, Plus, Users, Send, Loader2, X, Search, AlertCircle, ChevronLeft, Hash, RefreshCw, Paperclip, ImageIcon, Smile, FileText, Download, CornerUpLeft, Forward, Mic, Square, Play, Pause, CheckCheck, Sticker } from 'lucide-react';
-import { collection, doc, onSnapshot, orderBy, query, limit, where, Timestamp } from 'firebase/firestore';
+import { collection, doc, orderBy, query, limit, where, Timestamp } from 'firebase/firestore';
 import { ref as storageRef, getDownloadURL } from 'firebase/storage';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { getFirebaseClientDb, getFirebaseClientStorage, getFirebaseClient } from '@/lib/firebase/client';
+import { subscribeRealtime } from '@/lib/firebase/realtime-reconnect';
 import { chatApi, type ChatConversation, type ChatMessage, type ChatUser, type ChatAttachment, type ChatReplyRef } from '@/lib/services/chat/api-client';
 import { STICKER_PACK, STICKER_PACK_ID, findSticker } from '@/lib/stickers';
 
@@ -92,79 +93,66 @@ export function TinNhanClient({ currentUserId, currentUserName, currentUserRole 
     finally { setSyncing(false); }
   }
 
-  // ─── Conversations realtime ───
-  // PHẢI đợi Firebase Auth client init xong trước khi tạo Firestore listener,
-  // nếu không rules sẽ deny với "Missing or insufficient permissions" (request.auth=null).
+  // ─── Conversations realtime (Phase 13.6 — auto-reconnect via subscribeRealtime) ───
+  // Helper xử lý: token expire (1h), network flap, idle → tự retry với exponential backoff +
+  // re-attach ngay khi tab về visible. Chấm dứt vĩnh viễn vấn đề "1 thời gian phải thoát ra vào lại".
   useEffect(() => {
-    let unsub: (() => void) | null = null;
+    let chatUnsub: (() => void) | null = null;
     const auth = getAuth(getFirebaseClient());
     const unsubAuth = onAuthStateChanged(auth, (user) => {
-      // Auth chưa ready hoặc đã logout → close listener cũ
-      if (unsub) { unsub(); unsub = null; }
-      if (!user) {
-        setConvLoading(false);
-        return;
-      }
-      try {
-        const db = getFirebaseClientDb();
-        const q = query(
-          collection(db, 'conversations'),
-          where('participantIds', 'array-contains', user.uid),
-          orderBy('lastMessageAt', 'desc'),
-          limit(100),
-        );
-        unsub = onSnapshot(q,
-          (snap) => {
-            const rows: ChatConversation[] = snap.docs.map((d) => {
-              const x = d.data() as any;
-              const lm = x.lastMessage as any;
-              const readBy: Record<string, string> = {};
-              if (x.readBy) for (const [k, v] of Object.entries(x.readBy)) {
-                readBy[k] = v instanceof Timestamp ? v.toDate().toISOString() : (v as any);
-              }
-              const typing: Record<string, string> = {};
-              if (x.typing) for (const [k, v] of Object.entries(x.typing)) {
-                typing[k] = v instanceof Timestamp ? v.toDate().toISOString() : (v as any);
-              }
-              return {
-                id: d.id,
-                type: x.type,
-                name: x.name,
-                participantIds: x.participantIds ?? [],
-                participantNames: x.participantNames ?? {},
-                lastMessage: lm ? {
-                  text: lm.text,
-                  senderId: lm.senderId,
-                  senderName: lm.senderName,
-                  sentAt: lm.sentAt instanceof Timestamp ? lm.sentAt.toDate().toISOString() : lm.sentAt,
-                } : null,
-                lastMessageAt: x.lastMessageAt instanceof Timestamp ? x.lastMessageAt.toDate().toISOString() : x.lastMessageAt,
-                readBy,
-                typing,
-                createdAt: x.createdAt instanceof Timestamp ? x.createdAt.toDate().toISOString() : x.createdAt,
-                createdBy: x.createdBy,
-                createdByName: x.createdByName ?? '',
-                ownerId: x.ownerId,
-              };
-            });
-            setConversations(rows);
-            setConvLoading(false);
-            setError(null);
-          },
-          (err) => {
-            console.error('[conv listener]', err);
-            setError(err.code === 'failed-precondition'
-              ? 'Index Firestore đang build, vui lòng chờ vài phút.'
-              : err.message);
-            setConvLoading(false);
-          },
-        );
-      } catch (e: any) {
-        setError(e.message);
-        setConvLoading(false);
-      }
+      if (chatUnsub) { chatUnsub(); chatUnsub = null; }
+      if (!user) { setConvLoading(false); return; }
+      chatUnsub = subscribeRealtime({
+        label: 'conv',
+        buildQuery: () => {
+          const db = getFirebaseClientDb();
+          return query(
+            collection(db, 'conversations'),
+            where('participantIds', 'array-contains', user.uid),
+            orderBy('lastMessageAt', 'desc'),
+            limit(100),
+          );
+        },
+        onData: (snap) => {
+          const rows: ChatConversation[] = snap.docs.map((d) => {
+            const x = d.data() as any;
+            const lm = x.lastMessage as any;
+            const readBy: Record<string, string> = {};
+            if (x.readBy) for (const [k, v] of Object.entries(x.readBy)) {
+              readBy[k] = v instanceof Timestamp ? v.toDate().toISOString() : (v as any);
+            }
+            const typing: Record<string, string> = {};
+            if (x.typing) for (const [k, v] of Object.entries(x.typing)) {
+              typing[k] = v instanceof Timestamp ? v.toDate().toISOString() : (v as any);
+            }
+            return {
+              id: d.id,
+              type: x.type,
+              name: x.name,
+              participantIds: x.participantIds ?? [],
+              participantNames: x.participantNames ?? {},
+              lastMessage: lm ? {
+                text: lm.text,
+                senderId: lm.senderId,
+                senderName: lm.senderName,
+                sentAt: lm.sentAt instanceof Timestamp ? lm.sentAt.toDate().toISOString() : lm.sentAt,
+              } : null,
+              lastMessageAt: x.lastMessageAt instanceof Timestamp ? x.lastMessageAt.toDate().toISOString() : x.lastMessageAt,
+              readBy,
+              typing,
+              createdAt: x.createdAt instanceof Timestamp ? x.createdAt.toDate().toISOString() : x.createdAt,
+              createdBy: x.createdBy,
+              createdByName: x.createdByName ?? '',
+              ownerId: x.ownerId,
+            };
+          });
+          setConversations(rows);
+        },
+        onErrorMessage: setError,
+        onLoaded: () => setConvLoading(false),
+      });
     });
-    return () => { if (unsub) unsub(); if (unsubAuth) unsubAuth(); };
+    return () => { if (chatUnsub) chatUnsub(); if (unsubAuth) unsubAuth(); };
   }, [currentUserId]);
 
   // Filter theo tab
@@ -367,45 +355,46 @@ function MessageThread({ conv, currentUserId, onBack }: { conv: ChatConversation
   const dispName = convDisplayName(conv, currentUserId);
   const memberCount = conv.participantIds.length;
 
-  // Realtime messages subcollection — wait for auth ready trước khi listen (rules deny nếu auth=null)
+  // Realtime messages subcollection (Phase 13.6 — auto-reconnect)
   useEffect(() => {
     setLoading(true);
     setMessages([]);
-    let unsub: (() => void) | null = null;
+    let msgUnsub: (() => void) | null = null;
     const auth = getAuth(getFirebaseClient());
     const unsubAuth = onAuthStateChanged(auth, (user) => {
-      if (unsub) { unsub(); unsub = null; }
+      if (msgUnsub) { msgUnsub(); msgUnsub = null; }
       if (!user) { setLoading(false); return; }
-      try {
-        const db = getFirebaseClientDb();
-        const q = query(
-          collection(doc(db, 'conversations', conv.id), 'messages'),
-          orderBy('sentAt', 'desc'),
-          limit(100),
-        );
-        unsub = onSnapshot(q,
-          (snap) => {
-            const rows: ChatMessage[] = snap.docs.map((d) => {
-              const x = d.data() as any;
-              return {
-                id: d.id,
-                conversationId: conv.id,
-                senderId: x.senderId,
-                senderName: x.senderName,
-                text: x.text ?? '',
-                attachments: Array.isArray(x.attachments) ? x.attachments : [],
-                reactions: x.reactions && typeof x.reactions === 'object' ? x.reactions : {},
-                sentAt: x.sentAt instanceof Timestamp ? x.sentAt.toDate().toISOString() : x.sentAt,
-              };
-            }).reverse();   // cũ → mới
-            setMessages(rows);
-            setLoading(false);
-          },
-          (err) => { setError(err.message); setLoading(false); },
-        );
-      } catch (e: any) { setError(e.message); setLoading(false); }
+      msgUnsub = subscribeRealtime({
+        label: `msgs:${conv.id}`,
+        buildQuery: () => {
+          const db = getFirebaseClientDb();
+          return query(
+            collection(doc(db, 'conversations', conv.id), 'messages'),
+            orderBy('sentAt', 'desc'),
+            limit(100),
+          );
+        },
+        onData: (snap) => {
+          const rows: ChatMessage[] = snap.docs.map((d) => {
+            const x = d.data() as any;
+            return {
+              id: d.id,
+              conversationId: conv.id,
+              senderId: x.senderId,
+              senderName: x.senderName,
+              text: x.text ?? '',
+              attachments: Array.isArray(x.attachments) ? x.attachments : [],
+              reactions: x.reactions && typeof x.reactions === 'object' ? x.reactions : {},
+              sentAt: x.sentAt instanceof Timestamp ? x.sentAt.toDate().toISOString() : x.sentAt,
+            };
+          }).reverse();   // cũ → mới
+          setMessages(rows);
+        },
+        onErrorMessage: setError,
+        onLoaded: () => setLoading(false),
+      });
     });
-    return () => { if (unsub) unsub(); if (unsubAuth) unsubAuth(); };
+    return () => { if (msgUnsub) msgUnsub(); if (unsubAuth) unsubAuth(); };
   }, [conv.id]);
 
   // Auto-scroll xuống tin mới nhất
@@ -1370,21 +1359,25 @@ function ForwardMessageModal({ msg, fromConvName, currentUserId, onClose, onSent
   const [sending, setSending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Forward modal conversations list (Phase 13.6 — auto-reconnect)
   useEffect(() => {
-    let unsub: (() => void) | null = null;
+    let fwUnsub: (() => void) | null = null;
     const auth = getAuth(getFirebaseClient());
     const unsubAuth = onAuthStateChanged(auth, (user) => {
-      if (unsub) { unsub(); unsub = null; }
+      if (fwUnsub) { fwUnsub(); fwUnsub = null; }
       if (!user) return;
-      try {
-        const db = getFirebaseClientDb();
-        const qy = query(
-          collection(db, 'conversations'),
-          where('participantIds', 'array-contains', user.uid),
-          orderBy('lastMessageAt', 'desc'),
-          limit(100),
-        );
-        unsub = onSnapshot(qy, (snap) => {
+      fwUnsub = subscribeRealtime({
+        label: 'forward:convs',
+        buildQuery: () => {
+          const db = getFirebaseClientDb();
+          return query(
+            collection(db, 'conversations'),
+            where('participantIds', 'array-contains', user.uid),
+            orderBy('lastMessageAt', 'desc'),
+            limit(100),
+          );
+        },
+        onData: (snap) => {
           const rows: ChatConversation[] = snap.docs.map((d) => {
             const x = d.data() as any;
             const lm = x.lastMessage as any;
@@ -1405,10 +1398,11 @@ function ForwardMessageModal({ msg, fromConvName, currentUserId, onClose, onSent
             };
           });
           setConvs(rows);
-        });
-      } catch (e: any) { setError(e.message); }
+        },
+        onErrorMessage: setError,
+      });
     });
-    return () => { if (unsub) unsub(); if (unsubAuth) unsubAuth(); };
+    return () => { if (fwUnsub) fwUnsub(); if (unsubAuth) unsubAuth(); };
   }, [currentUserId]);
 
   const filtered = useMemo(() => {

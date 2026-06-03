@@ -11,7 +11,9 @@
 
 import { useEffect } from 'react';
 
-const REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24h
+const REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24h (renew session cookie)
+const TOKEN_REFRESH_INTERVAL_MS = 50 * 60 * 1000; // 50p — force ID token refresh trước khi 1h expire,
+                                                  // để realtime listener không bao giờ gặp expired token.
 const STORAGE_KEY = 'gp_last_session_refresh';
 
 async function refreshSession(): Promise<boolean> {
@@ -47,8 +49,21 @@ export function SessionRefresher() {
       refreshSession();
     }
 
-    // Định kỳ 24h
+    // Định kỳ 24h: renew session cookie
     const id = setInterval(() => { refreshSession(); }, REFRESH_INTERVAL_MS);
+
+    // CHU KỲ 50p: force ID token refresh — phòng ngừa realtime listener (Firestore onSnapshot)
+    // nhận expired token sau 1h. Firebase client tự refresh khi có API call, nhưng listener
+    // realtime không trigger refresh → cần ép explicit.
+    const tokenId = setInterval(async () => {
+      try {
+        const { getFirebaseClientAuth, isFirebaseClientReady } = await import('@/lib/firebase/client');
+        if (!isFirebaseClientReady()) return;
+        const auth = getFirebaseClientAuth();
+        const user = auth.currentUser;
+        if (user) await user.getIdToken(/* forceRefresh */ true);
+      } catch { /* silent — listener sẽ tự retry qua subscribeRealtime nếu fail */ }
+    }, TOKEN_REFRESH_INTERVAL_MS);
 
     // Visibility change: khi tab background → foreground, refresh nếu > 1h
     const onVisibility = () => {
@@ -62,6 +77,7 @@ export function SessionRefresher() {
 
     return () => {
       clearInterval(id);
+      clearInterval(tokenId);
       document.removeEventListener('visibilitychange', onVisibility);
     };
   }, []);
