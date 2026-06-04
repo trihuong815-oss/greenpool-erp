@@ -91,7 +91,7 @@ export function NhapClient(props: Props) {
   const [entryRevPkgOpen, setEntryRevPkgOpen] = useState(false);
   const [monthDetail, setMonthDetail] = useState<MonthDetailData | null>(null);
   const [monthDetailLoading, setMonthDetailLoading] = useState(false);
-  const [monthlyQty, setMonthlyQty] = useState<{ packageId: string; packageName: string; groupId: string; groupName: string; quantity: number; revenue?: number }[]>([]);
+  const [monthlyQty, setMonthlyQty] = useState<{ packageId: string; packageName: string; groupId: string; groupName: string; groupSortOrder?: number; packageSortOrder?: number; quantity: number; revenue?: number }[]>([]);
   const [monthlyQtyLoading, setMonthlyQtyLoading] = useState(false);
   const [summaryRefresh, setSummaryRefresh] = useState(0);
 
@@ -100,17 +100,26 @@ export function NhapClient(props: Props) {
     let cancelled = false;
     setMonthDetailLoading(true);
     setMonthlyQtyLoading(true);
-    // Fetch song song: month-detail (doanh số + lead) + package-quantities (SL gói)
+    // Fetch song song: month-detail + package-quantities + packages + groups (để enrich sortOrder)
     Promise.all([
       fetch(`/api/sales/month-detail?branchId=${encodeURIComponent(branchId)}&year=${year}&month=${month}`, { cache: 'no-store' })
         .then(async (r) => (r.ok ? r.json() : null))
         .catch(() => null),
       packageQuantitiesApi.list({ year, month, branchId })
         .catch(() => []),
-    ]).then(([d, q]) => {
+      packagesApi.list({ branchId }).catch(() => []),
+      packageGroupsApi.list(branchId).catch(() => []),
+    ]).then(([d, q, allPkgs, allGroups]) => {
       if (cancelled) return;
       setMonthDetail(d);
-      setMonthlyQty(q);
+      // Phase 12.10 (2026-06-04): enrich sortOrder để summary tables sort đúng
+      const pkgSo = new Map((allPkgs as any[]).map((p) => [p.id, p.sortOrder ?? 999]));
+      const grpSo = new Map((allGroups as any[]).map((g) => [g.id, g.sortOrder ?? 999]));
+      setMonthlyQty((q as any[]).map((x) => ({
+        ...x,
+        packageSortOrder: pkgSo.get(x.packageId) ?? 999,
+        groupSortOrder: grpSo.get(x.groupId) ?? 999,
+      })));
     }).finally(() => {
       if (cancelled) return;
       setMonthDetailLoading(false);
@@ -854,6 +863,9 @@ interface CombinedRow {
   packageName: string;
   groupId: string;
   groupName: string;
+  // Phase 12.10 (2026-06-04): sortOrder để summary tables sort đúng thứ tự logic
+  groupSortOrder: number;
+  packageSortOrder: number;
   quantity: number;
   revenue: number;
   hasExistingQty: boolean;
@@ -903,6 +915,9 @@ function PackageCombinedSection({ branchId, year, month, periodLabel, onToast }:
         packageName: p.name,
         groupId: p.groupId,
         groupName: grpById.get(p.groupId)?.name ?? '(?)',
+        // Phase 12.10 (2026-06-04): truyền sortOrder để summary tables sort đúng thứ tự
+        groupSortOrder: grpById.get(p.groupId)?.sortOrder ?? 999,
+        packageSortOrder: p.sortOrder ?? 999,
         quantity: qtyByPkg.get(p.id) ?? 0,
         revenue: revByPkg.get(p.id) ?? 0,
         hasExistingQty: hasQty.has(p.id),
@@ -1200,7 +1215,7 @@ function MonthlyTripleView({ data, loading, year, month, branchName, monthlyQty,
   year: number;
   month: number;
   branchName: string;
-  monthlyQty: { packageId: string; packageName: string; groupId: string; groupName: string; quantity: number; revenue?: number }[];
+  monthlyQty: { packageId: string; packageName: string; groupId: string; groupName: string; groupSortOrder?: number; packageSortOrder?: number; quantity: number; revenue?: number }[];
   monthlyQtyLoading: boolean;
 }) {
   if (loading) {
@@ -1308,10 +1323,11 @@ function MonthlyTripleView({ data, loading, year, month, branchName, monthlyQty,
 }
 
 function PackageRevSummaryTable({ rows, loading }: {
-  rows: { packageId: string; packageName: string; groupId: string; groupName: string; quantity: number; revenue?: number }[];
+  rows: { packageId: string; packageName: string; groupId: string; groupName: string; groupSortOrder?: number; packageSortOrder?: number; quantity: number; revenue?: number }[];
   loading: boolean;
 }) {
   // Group rows by groupName, chỉ giữ row có revenue > 0.
+  // Phase 12.10 (2026-06-04): sort theo sortOrder thay vì quantity/revenue desc.
   const grouped = useMemo(() => {
     const byGroup = new Map<string, typeof rows>();
     for (const r of rows) {
@@ -1322,9 +1338,10 @@ function PackageRevSummaryTable({ rows, loading }: {
     return Array.from(byGroup.entries()).map(([gid, items]) => ({
       groupId: gid,
       groupName: items[0]?.groupName ?? '(không có tên)',
-      items: [...items].sort((a, b) => (b.revenue ?? 0) - (a.revenue ?? 0)),
+      groupSortOrder: items[0]?.groupSortOrder ?? 999,
+      items: [...items].sort((a, b) => (a.packageSortOrder ?? 999) - (b.packageSortOrder ?? 999)),
       groupTotal: items.reduce((s, x) => s + (x.revenue ?? 0), 0),
-    })).sort((a, b) => b.groupTotal - a.groupTotal);
+    })).sort((a, b) => a.groupSortOrder - b.groupSortOrder);
   }, [rows]);
 
   const grandTotal = useMemo(() => rows.reduce((s, r) => s + (r.revenue ?? 0), 0), [rows]);
@@ -1407,23 +1424,24 @@ function PackageRevSummaryTable({ rows, loading }: {
 }
 
 function PackageQtySummaryTable({ rows, loading }: {
-  rows: { packageId: string; packageName: string; groupId: string; groupName: string; quantity: number }[];
+  rows: { packageId: string; packageName: string; groupId: string; groupName: string; groupSortOrder?: number; packageSortOrder?: number; quantity: number }[];
   loading: boolean;
 }) {
-  // Group rows by groupName + sort theo qty desc trong nhóm.
+  // Phase 12.10 (2026-06-04): sort packages + groups theo sortOrder (nhỏ → lớn), không theo quantity desc.
   const grouped = useMemo(() => {
     const byGroup = new Map<string, typeof rows>();
     for (const r of rows) {
-      if (r.quantity <= 0) continue; // ẩn gói SL=0 cho gọn (form chính vẫn hiện đủ)
+      if (r.quantity <= 0) continue;
       if (!byGroup.has(r.groupId)) byGroup.set(r.groupId, []);
       byGroup.get(r.groupId)!.push(r);
     }
     return Array.from(byGroup.entries()).map(([gid, items]) => ({
       groupId: gid,
       groupName: items[0].groupName,
-      items: [...items].sort((a, b) => b.quantity - a.quantity),
+      groupSortOrder: items[0].groupSortOrder ?? 999,
+      items: [...items].sort((a, b) => (a.packageSortOrder ?? 999) - (b.packageSortOrder ?? 999)),
       groupTotal: items.reduce((s, x) => s + x.quantity, 0),
-    })).sort((a, b) => b.groupTotal - a.groupTotal);
+    })).sort((a, b) => a.groupSortOrder - b.groupSortOrder);
   }, [rows]);
 
   const grandTotal = useMemo(() => rows.reduce((s, r) => s + r.quantity, 0), [rows]);
