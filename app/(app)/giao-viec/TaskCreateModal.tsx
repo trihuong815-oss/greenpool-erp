@@ -71,8 +71,9 @@ export function TaskCreateModal(props: {
   const [assigneeUserIds, setAssigneeUserIds] = useState<string[]>([]);
 
   // ─── PROPOSAL state (mới) ───
-  // Default: nếu creator là GĐ → liên khối (vì GĐ không đề xuất cho chính khối mình); còn lại → trong khối.
-  const [proposalScope, setProposalScope] = useState<ProposalScope>(isGD ? 'cross_block' : 'in_block');
+  // Phase 12.8.1 (2026-06-04): default in_block cho mọi role. GĐ cũng được đề xuất trong khối
+  // (vd GD_KD đề xuất xuống TP_KT khối mình). Bỏ rule ép GĐ → cross_block.
+  const [proposalScope, setProposalScope] = useState<ProposalScope>('in_block');
   const [proposalSubtype, setProposalSubtype] = useState<ProposalSubtype>('regular');
   const [recipientType, setRecipientType] = useState<RecipientType>('department');
   const [recipientDeptId, setRecipientDeptId] = useState<string>('');
@@ -91,15 +92,16 @@ export function TaskCreateModal(props: {
     });
   }, [kind, departments, proposalScope, myBlock, currentDepartmentId]);
 
-  // Cơ sở: 5 cơ sở (HM/TK/CTT/24/TT) đều thuộc khối KD. Liên khối từ VP → cơ sở mới khả thi.
+  // Cơ sở: 5 cơ sở (HM/TK/CTT/24/TT) đều thuộc khối KD.
+  //   - in_block + KD: list 5 cơ sở (trừ cơ sở mình)
+  //   - in_block + VP: empty (VP không có cơ sở)
+  //   - cross_block + KD: empty (đề xuất sang VP, VP không có cơ sở)
+  //   - cross_block + VP: list 5 cơ sở (đề xuất sang KD)
   const recipientFacilities = useMemo(() => {
     if (kind !== 'proposal') return [];
-    if (proposalScope === 'in_block' && myBlock !== 'KD') return []; // VP không có cơ sở
-    return branches.filter((b) => {
-      // Không tự đề xuất cho cơ sở mình
-      if (currentBranchId && b.id === currentBranchId) return true && b.id !== currentBranchId ? true : false;
-      return true;
-    }).filter((b) => b.id !== currentBranchId);
+    const targetBlock = proposalScope === 'in_block' ? myBlock : (myBlock === 'KD' ? 'VP' : 'KD');
+    if (targetBlock !== 'KD') return []; // cơ sở chỉ thuộc khối KD
+    return branches.filter((b) => b.id !== currentBranchId);
   }, [kind, branches, proposalScope, myBlock, currentBranchId]);
 
   // GĐ khối: trong khối = GĐ khối mình; liên khối = GĐ khối khác
@@ -128,13 +130,6 @@ export function TaskCreateModal(props: {
     // Subtype regular default
     if (proposalScope === 'in_block') setProposalSubtype('regular');
   }, [proposalScope, kind, recipientGdOptions]);
-
-  // GĐ khối: chỉ làm liên khối (không đề xuất cho khối mình)
-  useEffect(() => {
-    if (kind === 'proposal' && isGD && proposalScope === 'in_block') {
-      setProposalScope('cross_block');
-    }
-  }, [kind, isGD, proposalScope]);
 
   // CEO/ADMIN không tạo được đề xuất — báo lỗi rõ ràng
   const creatorBlocked = kind === 'proposal' && isCEO;
@@ -333,22 +328,16 @@ export function TaskCreateModal(props: {
                       key={s}
                       type="button"
                       onClick={() => setProposalScope(s)}
-                      disabled={isGD && s === 'in_block'}
                       className={`px-3 py-2 rounded-lg text-sm font-semibold ring-1 transition ${
                         proposalScope === s
                           ? 'bg-emerald-50 text-emerald-800 ring-emerald-300'
-                          : 'bg-white text-slate-600 ring-slate-200 hover:ring-emerald-200 disabled:opacity-50'
+                          : 'bg-white text-slate-600 ring-slate-200 hover:ring-emerald-200'
                       }`}
                     >
                       {s === 'in_block' ? '🏠 Trong khối' : '🔀 Liên khối'}
                     </button>
                   ))}
                 </div>
-                {isGD && (
-                  <p className="mt-1 text-[11px] text-slate-500">
-                    GĐ Khối chỉ đề xuất liên khối (sang khối còn lại).
-                  </p>
-                )}
               </Field>
 
               {/* Subtype: chỉ cho Liên khối */}
