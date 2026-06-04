@@ -95,11 +95,24 @@ export interface TaskListFilter {
 // Trả về filter "rộng" — sau khi merge, canReadTask sẽ re-check từng doc.
 
 // ---- CREATE ----
-// NV/GV/TT không được tạo. Tất cả role khác được tạo (CEO, GĐ, TP, QLCS).
-// crossBlock = true khi createdByBlock != assigneeBlock & creator không phải CEO.
+// Phase 12.9 (2026-06-04): tách rule theo kind (xem canCreateTaskKind).
+// canCreateTask giữ backward compat — check ai vào được module nói chung.
 export function canCreateTask(p: CallerProfile): boolean {
   if (isCEO(p) || isGD(p) || isTP(p) || isQLCS(p)) return true;
   return false;
+}
+
+// Phase 12.9: assignment (giao việc) chỉ cho GĐ Khối + CEO/ADMIN (cấp 1+2).
+// TP/QLCS (cấp 3) KHÔNG giao việc — họ chỉ đề xuất (ngang cấp / cấp trên).
+export function canCreateAssignment(p: CallerProfile): boolean {
+  return isCEO(p) || isGD(p);
+}
+
+// Phase 12.9: proposal (đề xuất) cho tất cả role được vào module TRỪ CEO/ADMIN
+// (CEO/Chủ tịch cấp cao nhất — tự quyết định, không đề xuất ai).
+export function canCreateProposal(p: CallerProfile): boolean {
+  if (isCEO(p)) return false;
+  return isGD(p) || isTP(p) || isQLCS(p);
 }
 
 // Workflow: xác định task ban đầu cần ai duyệt

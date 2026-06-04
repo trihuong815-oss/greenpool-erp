@@ -8,24 +8,25 @@ import {
 } from '@/lib/services/tasks/api-client';
 import { ROLE_BLOCK } from '@/lib/permissions';
 
-// Phase 12.8 (2026-06-04): Form Đề xuất theo tài liệu chuẩn.
-//   - Module /giao-viec chỉ cho TP/QLCS/GD/CEO/ADMIN (NV/GV/TT bị ẩn menu).
-//   - Đề xuất có 2 scope: Trong khối / Liên khối
-//   - Liên khối có 2 subtype: Thường xuyên (không qua GĐ khối mình) / Phát sinh (qua GĐ khối mình duyệt)
-//   - Người tạo chọn ĐỐI TƯỢNG NHẬN (phòng ban / cơ sở / GĐ khối), KHÔNG chọn user cụ thể.
-//   - Hệ thống tự build approvalChain: liên khối phát sinh = [GĐ khối creator, recipient]; còn lại = [recipient].
-//   - Mọi người nhận đều có 3 nút Duyệt/Bổ sung/Từ chối + ghi chú.
-//   - Bỏ phân biệt tài chính/vận hành, bỏ cost.
-//   - Giao việc (kind=assignment): giữ nguyên logic cũ.
+// Phase 12.9 (2026-06-04): Form Đề xuất đơn giản hoá.
+//   - 2 tab: NGANG CẤP / CẤP TRÊN
+//   - Mỗi tab → dropdown user phù hợp
+//   - Server: chain = [recipientUid] (1 cấp duyệt)
+//   - Module /giao-viec chỉ cho TP/QLCS/GD/CEO/ADMIN.
+
+// Phase 12.9: chỉ tầng 3 (theo sơ đồ org).
+// TIBAN_TT đã hạ xuống tầng 4 (thuộc phòng NS) — không nằm trong pool này nữa.
+const PEER_ROLES = new Set([
+  'TP_KT', 'TP_DT', 'TP_MKT', 'TP_GS', 'TP_KE', 'TP_NS',
+  'QLCS_HM', 'QLCS_TK', 'QLCS_CTT', 'QLCS_24NCT', 'QLCS_TT',
+]);
 
 interface Department { id: string; name: string; blockId: 'KD' | 'VP' | null; }
 interface Branch { id: string; name: string; }
 interface User { id: string; name: string; roleId: string; branchId: string | null; departmentId: string | null; }
 
 type AssigneeKind = 'department' | 'facility' | 'user';
-type ProposalScope = 'in_block' | 'cross_block';
-type ProposalSubtype = 'regular' | 'incidental';
-type RecipientType = 'department' | 'facility' | 'gd_block';
+type RecipientTier = 'peer' | 'senior';
 
 export function TaskCreateModal(props: {
   kind: TaskKind;
@@ -40,20 +41,18 @@ export function TaskCreateModal(props: {
   onCreated: () => void;
 }) {
   const {
-    kind, currentUserRole, currentDepartmentId, currentBranchId,
+    kind, currentUserId, currentUserRole, currentDepartmentId, currentBranchId,
     departments, branches, users, onClose, onCreated,
   } = props;
-  void props.currentUserId; // dùng khi cần
   const kindLabel = kind === 'proposal' ? 'đề xuất' : 'giao việc';
 
   const myBlock = ROLE_BLOCK[currentUserRole] ?? 'all';
   const isCEO = currentUserRole === 'CEO' || currentUserRole === 'ADMIN';
   const isGD = currentUserRole === 'GD_KD' || currentUserRole === 'GD_VP';
-  const isTP = currentUserRole.startsWith('TP_') || currentUserRole === 'TIBAN_TT';
+  const isTP = currentUserRole.startsWith('TP_');
   const isQLCS = currentUserRole.startsWith('QLCS_');
   void isTP; void isQLCS;
 
-  // Common state
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<TaskPriority>('normal');
@@ -70,71 +69,58 @@ export function TaskCreateModal(props: {
   const [assigneeFacilityId, setAssigneeFacilityId] = useState<string>('');
   const [assigneeUserIds, setAssigneeUserIds] = useState<string[]>([]);
 
-  // ─── PROPOSAL state (mới) ───
-  // Phase 12.8.1 (2026-06-04): default in_block cho mọi role. GĐ cũng được đề xuất trong khối
-  // (vd GD_KD đề xuất xuống TP_KT khối mình). Bỏ rule ép GĐ → cross_block.
-  const [proposalScope, setProposalScope] = useState<ProposalScope>('in_block');
-  const [proposalSubtype, setProposalSubtype] = useState<ProposalSubtype>('regular');
-  const [recipientType, setRecipientType] = useState<RecipientType>('department');
-  const [recipientDeptId, setRecipientDeptId] = useState<string>('');
-  const [recipientFacilityId, setRecipientFacilityId] = useState<string>('');
-  const [recipientGdRole, setRecipientGdRole] = useState<'GD_KD' | 'GD_VP'>(myBlock === 'VP' ? 'GD_VP' : 'GD_KD');
+  // ─── PROPOSAL state (Phase 12.9 — đơn giản hoá) ───
+  const [recipientTier, setRecipientTier] = useState<RecipientTier>('peer');
+  const [recipientUid, setRecipientUid] = useState<string>('');
 
-  // Filter departments theo scope: trong khối = phòng cùng khối (trừ phòng mình); liên khối = phòng khối khác
-  const recipientDepts = useMemo(() => {
+  // Candidates ngang cấp + cấp trên theo role creator
+  const peerCandidates = useMemo<User[]>(() => {
     if (kind !== 'proposal') return [];
-    const targetBlock = proposalScope === 'in_block' ? myBlock : (myBlock === 'KD' ? 'VP' : 'KD');
-    return departments.filter((d) => {
-      if (d.blockId !== targetBlock) return false;
-      // Không tự đề xuất cho phòng của mình
-      if (currentDepartmentId && d.id === currentDepartmentId) return false;
-      return true;
-    });
-  }, [kind, departments, proposalScope, myBlock, currentDepartmentId]);
-
-  // Cơ sở: 5 cơ sở (HM/TK/CTT/24/TT) đều thuộc khối KD.
-  //   - in_block + KD: list 5 cơ sở (trừ cơ sở mình)
-  //   - in_block + VP: empty (VP không có cơ sở)
-  //   - cross_block + KD: empty (đề xuất sang VP, VP không có cơ sở)
-  //   - cross_block + VP: list 5 cơ sở (đề xuất sang KD)
-  const recipientFacilities = useMemo(() => {
-    if (kind !== 'proposal') return [];
-    const targetBlock = proposalScope === 'in_block' ? myBlock : (myBlock === 'KD' ? 'VP' : 'KD');
-    if (targetBlock !== 'KD') return []; // cơ sở chỉ thuộc khối KD
-    return branches.filter((b) => b.id !== currentBranchId);
-  }, [kind, branches, proposalScope, myBlock, currentBranchId]);
-
-  // GĐ khối: trong khối = GĐ khối mình; liên khối = GĐ khối khác
-  const recipientGdOptions = useMemo<Array<{ role: 'GD_KD' | 'GD_VP'; label: string }>>(() => {
-    if (kind !== 'proposal') return [];
-    if (proposalScope === 'in_block') {
-      if (myBlock === 'KD') return [{ role: 'GD_KD', label: 'GĐ Khối Kinh Doanh' }];
-      if (myBlock === 'VP') return [{ role: 'GD_VP', label: 'GĐ Khối Văn Phòng' }];
-      return [
-        { role: 'GD_KD', label: 'GĐ Khối Kinh Doanh' },
-        { role: 'GD_VP', label: 'GĐ Khối Văn Phòng' },
-      ];
+    if (isCEO) return [];
+    // GĐ: ngang cấp = GĐ khối còn lại
+    if (isGD) {
+      const peerGdRole = currentUserRole === 'GD_KD' ? 'GD_VP' : 'GD_KD';
+      return users.filter((u) => u.roleId === peerGdRole && u.id !== currentUserId);
     }
-    // Cross-block: GĐ khối khác
-    if (myBlock === 'KD') return [{ role: 'GD_VP', label: 'GĐ Khối Văn Phòng' }];
-    if (myBlock === 'VP') return [{ role: 'GD_KD', label: 'GĐ Khối Kinh Doanh' }];
-    return [];
-  }, [kind, proposalScope, myBlock]);
+    // TP/QLCS/TIBAN_TT: ngang cấp = TP + QLCS khác
+    return users
+      .filter((u) => PEER_ROLES.has(u.roleId))
+      .filter((u) => u.id !== currentUserId)
+      .sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+  }, [kind, users, isCEO, isGD, currentUserRole, currentUserId]);
 
-  // Reset recipient khi đổi scope (vì danh sách thay đổi)
+  const seniorCandidates = useMemo<User[]>(() => {
+    if (kind !== 'proposal') return [];
+    if (isCEO) return [];
+    // GĐ: cấp trên = CEO + ADMIN (Chủ tịch)
+    if (isGD) {
+      return users
+        .filter((u) => u.roleId === 'CEO' || u.roleId === 'ADMIN')
+        .filter((u) => u.id !== currentUserId)
+        .sort((a, b) => a.roleId.localeCompare(b.roleId));
+    }
+    // TP/QLCS/TIBAN_TT: cấp trên = GD_KD + GD_VP
+    return users
+      .filter((u) => u.roleId === 'GD_KD' || u.roleId === 'GD_VP')
+      .filter((u) => u.id !== currentUserId)
+      .sort((a, b) => a.roleId.localeCompare(b.roleId));
+  }, [kind, users, isCEO, isGD, currentUserId]);
+
+  // Auto chọn người đầu tiên khi đổi tab
   useEffect(() => {
     if (kind !== 'proposal') return;
-    setRecipientDeptId('');
-    setRecipientFacilityId('');
-    if (recipientGdOptions.length > 0) setRecipientGdRole(recipientGdOptions[0].role);
-    // Subtype regular default
-    if (proposalScope === 'in_block') setProposalSubtype('regular');
-  }, [proposalScope, kind, recipientGdOptions]);
+    const list = recipientTier === 'peer' ? peerCandidates : seniorCandidates;
+    if (list.length > 0 && !list.find((u) => u.id === recipientUid)) {
+      setRecipientUid(list[0].id);
+    } else if (list.length === 0) {
+      setRecipientUid('');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recipientTier, peerCandidates, seniorCandidates, kind]);
 
-  // CEO/ADMIN không tạo được đề xuất — báo lỗi rõ ràng
   const creatorBlocked = kind === 'proposal' && isCEO;
 
-  // Constraints cho ASSIGNMENT (giữ logic cũ)
+  // Assignment constraints (giữ nguyên)
   const deptsInBlock = useMemo(
     () => departments.filter((d) => d.blockId === assigneeBlock),
     [departments, assigneeBlock],
@@ -158,13 +144,6 @@ export function TaskCreateModal(props: {
     ? (assigneeBlock === 'KD' ? 'GĐ Khối Kinh Doanh' : 'GĐ Khối Văn Phòng')
     : (myBlock === 'KD' ? 'GĐ Khối Kinh Doanh' : myBlock === 'VP' ? 'GĐ Khối Văn Phòng' : 'GĐ Khối');
 
-  // Số cấp duyệt dự kiến cho proposal (để hiển thị)
-  const proposalChainPreview = useMemo<number>(() => {
-    if (kind !== 'proposal') return 0;
-    if (proposalScope === 'cross_block' && proposalSubtype === 'incidental') return 2; // GĐ khối mình + recipient
-    return 1; // chỉ recipient
-  }, [kind, proposalScope, proposalSubtype]);
-
   async function submit() {
     setError(null);
     if (creatorBlocked) {
@@ -174,29 +153,13 @@ export function TaskCreateModal(props: {
     if (!title.trim()) { setError('Tiêu đề bắt buộc'); return; }
 
     if (kind === 'proposal') {
-      // Validate recipient theo type
-      if (recipientType === 'department' && !recipientDeptId) {
-        setError('Chọn phòng ban nhận đề xuất');
+      if (!recipientUid) {
+        setError(recipientTier === 'peer'
+          ? 'Không có người ngang cấp để gửi đề xuất.'
+          : 'Không có người cấp trên để gửi đề xuất.');
         return;
-      }
-      if (recipientType === 'facility' && !recipientFacilityId) {
-        setError('Chọn cơ sở nhận đề xuất');
-        return;
-      }
-      if (recipientType === 'gd_block' && !recipientGdRole) {
-        setError('Chọn GĐ khối nhận đề xuất');
-        return;
-      }
-      // Cross-block: phòng/cơ sở phải khác khối creator
-      if (proposalScope === 'cross_block' && recipientType === 'department') {
-        const d = departments.find((x) => x.id === recipientDeptId);
-        if (d && d.blockId === myBlock) {
-          setError('Đề xuất liên khối phải chọn phòng ban khối khác.');
-          return;
-        }
       }
     } else {
-      // Giao việc validate cũ
       if (assigneeKind === 'department' && !assigneeDeptId) { setError('Chọn phòng ban'); return; }
       if (assigneeKind === 'facility' && !assigneeFacilityId) { setError('Chọn cơ sở'); return; }
       if (assigneeKind === 'user' && assigneeUserIds.length === 0) { setError('Chọn ít nhất 1 người'); return; }
@@ -204,28 +167,24 @@ export function TaskCreateModal(props: {
 
     setSaving(true);
     try {
-      // Body khác nhau theo kind
       let createBody: Parameters<typeof tasksApi.create>[0];
       if (kind === 'proposal') {
         createBody = {
           kind: 'proposal',
           title: title.trim(),
           description: description.trim(),
-          // assigneeBlock dùng để server biết block đích (cho cross-block check)
-          assigneeBlock: (proposalScope === 'in_block' ? myBlock : (myBlock === 'KD' ? 'VP' : 'KD')) as Block,
-          assigneeDeptId: recipientType === 'department' ? recipientDeptId : null,
-          assigneeFacilityId: recipientType === 'facility' ? recipientFacilityId : null,
+          assigneeBlock: (myBlock === 'all' ? 'KD' : myBlock) as Block,
+          assigneeDeptId: null,
+          assigneeFacilityId: null,
           assigneeUserIds: [],
           priority,
           dueDate: dueDate || null,
           proposalType: null,
           financialGroup: null,
           estimatedCost: null,
-          // Server tự build chain dựa vào scope/subtype/recipient
-          proposalScope,
-          proposalSubtype: proposalScope === 'cross_block' ? proposalSubtype : null,
-          recipientType,
-          recipientGdRole: recipientType === 'gd_block' ? recipientGdRole : null,
+          // Phase 12.9: server build chain từ recipientUid + tier
+          recipientTier,
+          recipientUid,
         } as any;
       } else {
         createBody = {
@@ -277,7 +236,7 @@ export function TaskCreateModal(props: {
             <h2 className="text-base font-bold">Tạo {kindLabel} mới</h2>
             <p className="text-xs text-emerald-50/90 mt-0.5">
               {kind === 'proposal'
-                ? `${proposalChainPreview} cấp duyệt`
+                ? '1 cấp duyệt — người nhận trực tiếp duyệt'
                 : (willNeedApproval
                     ? (isCrossBlock ? `Liên khối → ${targetGDLabel} sẽ duyệt` : `Liên phòng/cơ sở → ${targetGDLabel} sẽ duyệt`)
                     : 'Đi thẳng đến người nhận, không cần duyệt')}
@@ -317,126 +276,63 @@ export function TaskCreateModal(props: {
             />
           </Field>
 
-          {/* ═══════ FORM ĐỀ XUẤT (NEW) ═══════ */}
-          {kind === 'proposal' && (
-            <>
-              {/* Scope: Trong khối / Liên khối */}
-              <Field label="Loại đề xuất *">
-                <div className="grid grid-cols-2 gap-2">
-                  {(['in_block', 'cross_block'] as const).map((s) => (
+          {/* ═══ FORM ĐỀ XUẤT (Phase 12.9 — đơn giản 2 mục) ═══ */}
+          {kind === 'proposal' && !creatorBlocked && (
+            <Field label="Đối tượng nhận đề xuất *">
+              <div className="grid grid-cols-2 gap-2 mb-2">
+                {(['peer', 'senior'] as const).map((t) => {
+                  const list = t === 'peer' ? peerCandidates : seniorCandidates;
+                  return (
                     <button
-                      key={s}
+                      key={t}
                       type="button"
-                      onClick={() => setProposalScope(s)}
+                      onClick={() => setRecipientTier(t)}
+                      disabled={list.length === 0}
                       className={`px-3 py-2 rounded-lg text-sm font-semibold ring-1 transition ${
-                        proposalScope === s
+                        recipientTier === t
                           ? 'bg-emerald-50 text-emerald-800 ring-emerald-300'
                           : 'bg-white text-slate-600 ring-slate-200 hover:ring-emerald-200'
-                      }`}
+                      } disabled:opacity-40`}
                     >
-                      {s === 'in_block' ? '🏠 Trong khối' : '🔀 Liên khối'}
+                      {t === 'peer' ? '↔ Ngang cấp' : '↑ Cấp trên'}
+                      <span className="ml-1 text-[10px] opacity-60">({list.length})</span>
                     </button>
-                  ))}
-                </div>
-              </Field>
-
-              {/* Subtype: chỉ cho Liên khối */}
-              {proposalScope === 'cross_block' && (
-                <Field label="Tính chất hoạt động *">
-                  <div className="space-y-1.5">
-                    {(['regular', 'incidental'] as const).map((st) => (
-                      <label key={st} className="flex items-start gap-2 px-3 py-2 ring-1 ring-slate-200 rounded-lg cursor-pointer hover:bg-slate-50">
-                        <input
-                          type="radio"
-                          name="subtype"
-                          value={st}
-                          checked={proposalSubtype === st}
-                          onChange={() => setProposalSubtype(st)}
-                          className="mt-0.5 text-emerald-600"
-                        />
-                        <div>
-                          <div className="text-sm font-medium text-slate-800">
-                            {st === 'regular' ? 'Thường xuyên' : 'Phát sinh'}
-                          </div>
-                          <div className="text-[11px] text-slate-500">
-                            {st === 'regular'
-                              ? 'Gửi thẳng sang phòng/cơ sở khối khác — KHÔNG qua GĐ khối mình.'
-                              : 'Cần GĐ khối mình duyệt trước, rồi mới chuyển sang phòng/cơ sở khối khác.'}
-                          </div>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                </Field>
-              )}
-
-              {/* Recipient type */}
-              <Field label="Đối tượng nhận *">
-                <div className="flex gap-1 mb-2 bg-slate-100 p-1 rounded-lg">
-                  {(['department', 'facility', 'gd_block'] as const).map((rt) => {
-                    const disabled = (rt === 'facility' && recipientFacilities.length === 0) ||
-                                     (rt === 'gd_block' && recipientGdOptions.length === 0);
-                    return (
-                      <button
-                        key={rt}
-                        type="button"
-                        onClick={() => setRecipientType(rt)}
-                        disabled={disabled}
-                        className={`flex-1 py-1.5 text-xs rounded font-medium ${
-                          recipientType === rt ? 'bg-white shadow text-emerald-700' : 'text-slate-600 hover:bg-white/50'
-                        } disabled:opacity-40`}
-                      >
-                        {rt === 'department' ? 'Phòng ban' : rt === 'facility' ? 'Cơ sở' : 'GĐ Khối'}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {recipientType === 'department' && (
+                  );
+                })}
+              </div>
+              {(() => {
+                const list = recipientTier === 'peer' ? peerCandidates : seniorCandidates;
+                if (list.length === 0) {
+                  return (
+                    <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+                      Không có {recipientTier === 'peer' ? 'người ngang cấp' : 'người cấp trên'} để gửi đề xuất.
+                    </div>
+                  );
+                }
+                return (
                   <select
-                    value={recipientDeptId}
-                    onChange={(e) => setRecipientDeptId(e.target.value)}
+                    value={recipientUid}
+                    onChange={(e) => setRecipientUid(e.target.value)}
                     className={inputCls}
                   >
-                    <option value="">-- Chọn phòng ban --</option>
-                    {recipientDepts.map((d) => (
-                      <option key={d.id} value={d.id}>{d.name}</option>
+                    <option value="">-- Chọn người nhận --</option>
+                    {list.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name} · {u.roleId}
+                      </option>
                     ))}
                   </select>
-                )}
-                {recipientType === 'facility' && (
-                  <select
-                    value={recipientFacilityId}
-                    onChange={(e) => setRecipientFacilityId(e.target.value)}
-                    className={inputCls}
-                  >
-                    <option value="">-- Chọn cơ sở --</option>
-                    {recipientFacilities.map((b) => (
-                      <option key={b.id} value={b.id}>{b.id} · {b.name}</option>
-                    ))}
-                  </select>
-                )}
-                {recipientType === 'gd_block' && (
-                  <select
-                    value={recipientGdRole}
-                    onChange={(e) => setRecipientGdRole(e.target.value as 'GD_KD' | 'GD_VP')}
-                    className={inputCls}
-                  >
-                    {recipientGdOptions.map((o) => (
-                      <option key={o.role} value={o.role}>{o.label}</option>
-                    ))}
-                  </select>
-                )}
-                <p className="mt-1.5 text-[11px] text-slate-500">
-                  {proposalScope === 'cross_block' && proposalSubtype === 'incidental'
-                    ? '2 cấp duyệt: GĐ khối bạn → người nhận khối khác.'
-                    : '1 cấp duyệt: người nhận trực tiếp duyệt.'}
-                </p>
-              </Field>
-            </>
+                );
+              })()}
+              <p className="mt-1.5 text-[11px] text-slate-500">
+                {isGD
+                  ? 'Ngang cấp = GĐ khối còn lại. Cấp trên = CEO / Chủ tịch.'
+                  : 'Ngang cấp = các TP + QLCS khác. Cấp trên = GĐ Khối.'}
+              </p>
+            </Field>
           )}
 
-          {/* ═══════ FORM GIAO VIỆC (giữ nguyên) ═══════ */}
+          {/* ═══ FORM GIAO VIỆC (giữ nguyên) ═══ */}
           {kind === 'assignment' && (
             <>
               <Field label="Khối nhận">

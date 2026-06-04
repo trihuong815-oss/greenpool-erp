@@ -9,7 +9,7 @@ import { writeAuditLog } from '@/lib/firebase/audit-log';
 import { logSystemError } from '@/lib/firebase/system-errors';
 import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-auth';
 import {
-  canCreateTask, canReadTask, computeApproval, getBlockOf, isCEO, isGD,
+  canCreateTask, canCreateAssignment, canCreateProposal, canReadTask, computeApproval, getBlockOf, isCEO, isGD,
   type Block, type TaskForScope, type TaskStatus,
 } from '@/lib/firebase/tasks-scope';
 
@@ -278,6 +278,13 @@ export async function POST(req: NextRequest) {
     if (!VALID_KIND.has(kind)) {
       return NextResponse.json({ error: 'kind phải là proposal hoặc assignment' }, { status: 400 });
     }
+    // Phase 12.9 (2026-06-04): rule riêng cho proposal vs assignment.
+    if (kind === 'assignment' && !canCreateAssignment(caller.profile)) {
+      return NextResponse.json({ error: 'Chỉ GĐ Khối / CEO / Chủ tịch được giao việc xuống cấp dưới' }, { status: 403 });
+    }
+    if (kind === 'proposal' && !canCreateProposal(caller.profile)) {
+      return NextResponse.json({ error: 'CEO/Chủ tịch không cần đề xuất — tự quyết định trực tiếp' }, { status: 403 });
+    }
     const title = String(body?.title ?? '').trim();
     const description = String(body?.description ?? '').trim();
     if (!title || title.length > 200) {
@@ -433,105 +440,73 @@ export async function POST(req: NextRequest) {
     let approvalChain: string[] = [];
     let currentApprover: string | null = null;
 
-    // Phase 12.8 (2026-06-04): REWRITE proposal flow theo tài liệu chuẩn.
-    //   - Module /giao-viec chỉ cho TP/QLCS/GD/CEO/ADMIN.
-    //   - 2 scope: in_block / cross_block; cross_block có 2 subtype: regular / incidental.
-    //   - User chọn ĐỐI TƯỢNG NHẬN (department / facility / gd_block).
-    //   - Server tự build chain:
-    //     · in_block hoặc cross_block + regular → chain = [recipient]
-    //     · cross_block + incidental → chain = [GĐ khối creator, recipient]
-    //   - CEO/ADMIN không tạo đề xuất.
-    let proposalScope: string | null = null;
-    let proposalSubtype: string | null = null;
-    let recipientType: string | null = null;
-    let recipientGdRole: string | null = null;
+    // Phase 12.9 (2026-06-04): proposal flow đơn giản hoá — 2 tier: peer / senior.
+    //   - peer = ngang cấp; senior = cấp trên trực tiếp
+    //   - Client chọn recipientUid trực tiếp → server build chain = [recipientUid] (1 cấp).
+    //   - canCreateProposal đã check ở đầu hàm.
+    let recipientTier: string | null = null;
+    let recipientUidResolved: string | null = null;
     if (kind === 'proposal') {
-      // CEO/ADMIN không tạo
-      if (caller.profile.role_code === 'CEO' || caller.profile.role_code === 'ADMIN') {
-        return NextResponse.json({ error: 'CEO/Chủ tịch không cần tạo đề xuất' }, { status: 403 });
+      const VALID_TIER = new Set(['peer', 'senior']);
+      recipientTier = typeof body?.recipientTier === 'string' && VALID_TIER.has(body.recipientTier)
+        ? body.recipientTier : null;
+      if (!recipientTier) {
+        return NextResponse.json({ error: 'recipientTier bắt buộc (peer/senior)' }, { status: 400 });
       }
-      // Module này chỉ cho TP/QLCS/GD (NV/GV/TT bị chặn)
-      const isManager = caller.profile.role_code.startsWith('TP_') ||
-                        caller.profile.role_code.startsWith('QLCS_') ||
-                        caller.profile.role_code === 'GD_KD' ||
-                        caller.profile.role_code === 'GD_VP' ||
-                        caller.profile.role_code === 'TIBAN_TT';
-      if (!isManager) {
-        return NextResponse.json({ error: 'Chỉ TP, QLCS, GĐ khối, CEO/Chủ tịch dùng module này' }, { status: 403 });
+      const recipientUid = typeof body?.recipientUid === 'string' ? body.recipientUid : '';
+      if (!recipientUid) {
+        return NextResponse.json({ error: 'Chọn người nhận đề xuất' }, { status: 400 });
       }
-      // Validate scope/subtype/recipient
-      const VALID_SCOPE = new Set(['in_block', 'cross_block']);
-      const VALID_SUBTYPE = new Set(['regular', 'incidental']);
-      const VALID_RECIPIENT = new Set(['department', 'facility', 'gd_block']);
-      proposalScope = typeof body?.proposalScope === 'string' && VALID_SCOPE.has(body.proposalScope) ? body.proposalScope : 'in_block';
-      proposalSubtype = proposalScope === 'cross_block'
-        ? (typeof body?.proposalSubtype === 'string' && VALID_SUBTYPE.has(body.proposalSubtype) ? body.proposalSubtype : 'regular')
-        : null;
-      recipientType = typeof body?.recipientType === 'string' && VALID_RECIPIENT.has(body.recipientType) ? body.recipientType : null;
-      if (!recipientType) return NextResponse.json({ error: 'recipientType bắt buộc (department/facility/gd_block)' }, { status: 400 });
-      recipientGdRole = recipientType === 'gd_block' && (body?.recipientGdRole === 'GD_KD' || body?.recipientGdRole === 'GD_VP')
-        ? body.recipientGdRole : null;
-      // Resolve recipient → final approver uid
-      let recipientUid: string | null = null;
+      if (recipientUid === caller.profile.uid) {
+        return NextResponse.json({ error: 'Không tự đề xuất cho chính mình' }, { status: 400 });
+      }
+      // Validate recipient tồn tại + match tier theo role creator
       const db = getFirebaseAdminDb();
-      if (recipientType === 'department') {
-        if (!assigneeDeptId) return NextResponse.json({ error: 'Chọn phòng ban nhận đề xuất' }, { status: 400 });
-        // Không tự đề xuất cho phòng mình
-        if (assigneeDeptId === caller.profile.department_id) {
-          return NextResponse.json({ error: 'Không tự đề xuất cho phòng ban của mình' }, { status: 400 });
-        }
-        // Tìm TP của phòng đó
-        const expectedRole = `TP_${assigneeDeptId}`;
-        const tpSnap = await db.collection(COLLECTIONS.USERS).where('roleId', '==', expectedRole).limit(1).get();
-        if (tpSnap.empty) return NextResponse.json({ error: `Không tìm thấy TP của phòng ${assigneeDeptId}` }, { status: 400 });
-        recipientUid = tpSnap.docs[0].id;
-      } else if (recipientType === 'facility') {
-        if (!assigneeFacilityId) return NextResponse.json({ error: 'Chọn cơ sở nhận đề xuất' }, { status: 400 });
-        if (assigneeFacilityId === caller.profile.facility_id) {
-          return NextResponse.json({ error: 'Không tự đề xuất cho cơ sở của mình' }, { status: 400 });
-        }
-        const expectedRole = `QLCS_${assigneeFacilityId === '24' ? '24NCT' : assigneeFacilityId}`;
-        const qSnap = await db.collection(COLLECTIONS.USERS).where('roleId', '==', expectedRole).limit(1).get();
-        if (qSnap.empty) return NextResponse.json({ error: `Không tìm thấy QLCS cơ sở ${assigneeFacilityId}` }, { status: 400 });
-        recipientUid = qSnap.docs[0].id;
-      } else if (recipientType === 'gd_block') {
-        if (!recipientGdRole) return NextResponse.json({ error: 'Chọn GĐ khối nhận đề xuất' }, { status: 400 });
-        // Không đề xuất cho chính mình
-        if (recipientGdRole === caller.profile.role_code) {
-          return NextResponse.json({ error: 'Không tự đề xuất cho chính mình' }, { status: 400 });
-        }
-        const gdSnap = await db.collection(COLLECTIONS.USERS).where('roleId', '==', recipientGdRole).limit(1).get();
-        if (gdSnap.empty) return NextResponse.json({ error: `Không tìm thấy ${recipientGdRole}` }, { status: 400 });
-        recipientUid = gdSnap.docs[0].id;
+      const recipientDoc = await db.collection(COLLECTIONS.USERS).doc(recipientUid).get();
+      if (!recipientDoc.exists) {
+        return NextResponse.json({ error: 'Người nhận không tồn tại' }, { status: 400 });
       }
-      if (!recipientUid) return NextResponse.json({ error: 'Không xác định được người nhận đề xuất' }, { status: 400 });
-
-      // Cross-block validation: recipient phải khác khối creator
-      if (proposalScope === 'cross_block' && recipientType === 'department') {
-        // Dept→block: DEPT_BLOCK đã định nghĩa ở đầu file
-        if (DEPT_BLOCK[assigneeDeptId as string] === creatorBlock) {
-          return NextResponse.json({ error: 'Đề xuất liên khối phải chọn phòng ban khối khác' }, { status: 400 });
-        }
+      const recipientData = recipientDoc.data()!;
+      if (recipientData.disabled) {
+        return NextResponse.json({ error: 'Người nhận đã bị khoá' }, { status: 400 });
       }
-
-      // Build chain
-      const chain: string[] = [];
-      if (proposalScope === 'cross_block' && proposalSubtype === 'incidental') {
-        // GĐ khối creator duyệt trước
-        const creatorGdRole = creatorBlock === 'KD' ? 'GD_KD' : 'GD_VP';
-        if (creatorGdRole !== caller.profile.role_code) {
-          // Tránh creator là GĐ tự duyệt mình
-          const gdSnap = await db.collection(COLLECTIONS.USERS).where('roleId', '==', creatorGdRole).limit(1).get();
-          if (!gdSnap.empty) chain.push(`user:${gdSnap.docs[0].id}`);
+      const recipientRole: string = recipientData.roleId ?? '';
+      const creatorRole = caller.profile.role_code;
+      const isCreatorGD = creatorRole === 'GD_KD' || creatorRole === 'GD_VP';
+      const isCreatorTpQlcs = creatorRole.startsWith('TP_') || creatorRole.startsWith('QLCS_');
+      const TP_QLCS_PEER = new Set([
+        'TP_KT','TP_DT','TP_MKT','TP_GS','TP_KE','TP_NS',
+        'QLCS_HM','QLCS_TK','QLCS_CTT','QLCS_24NCT','QLCS_TT',
+      ]);
+      // Validate tier match
+      if (isCreatorGD) {
+        const expectedPeerGd = creatorRole === 'GD_KD' ? 'GD_VP' : 'GD_KD';
+        if (recipientTier === 'peer' && recipientRole !== expectedPeerGd) {
+          return NextResponse.json({ error: 'Người nhận ngang cấp phải là GĐ khối còn lại' }, { status: 400 });
         }
+        if (recipientTier === 'senior' && recipientRole !== 'CEO' && recipientRole !== 'ADMIN') {
+          return NextResponse.json({ error: 'Người nhận cấp trên phải là CEO/Chủ tịch' }, { status: 400 });
+        }
+      } else if (isCreatorTpQlcs) {
+        if (recipientTier === 'peer' && !TP_QLCS_PEER.has(recipientRole)) {
+          return NextResponse.json({ error: 'Người nhận ngang cấp phải là TP/QLCS' }, { status: 400 });
+        }
+        if (recipientTier === 'senior' && recipientRole !== 'GD_KD' && recipientRole !== 'GD_VP') {
+          return NextResponse.json({ error: 'Người nhận cấp trên phải là GĐ Khối' }, { status: 400 });
+        }
+      } else {
+        return NextResponse.json({ error: 'Vai trò không được dùng module này' }, { status: 403 });
       }
-      chain.push(`user:${recipientUid}`);
-
-      approvalChain = chain;
+      recipientUidResolved = recipientUid;
+      approvalChain = [`user:${recipientUid}`];
       status = 'pending_approval';
-      currentApprover = chain[0];
+      currentApprover = approvalChain[0];
       approvalRequiredFrom = null;
-      crossBlock = proposalScope === 'cross_block';
+      // crossBlock theo block recipient vs creator
+      const recipientBlock = recipientRole === 'CEO' || recipientRole === 'ADMIN'
+        ? 'all' : (recipientRole === 'GD_KD' ? 'KD' : recipientRole === 'GD_VP' ? 'VP'
+        : (recipientRole.startsWith('QLCS_') ? 'KD' : null));
+      crossBlock = !!(recipientBlock && recipientBlock !== 'all' && creatorBlock !== 'all' && recipientBlock !== creatorBlock);
     }
 
     const db = getFirebaseAdminDb();
@@ -563,11 +538,9 @@ export async function POST(req: NextRequest) {
       proposalType,
       financialGroup,
       estimatedCost,
-      // Phase 12.8 (2026-06-04): proposal scope/subtype/recipient
-      proposalScope,
-      proposalSubtype,
-      recipientType,
-      recipientGdRole,
+      // Phase 12.9 (2026-06-04): proposal tier (peer/senior) + recipient uid
+      recipientTier,
+      recipientUid: recipientUidResolved,
       expectedCompletionDate: null,
       approvalChain,
       approvalsCompleted: [],

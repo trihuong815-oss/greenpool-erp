@@ -16,7 +16,7 @@ type Tab = 'org' | 'tree' | 'flow';
 const TIER_LABELS: Record<number, string> = {
   1: 'Tầng 1 — Lãnh đạo',
   2: 'Tầng 2 — Giám đốc Khối',
-  3: 'Tầng 3 — QLCS · Trưởng phòng · Tiểu ban',
+  3: 'Tầng 3 — QLCS · Trưởng phòng',
   4: 'Tầng 4 — Phó phòng',
   5: 'Tầng 5 — Tổ trưởng',
   6: 'Tầng 6 — Nhân viên · Giáo viên',

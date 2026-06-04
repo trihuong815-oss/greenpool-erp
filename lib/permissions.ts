@@ -51,7 +51,8 @@ export const MENU_PERMISSIONS: Record<string, string[]> = {
   KT_XLN_TT:    ['dashboard','tin-nhan','ky-thuat','bao-mat'],
   TP_DT:     ['dashboard','tin-nhan','quy-trinh','giao-viec','quan-ly-cong-viec','bao-cao','daotao','cong-viec-ca-nhan','bao-mat'],
   TP_MKT:    ['dashboard','tin-nhan','quy-trinh','giao-viec','quan-ly-cong-viec','bao-cao','mkt','cong-viec-ca-nhan','bao-mat'],
-  TIBAN_TT:  ['dashboard','tin-nhan','quy-trinh','giao-viec','quan-ly-cong-viec','bao-cao','cong-viec-ca-nhan','bao-mat'],
+  // TIBAN_TT (Trưởng tiểu ban Truyền thông Nội bộ): thuộc phòng NS (tầng 4) — KHÔNG dùng /giao-viec.
+  TIBAN_TT:  ['dashboard','tin-nhan','quy-trinh','quan-ly-cong-viec','bao-cao','cong-viec-ca-nhan','bao-mat'],
   TP_GS:     ['dashboard','tin-nhan','quy-trinh','giao-viec','quan-ly-cong-viec','bao-cao','sodo','cong-viec-ca-nhan','bao-mat'],
   TP_KE:     ['dashboard','tin-nhan','quy-trinh','giao-viec','quan-ly-cong-viec','bao-cao','luong','cong-viec-ca-nhan','bao-mat'],
   TP_NS:     ['dashboard','tin-nhan','quy-trinh','giao-viec','quan-ly-cong-viec','bao-cao','luong','sodo','cong-viec-ca-nhan','bao-mat'],

@@ -69,6 +69,12 @@ export function GiaoViecClient(props: Props) {
   const isGD = GD_ROLES.has(currentUserRole);
   const isCEO = currentUserRole === 'CEO' || currentUserRole === 'ADMIN';
   const showApprovalTab = isGD || isCEO;
+  // Phase 12.9 (2026-06-04): chỉ GĐ Khối + CEO/ADMIN có "Giao việc" (giao xuống cấp dưới).
+  // TP/QLCS chỉ dùng "Đề xuất" (đối tượng đều ngang cấp/trên).
+  // CEO không tạo "Đề xuất" (cấp cao nhất).
+  const canCreateAssignment = isGD || isCEO;
+  const canCreateProposal = canCreate && !isCEO;
+  const showAssignmentTab = isGD || isCEO; // ẩn tab Giao việc cho TP/QLCS
 
   const [tab, setTab] = useState<TabKey>('received');
   const tabSectionRef = useRef<HTMLElement | null>(null);
@@ -245,14 +251,16 @@ export function GiaoViecClient(props: Props) {
           active={tab === 'proposal'}
           onClick={() => jumpToTab('proposal')}
         />
-        <CategoryCard
-          title="Giao việc"
-          subtitle="Theo dõi tiến độ thực hiện"
-          icon={Send}
-          stats={statsByCategory.assignment}
-          active={tab === 'assignment'}
-          onClick={() => jumpToTab('assignment')}
-        />
+        {showAssignmentTab && (
+          <CategoryCard
+            title="Giao việc"
+            subtitle="Theo dõi tiến độ thực hiện"
+            icon={Send}
+            stats={statsByCategory.assignment}
+            active={tab === 'assignment'}
+            onClick={() => jumpToTab('assignment')}
+          />
+        )}
       </section>
 
       {/* Tổng tổng quan nhanh */}
@@ -285,8 +293,8 @@ export function GiaoViecClient(props: Props) {
       <section ref={tabSectionRef} className="rounded-xl border border-slate-200 bg-white shadow-sm scroll-mt-20">
         <div className="flex items-stretch border-b border-slate-200">
           <TabButton active={tab === 'received'} onClick={() => jumpToTab('received')} icon={Inbox} label="Nhiệm vụ của tôi" />
-          <TabButton active={tab === 'proposal'} onClick={() => jumpToTab('proposal')} icon={Send} label="Đề xuất" />
-          <TabButton active={tab === 'assignment'} onClick={() => jumpToTab('assignment')} icon={Send} label="Giao việc" />
+          {!isCEO && <TabButton active={tab === 'proposal'} onClick={() => jumpToTab('proposal')} icon={Send} label="Đề xuất" />}
+          {showAssignmentTab && <TabButton active={tab === 'assignment'} onClick={() => jumpToTab('assignment')} icon={Send} label="Giao việc" />}
           {showApprovalTab && (
             <TabButton
               active={tab === 'approval'} onClick={() => jumpToTab('approval')}
@@ -312,7 +320,7 @@ export function GiaoViecClient(props: Props) {
               <LayoutGrid size={16} />
             </button>
           </div>
-          {canCreate && tab === 'proposal' && (
+          {canCreateProposal && tab === 'proposal' && (
             <button
               onClick={() => setShowCreate('proposal')}
               className="my-2 mr-2 inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 shadow-sm"
@@ -320,7 +328,7 @@ export function GiaoViecClient(props: Props) {
               <Plus size={14} /> Tạo đề xuất
             </button>
           )}
-          {canCreate && tab === 'assignment' && (
+          {canCreateAssignment && tab === 'assignment' && (
             <button
               onClick={() => setShowCreate('assignment')}
               className="my-2 mr-2 inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 shadow-sm"
