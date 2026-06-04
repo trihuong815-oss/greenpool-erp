@@ -56,12 +56,14 @@ export const MENU_PERMISSIONS: Record<string, string[]> = {
   TP_KE:     ['dashboard','tin-nhan','quy-trinh','giao-viec','quan-ly-cong-viec','bao-cao','luong','cong-viec-ca-nhan','bao-mat'],
   TP_NS:     ['dashboard','tin-nhan','quy-trinh','giao-viec','quan-ly-cong-viec','bao-cao','luong','sodo','cong-viec-ca-nhan','bao-mat'],
 
-  TT_DT:     ['dashboard','tin-nhan','quy-trinh','giao-viec','quan-ly-cong-viec','bao-cao','bao-mat'],
-  GV_CB:     ['dashboard','tin-nhan','quy-trinh','giao-viec','bao-mat'],
-  GV_NC:     ['dashboard','tin-nhan','quy-trinh','giao-viec','bao-mat'],
-  NV_SALE:   ['dashboard','tin-nhan','giao-viec','bao-mat'],
-  NV_SALE_PT:['dashboard','tin-nhan','giao-viec','bao-mat'],
-  NV_CH:     ['dashboard','tin-nhan','giao-viec','bao-mat'],
+  // Phase 12.8 (2026-06-04): /giao-viec chỉ dành cho TP/QLCS/GD/CEO/Chủ tịch (theo tài liệu anh chốt).
+  // NV/GV/TT_DT bị ẩn menu này. Họ vẫn dùng tin-nhan + bao-mat + module nghiệp vụ riêng.
+  TT_DT:     ['dashboard','tin-nhan','quy-trinh','quan-ly-cong-viec','bao-cao','bao-mat'],
+  GV_CB:     ['dashboard','tin-nhan','quy-trinh','bao-mat'],
+  GV_NC:     ['dashboard','tin-nhan','quy-trinh','bao-mat'],
+  NV_SALE:   ['dashboard','tin-nhan','bao-mat'],
+  NV_SALE_PT:['dashboard','tin-nhan','bao-mat'],
+  NV_CH:     ['dashboard','tin-nhan','bao-mat'],
 };
 
 // Role → khối mapping (single source of truth — tasks-scope/sales-scope import từ đây)

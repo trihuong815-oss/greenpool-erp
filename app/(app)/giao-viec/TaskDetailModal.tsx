@@ -344,7 +344,39 @@ export function TaskDetailModal(props: {
                 </div>
               )}
 
-              {/* Đề xuất v2: nội dung + nhóm chi + chi phí */}
+              {/* Phase 12.8 (2026-06-04): scope + subtype + recipient cho doc mới */}
+              {task.kind === 'proposal' && (task as any).proposalScope && (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-3 flex items-center gap-3 flex-wrap">
+                  <div>
+                    <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700 mb-0.5">Loại đề xuất</div>
+                    <div className="text-sm font-semibold text-slate-800">
+                      {(task as any).proposalScope === 'in_block' ? '🏠 Trong khối' : '🔀 Liên khối'}
+                    </div>
+                  </div>
+                  {(task as any).proposalScope === 'cross_block' && (task as any).proposalSubtype && (
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700 mb-0.5">Tính chất</div>
+                      <div className="text-sm font-medium text-slate-700">
+                        {(task as any).proposalSubtype === 'regular' ? 'Thường xuyên' : 'Phát sinh (qua GĐ khối)'}
+                      </div>
+                    </div>
+                  )}
+                  {(task as any).recipientType && (
+                    <div className="ml-auto text-right">
+                      <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700 mb-0.5">Đối tượng nhận</div>
+                      <div className="text-sm font-medium text-slate-700">
+                        {(task as any).recipientType === 'department'
+                          ? `Phòng ${task.assigneeDeptId ?? '?'}`
+                          : (task as any).recipientType === 'facility'
+                            ? `Cơ sở ${task.assigneeFacilityId ?? '?'}`
+                            : (task as any).recipientGdRole === 'GD_KD' ? 'GĐ Khối Kinh Doanh' : 'GĐ Khối Văn Phòng'}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* LEGACY (doc cũ trước 2026-06-04): nội dung + nhóm chi + chi phí */}
               {task.kind === 'proposal' && task.proposalType && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-3 flex items-center gap-3 flex-wrap">
                   <div>
