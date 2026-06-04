@@ -1344,6 +1344,27 @@ function PackageRevSummaryTable({ rows, loading }: {
     })).sort((a, b) => a.groupSortOrder - b.groupSortOrder);
   }, [rows]);
 
+  // Phase 12.11: detect sub-group → 3 cấp (CTT) hoặc 2 cấp cũ (HM/TK/24/TT)
+  const hasSubGroups = useMemo(
+    () => grouped.some((g) => parseGroupName(g.groupName).sub !== null),
+    [grouped],
+  );
+  const byParent = useMemo(() => {
+    if (!hasSubGroups) return [];
+    const parents = new Map<string, typeof grouped>();
+    for (const g of grouped) {
+      const { parent } = parseGroupName(g.groupName);
+      if (!parents.has(parent)) parents.set(parent, []);
+      parents.get(parent)!.push(g);
+    }
+    return Array.from(parents.entries()).map(([parent, subs]) => ({
+      parent,
+      subs,
+      parentTotal: subs.reduce((s, g) => s + g.groupTotal, 0),
+      rowCount: subs.reduce((s, g) => s + g.items.length, 0),
+    }));
+  }, [grouped, hasSubGroups]);
+
   const grandTotal = useMemo(() => rows.reduce((s, r) => s + (r.revenue ?? 0), 0), [rows]);
 
   if (loading) {
@@ -1368,59 +1389,135 @@ function PackageRevSummaryTable({ rows, loading }: {
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-xs tabular-nums table-fixed">
-            <thead className="bg-slate-50 text-slate-700">
-              <tr>
-                <th className="px-3 py-2 text-left font-semibold w-12">#</th>
-                <th className="px-3 py-2 text-left font-semibold w-48">Nhóm</th>
-                <th className="px-3 py-2 text-left font-semibold">Gói dịch vụ</th>
-                <th className="px-3 py-2 text-center font-semibold w-44">Doanh số</th>
-                <th className="px-3 py-2 text-center font-semibold w-24">% cơ cấu</th>
-              </tr>
-            </thead>
-            <tbody>
-              {grouped.map((g, gIdx) => (
-                <Fragment key={g.groupId}>
-                  {g.items.map((r, idx) => {
-                    const rev = r.revenue ?? 0;
-                    const pct = grandTotal > 0 ? Math.round((rev / grandTotal) * 100) : 0;
-                    const rowBg = (gIdx + idx) % 2 === 1 ? 'bg-slate-50/40' : 'bg-white';
-                    return (
-                      <tr key={r.packageId} className={`border-t border-slate-100 hover:bg-blue-50/30 ${rowBg}`}>
-                        {idx === 0 && (
-                          <td rowSpan={g.items.length} className={`px-3 py-1.5 text-slate-400 align-top ${rowBg} border-r border-slate-100`}>
-                            {gIdx + 1}
-                          </td>
-                        )}
-                        {idx === 0 && (
-                          <td rowSpan={g.items.length} className={`px-3 py-1.5 font-semibold text-blue-900 align-top ${rowBg} border-r border-slate-100`}>
-                            {g.groupName}
-                            <div className="text-[10px] font-normal text-slate-500 mt-0.5">
-                              {g.items.length} gói · {g.groupTotal.toLocaleString('vi-VN')}₫ ({grandTotal > 0 ? Math.round((g.groupTotal / grandTotal) * 100) : 0}%)
-                            </div>
-                          </td>
-                        )}
-                        <td className="px-3 py-1.5 text-slate-700">{r.packageName}</td>
-                        <td className="px-3 py-1.5 text-center font-bold text-blue-700">{fmtMoney(rev)}</td>
-                        <td className="px-3 py-1.5 text-center text-slate-500">{pct}%</td>
-                      </tr>
-                    );
-                  })}
-                </Fragment>
-              ))}
-            </tbody>
-            <tfoot className="bg-gradient-to-r from-blue-100 to-indigo-50 font-bold text-blue-900">
-              <tr className="border-t-2 border-blue-300">
-                <td colSpan={3} className="px-3 py-2 text-right">Tổng cơ sở</td>
-                <td className="px-3 py-2 text-center">{fmtMoney(grandTotal)}</td>
-                <td className="px-3 py-2 text-center">100%</td>
-              </tr>
-            </tfoot>
-          </table>
+          {hasSubGroups ? (
+            // 3 cấp (CTT): # | Bể / Loại lớn | Nhóm thẻ | Gói | Doanh số | %
+            <table className="w-full text-xs tabular-nums">
+              <thead className="bg-slate-50 text-slate-700">
+                <tr>
+                  <th className="px-3 py-2 text-left font-semibold w-12">#</th>
+                  <th className="px-3 py-2 text-left font-semibold w-40">Bể / Loại lớn</th>
+                  <th className="px-3 py-2 text-left font-semibold w-36">Nhóm thẻ</th>
+                  <th className="px-3 py-2 text-left font-semibold">Gói dịch vụ</th>
+                  <th className="px-3 py-2 text-center font-semibold w-44">Doanh số</th>
+                  <th className="px-3 py-2 text-center font-semibold w-24">% cơ cấu</th>
+                </tr>
+              </thead>
+              <tbody>
+                {byParent.map((parent, pIdx) => (
+                  <Fragment key={parent.parent}>
+                    {parent.subs.map((g) => (
+                      <Fragment key={g.groupId}>
+                        {g.items.map((r, idx) => {
+                          const rev = r.revenue ?? 0;
+                          const pct = grandTotal > 0 ? Math.round((rev / grandTotal) * 100) : 0;
+                          const rowBg = pIdx % 2 === 1 ? 'bg-slate-50/40' : 'bg-white';
+                          const isFirstOfParent = g === parent.subs[0] && idx === 0;
+                          const isFirstOfSub = idx === 0;
+                          return (
+                            <tr key={r.packageId} className={`border-t border-slate-100 hover:bg-blue-50/30 ${rowBg}`}>
+                              {isFirstOfParent && (
+                                <td rowSpan={parent.rowCount} className={`px-3 py-1.5 text-slate-400 align-top ${rowBg} border-r border-slate-200`}>
+                                  {pIdx + 1}
+                                </td>
+                              )}
+                              {isFirstOfParent && (
+                                <td rowSpan={parent.rowCount} className={`px-3 py-1.5 font-bold text-blue-900 align-top ${rowBg} border-r border-slate-200`}>
+                                  {parent.parent}
+                                  <div className="text-[10px] font-normal text-slate-500 mt-0.5">
+                                    {parent.parentTotal.toLocaleString('vi-VN')}₫ ({grandTotal > 0 ? Math.round((parent.parentTotal / grandTotal) * 100) : 0}%)
+                                  </div>
+                                </td>
+                              )}
+                              {isFirstOfSub && (
+                                <td rowSpan={g.items.length} className={`px-3 py-1.5 font-semibold text-blue-700 align-top ${rowBg} border-r border-slate-100`}>
+                                  {parseGroupName(g.groupName).sub ?? <span className="text-slate-400 italic text-[10px]">—</span>}
+                                  <div className="text-[10px] font-normal text-slate-500 mt-0.5">
+                                    {g.items.length} gói · {g.groupTotal.toLocaleString('vi-VN')}₫
+                                  </div>
+                                </td>
+                              )}
+                              <td className="px-3 py-1.5 text-slate-700">{r.packageName}</td>
+                              <td className="px-3 py-1.5 text-center font-bold text-blue-700">{fmtMoney(rev)}</td>
+                              <td className="px-3 py-1.5 text-center text-slate-500">{pct}%</td>
+                            </tr>
+                          );
+                        })}
+                      </Fragment>
+                    ))}
+                  </Fragment>
+                ))}
+              </tbody>
+              <tfoot className="bg-gradient-to-r from-blue-100 to-indigo-50 font-bold text-blue-900">
+                <tr className="border-t-2 border-blue-300">
+                  <td colSpan={4} className="px-3 py-2 text-right">Tổng cơ sở</td>
+                  <td className="px-3 py-2 text-center">{fmtMoney(grandTotal)}</td>
+                  <td className="px-3 py-2 text-center">100%</td>
+                </tr>
+              </tfoot>
+            </table>
+          ) : (
+            // 2 cấp cũ (HM/TK/24/TT): # | Nhóm | Gói | Doanh số | %
+            <table className="w-full text-xs tabular-nums table-fixed">
+              <thead className="bg-slate-50 text-slate-700">
+                <tr>
+                  <th className="px-3 py-2 text-left font-semibold w-12">#</th>
+                  <th className="px-3 py-2 text-left font-semibold w-48">Nhóm</th>
+                  <th className="px-3 py-2 text-left font-semibold">Gói dịch vụ</th>
+                  <th className="px-3 py-2 text-center font-semibold w-44">Doanh số</th>
+                  <th className="px-3 py-2 text-center font-semibold w-24">% cơ cấu</th>
+                </tr>
+              </thead>
+              <tbody>
+                {grouped.map((g, gIdx) => (
+                  <Fragment key={g.groupId}>
+                    {g.items.map((r, idx) => {
+                      const rev = r.revenue ?? 0;
+                      const pct = grandTotal > 0 ? Math.round((rev / grandTotal) * 100) : 0;
+                      const rowBg = (gIdx + idx) % 2 === 1 ? 'bg-slate-50/40' : 'bg-white';
+                      return (
+                        <tr key={r.packageId} className={`border-t border-slate-100 hover:bg-blue-50/30 ${rowBg}`}>
+                          {idx === 0 && (
+                            <td rowSpan={g.items.length} className={`px-3 py-1.5 text-slate-400 align-top ${rowBg} border-r border-slate-100`}>
+                              {gIdx + 1}
+                            </td>
+                          )}
+                          {idx === 0 && (
+                            <td rowSpan={g.items.length} className={`px-3 py-1.5 font-semibold text-blue-900 align-top ${rowBg} border-r border-slate-100`}>
+                              {g.groupName}
+                              <div className="text-[10px] font-normal text-slate-500 mt-0.5">
+                                {g.items.length} gói · {g.groupTotal.toLocaleString('vi-VN')}₫ ({grandTotal > 0 ? Math.round((g.groupTotal / grandTotal) * 100) : 0}%)
+                              </div>
+                            </td>
+                          )}
+                          <td className="px-3 py-1.5 text-slate-700">{r.packageName}</td>
+                          <td className="px-3 py-1.5 text-center font-bold text-blue-700">{fmtMoney(rev)}</td>
+                          <td className="px-3 py-1.5 text-center text-slate-500">{pct}%</td>
+                        </tr>
+                      );
+                    })}
+                  </Fragment>
+                ))}
+              </tbody>
+              <tfoot className="bg-gradient-to-r from-blue-100 to-indigo-50 font-bold text-blue-900">
+                <tr className="border-t-2 border-blue-300">
+                  <td colSpan={3} className="px-3 py-2 text-right">Tổng cơ sở</td>
+                  <td className="px-3 py-2 text-center">{fmtMoney(grandTotal)}</td>
+                  <td className="px-3 py-2 text-center">100%</td>
+                </tr>
+              </tfoot>
+            </table>
+          )}
         </div>
       )}
     </div>
   );
+}
+
+// Phase 12.11 (2026-06-04): parse "Bể X - Thẻ Y" thành (parent, sub) để hiển thị 3 cấp với rowspan
+function parseGroupName(name: string): { parent: string; sub: string | null } {
+  const idx = name.indexOf(' - ');
+  if (idx === -1) return { parent: name, sub: null };
+  return { parent: name.slice(0, idx).trim(), sub: name.slice(idx + 3).trim() };
 }
 
 function PackageQtySummaryTable({ rows, loading }: {
@@ -1443,6 +1540,28 @@ function PackageQtySummaryTable({ rows, loading }: {
       groupTotal: items.reduce((s, x) => s + x.quantity, 0),
     })).sort((a, b) => a.groupSortOrder - b.groupSortOrder);
   }, [rows]);
+
+  // Phase 12.11: nhóm theo "parent" — CHỈ áp dụng nếu cơ sở có sub-group (CTT).
+  // Cơ sở khác (HM/TK/24/TT) không có sub → render layout 2 cấp cũ.
+  const hasSubGroups = useMemo(
+    () => grouped.some((g) => parseGroupName(g.groupName).sub !== null),
+    [grouped],
+  );
+  const byParent = useMemo(() => {
+    if (!hasSubGroups) return [];
+    const parents = new Map<string, typeof grouped>();
+    for (const g of grouped) {
+      const { parent } = parseGroupName(g.groupName);
+      if (!parents.has(parent)) parents.set(parent, []);
+      parents.get(parent)!.push(g);
+    }
+    return Array.from(parents.entries()).map(([parent, subs]) => ({
+      parent,
+      subs,
+      parentTotal: subs.reduce((s, g) => s + g.groupTotal, 0),
+      rowCount: subs.reduce((s, g) => s + g.items.length, 0),
+    }));
+  }, [grouped, hasSubGroups]);
 
   const grandTotal = useMemo(() => rows.reduce((s, r) => s + r.quantity, 0), [rows]);
 
@@ -1468,54 +1587,122 @@ function PackageQtySummaryTable({ rows, loading }: {
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-xs tabular-nums table-fixed">
-            <thead className="bg-slate-50 text-slate-700">
-              <tr>
-                <th className="px-3 py-2 text-left font-semibold w-12">#</th>
-                <th className="px-3 py-2 text-left font-semibold w-48">Nhóm</th>
-                <th className="px-3 py-2 text-left font-semibold">Gói dịch vụ</th>
-                <th className="px-3 py-2 text-center font-semibold w-28">Số lượng</th>
-                <th className="px-3 py-2 text-center font-semibold w-24">% cơ cấu</th>
-              </tr>
-            </thead>
-            <tbody>
-              {grouped.map((g, gIdx) => (
-                <Fragment key={g.groupId}>
-                  {g.items.map((r, idx) => {
-                    const pct = grandTotal > 0 ? Math.round((r.quantity / grandTotal) * 100) : 0;
-                    const rowBg = (gIdx + idx) % 2 === 1 ? 'bg-slate-50/40' : 'bg-white';
-                    return (
-                      <tr key={r.packageId} className={`border-t border-slate-100 hover:bg-purple-50/30 ${rowBg}`}>
-                        {idx === 0 && (
-                          <td rowSpan={g.items.length} className={`px-3 py-1.5 text-slate-400 align-top ${rowBg} border-r border-slate-100`}>
-                            {gIdx + 1}
-                          </td>
-                        )}
-                        {idx === 0 && (
-                          <td rowSpan={g.items.length} className={`px-3 py-1.5 font-semibold text-purple-900 align-top ${rowBg} border-r border-slate-100`}>
-                            {g.groupName}
-                            <div className="text-[10px] font-normal text-slate-500 mt-0.5">
-                              {g.items.length} gói · {g.groupTotal} ({grandTotal > 0 ? Math.round((g.groupTotal / grandTotal) * 100) : 0}%)
-                            </div>
-                          </td>
-                        )}
-                        <td className="px-3 py-1.5 text-slate-700">{r.packageName}</td>
-                        <td className="px-3 py-1.5 text-center font-bold text-purple-700">{r.quantity}</td>
-                        <td className="px-3 py-1.5 text-center text-slate-500">{pct}%</td>
-                      </tr>
-                    );
-                  })}
-                </Fragment>
-              ))}
-            </tbody>
-            <tfoot className="bg-gradient-to-r from-purple-100 to-fuchsia-50 font-bold text-purple-900">
-              <tr className="border-t-2 border-purple-300">
-                <td colSpan={3} className="px-3 py-2 text-right">Tổng cơ sở</td>
-                <td className="px-3 py-2 text-center">{grandTotal}</td>
-                <td className="px-3 py-2 text-center">100%</td>
-              </tr>
-            </tfoot>
-          </table>
+          {hasSubGroups ? (
+            // 3 cấp: # | Bể / Loại lớn | Nhóm thẻ | Gói | SL | %
+            <table className="w-full text-xs tabular-nums">
+              <thead className="bg-slate-50 text-slate-700">
+                <tr>
+                  <th className="px-3 py-2 text-left font-semibold w-12">#</th>
+                  <th className="px-3 py-2 text-left font-semibold w-40">Bể / Loại lớn</th>
+                  <th className="px-3 py-2 text-left font-semibold w-36">Nhóm thẻ</th>
+                  <th className="px-3 py-2 text-left font-semibold">Gói dịch vụ</th>
+                  <th className="px-3 py-2 text-center font-semibold w-28">Số lượng</th>
+                  <th className="px-3 py-2 text-center font-semibold w-24">% cơ cấu</th>
+                </tr>
+              </thead>
+              <tbody>
+                {byParent.map((parent, pIdx) => (
+                  <Fragment key={parent.parent}>
+                    {parent.subs.map((g) => (
+                      <Fragment key={g.groupId}>
+                        {g.items.map((r, idx) => {
+                          const pct = grandTotal > 0 ? Math.round((r.quantity / grandTotal) * 100) : 0;
+                          const rowBg = pIdx % 2 === 1 ? 'bg-slate-50/40' : 'bg-white';
+                          const isFirstOfParent = g === parent.subs[0] && idx === 0;
+                          const isFirstOfSub = idx === 0;
+                          return (
+                            <tr key={r.packageId} className={`border-t border-slate-100 hover:bg-purple-50/30 ${rowBg}`}>
+                              {isFirstOfParent && (
+                                <td rowSpan={parent.rowCount} className={`px-3 py-1.5 text-slate-400 align-top ${rowBg} border-r border-slate-200`}>
+                                  {pIdx + 1}
+                                </td>
+                              )}
+                              {isFirstOfParent && (
+                                <td rowSpan={parent.rowCount} className={`px-3 py-1.5 font-bold text-purple-900 align-top ${rowBg} border-r border-slate-200`}>
+                                  {parent.parent}
+                                  <div className="text-[10px] font-normal text-slate-500 mt-0.5">
+                                    {parent.parentTotal} ({grandTotal > 0 ? Math.round((parent.parentTotal / grandTotal) * 100) : 0}%)
+                                  </div>
+                                </td>
+                              )}
+                              {isFirstOfSub && (
+                                <td rowSpan={g.items.length} className={`px-3 py-1.5 font-semibold text-purple-700 align-top ${rowBg} border-r border-slate-100`}>
+                                  {parseGroupName(g.groupName).sub ?? <span className="text-slate-400 italic text-[10px]">—</span>}
+                                  <div className="text-[10px] font-normal text-slate-500 mt-0.5">
+                                    {g.items.length} gói · {g.groupTotal}
+                                  </div>
+                                </td>
+                              )}
+                              <td className="px-3 py-1.5 text-slate-700">{r.packageName}</td>
+                              <td className="px-3 py-1.5 text-center font-bold text-purple-700">{r.quantity}</td>
+                              <td className="px-3 py-1.5 text-center text-slate-500">{pct}%</td>
+                            </tr>
+                          );
+                        })}
+                      </Fragment>
+                    ))}
+                  </Fragment>
+                ))}
+              </tbody>
+              <tfoot className="bg-gradient-to-r from-purple-100 to-fuchsia-50 font-bold text-purple-900">
+                <tr className="border-t-2 border-purple-300">
+                  <td colSpan={4} className="px-3 py-2 text-right">Tổng cơ sở</td>
+                  <td className="px-3 py-2 text-center">{grandTotal}</td>
+                  <td className="px-3 py-2 text-center">100%</td>
+                </tr>
+              </tfoot>
+            </table>
+          ) : (
+            // 2 cấp cũ: # | Nhóm | Gói | SL | %
+            <table className="w-full text-xs tabular-nums table-fixed">
+              <thead className="bg-slate-50 text-slate-700">
+                <tr>
+                  <th className="px-3 py-2 text-left font-semibold w-12">#</th>
+                  <th className="px-3 py-2 text-left font-semibold w-48">Nhóm</th>
+                  <th className="px-3 py-2 text-left font-semibold">Gói dịch vụ</th>
+                  <th className="px-3 py-2 text-center font-semibold w-28">Số lượng</th>
+                  <th className="px-3 py-2 text-center font-semibold w-24">% cơ cấu</th>
+                </tr>
+              </thead>
+              <tbody>
+                {grouped.map((g, gIdx) => (
+                  <Fragment key={g.groupId}>
+                    {g.items.map((r, idx) => {
+                      const pct = grandTotal > 0 ? Math.round((r.quantity / grandTotal) * 100) : 0;
+                      const rowBg = (gIdx + idx) % 2 === 1 ? 'bg-slate-50/40' : 'bg-white';
+                      return (
+                        <tr key={r.packageId} className={`border-t border-slate-100 hover:bg-purple-50/30 ${rowBg}`}>
+                          {idx === 0 && (
+                            <td rowSpan={g.items.length} className={`px-3 py-1.5 text-slate-400 align-top ${rowBg} border-r border-slate-100`}>
+                              {gIdx + 1}
+                            </td>
+                          )}
+                          {idx === 0 && (
+                            <td rowSpan={g.items.length} className={`px-3 py-1.5 font-semibold text-purple-900 align-top ${rowBg} border-r border-slate-100`}>
+                              {g.groupName}
+                              <div className="text-[10px] font-normal text-slate-500 mt-0.5">
+                                {g.items.length} gói · {g.groupTotal} ({grandTotal > 0 ? Math.round((g.groupTotal / grandTotal) * 100) : 0}%)
+                              </div>
+                            </td>
+                          )}
+                          <td className="px-3 py-1.5 text-slate-700">{r.packageName}</td>
+                          <td className="px-3 py-1.5 text-center font-bold text-purple-700">{r.quantity}</td>
+                          <td className="px-3 py-1.5 text-center text-slate-500">{pct}%</td>
+                        </tr>
+                      );
+                    })}
+                  </Fragment>
+                ))}
+              </tbody>
+              <tfoot className="bg-gradient-to-r from-purple-100 to-fuchsia-50 font-bold text-purple-900">
+                <tr className="border-t-2 border-purple-300">
+                  <td colSpan={3} className="px-3 py-2 text-right">Tổng cơ sở</td>
+                  <td className="px-3 py-2 text-center">{grandTotal}</td>
+                  <td className="px-3 py-2 text-center">100%</td>
+                </tr>
+              </tfoot>
+            </table>
+          )}
         </div>
       )}
     </div>
