@@ -335,8 +335,8 @@ export function NhapClient(props: Props) {
     <div className="max-w-7xl mx-auto space-y-4">
       {/* Toolbar: Cơ sở + Năm + Tháng + nút Nhập dữ liệu */}
       <div className="card">
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex-1 min-w-0 grid grid-cols-3 gap-3 items-end max-w-2xl">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:flex-wrap">
+          <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 items-end sm:max-w-2xl">
             <FieldLabel label="Cơ sở">
               <select
                 value={branchId} onChange={(e) => setBranchId(e.target.value)}
@@ -1887,11 +1887,11 @@ function EntryFormModal({ children, onClose, headerRight, title = 'Nhập dữ l
     : 'from-emerald-600 to-teal-600';
   return (
     <div
-      className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-3"
+      className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-3"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-7xl max-h-[94vh] flex flex-col overflow-hidden"
+        className="bg-white shadow-2xl w-full sm:max-w-7xl h-full sm:h-auto sm:max-h-[94vh] sm:rounded-2xl flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className={`px-5 py-3 bg-gradient-to-r ${headerBg} text-white flex items-center justify-between gap-3`}>

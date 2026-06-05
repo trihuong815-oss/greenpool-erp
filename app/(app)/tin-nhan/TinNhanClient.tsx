@@ -615,8 +615,8 @@ function MessageThread({ conv, currentUserId, onBack }: { conv: ChatConversation
   return (
     <>
       <div className="px-4 py-3 border-b border-slate-200 bg-white flex items-center gap-2">
-        <button onClick={onBack} className="md:hidden p-1 rounded hover:bg-slate-100 text-slate-600">
-          <ChevronLeft size={20} />
+        <button onClick={onBack} className="md:hidden p-2.5 -ml-1 rounded-lg hover:bg-slate-100 active:bg-slate-200 text-slate-600" aria-label="Quay lại">
+          <ChevronLeft size={22} />
         </button>
         {(() => {
           const av = convAvatarStyle(conv.type);
@@ -843,28 +843,32 @@ function MessageThread({ conv, currentUserId, onBack }: { conv: ChatConversation
                   })()}
                 </div>
               </div>
-              {/* Hover/Tap → action bar (Reply + Forward + React) */}
-              <div className={`absolute top-0 ${isMine ? 'right-full mr-1' : 'left-full ml-1'} opacity-0 group-hover:opacity-100 transition flex gap-1`}>
+              {/* Hover/Tap → action bar (Reply + Forward + React).
+                  Mobile: luôn hiện (md:opacity-0 + group-hover) + touch target lớn */}
+              <div className={`absolute top-0 ${isMine ? 'right-full mr-1' : 'left-full ml-1'} opacity-100 md:opacity-0 md:group-hover:opacity-100 transition flex gap-1.5`}>
                 <button
                   onClick={() => startReply(m)}
-                  className="p-1 rounded-full bg-white ring-1 ring-slate-200 hover:bg-slate-50 text-slate-500"
+                  className="p-2 rounded-full bg-white ring-1 ring-slate-200 hover:bg-slate-50 active:bg-slate-100 text-slate-500 shadow-sm"
                   title="Trả lời"
+                  aria-label="Trả lời"
                 >
-                  <CornerUpLeft size={14} />
+                  <CornerUpLeft size={16} />
                 </button>
                 <button
                   onClick={() => setForwardingMsg(m)}
-                  className="p-1 rounded-full bg-white ring-1 ring-slate-200 hover:bg-slate-50 text-slate-500"
+                  className="p-2 rounded-full bg-white ring-1 ring-slate-200 hover:bg-slate-50 active:bg-slate-100 text-slate-500 shadow-sm"
                   title="Chuyển tiếp"
+                  aria-label="Chuyển tiếp"
                 >
-                  <Forward size={14} />
+                  <Forward size={16} />
                 </button>
                 <button
                   onClick={() => setReactPickerFor(reactPickerFor === m.id ? null : m.id)}
-                  className="p-1 rounded-full bg-white ring-1 ring-slate-200 hover:bg-slate-50 text-slate-500 relative"
+                  className="p-2 rounded-full bg-white ring-1 ring-slate-200 hover:bg-slate-50 active:bg-slate-100 text-slate-500 shadow-sm relative"
                   title="Reaction"
+                  aria-label="Reaction"
                 >
-                  <Smile size={14} />
+                  <Smile size={16} />
                   {reactPickerFor === m.id && (
                     <div className="absolute top-7 left-1/2 -translate-x-1/2 bg-white ring-1 ring-slate-200 shadow-lg rounded-full px-2 py-1 flex gap-1 z-10">
                       {REACTIONS.map((e) => (

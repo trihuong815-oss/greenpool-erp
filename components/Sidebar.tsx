@@ -115,10 +115,10 @@ export function Sidebar({ userName, userRole, roleCode, menuOverrides }: Sidebar
         <button
           type="button"
           onClick={() => setOpen(false)}
-          className="md:hidden absolute top-2 right-2 flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-white"
+          className="md:hidden absolute top-2 right-2 flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 hover:bg-white active:bg-slate-200"
           aria-label="Đóng menu"
         >
-          <X size={18} />
+          <X size={20} />
         </button>
         <div className="flex items-center gap-3">
           <div className="flex h-20 w-20 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-emerald-100 shrink-0">
