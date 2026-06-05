@@ -47,6 +47,48 @@ export function SecurityClient({ email, displayName, roleCode, mfaRequired }: Pr
   const [pushPermission, setPushPermission] = useState<NotificationPermission>('default');
   const [pushDeviceOn, setPushDeviceOn] = useState<boolean>(false);
   const [pushBusy, setPushBusy] = useState<'enable' | 'disable' | null>(null);
+  // Phase 13.8 (2026-06-05): list devices đã bật
+  interface FcmDevice { token: string; tokenMask: string; userAgent: string; label: string; createdAt: number; lastSeen: number; }
+  const [devices, setDevices] = useState<FcmDevice[]>([]);
+  const [devicesLoading, setDevicesLoading] = useState(false);
+  const [removingToken, setRemovingToken] = useState<string | null>(null);
+
+  async function loadDevices() {
+    setDevicesLoading(true);
+    try {
+      const res = await fetch('/api/personal/fcm-token', { cache: 'no-store' });
+      if (res.ok) {
+        const j = await res.json();
+        setDevices(Array.isArray(j.devices) ? j.devices : []);
+      }
+    } catch { /* silent */ } finally { setDevicesLoading(false); }
+  }
+  useEffect(() => { loadDevices(); }, []);
+
+  async function handleRemoveDevice(token: string, label: string) {
+    if (!confirm(`Xoá thiết bị "${label}"? Thiết bị này sẽ không nhận thông báo nữa.`)) return;
+    setRemovingToken(token);
+    try {
+      const res = await fetch('/api/personal/fcm-token', {
+        method: 'DELETE',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+      if (res.ok) {
+        await loadDevices();
+        // Nếu token bị xoá là token CURRENT device → cập nhật state
+        try {
+          const cached = localStorage.getItem('fcm_token_registered');
+          if (cached === token) {
+            localStorage.removeItem('fcm_token_registered');
+            setPushDeviceOn(false);
+          }
+        } catch { /* ignore */ }
+      }
+    } catch (e: any) {
+      alert('Lỗi xoá thiết bị: ' + (e?.message ?? 'unknown'));
+    } finally { setRemovingToken(null); }
+  }
 
   // Detect trạng thái thông báo trên thiết bị này
   useEffect(() => {
@@ -288,6 +330,69 @@ export function SecurityClient({ email, displayName, roleCode, mfaRequired }: Pr
               Tắt/bật áp dụng <strong>chỉ cho thiết bị này</strong>. Nếu dùng nhiều thiết bị (vd điện thoại + máy tính),
               bật riêng từng máy.
             </p>
+
+            {/* List thiết bị đã bật — Phase 13.8 (2026-06-05) */}
+            <div className="mt-4 pt-4 border-t border-slate-100">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Thiết bị đang nhận thông báo ({devices.length})
+                </h4>
+                <button
+                  type="button"
+                  onClick={loadDevices}
+                  disabled={devicesLoading}
+                  className="text-[11px] text-slate-500 hover:text-emerald-700 disabled:opacity-50"
+                  title="Tải lại"
+                >
+                  {devicesLoading ? '...' : '⟳'}
+                </button>
+              </div>
+              {devicesLoading ? (
+                <div className="text-xs text-slate-400 py-3 text-center">
+                  <Loader2 size={14} className="inline animate-spin mr-1" /> Đang tải...
+                </div>
+              ) : devices.length === 0 ? (
+                <div className="text-xs text-slate-400 py-3 text-center">
+                  Chưa có thiết bị nào nhận thông báo. Bấm "Bật thông báo" ở trên.
+                </div>
+              ) : (
+                <ul className="space-y-1.5">
+                  {devices.map((d) => {
+                    const isCurrent = (() => {
+                      try { return localStorage.getItem('fcm_token_registered') === d.token; }
+                      catch { return false; }
+                    })();
+                    const lastSeenDate = d.lastSeen ? new Date(d.lastSeen) : null;
+                    const createdDate = d.createdAt ? new Date(d.createdAt) : null;
+                    return (
+                      <li key={d.token} className="flex items-center gap-3 px-3 py-2.5 bg-slate-50 rounded-lg ring-1 ring-slate-200">
+                        <Bell size={14} className={isCurrent ? 'text-emerald-600' : 'text-slate-400'} />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                            {d.label}
+                            {isCurrent && <span className="text-[9px] px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded font-bold">THIẾT BỊ NÀY</span>}
+                          </div>
+                          <div className="text-[10px] text-slate-500 mt-0.5">
+                            {createdDate ? `Đăng ký: ${createdDate.toLocaleDateString('vi-VN')} · ` : ''}
+                            {lastSeenDate ? `Lần gần nhất: ${lastSeenDate.toLocaleDateString('vi-VN')} ${lastSeenDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}` : 'Chưa có log'}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveDevice(d.token, d.label)}
+                          disabled={removingToken === d.token}
+                          className="px-2 py-1 text-[11px] text-rose-600 hover:bg-rose-50 rounded disabled:opacity-50 inline-flex items-center gap-1"
+                          title="Tắt thông báo cho thiết bị này"
+                        >
+                          {removingToken === d.token ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />}
+                          Xoá
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
           </>
         )}
       </div>

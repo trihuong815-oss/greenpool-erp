@@ -31,7 +31,6 @@ const MENU_SECTIONS: MenuSection[] = [
       { route: 'dashboard',         label: 'Dashboard',          icon: Home },
       { route: 'tin-nhan',          label: 'Tin nhắn',           icon: MessageCircle },
       { route: 'cong-viec-ca-nhan', label: 'Công việc cá nhân', icon: Briefcase },
-      { route: 'bao-mat',           label: 'Bảo mật (2FA)',      icon: ShieldCheck },
     ],
   },
   {
@@ -61,8 +60,9 @@ const MENU_SECTIONS: MenuSection[] = [
     ],
   },
   {
-    title: 'Quản trị',
+    title: 'Cài đặt',
     items: [
+      { route: 'bao-mat',            label: 'Bảo mật & Thông báo',  icon: ShieldCheck },
       { route: 'doanh-so/packages',  label: 'Quản lý gói dịch vụ',  icon: Settings },
       { route: 'quan-ly-sale',       label: 'Quản lý Sale',         icon: UserPlus },
       { route: 'users',              label: 'Quản lý người dùng',   icon: UserCog },

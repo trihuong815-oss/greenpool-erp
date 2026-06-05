@@ -155,10 +155,12 @@ export async function enablePushNotifications(): Promise<{
     _currentToken = token;
 
     // POST token to backend (arrayUnion ở server đảm bảo dedup)
+    // Phase 13.8 (2026-06-05): gửi userAgent để server lưu metadata cho list devices.
+    const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
     const res = await fetch('/api/personal/fcm-token', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ token }),
+      body: JSON.stringify({ token, userAgent }),
     });
     if (!res.ok) {
       const j = await res.json().catch(() => ({}));
