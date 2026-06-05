@@ -1,6 +1,9 @@
 import { AppShell } from '@/components/AppShell';
 import { SessionRefresher } from '@/components/SessionRefresher';
-import { IdleAutoLogout } from '@/components/IdleAutoLogout';
+// Phase 13.7 (2026-06-05): bỏ IdleAutoLogout theo yêu cầu anh — UX giống FB/Zalo.
+// Bảo mật giữ qua: auth + 2FA TOTP + Firestore rules + audit log + rate limit + CSP.
+// Session cookie 14d tự renew qua SessionRefresher mỗi 24h.
+// import { IdleAutoLogout } from '@/components/IdleAutoLogout';
 import { PWAAppBadge } from '@/components/PWAAppBadge';
 import { getCurrentProfile } from '@/lib/firebase/current-profile';
 import { redirect } from 'next/navigation';
@@ -28,7 +31,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <>
       <SessionRefresher />
-      <IdleAutoLogout />
       <PWAAppBadge />
       <AppShell
         userName={profile.displayName}
