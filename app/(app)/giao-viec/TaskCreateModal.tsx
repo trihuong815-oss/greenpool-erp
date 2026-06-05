@@ -47,7 +47,10 @@ export function TaskCreateModal(props: {
   const kindLabel = kind === 'proposal' ? 'đề xuất' : 'giao việc';
 
   const myBlock = ROLE_BLOCK[currentUserRole] ?? 'all';
-  const isCEO = currentUserRole === 'CEO' || currentUserRole === 'ADMIN';
+  // Phase 12.9.1 (anh chốt 2026-06-05): ADMIN ≠ CEO. ADMIN trong CTY xếp dưới CEO/Chủ tịch
+  // → ADMIN vẫn cần đề xuất (peer GD_KD/GD_VP, senior CEO/Chủ tịch).
+  const isCEO = currentUserRole === 'CEO'; // CHỈ CEO thuần (không ADMIN)
+  const isAdmin = currentUserRole === 'ADMIN';
   const isGD = currentUserRole === 'GD_KD' || currentUserRole === 'GD_VP';
   const isTP = currentUserRole.startsWith('TP_');
   const isQLCS = currentUserRole.startsWith('QLCS_');
@@ -77,6 +80,13 @@ export function TaskCreateModal(props: {
   const peerCandidates = useMemo<User[]>(() => {
     if (kind !== 'proposal') return [];
     if (isCEO) return [];
+    // ADMIN: ngang cấp = GD_KD + GD_VP (xếp ngang GĐ Khối)
+    if (isAdmin) {
+      return users
+        .filter((u) => u.roleId === 'GD_KD' || u.roleId === 'GD_VP')
+        .filter((u) => u.id !== currentUserId)
+        .sort((a, b) => a.roleId.localeCompare(b.roleId));
+    }
     // GĐ: ngang cấp = GĐ khối còn lại
     if (isGD) {
       const peerGdRole = currentUserRole === 'GD_KD' ? 'GD_VP' : 'GD_KD';
@@ -87,24 +97,31 @@ export function TaskCreateModal(props: {
       .filter((u) => PEER_ROLES.has(u.roleId))
       .filter((u) => u.id !== currentUserId)
       .sort((a, b) => a.name.localeCompare(b.name, 'vi'));
-  }, [kind, users, isCEO, isGD, currentUserRole, currentUserId]);
+  }, [kind, users, isCEO, isAdmin, isGD, currentUserRole, currentUserId]);
 
   const seniorCandidates = useMemo<User[]>(() => {
     if (kind !== 'proposal') return [];
     if (isCEO) return [];
-    // GĐ: cấp trên = CEO + ADMIN (Chủ tịch)
+    // ADMIN: cấp trên = CEO (top; không gồm ADMIN khác — ngang cấp).
+    if (isAdmin) {
+      return users
+        .filter((u) => u.roleId === 'CEO')
+        .filter((u) => u.id !== currentUserId)
+        .sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+    }
+    // GĐ: cấp trên = CEO/Chủ tịch (anh chốt 2026-06-05: KHÔNG gồm ADMIN — ADMIN dưới CEO)
     if (isGD) {
       return users
-        .filter((u) => u.roleId === 'CEO' || u.roleId === 'ADMIN')
+        .filter((u) => u.roleId === 'CEO')
         .filter((u) => u.id !== currentUserId)
-        .sort((a, b) => a.roleId.localeCompare(b.roleId));
+        .sort((a, b) => a.name.localeCompare(b.name, 'vi'));
     }
     // TP/QLCS/TIBAN_TT: cấp trên = GD_KD + GD_VP
     return users
       .filter((u) => u.roleId === 'GD_KD' || u.roleId === 'GD_VP')
       .filter((u) => u.id !== currentUserId)
       .sort((a, b) => a.roleId.localeCompare(b.roleId));
-  }, [kind, users, isCEO, isGD, currentUserId]);
+  }, [kind, users, isCEO, isAdmin, isGD, currentUserId]);
 
   // Auto chọn người đầu tiên khi đổi tab
   useEffect(() => {
@@ -325,9 +342,11 @@ export function TaskCreateModal(props: {
                 );
               })()}
               <p className="mt-1.5 text-[11px] text-slate-500">
-                {isGD
-                  ? 'Ngang cấp = GĐ khối còn lại. Cấp trên = CEO / Chủ tịch.'
-                  : 'Ngang cấp = các TP + QLCS khác. Cấp trên = GĐ Khối.'}
+                {isAdmin
+                  ? 'Ngang cấp = GĐ Kinh Doanh / Văn Phòng. Cấp trên = CEO / Chủ tịch.'
+                  : isGD
+                    ? 'Ngang cấp = GĐ khối còn lại. Cấp trên = CEO / Chủ tịch.'
+                    : 'Ngang cấp = các TP + QLCS khác. Cấp trên = GĐ Khối.'}
               </p>
             </Field>
           )}

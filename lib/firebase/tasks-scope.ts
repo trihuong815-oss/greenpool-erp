@@ -108,10 +108,12 @@ export function canCreateAssignment(p: CallerProfile): boolean {
   return isCEO(p) || isGD(p);
 }
 
-// Phase 12.9: proposal (đề xuất) cho tất cả role được vào module TRỪ CEO/ADMIN
-// (CEO/Chủ tịch cấp cao nhất — tự quyết định, không đề xuất ai).
+// Phase 12.9 (anh chốt 2026-06-05): proposal cho ADMIN/GD/TP/QLCS.
+// CHỈ CEO/Chủ tịch không cần đề xuất (cấp cao nhất).
+// ADMIN trong app = quản trị tech, trong CTY xếp dưới CEO/Chủ tịch nên vẫn đề xuất được.
 export function canCreateProposal(p: CallerProfile): boolean {
-  if (isCEO(p)) return false;
+  if (p.role_code === 'CEO') return false;
+  if (p.role_code === 'ADMIN') return true;
   return isGD(p) || isTP(p) || isQLCS(p);
 }
 

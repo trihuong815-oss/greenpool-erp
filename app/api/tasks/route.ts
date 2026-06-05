@@ -472,19 +472,29 @@ export async function POST(req: NextRequest) {
       }
       const recipientRole: string = recipientData.roleId ?? '';
       const creatorRole = caller.profile.role_code;
+      const isCreatorAdmin = creatorRole === 'ADMIN';
       const isCreatorGD = creatorRole === 'GD_KD' || creatorRole === 'GD_VP';
       const isCreatorTpQlcs = creatorRole.startsWith('TP_') || creatorRole.startsWith('QLCS_');
       const TP_QLCS_PEER = new Set([
         'TP_KT','TP_DT','TP_MKT','TP_GS','TP_KE','TP_NS',
         'QLCS_HM','QLCS_TK','QLCS_CTT','QLCS_24NCT','QLCS_TT',
       ]);
-      // Validate tier match
-      if (isCreatorGD) {
+      // Validate tier match (anh chốt 2026-06-05: ADMIN tách khỏi CEO)
+      if (isCreatorAdmin) {
+        // ADMIN: ngang cấp = GD_KD/GD_VP, cấp trên = CEO
+        if (recipientTier === 'peer' && recipientRole !== 'GD_KD' && recipientRole !== 'GD_VP') {
+          return NextResponse.json({ error: 'Người nhận ngang cấp ADMIN phải là GĐ Khối' }, { status: 400 });
+        }
+        if (recipientTier === 'senior' && recipientRole !== 'CEO') {
+          return NextResponse.json({ error: 'Người nhận cấp trên ADMIN phải là CEO/Chủ tịch' }, { status: 400 });
+        }
+      } else if (isCreatorGD) {
         const expectedPeerGd = creatorRole === 'GD_KD' ? 'GD_VP' : 'GD_KD';
         if (recipientTier === 'peer' && recipientRole !== expectedPeerGd) {
           return NextResponse.json({ error: 'Người nhận ngang cấp phải là GĐ khối còn lại' }, { status: 400 });
         }
-        if (recipientTier === 'senior' && recipientRole !== 'CEO' && recipientRole !== 'ADMIN') {
+        // GĐ cấp trên = CEO (KHÔNG gồm ADMIN — anh chốt 2026-06-05 ADMIN dưới CEO)
+        if (recipientTier === 'senior' && recipientRole !== 'CEO') {
           return NextResponse.json({ error: 'Người nhận cấp trên phải là CEO/Chủ tịch' }, { status: 400 });
         }
       } else if (isCreatorTpQlcs) {

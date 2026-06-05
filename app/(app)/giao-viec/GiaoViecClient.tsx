@@ -67,14 +67,14 @@ export function GiaoViecClient(props: Props) {
 
   const canCreate = !/^(NV_|GV_|TT_)/.test(currentUserRole); // NV/GV/TT không tạo
   const isGD = GD_ROLES.has(currentUserRole);
-  const isCEO = currentUserRole === 'CEO' || currentUserRole === 'ADMIN';
-  const showApprovalTab = isGD || isCEO;
-  // Phase 12.9 (2026-06-04): chỉ GĐ Khối + CEO/ADMIN có "Giao việc" (giao xuống cấp dưới).
-  // TP/QLCS chỉ dùng "Đề xuất" (đối tượng đều ngang cấp/trên).
-  // CEO không tạo "Đề xuất" (cấp cao nhất).
-  const canCreateAssignment = isGD || isCEO;
-  const canCreateProposal = canCreate && !isCEO;
-  const showAssignmentTab = isGD || isCEO; // ẩn tab Giao việc cho TP/QLCS
+  const isCEO = currentUserRole === 'CEO'; // CHỈ CEO thuần (không gồm ADMIN — anh chốt 2026-06-05)
+  const isAdmin = currentUserRole === 'ADMIN';
+  const showApprovalTab = isGD || isCEO || isAdmin;
+  // Phase 12.9: GĐ Khối + CEO/ADMIN có "Giao việc" (giao xuống cấp dưới).
+  // TP/QLCS chỉ dùng "Đề xuất". CEO/Chủ tịch không tạo Đề xuất (top); ADMIN có (dưới CEO trong CTY).
+  const canCreateAssignment = isGD || isCEO || isAdmin;
+  const canCreateProposal = canCreate && !isCEO; // ADMIN được tạo đề xuất
+  const showAssignmentTab = isGD || isCEO || isAdmin; // ẩn tab Giao việc cho TP/QLCS
 
   const [tab, setTab] = useState<TabKey>('received');
   const tabSectionRef = useRef<HTMLElement | null>(null);
