@@ -26,6 +26,35 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim());
 });
 
+// Phase 13.10 (2026-06-05): persistent badge counter qua Cache API.
+// SW không có in-memory state giữa events → phải đọc/ghi storage mỗi lần.
+const BADGE_CACHE = 'gp-app-badge-v1';
+const BADGE_KEY = '/__badge_count';
+async function getBadgeCount() {
+  try {
+    const cache = await caches.open(BADGE_CACHE);
+    const res = await cache.match(BADGE_KEY);
+    if (!res) return 0;
+    const n = parseInt(await res.text(), 10);
+    return isNaN(n) ? 0 : n;
+  } catch { return 0; }
+}
+async function setBadgeCount(n) {
+  try {
+    const cache = await caches.open(BADGE_CACHE);
+    await cache.put(BADGE_KEY, new Response(String(Math.max(0, n))));
+  } catch { /* silent */ }
+}
+async function applyBadgeFromCount(n) {
+  try {
+    if (n > 0 && 'setAppBadge' in self.navigator) {
+      await self.navigator.setAppBadge(n);
+    } else if ('clearAppBadge' in self.navigator) {
+      await self.navigator.clearAppBadge();
+    }
+  } catch { /* silent */ }
+}
+
 (async () => {
   try {
     const res = await fetch('/api/fcm-config');
@@ -40,25 +69,25 @@ self.addEventListener('activate', (event) => {
     const messaging = firebase.messaging();
 
     // Background message handler — render thủ công vì server gửi data-only payload.
-    messaging.onBackgroundMessage((payload) => {
+    messaging.onBackgroundMessage(async (payload) => {
       const d = (payload && payload.data) || {};
       const title = d.title || 'Green Pool';
+      // Phase 13.10: mỗi noti có tag UNIQUE để OS hiển thị từng cái riêng (KHÔNG replace).
+      // Trước đó tag='green-pool' cố định → noti mới đè noti cũ → user chỉ thấy 1.
+      const uniqueTag = d.tag && d.tag !== 'green-pool' ? d.tag : `noti-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
       const opts = {
         body: d.body || '',
         icon: '/icon-192.png',
         badge: '/icon-192.png',
-        tag: d.tag || 'green-pool',
+        tag: uniqueTag,
         requireInteraction: false,
         data: { link: d.link || '/dashboard', ...d },
       };
-      // Increment badge số đỏ trên icon PWA (iOS 16.4+ / Android Chrome)
-      try {
-        if ('setAppBadge' in self.navigator) {
-          // SW không có state persist → đọc-tăng-set; nếu lỗi thì set=1
-          (self.navigator).setAppBadge && (self.navigator).setAppBadge();
-        }
-      } catch (_) { /* silent */ }
-      // self.registration.showNotification → trigger OS notification banner.
+      // Phase 13.10: increment badge counter (persist qua Cache API)
+      const current = await getBadgeCount();
+      const next = current + 1;
+      await setBadgeCount(next);
+      await applyBadgeFromCount(next);
       return self.registration.showNotification(title, opts);
     });
   } catch (e) {
@@ -66,21 +95,40 @@ self.addEventListener('activate', (event) => {
   }
 })();
 
-// Click notification → mở link trong data hoặc focus tab đã mở.
+// Click notification → mở link + reset badge counter
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const link = (event.notification.data && event.notification.data.link) || '/dashboard';
-  event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
-      // Nếu có tab đang mở app này → focus + navigate
-      for (const w of wins) {
-        if ('focus' in w && w.url.indexOf(self.location.origin) === 0) {
-          w.focus();
-          if ('navigate' in w) return w.navigate(link);
-          return;
-        }
+  event.waitUntil((async () => {
+    // Phase 13.10: user đã thấy noti → reset badge
+    await setBadgeCount(0);
+    await applyBadgeFromCount(0);
+    // Mở/focus tab
+    const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const w of wins) {
+      if ('focus' in w && w.url.indexOf(self.location.origin) === 0) {
+        w.focus();
+        if ('navigate' in w) return w.navigate(link);
+        return;
       }
-      if (self.clients.openWindow) return self.clients.openWindow(link);
-    })
-  );
+    }
+    if (self.clients.openWindow) return self.clients.openWindow(link);
+  })());
+});
+
+// Phase 13.10: nhận message từ client (PWAAppBadge) để sync badge count
+// Client gửi { type: 'set-badge', count: N } khi app mở + đọc realtime data.
+self.addEventListener('message', (event) => {
+  const data = event.data || {};
+  if (data.type === 'set-badge' && typeof data.count === 'number') {
+    event.waitUntil((async () => {
+      await setBadgeCount(data.count);
+      await applyBadgeFromCount(data.count);
+    })());
+  } else if (data.type === 'clear-badge') {
+    event.waitUntil((async () => {
+      await setBadgeCount(0);
+      await applyBadgeFromCount(0);
+    })());
+  }
 });

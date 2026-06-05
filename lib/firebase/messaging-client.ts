@@ -52,7 +52,7 @@ async function loadMessaging(): Promise<Messaging | null> {
 
 // Bump SW_VERSION mỗi khi sửa firebase-messaging-sw.js → iOS Safari PWA buộc tải SW mới
 // (Apple cache SW rất aggressive — không bump version sẽ giữ SW cũ tới 24h+).
-const SW_VERSION = '2026-06-02-badge-v3';
+const SW_VERSION = '2026-06-05-badge-counter-v4';
 
 async function ensureSWRegistration(): Promise<ServiceWorkerRegistration | null> {
   if (_swReg) return _swReg;

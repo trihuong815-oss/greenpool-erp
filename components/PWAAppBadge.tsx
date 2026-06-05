@@ -45,6 +45,13 @@ export function PWAAppBadge() {
       } catch {
         // Browser từ chối (vd notification permission chưa grant) — silent
       }
+      // Phase 13.10 (2026-06-05): sync badge count tới SW counter để không lệch.
+      // Khi app mở, PWAAppBadge có số CHÍNH XÁC theo realtime data → override SW counter.
+      try {
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+          navigator.serviceWorker.controller.postMessage({ type: 'set-badge', count: total });
+        }
+      } catch { /* silent */ }
     }
 
     // ─── Source 1: Chat unread (realtime conv listener) ───
