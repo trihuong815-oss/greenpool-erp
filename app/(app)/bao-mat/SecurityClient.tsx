@@ -9,8 +9,8 @@
 //   Authentication → Sign-in method → Multi-factor → Enable "TOTP".
 
 import { useEffect, useState } from 'react';
-import { Shield, ShieldCheck, ShieldAlert, KeyRound, Loader2, Copy, Check, AlertCircle, X, Bell, RefreshCw } from 'lucide-react';
-import { forceRefreshPushSetup } from '@/lib/firebase/messaging-client';
+import { Shield, ShieldCheck, ShieldAlert, KeyRound, Loader2, Copy, Check, AlertCircle, X, Bell, BellOff, RefreshCw } from 'lucide-react';
+import { enablePushNotifications, forceRefreshPushSetup, getNotificationPermission, isFcmSupported, disablePushNotifications } from '@/lib/firebase/messaging-client';
 import {
   getAuth, multiFactor, TotpMultiFactorGenerator,
   type MultiFactorInfo, type TotpSecret,
@@ -42,6 +42,56 @@ export function SecurityClient({ email, displayName, roleCode, mfaRequired }: Pr
   // Push refresh state
   const [pushRefreshing, setPushRefreshing] = useState(false);
   const [pushMsg, setPushMsg] = useState<string | null>(null);
+  // Phase 13.7 (2026-06-05): Push noti enable/disable state cho thiết bị này
+  const [pushSupported, setPushSupported] = useState<boolean>(false);
+  const [pushPermission, setPushPermission] = useState<NotificationPermission>('default');
+  const [pushDeviceOn, setPushDeviceOn] = useState<boolean>(false);
+  const [pushBusy, setPushBusy] = useState<'enable' | 'disable' | null>(null);
+
+  // Detect trạng thái thông báo trên thiết bị này
+  useEffect(() => {
+    setPushSupported(isFcmSupported());
+    if (!isFcmSupported()) return;
+    setPushPermission(getNotificationPermission());
+    try {
+      const cachedToken = localStorage.getItem('fcm_token_registered');
+      setPushDeviceOn(getNotificationPermission() === 'granted' && !!cachedToken);
+    } catch { /* localStorage chặn */ }
+  }, []);
+
+  async function handleEnablePush() {
+    setPushBusy('enable');
+    setPushMsg(null);
+    try {
+      const res = await enablePushNotifications();
+      if (res.ok) {
+        setPushDeviceOn(true);
+        setPushPermission('granted');
+        setPushMsg('✓ Đã bật thông báo trên thiết bị này. Bật 1 lần dùng mãi đến khi tắt.');
+      } else if (res.reason === 'denied') {
+        setPushMsg('⚠ Bạn đã chặn thông báo. Vào cài đặt trình duyệt → cho phép thông báo cho trang này.');
+      } else if (res.reason === 'unsupported') {
+        setPushMsg('⚠ Trình duyệt/thiết bị không hỗ trợ. Dùng Chrome/Safari iOS 16.4+ qua PWA.');
+      } else {
+        setPushMsg('⚠ Lỗi: ' + (res.errorMsg ?? 'unknown'));
+      }
+    } catch (e: any) {
+      setPushMsg('⚠ Lỗi: ' + (e?.message ?? 'unknown'));
+    } finally { setPushBusy(null); }
+  }
+
+  async function handleDisablePush() {
+    if (!confirm('Tắt thông báo trên thiết bị này? Bạn sẽ không nhận tin nhắn / đề xuất / nhiệm vụ mới qua noti nữa.')) return;
+    setPushBusy('disable');
+    setPushMsg(null);
+    try {
+      await disablePushNotifications();
+      setPushDeviceOn(false);
+      setPushMsg('✓ Đã tắt thông báo trên thiết bị này. Bật lại bất kỳ lúc nào.');
+    } catch (e: any) {
+      setPushMsg('⚠ Lỗi: ' + (e?.message ?? 'unknown'));
+    } finally { setPushBusy(null); }
+  }
 
   async function handleRefreshPush() {
     setPushRefreshing(true); setPushMsg(null);
@@ -166,28 +216,79 @@ export function SecurityClient({ email, displayName, roleCode, mfaRequired }: Pr
         </div>
       </div>
 
-      {/* Push notification — làm mới khi điện thoại không nhận noti */}
+      {/* Push notification — Phase 13.7 (2026-06-05): bật/tắt cho thiết bị này */}
       <div className="bg-white rounded-xl ring-1 ring-slate-200 p-4">
-        <h3 className="font-bold text-sm text-slate-800 mb-2 inline-flex items-center gap-2">
-          <Bell size={16} /> Thông báo trên điện thoại (Push)
+        <h3 className="font-bold text-sm text-slate-800 mb-3 inline-flex items-center gap-2">
+          <Bell size={16} /> Thông báo trên thiết bị này (Push)
         </h3>
-        <p className="text-xs text-slate-600 mb-3">
-          Nếu điện thoại không nhận được tin nhắn báo về khi có sự kiện (đề xuất, tin nhắn mới…),
-          bấm <strong>"Làm mới push noti"</strong> bên dưới. Lệnh này sẽ xoá Service Worker cũ + tải mới + đăng ký lại token FCM.
-        </p>
-        <button
-          onClick={handleRefreshPush}
-          disabled={pushRefreshing}
-          className="inline-flex items-center gap-2 px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg disabled:opacity-50"
-        >
-          {pushRefreshing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-          Làm mới push noti
-        </button>
-        {pushMsg && (
-          <div className={`mt-2 text-xs px-2 py-1.5 rounded ${
-            pushMsg.startsWith('✓') ? 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200'
-              : 'bg-rose-50 text-rose-800 ring-1 ring-rose-200'
-          }`}>{pushMsg}</div>
+        {!pushSupported ? (
+          <div className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded px-2 py-2">
+            ⚠ Trình duyệt/thiết bị KHÔNG hỗ trợ thông báo. Dùng Chrome/Edge desktop hoặc Safari iOS 16.4+ (đã cài PWA — Add to Home Screen).
+          </div>
+        ) : (
+          <>
+            {/* Status hiện tại */}
+            <div className={`mb-3 px-3 py-2.5 rounded-lg text-xs ring-1 ${
+              pushDeviceOn
+                ? 'bg-emerald-50 text-emerald-800 ring-emerald-200'
+                : pushPermission === 'denied'
+                  ? 'bg-rose-50 text-rose-800 ring-rose-200'
+                  : 'bg-amber-50 text-amber-800 ring-amber-200'
+            }`}>
+              <div className="font-semibold mb-0.5">
+                {pushDeviceOn ? '✓ Đã bật' : pushPermission === 'denied' ? '✗ Bị chặn' : '○ Chưa bật'}
+              </div>
+              <div>
+                {pushDeviceOn
+                  ? 'Thiết bị này đang nhận thông báo (tin nhắn, đề xuất, nhiệm vụ). Bật 1 lần — chạy mãi đến khi bạn tắt đi.'
+                  : pushPermission === 'denied'
+                    ? 'Bạn đã chặn thông báo cho trang này. Vào cài đặt trình duyệt → cho phép thông báo cho trang web này → quay lại đây bật.'
+                    : 'Bật để nhận thông báo tin nhắn, đề xuất, nhiệm vụ ngay cả khi đóng app.'}
+              </div>
+            </div>
+
+            {/* Nút bật/tắt */}
+            <div className="flex flex-wrap items-center gap-2">
+              {!pushDeviceOn ? (
+                <button
+                  onClick={handleEnablePush}
+                  disabled={pushBusy === 'enable' || pushPermission === 'denied'}
+                  className="inline-flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg disabled:opacity-50"
+                >
+                  {pushBusy === 'enable' ? <Loader2 size={14} className="animate-spin" /> : <Bell size={14} />}
+                  Bật thông báo trên thiết bị này
+                </button>
+              ) : (
+                <button
+                  onClick={handleDisablePush}
+                  disabled={pushBusy === 'disable'}
+                  className="inline-flex items-center gap-2 px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-lg disabled:opacity-50"
+                >
+                  {pushBusy === 'disable' ? <Loader2 size={14} className="animate-spin" /> : <BellOff size={14} />}
+                  Tắt thông báo trên thiết bị này
+                </button>
+              )}
+              <button
+                onClick={handleRefreshPush}
+                disabled={pushRefreshing}
+                className="inline-flex items-center gap-2 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg disabled:opacity-50"
+                title="Nếu đã bật rồi mà thông báo không tới, bấm để làm mới Service Worker + đăng ký lại token FCM"
+              >
+                {pushRefreshing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                Làm mới
+              </button>
+            </div>
+            {pushMsg && (
+              <div className={`mt-3 text-xs px-2 py-1.5 rounded ${
+                pushMsg.startsWith('✓') ? 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200'
+                  : 'bg-rose-50 text-rose-800 ring-1 ring-rose-200'
+              }`}>{pushMsg}</div>
+            )}
+            <p className="mt-3 text-[11px] text-slate-500 leading-relaxed">
+              Tắt/bật áp dụng <strong>chỉ cho thiết bị này</strong>. Nếu dùng nhiều thiết bị (vd điện thoại + máy tính),
+              bật riêng từng máy.
+            </p>
+          </>
         )}
       </div>
 
