@@ -184,9 +184,13 @@ export function channelConversationId(meta: ChannelMeta): string {
   throw new Error('Invalid channel meta');
 }
 
-/** 10 channels chuẩn (chốt 2026-06-02 anh update):
- *  1 toàn công ty + 5 cơ sở + 3 phòng (KT/DT/KE/NS/GS — bỏ MKT + TTNB) + 1 điều hành khối KD. */
-export const STANDARD_CHANNELS: Array<{ name: string; meta: ChannelMeta }> = [
+/** Phase 13.11 (2026-06-05): anh chốt BỎ HẾT các kênh chuẩn.
+ *  Chat chỉ giữ DM cá nhân + nhóm tự tạo. STANDARD_CHANNELS = []
+ *  → sync-channels API + seed script không tạo gì.
+ *  Định nghĩa cũ commented để dễ revert nếu cần. */
+export const STANDARD_CHANNELS: Array<{ name: string; meta: ChannelMeta }> = [];
+
+const _DEPRECATED_STANDARD_CHANNELS: Array<{ name: string; meta: ChannelMeta }> = [
   { name: 'Thông báo chung — Toàn công ty', meta: { kind: 'company' } },
   { name: 'Cơ sở Hoàng Mai',     meta: { kind: 'branch', branchId: 'HM'  } },
   { name: 'Cơ sở Thuỵ Khuê',     meta: { kind: 'branch', branchId: 'TK'  } },
