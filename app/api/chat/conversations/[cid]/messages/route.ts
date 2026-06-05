@@ -218,20 +218,26 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ cid: strin
       });
     }
 
-    // Push noti tới participants khác (fire-and-forget)
+    // Push noti tới participants khác.
+    // Phase 13.10 (2026-06-05): AWAIT trước return để Cloud Run không suspend function
+    // giữa chừng. Trước đó fire-and-forget khiến noti bị mất (Cloud Run free instance
+    // shutdown sau response → pending FCM call bị abort).
     const recipients: string[] = (Array.isArray(conv.participantIds) ? conv.participantIds : [])
       .filter((u: string) => u !== caller.profile.uid);
     if (recipients.length > 0) {
-      const { notifyNewMessage } = await import('@/lib/firebase/chat-notifications');
-      notifyNewMessage({
-        conversationId: cid,
-        conversationType: conv.type,
-        // group + channel đều có name; 1-1 không có (UI tự render tên đối phương)
-        conversationName: (conv.type === 'group' || conv.type === 'channel') ? conv.name : null,
-        recipients,
-        senderName: caller.actorName ?? '',
-        text: preview,
-      }).catch(() => {});
+      try {
+        const { notifyNewMessage } = await import('@/lib/firebase/chat-notifications');
+        await notifyNewMessage({
+          conversationId: cid,
+          conversationType: conv.type,
+          conversationName: (conv.type === 'group' || conv.type === 'channel') ? conv.name : null,
+          recipients,
+          senderName: caller.actorName ?? '',
+          text: preview,
+        });
+      } catch (e: any) {
+        console.error('[chat noti]', e?.message);
+      }
     }
 
     return NextResponse.json({ ok: true, id: msgRef.id });
