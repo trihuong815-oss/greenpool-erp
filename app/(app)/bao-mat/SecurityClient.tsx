@@ -47,11 +47,17 @@ export function SecurityClient({ email, displayName, roleCode, mfaRequired }: Pr
   const [pushPermission, setPushPermission] = useState<NotificationPermission>('default');
   const [pushDeviceOn, setPushDeviceOn] = useState<boolean>(false);
   const [pushBusy, setPushBusy] = useState<'enable' | 'disable' | null>(null);
-  // Phase 13.8 (2026-06-05): list devices đã bật
-  interface FcmDevice { token: string; tokenMask: string; userAgent: string; label: string; createdAt: number; lastSeen: number; }
+  // Phase 13.8 + 13.9.1/2 (2026-06-05): list devices đã bật + đặt tên + on/off
+  interface FcmDevice { token: string; tokenMask: string; userAgent: string; label: string; createdAt: number; lastSeen: number; enabled: boolean; }
   const [devices, setDevices] = useState<FcmDevice[]>([]);
   const [devicesLoading, setDevicesLoading] = useState(false);
-  const [removingToken, setRemovingToken] = useState<string | null>(null);
+  const [busyToken, setBusyToken] = useState<string | null>(null); // chung cho toggle/edit/delete
+  // Inline edit label
+  const [editingToken, setEditingToken] = useState<string | null>(null);
+  const [editingLabelDraft, setEditingLabelDraft] = useState('');
+  // Custom label khi bật mới
+  const [enableLabel, setEnableLabel] = useState('');
+  const [showLabelInput, setShowLabelInput] = useState(false);
 
   async function loadDevices() {
     setDevicesLoading(true);
@@ -66,8 +72,8 @@ export function SecurityClient({ email, displayName, roleCode, mfaRequired }: Pr
   useEffect(() => { loadDevices(); }, []);
 
   async function handleRemoveDevice(token: string, label: string) {
-    if (!confirm(`Xoá thiết bị "${label}"? Thiết bị này sẽ không nhận thông báo nữa.`)) return;
-    setRemovingToken(token);
+    if (!confirm(`Xoá thiết bị "${label}"? Thiết bị này sẽ không nhận thông báo nữa và phải bật lại từ đầu.`)) return;
+    setBusyToken(token);
     try {
       const res = await fetch('/api/personal/fcm-token', {
         method: 'DELETE',
@@ -76,7 +82,6 @@ export function SecurityClient({ email, displayName, roleCode, mfaRequired }: Pr
       });
       if (res.ok) {
         await loadDevices();
-        // Nếu token bị xoá là token CURRENT device → cập nhật state
         try {
           const cached = localStorage.getItem('fcm_token_registered');
           if (cached === token) {
@@ -87,7 +92,56 @@ export function SecurityClient({ email, displayName, roleCode, mfaRequired }: Pr
       }
     } catch (e: any) {
       alert('Lỗi xoá thiết bị: ' + (e?.message ?? 'unknown'));
-    } finally { setRemovingToken(null); }
+    } finally { setBusyToken(null); }
+  }
+
+  async function handleToggleDevice(token: string, currentEnabled: boolean) {
+    setBusyToken(token);
+    try {
+      const res = await fetch('/api/personal/fcm-token', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ token, enabled: !currentEnabled }),
+      });
+      if (res.ok) {
+        setDevices((arr) => arr.map((d) => d.token === token ? { ...d, enabled: !currentEnabled } : d));
+      } else {
+        const j = await res.json().catch(() => ({}));
+        alert('Lỗi: ' + (j?.error ?? 'unknown'));
+      }
+    } catch (e: any) {
+      alert('Lỗi: ' + (e?.message ?? 'unknown'));
+    } finally { setBusyToken(null); }
+  }
+
+  function startEditLabel(d: FcmDevice) {
+    setEditingToken(d.token);
+    setEditingLabelDraft(d.label);
+  }
+  function cancelEditLabel() {
+    setEditingToken(null);
+    setEditingLabelDraft('');
+  }
+  async function saveEditLabel(token: string) {
+    const newLabel = editingLabelDraft.trim();
+    if (!newLabel) { alert('Tên thiết bị không được để trống'); return; }
+    setBusyToken(token);
+    try {
+      const res = await fetch('/api/personal/fcm-token', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ token, label: newLabel }),
+      });
+      if (res.ok) {
+        setDevices((arr) => arr.map((d) => d.token === token ? { ...d, label: newLabel } : d));
+        cancelEditLabel();
+      } else {
+        const j = await res.json().catch(() => ({}));
+        alert('Lỗi: ' + (j?.error ?? 'unknown'));
+      }
+    } catch (e: any) {
+      alert('Lỗi: ' + (e?.message ?? 'unknown'));
+    } finally { setBusyToken(null); }
   }
 
   // Detect trạng thái thông báo trên thiết bị này
@@ -105,11 +159,15 @@ export function SecurityClient({ email, displayName, roleCode, mfaRequired }: Pr
     setPushBusy('enable');
     setPushMsg(null);
     try {
-      const res = await enablePushNotifications();
+      const res = await enablePushNotifications(enableLabel.trim() || undefined);
       if (res.ok) {
         setPushDeviceOn(true);
         setPushPermission('granted');
+        setEnableLabel('');
+        setShowLabelInput(false);
         setPushMsg('✓ Đã bật thông báo trên thiết bị này. Bật 1 lần dùng mãi đến khi tắt.');
+        // Refresh list devices ngay để hiển thị
+        await loadDevices();
       } else if (res.reason === 'denied') {
         setPushMsg('⚠ Bạn đã chặn thông báo. Vào cài đặt trình duyệt → cho phép thông báo cho trang này.');
       } else if (res.reason === 'unsupported') {
@@ -290,36 +348,76 @@ export function SecurityClient({ email, displayName, roleCode, mfaRequired }: Pr
             </div>
 
             {/* Nút bật/tắt */}
-            <div className="flex flex-wrap items-center gap-2">
-              {!pushDeviceOn ? (
+            {!pushDeviceOn && showLabelInput ? (
+              // Inline form: đặt tên thiết bị (tùy chọn) → bấm xác nhận bật
+              <div className="space-y-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
+                <label className="block">
+                  <span className="block text-[11px] font-semibold text-emerald-800 mb-1">
+                    Đặt tên cho thiết bị này (tùy chọn)
+                  </span>
+                  <input
+                    type="text"
+                    value={enableLabel}
+                    onChange={(e) => setEnableLabel(e.target.value)}
+                    maxLength={80}
+                    placeholder="vd: MacBook ở văn phòng, iPhone cá nhân..."
+                    className="w-full px-2.5 py-1.5 text-sm border border-emerald-300 rounded focus:ring-2 focus:ring-emerald-400 outline-none"
+                    autoFocus
+                  />
+                </label>
+                <p className="text-[10px] text-emerald-700">
+                  Bỏ trống → hệ thống tự đặt theo trình duyệt (vd "MacBook · Chrome"). Có thể đổi tên sau.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleEnablePush}
+                    disabled={pushBusy === 'enable' || pushPermission === 'denied'}
+                    className="inline-flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg disabled:opacity-50"
+                  >
+                    {pushBusy === 'enable' ? <Loader2 size={14} className="animate-spin" /> : <Bell size={14} />}
+                    Xác nhận bật
+                  </button>
+                  <button
+                    onClick={() => { setShowLabelInput(false); setEnableLabel(''); }}
+                    disabled={pushBusy === 'enable'}
+                    className="px-3.5 py-2 text-xs text-slate-600 hover:bg-slate-100 rounded-lg disabled:opacity-50"
+                  >
+                    Hủy
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                {!pushDeviceOn ? (
+                  <button
+                    onClick={() => setShowLabelInput(true)}
+                    disabled={pushPermission === 'denied'}
+                    className="inline-flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg disabled:opacity-50"
+                  >
+                    <Bell size={14} />
+                    Bật thông báo trên thiết bị này
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleDisablePush}
+                    disabled={pushBusy === 'disable'}
+                    className="inline-flex items-center gap-2 px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-lg disabled:opacity-50"
+                  >
+                    {pushBusy === 'disable' ? <Loader2 size={14} className="animate-spin" /> : <BellOff size={14} />}
+                    Tắt thông báo trên thiết bị này
+                  </button>
+                )}
                 <button
-                  onClick={handleEnablePush}
-                  disabled={pushBusy === 'enable' || pushPermission === 'denied'}
-                  className="inline-flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg disabled:opacity-50"
+                  onClick={handleRefreshPush}
+                  disabled={pushRefreshing}
+                  className="inline-flex items-center gap-2 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg disabled:opacity-50"
+                  title="Nếu đã bật rồi mà thông báo không tới, bấm để làm mới Service Worker + đăng ký lại token FCM"
                 >
-                  {pushBusy === 'enable' ? <Loader2 size={14} className="animate-spin" /> : <Bell size={14} />}
-                  Bật thông báo trên thiết bị này
+                  {pushRefreshing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                  Làm mới
                 </button>
-              ) : (
-                <button
-                  onClick={handleDisablePush}
-                  disabled={pushBusy === 'disable'}
-                  className="inline-flex items-center gap-2 px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-lg disabled:opacity-50"
-                >
-                  {pushBusy === 'disable' ? <Loader2 size={14} className="animate-spin" /> : <BellOff size={14} />}
-                  Tắt thông báo trên thiết bị này
-                </button>
-              )}
-              <button
-                onClick={handleRefreshPush}
-                disabled={pushRefreshing}
-                className="inline-flex items-center gap-2 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg disabled:opacity-50"
-                title="Nếu đã bật rồi mà thông báo không tới, bấm để làm mới Service Worker + đăng ký lại token FCM"
-              >
-                {pushRefreshing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-                Làm mới
-              </button>
-            </div>
+              </div>
+            )}
             {pushMsg && (
               <div className={`mt-3 text-xs px-2 py-1.5 rounded ${
                 pushMsg.startsWith('✓') ? 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200'
@@ -356,7 +454,7 @@ export function SecurityClient({ email, displayName, roleCode, mfaRequired }: Pr
                   Chưa có thiết bị nào nhận thông báo. Bấm "Bật thông báo" ở trên.
                 </div>
               ) : (
-                <ul className="space-y-1.5">
+                <ul className="space-y-2">
                   {devices.map((d) => {
                     const isCurrent = (() => {
                       try { return localStorage.getItem('fcm_token_registered') === d.token; }
@@ -364,29 +462,111 @@ export function SecurityClient({ email, displayName, roleCode, mfaRequired }: Pr
                     })();
                     const lastSeenDate = d.lastSeen ? new Date(d.lastSeen) : null;
                     const createdDate = d.createdAt ? new Date(d.createdAt) : null;
+                    const isEditing = editingToken === d.token;
+                    const isBusy = busyToken === d.token;
                     return (
-                      <li key={d.token} className="flex items-center gap-3 px-3 py-2.5 bg-slate-50 rounded-lg ring-1 ring-slate-200">
-                        <Bell size={14} className={isCurrent ? 'text-emerald-600' : 'text-slate-400'} />
-                        <div className="flex-1 min-w-0">
-                          <div className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
-                            {d.label}
-                            {isCurrent && <span className="text-[9px] px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded font-bold">THIẾT BỊ NÀY</span>}
+                      <li key={d.token} className={`rounded-lg ring-1 transition ${
+                        d.enabled
+                          ? (isCurrent ? 'bg-emerald-50/40 ring-emerald-200' : 'bg-white ring-slate-200')
+                          : 'bg-slate-100 ring-slate-200 opacity-70'
+                      }`}>
+                        <div className="flex items-center gap-3 px-3 py-3">
+                          {/* Icon */}
+                          <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
+                            d.enabled
+                              ? (isCurrent ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600')
+                              : 'bg-slate-200 text-slate-400'
+                          }`}>
+                            <Bell size={16} />
                           </div>
-                          <div className="text-[10px] text-slate-500 mt-0.5">
-                            {createdDate ? `Đăng ký: ${createdDate.toLocaleDateString('vi-VN')} · ` : ''}
-                            {lastSeenDate ? `Lần gần nhất: ${lastSeenDate.toLocaleDateString('vi-VN')} ${lastSeenDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}` : 'Chưa có log'}
+
+                          {/* Info */}
+                          <div className="flex-1 min-w-0">
+                            {isEditing ? (
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="text"
+                                  value={editingLabelDraft}
+                                  onChange={(e) => setEditingLabelDraft(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') saveEditLabel(d.token);
+                                    if (e.key === 'Escape') cancelEditLabel();
+                                  }}
+                                  autoFocus
+                                  maxLength={80}
+                                  placeholder="vd: MacBook ở văn phòng"
+                                  className="flex-1 px-2 py-1 text-sm border border-emerald-300 rounded focus:ring-1 focus:ring-emerald-400 outline-none"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => saveEditLabel(d.token)}
+                                  disabled={isBusy}
+                                  className="px-2 py-1 text-[11px] bg-emerald-600 hover:bg-emerald-700 text-white rounded font-semibold disabled:opacity-50"
+                                >
+                                  {isBusy ? <Loader2 size={12} className="animate-spin" /> : 'Lưu'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={cancelEditLabel}
+                                  className="px-2 py-1 text-[11px] text-slate-500 hover:bg-slate-100 rounded"
+                                >
+                                  Hủy
+                                </button>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="text-sm font-semibold text-slate-800 flex items-center gap-1.5 flex-wrap">
+                                  <span className={d.enabled ? '' : 'line-through text-slate-400'}>{d.label}</span>
+                                  {isCurrent && <span className="text-[9px] px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded font-bold">THIẾT BỊ NÀY</span>}
+                                  {!d.enabled && <span className="text-[9px] px-1.5 py-0.5 bg-slate-200 text-slate-600 rounded font-bold">TẠM TẮT</span>}
+                                  <button
+                                    type="button"
+                                    onClick={() => startEditLabel(d)}
+                                    className="text-slate-400 hover:text-emerald-600"
+                                    title="Đổi tên thiết bị"
+                                  >
+                                    <KeyRound size={11} className="rotate-45 inline" style={{ marginLeft: 2 }} />
+                                  </button>
+                                </div>
+                                <div className="text-[11px] text-slate-500 mt-0.5">
+                                  {createdDate ? `Đăng ký ${createdDate.toLocaleDateString('vi-VN')}` : ''}
+                                  {lastSeenDate ? ` · Hoạt động ${lastSeenDate.toLocaleDateString('vi-VN')} ${lastSeenDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}` : ''}
+                                </div>
+                              </>
+                            )}
                           </div>
+
+                          {/* Toggle ON/OFF */}
+                          {!isEditing && (
+                            <button
+                              type="button"
+                              onClick={() => handleToggleDevice(d.token, d.enabled)}
+                              disabled={isBusy}
+                              className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
+                                d.enabled ? 'bg-emerald-600' : 'bg-slate-300'
+                              }`}
+                              title={d.enabled ? 'Bấm để tạm tắt thông báo' : 'Bấm để bật lại thông báo'}
+                              aria-label={d.enabled ? 'Tắt thông báo' : 'Bật thông báo'}
+                            >
+                              <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${
+                                d.enabled ? 'translate-x-5' : 'translate-x-0.5'
+                              }`} />
+                            </button>
+                          )}
+
+                          {/* Delete button */}
+                          {!isEditing && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveDevice(d.token, d.label)}
+                              disabled={isBusy}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded disabled:opacity-50"
+                              title="Xoá thiết bị (cần bật lại từ đầu nếu muốn nhận noti)"
+                            >
+                              {isBusy ? <Loader2 size={14} className="animate-spin" /> : <X size={14} />}
+                            </button>
+                          )}
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveDevice(d.token, d.label)}
-                          disabled={removingToken === d.token}
-                          className="px-2 py-1 text-[11px] text-rose-600 hover:bg-rose-50 rounded disabled:opacity-50 inline-flex items-center gap-1"
-                          title="Tắt thông báo cho thiết bị này"
-                        >
-                          {removingToken === d.token ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />}
-                          Xoá
-                        </button>
                       </li>
                     );
                   })}

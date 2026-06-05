@@ -57,9 +57,14 @@ export async function pushToUsers(uids: string[], payload: PushPayload): Promise
     for (const s of snaps) {
       if (!s.exists) continue;
       const x = s.data();
+      // Phase 13.9.2 (2026-06-05): bỏ qua thiết bị enabled=false. Build disabledSet từ fcmDevices.
+      const devices: any[] = Array.isArray(x?.fcmDevices) ? x.fcmDevices : [];
+      const disabledTokens = new Set<string>(
+        devices.filter((d) => d && d.enabled === false && typeof d.token === 'string').map((d) => d.token),
+      );
       // Dedup tokens — fcmTokens có thể có duplicate nếu user re-register token cũ → tránh push lặp
       const tk = Array.isArray(x?.fcmTokens)
-        ? Array.from(new Set(x.fcmTokens.filter((t: any) => typeof t === 'string' && t.length > 20))) as string[]
+        ? Array.from(new Set(x.fcmTokens.filter((t: any) => typeof t === 'string' && t.length > 20 && !disabledTokens.has(t)))) as string[]
         : [];
       if (tk.length === 0) continue;
       tokenMap.set(s.id, tk);

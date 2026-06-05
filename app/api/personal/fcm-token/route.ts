@@ -20,6 +20,7 @@ interface DeviceMeta {
   label: string;
   createdAt: number; // ms epoch
   lastSeen: number;  // ms epoch
+  enabled: boolean;  // Phase 13.9.2 (2026-06-05): on/off toggle — false = tạm tắt, không nhận noti
 }
 
 // Parse userAgent → label friendly (ngắn gọn)
@@ -63,6 +64,7 @@ export async function GET() {
           label: typeof d.label === 'string' && d.label ? d.label : parseUserAgentLabel(d.userAgent ?? ''),
           createdAt: typeof d.createdAt === 'number' ? d.createdAt : 0,
           lastSeen: typeof d.lastSeen === 'number' ? d.lastSeen : 0,
+          enabled: d.enabled !== false, // default true cho doc cũ
         }))
       : [];
 
@@ -77,6 +79,7 @@ export async function GET() {
             label: 'Thiết bị cũ (chưa rõ)',
             createdAt: 0,
             lastSeen: 0,
+            enabled: true, // default cho legacy
           });
         }
       }
@@ -87,12 +90,13 @@ export async function GET() {
 
     // Mask token để bảo mật (chỉ trả 8 ký tự đầu + cuối)
     const safeDevices = devices.map((d) => ({
-      token: d.token, // giữ để DELETE — UI sẽ không hiển thị
+      token: d.token, // giữ để DELETE/PATCH — UI sẽ không hiển thị
       tokenMask: d.token.slice(0, 6) + '...' + d.token.slice(-6),
       userAgent: d.userAgent,
       label: d.label,
       createdAt: d.createdAt,
       lastSeen: d.lastSeen,
+      enabled: d.enabled,
     }));
 
     return NextResponse.json({ count: devices.length, hasAny: devices.length > 0, devices: safeDevices });
@@ -112,7 +116,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Token không hợp lệ' }, { status: 400 });
   }
   const userAgent: string = typeof body?.userAgent === 'string' ? body.userAgent.slice(0, 500) : '';
-  const label = parseUserAgentLabel(userAgent);
+  // Phase 13.9.1 (2026-06-05): user có thể tự đặt tên thiết bị
+  const customLabel: string = typeof body?.label === 'string' ? body.label.trim().slice(0, 80) : '';
+  const finalLabel = customLabel || parseUserAgentLabel(userAgent);
 
   try {
     const db = getFirebaseAdminDb();
@@ -123,12 +129,15 @@ export async function POST(req: NextRequest) {
     const oldDevices: any[] = Array.isArray(snap.data()?.fcmDevices) ? snap.data()!.fcmDevices : [];
     const filtered = oldDevices.filter((d) => d?.token !== token);
     const existing = oldDevices.find((d) => d?.token === token);
+    // Nếu re-register thiết bị cũ có label tùy chỉnh → giữ label cũ (không override bằng auto-parse)
+    // Re-register cũng auto bật lại (enabled=true) — vì user vừa bấm "Bật thông báo".
     const device: DeviceMeta = {
       token,
       userAgent,
-      label,
+      label: customLabel || existing?.label || finalLabel,
       createdAt: existing?.createdAt ?? now,
       lastSeen: now,
+      enabled: true,
     };
     await ref.update({
       fcmDevices: [...filtered, device],
@@ -138,6 +147,45 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (e: any) {
     console.error('[fcm-token POST]', e?.message);
+    return NextResponse.json({ error: 'Lỗi server' }, { status: 500 });
+  }
+}
+
+// Phase 13.9.1 (2026-06-05): PATCH /api/personal/fcm-token body: { token, label?, enabled? }
+// User đổi tên thiết bị HOẶC toggle on/off (Phase 13.9.2). Chỉ update field truyền vào.
+export async function PATCH(req: NextRequest) {
+  const ctx = await getCurrentProfile();
+  if (!ctx) return NextResponse.json({ error: 'Chưa đăng nhập' }, { status: 401 });
+
+  const body = await req.json().catch(() => null);
+  const token = typeof body?.token === 'string' ? body.token.trim() : '';
+  const labelProvided = typeof body?.label === 'string';
+  const enabledProvided = typeof body?.enabled === 'boolean';
+  if (!token) return NextResponse.json({ error: 'Thiếu token' }, { status: 400 });
+  if (!labelProvided && !enabledProvided) {
+    return NextResponse.json({ error: 'Cần truyền label hoặc enabled' }, { status: 400 });
+  }
+  const label = labelProvided ? body.label.trim().slice(0, 80) : '';
+  if (labelProvided && !label) {
+    return NextResponse.json({ error: 'Tên thiết bị không được để trống' }, { status: 400 });
+  }
+
+  try {
+    const db = getFirebaseAdminDb();
+    const ref = db.collection(COLLECTIONS.USERS).doc(ctx.profile.id);
+    const snap = await ref.get();
+    const oldDevices: any[] = Array.isArray(snap.data()?.fcmDevices) ? snap.data()!.fcmDevices : [];
+    const idx = oldDevices.findIndex((d) => d?.token === token);
+    if (idx === -1) return NextResponse.json({ error: 'Thiết bị không tồn tại' }, { status: 404 });
+    const updated = [...oldDevices];
+    const patch: Record<string, any> = { lastSeen: Date.now() };
+    if (labelProvided) patch.label = label;
+    if (enabledProvided) patch.enabled = body.enabled;
+    updated[idx] = { ...updated[idx], ...patch };
+    await ref.update({ fcmDevices: updated });
+    return NextResponse.json({ ok: true });
+  } catch (e: any) {
+    console.error('[fcm-token PATCH]', e?.message);
     return NextResponse.json({ error: 'Lỗi server' }, { status: 500 });
   }
 }

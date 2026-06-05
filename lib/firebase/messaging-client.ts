@@ -109,8 +109,9 @@ export async function forceRefreshPushSetup(): Promise<{ updated: boolean; newTo
 }
 
 /** Request permission + get FCM token + register lên backend.
+ *  Phase 13.9.1 (2026-06-05): nhận optional label để user đặt tên thiết bị.
  *  Returns: { ok, token?, reason? } */
-export async function enablePushNotifications(): Promise<{
+export async function enablePushNotifications(label?: string): Promise<{
   ok: boolean;
   token?: string;
   reason?: 'unsupported' | 'denied' | 'no-vapid' | 'error';
@@ -155,12 +156,14 @@ export async function enablePushNotifications(): Promise<{
     _currentToken = token;
 
     // POST token to backend (arrayUnion ở server đảm bảo dedup)
-    // Phase 13.8 (2026-06-05): gửi userAgent để server lưu metadata cho list devices.
+    // Phase 13.8 + 13.9.1 (2026-06-05): gửi userAgent + label tùy chỉnh (nếu user đặt).
     const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+    const body: Record<string, unknown> = { token, userAgent };
+    if (label && label.trim()) body.label = label.trim().slice(0, 80);
     const res = await fetch('/api/personal/fcm-token', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ token, userAgent }),
+      body: JSON.stringify(body),
     });
     if (!res.ok) {
       const j = await res.json().catch(() => ({}));
