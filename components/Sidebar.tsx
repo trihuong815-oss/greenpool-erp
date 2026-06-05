@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { effectiveMenu } from '@/lib/permissions';
 import {
   Home, BarChart3, CheckSquare, FileText, ListTodo, MessageCircle,
-  Users, DollarSign, FileBarChart, GraduationCap, Megaphone, Settings, LogOut, UserCog, UserPlus, Wrench, KeyRound, X, Briefcase, ShieldCheck,
+  Users, DollarSign, FileBarChart, GraduationCap, Megaphone, Settings, LogOut, UserCog, Wrench, KeyRound, X, Briefcase, ShieldCheck,
   type LucideIcon,
 } from 'lucide-react';
 import { TasksBadge } from './TasksBadge';
@@ -64,7 +64,7 @@ const MENU_SECTIONS: MenuSection[] = [
     items: [
       { route: 'bao-mat',            label: 'Bảo mật & Thông báo',  icon: ShieldCheck },
       { route: 'doanh-so/packages',  label: 'Cài đặt gói dịch vụ',  icon: Settings },
-      { route: 'quan-ly-sale',       label: 'Cài đặt Sale',         icon: UserPlus },
+      // 'Cài đặt Sale' đã gộp vào 'Cài đặt user' (filter cơ sở + phòng ban). Giữ route /quan-ly-sale sống nhưng ẩn khỏi sidebar.
       { route: 'users',              label: 'Cài đặt user',         icon: UserCog },
     ],
   },

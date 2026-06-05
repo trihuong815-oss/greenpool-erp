@@ -24,21 +24,23 @@ export default async function UsersPage() {
   }
 
   const db = getFirebaseAdminDb();
-  const [branchesSnap, rolesSnap] = await Promise.all([
+  const [branchesSnap, rolesSnap, deptsSnap] = await Promise.all([
     db.collection(COLLECTIONS.BRANCHES).get(),
     db.collection(COLLECTIONS.ROLES).orderBy('tier').get(),
+    db.collection(COLLECTIONS.DEPARTMENTS).get(),
   ]);
   const facilities = branchesSnap.docs.map((d) => ({ id: d.id, name: d.data().name ?? '' }));
   const roles = rolesSnap.docs.map((d) => {
     const x = d.data();
-    return { code: x.code ?? d.id, name: x.name ?? '', block_id: x.block_id ?? null, tier: x.tier ?? 0 };
+    return { code: x.code ?? d.id, name: x.name ?? '', block_id: x.block_id ?? null, tier: x.tier ?? 0, dept_id: x.dept_id ?? null };
   });
+  const departments = deptsSnap.docs.map((d) => ({ id: d.id, name: d.data().name ?? d.id, block_id: d.data().block_id ?? null }));
 
   return (
     <>
       <AppTopBar
-        title="Quản lý người dùng"
-        subtitle="Tạo · Sửa · Tắt tài khoản · Phân vai trò"
+        title="Cài đặt user"
+        subtitle="Tạo · Sửa · Tắt tài khoản · Phân vai trò · Lọc theo cơ sở / phòng ban"
         icon="userCog"
       />
       <div className="flex-1 overflow-y-auto p-3 md:p-6 bg-slate-50">
@@ -48,6 +50,7 @@ export default async function UsersPage() {
           isAdminUser={profile.roleCode === 'ADMIN'}
           facilities={facilities}
           roles={roles}
+          departments={departments}
         />
       </div>
     </>

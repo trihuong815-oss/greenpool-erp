@@ -21,6 +21,8 @@ interface UserRow {
   menu_overrides: Record<string, boolean>;
 }
 
+interface DepartmentRef { id: string; name: string; block_id: string | null }
+
 interface Props {
   currentUserId: string;
   currentUserRole: string;
@@ -28,6 +30,7 @@ interface Props {
   isAdminUser: boolean;
   facilities: Facility[];
   roles: RoleRef[];
+  departments: DepartmentRef[];
 }
 
 function generateTempPassword(): string {
@@ -59,7 +62,7 @@ function facilitiesVisibleToCreator(creatorCode: string, creatorFacility: string
   return all;
 }
 
-export function UsersClient({ currentUserId, currentUserRole, isAdminUser, facilities, roles }: Props) {
+export function UsersClient({ currentUserId, currentUserRole, isAdminUser, facilities, roles, departments }: Props) {
   const [tab, setTab] = useState<'list' | 'permissions'>('list');
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,6 +70,7 @@ export function UsersClient({ currentUserId, currentUserRole, isAdminUser, facil
   const [search, setSearch] = useState('');
   const [filterRole, setFilterRole] = useState('all');
   const [filterFacility, setFilterFacility] = useState('all');
+  const [filterDept, setFilterDept] = useState('all'); // Phase 13.9 (2026-06-05): filter phòng ban
   const [filterActive, setFilterActive] = useState<'all' | 'active' | 'inactive'>('all');
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<UserRow | null>(null);
@@ -159,17 +163,28 @@ export function UsersClient({ currentUserId, currentUserRole, isAdminUser, facil
     return true;
   }
 
+  // Phase 13.9 (2026-06-05): map role.code → dept_id để filter theo phòng ban
+  const roleDeptMap = useMemo(() => {
+    const m = new Map<string, string | null>();
+    for (const r of roles) m.set(r.code, r.dept_id ?? null);
+    return m;
+  }, [roles]);
+
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase();
     return users.filter(u => {
       if (s && !(u.email.toLowerCase().includes(s) || (u.full_name || '').toLowerCase().includes(s))) return false;
       if (filterRole !== 'all' && u.role_code !== filterRole) return false;
       if (filterFacility !== 'all' && u.facility_id !== filterFacility) return false;
+      if (filterDept !== 'all') {
+        const userDept = u.role_code ? roleDeptMap.get(u.role_code) ?? null : null;
+        if (userDept !== filterDept) return false;
+      }
       if (filterActive === 'active' && !u.active) return false;
       if (filterActive === 'inactive' && u.active) return false;
       return true;
     });
-  }, [users, search, filterRole, filterFacility, filterActive]);
+  }, [users, search, filterRole, filterFacility, filterDept, filterActive, roleDeptMap]);
 
   const stats = useMemo(() => ({
     total: users.length,
@@ -275,6 +290,14 @@ export function UsersClient({ currentUserId, currentUserRole, isAdminUser, facil
               className="px-2 py-1.5 border border-slate-200 rounded text-sm">
               <option value="all">Tất cả</option>
               {facilities.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+            </select>
+          </label>
+          <label className="block">
+            <span className="block text-xs font-semibold text-slate-600 mb-1">Phòng ban</span>
+            <select value={filterDept} onChange={e => setFilterDept(e.target.value)}
+              className="px-2 py-1.5 border border-slate-200 rounded text-sm">
+              <option value="all">Tất cả</option>
+              {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
             </select>
           </label>
           <label className="block">
