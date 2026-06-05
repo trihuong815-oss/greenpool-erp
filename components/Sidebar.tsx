@@ -63,9 +63,9 @@ const MENU_SECTIONS: MenuSection[] = [
     title: 'Cài đặt',
     items: [
       { route: 'bao-mat',            label: 'Bảo mật & Thông báo',  icon: ShieldCheck },
-      { route: 'doanh-so/packages',  label: 'Quản lý gói dịch vụ',  icon: Settings },
-      { route: 'quan-ly-sale',       label: 'Quản lý Sale',         icon: UserPlus },
-      { route: 'users',              label: 'Quản lý người dùng',   icon: UserCog },
+      { route: 'doanh-so/packages',  label: 'Cài đặt gói dịch vụ',  icon: Settings },
+      { route: 'quan-ly-sale',       label: 'Cài đặt Sale',         icon: UserPlus },
+      { route: 'users',              label: 'Cài đặt user',         icon: UserCog },
     ],
   },
 ];
