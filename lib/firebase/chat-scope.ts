@@ -175,50 +175,11 @@ export function oneToOneConversationId(uidA: string, uidB: string): string {
   return `dm_${a}__${b}`;
 }
 
-/** Deterministic doc id cho channel — re-seed idempotent. */
-export function channelConversationId(meta: ChannelMeta): string {
-  if (meta.kind === 'company') return 'ch_company_general';
-  if (meta.kind === 'branch') return `ch_branch_${meta.branchId}`;
-  if (meta.kind === 'department') return `ch_dept_${meta.departmentId}`;
-  if (meta.kind === 'roleSet') return `ch_role_${meta.id}`;
-  throw new Error('Invalid channel meta');
-}
-
-/** Phase 13.11 (2026-06-05): anh chốt BỎ HẾT các kênh chuẩn.
- *  Chat chỉ giữ DM cá nhân + nhóm tự tạo. STANDARD_CHANNELS = []
- *  → sync-channels API + seed script không tạo gì.
- *  Định nghĩa cũ commented để dễ revert nếu cần. */
-export const STANDARD_CHANNELS: Array<{ name: string; meta: ChannelMeta }> = [];
-
-const _DEPRECATED_STANDARD_CHANNELS: Array<{ name: string; meta: ChannelMeta }> = [
-  { name: 'Thông báo chung — Toàn công ty', meta: { kind: 'company' } },
-  { name: 'Cơ sở Hoàng Mai',     meta: { kind: 'branch', branchId: 'HM'  } },
-  { name: 'Cơ sở Thuỵ Khuê',     meta: { kind: 'branch', branchId: 'TK'  } },
-  { name: 'Cơ sở CTT Mỹ Đình',   meta: { kind: 'branch', branchId: 'CTT' } },
-  { name: 'Cơ sở 24 NCT',        meta: { kind: 'branch', branchId: '24'  } },
-  { name: 'Cơ sở Thanh Trì',     meta: { kind: 'branch', branchId: 'TT'  } },
-  { name: 'Phòng Kỹ thuật',       meta: { kind: 'department', departmentId: 'KT'   } },
-  { name: 'Phòng Đào tạo',        meta: { kind: 'department', departmentId: 'DT'   } },
-  { name: 'Phòng Kế toán',        meta: { kind: 'department', departmentId: 'KE'   } },
-  { name: 'Phòng Nhân sự',        meta: { kind: 'department', departmentId: 'NS'   } },
-  { name: 'Phòng Giám sát',       meta: { kind: 'department', departmentId: 'GS'   } },
-  // Channel điều hành khối Kinh Doanh: GĐ KD + TP phòng + Phó phòng + QLCS các cơ sở.
-  // Auto include ADMIN/CEO (resolver tự thêm). KHÔNG include GD_VP vì đây là channel khối KD riêng.
-  {
-    name: 'Điều hành khối Kinh Doanh',
-    meta: {
-      kind: 'roleSet',
-      id: 'kd_management',
-      roleIds: [
-        'GD_KD',
-        'TP_DT', 'PP_DT_CM', 'PP_DT_TC',
-        'TP_KT',
-        'TP_MKT',
-        'QLCS_HM', 'QLCS_TK', 'QLCS_CTT', 'QLCS_24NCT', 'QLCS_TT',
-      ],
-    },
-  },
-];
+// Phase 13.11 (2026-06-05): bỏ HẾT các kênh chuẩn (anh chốt).
+// Đã xóa: STANDARD_CHANNELS array + channelConversationId helper + sync-channels API
+// + seed script + chat-channel-resolver. ChannelMeta type + field `channel?` GIỮ cho
+// backward compat (UI render legacy doc nếu có). Tham khảo định nghĩa cũ ở git history
+// (xem commit 0b229c7 trở về trước).
 
 /** Cắt preview text cho lastMessage (200 ký tự). */
 export function previewText(text: string): string {
