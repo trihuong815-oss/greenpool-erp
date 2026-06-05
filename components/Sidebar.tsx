@@ -89,19 +89,17 @@ export function Sidebar({ userName, userRole, roleCode, menuOverrides }: Sidebar
     .filter(s => s.items.length > 0);
 
   async function handleLogout() {
-    // 1. Unregister FCM token (tránh push tới device đã logout)
-    try {
-      const mod = await import('@/lib/firebase/messaging-client');
-      await mod.disablePushNotifications();
-    } catch { /* ignore */ }
-    // 2. SignOut Firebase client SDK (xóa trạng thái LOCAL persistence)
+    // Phase 13.9.3 (2026-06-05): KHÔNG xoá FCM token khi logout — anh chốt rule
+    // "bật noti là dùng mãi đến khi tắt". User chủ động tắt trong /bao-mat thì token mới bị xoá.
+    // Logout chỉ clear session/auth, giữ token để login sau noti vẫn tới.
+    // 1. SignOut Firebase client SDK (xóa trạng thái LOCAL persistence)
     //    → ngăn SessionRefresher tự tạo lại cookie
     try {
       const { getFirebaseClientAuth } = await import('@/lib/firebase/client');
       await getFirebaseClientAuth().signOut();
       try { localStorage.removeItem('gp_last_session_refresh'); } catch { /* ignore */ }
     } catch { /* ignore */ }
-    // 3. Clear Firebase session cookie qua API route
+    // 2. Clear Firebase session cookie qua API route
     await fetch('/api/auth/session', { method: 'DELETE' }).catch(() => {});
     router.push('/login');
     router.refresh();
