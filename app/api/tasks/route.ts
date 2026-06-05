@@ -498,11 +498,20 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: 'Người nhận cấp trên phải là CEO/Chủ tịch' }, { status: 400 });
         }
       } else if (isCreatorTpQlcs) {
+        // Phase 12.9.3 (2026-06-05): TP/QLCS chỉ đề xuất TRONG KHỐI mình
+        const creatorBlock = getBlockOf(creatorRole);
+        const recipientBlock = getBlockOf(recipientRole);
         if (recipientTier === 'peer' && !TP_QLCS_PEER.has(recipientRole)) {
           return NextResponse.json({ error: 'Người nhận ngang cấp phải là TP/QLCS' }, { status: 400 });
         }
-        if (recipientTier === 'senior' && recipientRole !== 'GD_KD' && recipientRole !== 'GD_VP') {
-          return NextResponse.json({ error: 'Người nhận cấp trên phải là GĐ Khối' }, { status: 400 });
+        if (recipientTier === 'peer' && creatorBlock !== 'all' && recipientBlock !== creatorBlock) {
+          return NextResponse.json({ error: 'Đề xuất ngang cấp phải trong cùng khối với bạn' }, { status: 400 });
+        }
+        if (recipientTier === 'senior') {
+          const expectedGd = creatorBlock === 'KD' ? 'GD_KD' : creatorBlock === 'VP' ? 'GD_VP' : null;
+          if (!expectedGd || recipientRole !== expectedGd) {
+            return NextResponse.json({ error: `Người nhận cấp trên phải là ${expectedGd ?? 'GĐ Khối của bạn'}` }, { status: 400 });
+          }
         }
       } else {
         return NextResponse.json({ error: 'Vai trò không được dùng module này' }, { status: 403 });
