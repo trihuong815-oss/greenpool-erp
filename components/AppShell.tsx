@@ -35,7 +35,7 @@ export function AppShell({ userName, userRole, roleCode, menuOverrides, children
 
   return (
     <MobileNavContext.Provider value={{ open, setOpen }}>
-      <div className="min-h-screen flex">
+      <div className="h-screen flex overflow-hidden">
         {/* Desktop sidebar — fixed bên trái */}
         <div className="hidden md:flex">
           <Sidebar userName={userName} userRole={userRole} roleCode={roleCode} menuOverrides={menuOverrides} />
@@ -59,7 +59,7 @@ export function AppShell({ userName, userRole, roleCode, menuOverrides, children
         </div>
 
         {/* Main content area */}
-        <main className="flex-1 flex flex-col overflow-hidden min-w-0">
+        <main className="flex-1 flex flex-col overflow-hidden min-w-0 min-h-0">
           <MfaRequiredBanner roleCode={roleCode} />
           {children}
         </main>
