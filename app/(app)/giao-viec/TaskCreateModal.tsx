@@ -21,6 +21,13 @@ const PEER_ROLES = new Set([
   'QLCS_HM', 'QLCS_TK', 'QLCS_CTT', 'QLCS_24NCT', 'QLCS_TT',
 ]);
 
+// Phase 12.9.6 (2026-06-06): cấu trúc tabs khối cho TP/QLCS.
+//   - Khối KD: phòng ban (TP_KT/DT/MKT) + cơ sở (QLCS_*) + lãnh đạo (GD_KD / ADMIN fallback)
+//   - Khối VP: phòng ban (TP_KE/GS/NS) + lãnh đạo (GD_VP) — VP không có cơ sở
+const TP_ROLES_KD = new Set(['TP_KT', 'TP_DT', 'TP_MKT']);
+const TP_ROLES_VP = new Set(['TP_GS', 'TP_KE', 'TP_NS']);
+const QLCS_ROLES = new Set(['QLCS_HM', 'QLCS_TK', 'QLCS_CTT', 'QLCS_24NCT', 'QLCS_TT']);
+
 interface Department { id: string; name: string; blockId: 'KD' | 'VP' | null; }
 interface Branch { id: string; name: string; }
 interface User { id: string; name: string; roleId: string; branchId: string | null; departmentId: string | null; }
@@ -54,7 +61,8 @@ export function TaskCreateModal(props: {
   const isGD = currentUserRole === 'GD_KD' || currentUserRole === 'GD_VP';
   const isTP = currentUserRole.startsWith('TP_');
   const isQLCS = currentUserRole.startsWith('QLCS_');
-  void isTP; void isQLCS;
+  // Phase 12.9.6: TP/QLCS dùng UI tabs khối (KD/VP) + 3 nhóm.
+  const isCreatorTpQlcs = isTP || isQLCS;
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -75,6 +83,8 @@ export function TaskCreateModal(props: {
   // ─── PROPOSAL state (Phase 12.9 — đơn giản hoá) ───
   const [recipientTier, setRecipientTier] = useState<RecipientTier>('peer');
   const [recipientUid, setRecipientUid] = useState<string>('');
+  // Phase 12.9.6: cho TP/QLCS — chọn khối nhận (default = khối creator).
+  const [recipientBlock, setRecipientBlock] = useState<'KD' | 'VP'>(myBlock === 'VP' ? 'VP' : 'KD');
 
   // Phase 12.9.4 (anh chốt 2026-06-06): cho phép đề xuất LIÊN KHỐI cho TP/QLCS.
   // Khi recipient cross-block → server tự chèn GĐ khối creator vào đầu chain (2 cấp duyệt).
@@ -149,17 +159,46 @@ export function TaskCreateModal(props: {
       });
   }, [kind, users, isCEO, isAdmin, isGD, currentUserId, myBlock]);
 
-  // Auto chọn người đầu tiên khi đổi tab
+  // Phase 12.9.6: groups theo khối cho TP/QLCS — 3 nhóm: phòng ban / cơ sở / lãnh đạo.
+  //   KD: TP_KT/DT/MKT + 5 QLCS + GD_KD (fallback ADMIN nếu trống)
+  //   VP: TP_KE/GS/NS + GD_VP (VP không có cơ sở)
+  const blockGroups = useMemo(() => {
+    if (!isCreatorTpQlcs || kind !== 'proposal') return null;
+    const hasGdKd = users.some((u) => u.roleId === 'GD_KD');
+    const sortByName = (a: User, b: User) => a.name.localeCompare(b.name, 'vi');
+    const notSelf = (u: User) => u.id !== currentUserId;
+    return {
+      KD: {
+        dept: users.filter((u) => TP_ROLES_KD.has(u.roleId)).filter(notSelf).sort(sortByName),
+        facility: users.filter((u) => QLCS_ROLES.has(u.roleId)).filter(notSelf)
+          .sort((a, b) => a.roleId.localeCompare(b.roleId)),
+        leadership: users.filter((u) => u.roleId === 'GD_KD' || (!hasGdKd && u.roleId === 'ADMIN')).filter(notSelf),
+      },
+      VP: {
+        dept: users.filter((u) => TP_ROLES_VP.has(u.roleId)).filter(notSelf).sort(sortByName),
+        facility: [] as User[],
+        leadership: users.filter((u) => u.roleId === 'GD_VP').filter(notSelf),
+      },
+    } as const;
+  }, [isCreatorTpQlcs, kind, users, currentUserId]);
+
+  // Auto chọn người đầu tiên khi đổi tab — cho cả 2 chế độ UI.
   useEffect(() => {
     if (kind !== 'proposal') return;
-    const list = recipientTier === 'peer' ? peerCandidates : seniorCandidates;
+    let list: User[];
+    if (isCreatorTpQlcs && blockGroups) {
+      const g = blockGroups[recipientBlock];
+      list = [...g.dept, ...g.facility, ...g.leadership];
+    } else {
+      list = recipientTier === 'peer' ? peerCandidates : seniorCandidates;
+    }
     if (list.length > 0 && !list.find((u) => u.id === recipientUid)) {
       setRecipientUid(list[0].id);
     } else if (list.length === 0) {
       setRecipientUid('');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recipientTier, peerCandidates, seniorCandidates, kind]);
+  }, [recipientTier, recipientBlock, isCreatorTpQlcs, blockGroups, peerCandidates, seniorCandidates, kind]);
 
   const creatorBlocked = kind === 'proposal' && isCEO;
 
@@ -197,9 +236,9 @@ export function TaskCreateModal(props: {
 
     if (kind === 'proposal') {
       if (!recipientUid) {
-        setError(recipientTier === 'peer'
-          ? 'Không có người ngang cấp để gửi đề xuất.'
-          : 'Không có người cấp trên để gửi đề xuất.');
+        setError(isCreatorTpQlcs
+          ? 'Chưa chọn đối tượng nhận đề xuất.'
+          : (recipientTier === 'peer' ? 'Không có người ngang cấp để gửi đề xuất.' : 'Không có người cấp trên để gửi đề xuất.'));
         return;
       }
     } else {
@@ -212,6 +251,15 @@ export function TaskCreateModal(props: {
     try {
       let createBody: Parameters<typeof tasksApi.create>[0];
       if (kind === 'proposal') {
+        // Phase 12.9.6: TP/QLCS dùng tab khối → infer tier client-side từ role recipient.
+        //   recipient role = GD_KD/GD_VP/ADMIN  → senior
+        //   recipient role = TP_*/QLCS_*       → peer
+        let finalTier: RecipientTier = recipientTier;
+        if (isCreatorTpQlcs) {
+          const r = users.find((u) => u.id === recipientUid);
+          const role = r?.roleId ?? '';
+          finalTier = (role === 'GD_KD' || role === 'GD_VP' || role === 'ADMIN') ? 'senior' : 'peer';
+        }
         createBody = {
           kind: 'proposal',
           title: title.trim(),
@@ -226,7 +274,7 @@ export function TaskCreateModal(props: {
           financialGroup: null,
           estimatedCost: null,
           // Phase 12.9: server build chain từ recipientUid + tier
-          recipientTier,
+          recipientTier: finalTier,
           recipientUid,
         } as any;
       } else {
@@ -322,6 +370,86 @@ export function TaskCreateModal(props: {
           {/* ═══ FORM ĐỀ XUẤT (Phase 12.9 — đơn giản 2 mục) ═══ */}
           {kind === 'proposal' && !creatorBlocked && (
             <Field label="Đối tượng nhận đề xuất *">
+              {/* Phase 12.9.6 (2026-06-06): TP/QLCS dùng tab KHỐI (KD/VP) + 3 nhóm.
+                  GD/ADMIN giữ tab peer/senior cũ (chỉ có vài lựa chọn cố định). */}
+              {isCreatorTpQlcs && blockGroups ? (
+                <>
+                  {/* Tabs 2 khối */}
+                  <div className="grid grid-cols-2 gap-2 mb-2">
+                    {(['KD', 'VP'] as const).map((b) => {
+                      const g = blockGroups[b];
+                      const total = g.dept.length + g.facility.length + g.leadership.length;
+                      const isMyBlock = b === myBlock;
+                      return (
+                        <button
+                          key={b}
+                          type="button"
+                          onClick={() => setRecipientBlock(b)}
+                          disabled={total === 0}
+                          className={`px-3 py-2 rounded-lg text-sm font-semibold ring-1 transition ${
+                            recipientBlock === b
+                              ? 'bg-emerald-50 text-emerald-800 ring-emerald-300'
+                              : 'bg-white text-slate-600 ring-slate-200 hover:ring-emerald-200'
+                          } disabled:opacity-40`}
+                        >
+                          {b === 'KD' ? '🏭 Khối Kinh Doanh' : '🏢 Khối Văn Phòng'}
+                          <span className="ml-1 text-[10px] opacity-60">
+                            ({total}{isMyBlock ? ' · của bạn' : ''})
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {/* Dropdown 3 nhóm cho khối được chọn */}
+                  {(() => {
+                    const g = blockGroups[recipientBlock];
+                    const total = g.dept.length + g.facility.length + g.leadership.length;
+                    if (total === 0) {
+                      return (
+                        <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-2.5">
+                          Khối {recipientBlock === 'KD' ? 'Kinh Doanh' : 'Văn Phòng'} chưa có người nhận hợp lệ.
+                        </div>
+                      );
+                    }
+                    const renderOpt = (u: User) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name} · {u.roleId}
+                      </option>
+                    );
+                    return (
+                      <select
+                        value={recipientUid}
+                        onChange={(e) => setRecipientUid(e.target.value)}
+                        className={inputCls}
+                      >
+                        <option value="">-- Chọn người nhận --</option>
+                        {g.dept.length > 0 && (
+                          <optgroup label="📋 Phòng ban (Trưởng phòng)">
+                            {g.dept.map(renderOpt)}
+                          </optgroup>
+                        )}
+                        {g.facility.length > 0 && (
+                          <optgroup label="🏊 Cơ sở (Quản lý cơ sở)">
+                            {g.facility.map(renderOpt)}
+                          </optgroup>
+                        )}
+                        {g.leadership.length > 0 && (
+                          <optgroup label="👔 Lãnh đạo (Giám đốc Khối)">
+                            {g.leadership.map(renderOpt)}
+                          </optgroup>
+                        )}
+                      </select>
+                    );
+                  })()}
+                  {/* Hint liên khối */}
+                  <p className="mt-1.5 text-[11px] text-slate-500">
+                    {recipientBlock !== myBlock
+                      ? `⚠ Liên khối → chain 3 cấp: GĐ khối bạn (${myBlock === 'KD' ? 'KD' : 'VP'}) → GĐ khối nhận (${recipientBlock}) → người nhận.`
+                      : 'Trong khối — gửi trực tiếp 1 cấp duyệt (trừ khi chọn GĐ khối → 1 cấp luôn).'}
+                  </p>
+                </>
+              ) : (
+              <>
               <div className="grid grid-cols-2 gap-2 mb-2">
                 {(['peer', 'senior'] as const).map((t) => {
                   const list = t === 'peer' ? peerCandidates : seniorCandidates;
@@ -401,6 +529,8 @@ export function TaskCreateModal(props: {
                     ? 'Ngang cấp = GĐ khối còn lại. Cấp trên = CEO / Chủ tịch.'
                     : 'Ngang cấp = các TP + QLCS (cả 2 khối). Cấp trên = GĐ Khối. Liên khối → chain: GĐ khối bạn → GĐ khối nhận → người nhận.'}
               </p>
+              </>
+              )}
             </Field>
           )}
 
