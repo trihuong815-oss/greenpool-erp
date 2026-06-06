@@ -9,6 +9,7 @@ import { usePathname } from 'next/navigation';
 import { Sidebar } from './Sidebar';
 import { MobileNavContext } from './MobileNavContext';
 import { MfaRequiredBanner } from './MfaRequiredBanner';
+import { NotiCountsProvider } from '@/lib/hooks/use-noti-counts';
 
 interface AppShellProps {
   userName: string;
@@ -34,6 +35,7 @@ export function AppShell({ userName, userRole, roleCode, menuOverrides, children
   }, [open]);
 
   return (
+    <NotiCountsProvider>
     <MobileNavContext.Provider value={{ open, setOpen }}>
       <div className="h-screen flex overflow-hidden">
         {/* Desktop sidebar — fixed bên trái */}
@@ -65,5 +67,6 @@ export function AppShell({ userName, userRole, roleCode, menuOverrides, children
         </main>
       </div>
     </MobileNavContext.Provider>
+    </NotiCountsProvider>
   );
 }

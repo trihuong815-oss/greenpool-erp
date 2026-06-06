@@ -128,15 +128,24 @@ export function TaskCreateModal(props: {
         .sort((a, b) => a.name.localeCompare(b.name, 'vi'));
     }
     // TP/QLCS/TIBAN_TT: cấp trên = GĐ KHỐI cả 2 (anh chốt 2026-06-06 cho liên khối).
+    // Phase 12.9.5: nếu slot GD_KD trống → hiển thị ADMIN (anh đảm nhiệm GĐKD thực tế).
+    // Server resolveGdUid cũng fallback ADMIN cho GD_KD → UI & chain đồng bộ.
+    const hasGdKd = users.some((u) => u.roleId === 'GD_KD');
     return users
-      .filter((u) => u.roleId === 'GD_KD' || u.roleId === 'GD_VP')
+      .filter((u) =>
+        u.roleId === 'GD_KD'
+        || u.roleId === 'GD_VP'
+        || (!hasGdKd && u.roleId === 'ADMIN'),  // ADMIN xuất hiện thay GD_KD khi slot trống
+      )
       .filter((u) => u.id !== currentUserId)
       .sort((a, b) => {
-        // GĐ cùng khối ưu tiên trước
+        // GĐ cùng khối ưu tiên trước. ADMIN coi như GD_KD (khối KD).
+        const aGd = a.roleId === 'ADMIN' ? 'GD_KD' : a.roleId;
+        const bGd = b.roleId === 'ADMIN' ? 'GD_KD' : b.roleId;
         const myGd = myBlock === 'KD' ? 'GD_KD' : myBlock === 'VP' ? 'GD_VP' : null;
-        if (a.roleId === myGd && b.roleId !== myGd) return -1;
-        if (b.roleId === myGd && a.roleId !== myGd) return 1;
-        return a.roleId.localeCompare(b.roleId);
+        if (aGd === myGd && bGd !== myGd) return -1;
+        if (bGd === myGd && aGd !== myGd) return 1;
+        return aGd.localeCompare(bGd);
       });
   }, [kind, users, isCEO, isAdmin, isGD, currentUserId, myBlock]);
 
@@ -343,6 +352,28 @@ export function TaskCreateModal(props: {
                     </div>
                   );
                 }
+                // Phase 12.9.5: group dropdown thành "Trong khối" / "Liên khối" (tách rõ cho anh).
+                // ADMIN coi như khối KD (đảm nhiệm GĐKD ảo) — đồng bộ server resolveGdUid.
+                const effectiveBlockOf = (roleId: string): 'KD' | 'VP' | 'all' =>
+                  roleId === 'ADMIN' ? 'KD' : (ROLE_BLOCK[roleId] ?? 'all');
+                const inBlockList = list.filter((u) => {
+                  const b = effectiveBlockOf(u.roleId);
+                  return myBlock === 'all' || b === 'all' || b === myBlock;
+                });
+                const crossBlockList = list.filter((u) => {
+                  const b = effectiveBlockOf(u.roleId);
+                  return myBlock !== 'all' && b !== 'all' && b !== myBlock;
+                });
+                const blockLabel = (b: 'KD' | 'VP' | 'all') =>
+                  b === 'KD' ? 'Kinh Doanh' : b === 'VP' ? 'Văn Phòng' : 'toàn cty';
+                const renderOpt = (u: User) => {
+                  const b = effectiveBlockOf(u.roleId);
+                  return (
+                    <option key={u.id} value={u.id}>
+                      {u.name} · {u.roleId}{b !== 'all' ? ` (${blockLabel(b)})` : ' (toàn cty)'}
+                    </option>
+                  );
+                };
                 return (
                   <select
                     value={recipientUid}
@@ -350,11 +381,16 @@ export function TaskCreateModal(props: {
                     className={inputCls}
                   >
                     <option value="">-- Chọn người nhận --</option>
-                    {list.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.name} · {u.roleId}
-                      </option>
-                    ))}
+                    {inBlockList.length > 0 && (
+                      <optgroup label={`▸ Trong khối${myBlock !== 'all' ? ` (${blockLabel(myBlock)})` : ''}`}>
+                        {inBlockList.map(renderOpt)}
+                      </optgroup>
+                    )}
+                    {crossBlockList.length > 0 && (
+                      <optgroup label="▸ Liên khối (qua GĐ khối duyệt thêm)">
+                        {crossBlockList.map(renderOpt)}
+                      </optgroup>
+                    )}
                   </select>
                 );
               })()}
@@ -363,7 +399,7 @@ export function TaskCreateModal(props: {
                   ? 'Ngang cấp = GĐ Kinh Doanh / Văn Phòng. Cấp trên = CEO / Chủ tịch.'
                   : isGD
                     ? 'Ngang cấp = GĐ khối còn lại. Cấp trên = CEO / Chủ tịch.'
-                    : 'Ngang cấp = các TP + QLCS (cả 2 khối). Cấp trên = GĐ Khối. Nếu liên khối → tự thêm GĐ khối bạn duyệt trước.'}
+                    : 'Ngang cấp = các TP + QLCS (cả 2 khối). Cấp trên = GĐ Khối. Liên khối → chain: GĐ khối bạn → GĐ khối nhận → người nhận.'}
               </p>
             </Field>
           )}

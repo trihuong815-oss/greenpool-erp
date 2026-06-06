@@ -3,8 +3,8 @@ import { SessionRefresher } from '@/components/SessionRefresher';
 // Phase 13.7 (2026-06-05): bỏ IdleAutoLogout theo yêu cầu anh — UX giống FB/Zalo.
 // Bảo mật giữ qua: auth + 2FA TOTP + Firestore rules + audit log + rate limit + CSP.
 // Session cookie 14d tự renew qua SessionRefresher mỗi 24h.
-// import { IdleAutoLogout } from '@/components/IdleAutoLogout';
-import { PWAAppBadge } from '@/components/PWAAppBadge';
+// Phase 13.13 (2026-06-06): app badge OS được set trong NotiCountsProvider (AppShell) —
+// PWAAppBadge component đã trở thành no-op, không cần render ở đây nữa.
 import { getCurrentProfile } from '@/lib/firebase/current-profile';
 import { redirect } from 'next/navigation';
 
@@ -31,7 +31,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <>
       <SessionRefresher />
-      <PWAAppBadge />
       <AppShell
         userName={profile.displayName}
         userRole={profile.roleName ?? profile.roleCode}

@@ -72,6 +72,10 @@ export async function GET(req: NextRequest) {
     const status = qs.get('status') as TaskStatus | null;
     const kindFilter = qs.get('kind');
     const q = (qs.get('q') ?? '').toLowerCase().trim();
+    // Phase 13.13: onlyMine=1 → mode=assigned chỉ filter task có assigneeUserIds.includes(uid).
+    // Mặc định false (giữ behavior cũ: dept/facility/block/CEO scope rộng cho list view).
+    // Badge counters dùng onlyMine=1 để đếm chính xác "việc của riêng tôi".
+    const onlyMine = qs.get('onlyMine') === '1';
 
     const db = getFirebaseAdminDb();
     const myBlock = getBlockOf(caller.profile.role_code);
@@ -231,7 +235,7 @@ export async function GET(req: NextRequest) {
       results.forEach((snap) => addDocs(snap.docs));
     }
 
-    // Final filter: scope check + status + kind + q
+    // Final filter: scope check + status + kind + q + onlyMine
     const rows: Record<string, any>[] = [];
     for (const data of docMap.values()) {
       const scope = asTaskForScope(data);
@@ -240,6 +244,12 @@ export async function GET(req: NextRequest) {
       // Default kind='assignment' để back-compat với doc cũ
       const docKind = data.kind ?? 'assignment';
       if (kindFilter && docKind !== kindFilter) continue;
+      // Phase 13.13: onlyMine chỉ áp cho mode=assigned — filter chính xác task của riêng caller,
+      // loại bỏ task assigned cho dept/facility/block mà caller không trực tiếp được assign.
+      if (onlyMine && mode === 'assigned') {
+        const ids = Array.isArray(data.assigneeUserIds) ? data.assigneeUserIds : [];
+        if (!ids.includes(caller.profile.uid)) continue;
+      }
       if (q) {
         const hay = `${data.title ?? ''} ${data.description ?? ''}`.toLowerCase();
         if (!hay.includes(q)) continue;
@@ -504,35 +514,70 @@ export async function POST(req: NextRequest) {
         if (recipientTier === 'peer' && !TP_QLCS_PEER.has(recipientRole)) {
           return NextResponse.json({ error: 'Người nhận ngang cấp phải là TP/QLCS' }, { status: 400 });
         }
-        if (recipientTier === 'senior' && recipientRole !== 'GD_KD' && recipientRole !== 'GD_VP') {
+        // Phase 12.9.5: senior = GD_KD / GD_VP. Cho phép ADMIN khi slot GD_KD trống
+        // (anh đảm nhiệm GĐKD thực tế dưới role ADMIN — đồng bộ với UI).
+        if (recipientTier === 'senior'
+          && recipientRole !== 'GD_KD'
+          && recipientRole !== 'GD_VP'
+          && recipientRole !== 'ADMIN') {
           return NextResponse.json({ error: 'Người nhận cấp trên phải là GĐ Khối' }, { status: 400 });
+        }
+        if (recipientTier === 'senior' && recipientRole === 'ADMIN') {
+          // Chỉ chấp nhận ADMIN nếu thực sự không có user GD_KD nào
+          const gdKdSnap = await db.collection(COLLECTIONS.USERS).where('roleId', '==', 'GD_KD').limit(1).get();
+          if (!gdKdSnap.empty) {
+            return NextResponse.json({ error: 'Phải chọn GĐ Khối, không phải ADMIN' }, { status: 400 });
+          }
         }
       } else {
         return NextResponse.json({ error: 'Vai trò không được dùng module này' }, { status: 403 });
       }
       recipientUidResolved = recipientUid;
-      // Phase 12.9.4 (anh chốt 2026-06-06): nếu liên khối → tự chèn GĐ khối creator vào đầu chain.
-      // Chỉ áp dụng cho TP/QLCS (creator KD/VP); GD/ADMIN không cần (đề xuất ngang cấp hoặc CEO).
+      // Phase 12.9.5 (anh chốt 2026-06-06): luồng liên khối FULL =
+      //   [GĐ khối creator] → [GĐ khối recipient] → [recipient TP/QLCS]
+      // Nếu recipient CHÍNH là một trong 2 GĐ → KHÔNG chèn lần 2 (tránh trùng).
+      // Nếu GD_KD slot trống → fallback ADMIN (anh đảm nhiệm GĐKD thực tế).
       const chain: string[] = [];
+      // Helper: resolve uid của GĐ role, fallback ADMIN nếu GD_KD trống.
+      const resolveGdUid = async (gdRole: 'GD_KD' | 'GD_VP'): Promise<string | null> => {
+        const snap = await db.collection(COLLECTIONS.USERS).where('roleId', '==', gdRole).limit(1).get();
+        if (!snap.empty) return snap.docs[0].id;
+        if (gdRole === 'GD_KD') {
+          const adminSnap = await db.collection(COLLECTIONS.USERS).where('roleId', '==', 'ADMIN').limit(1).get();
+          if (!adminSnap.empty) return adminSnap.docs[0].id;
+        }
+        return null;
+      };
       if (isCreatorTpQlcs) {
-        const creatorBlock = getBlockOf(creatorRole);
-        const recipientBlock = getBlockOf(recipientRole);
-        const isCrossBlockProposal = creatorBlock !== 'all'
-          && recipientBlock !== 'all'
-          && creatorBlock !== recipientBlock;
+        const creatorBlock2 = getBlockOf(creatorRole);
+        const recipientBlock2 = getBlockOf(recipientRole);
+        const isCrossBlockProposal = creatorBlock2 !== 'all'
+          && recipientBlock2 !== 'all'
+          && creatorBlock2 !== recipientBlock2;
         if (isCrossBlockProposal) {
-          // Tìm uid của GĐ khối creator để chèn vào đầu chain
-          const creatorGdRole = creatorBlock === 'KD' ? 'GD_KD' : 'GD_VP';
-          // KHÔNG tự chèn nếu recipient CHÍNH là GĐ khối creator (vô nghĩa - duyệt 2 lần cùng người)
+          const creatorGdRole = creatorBlock2 === 'KD' ? 'GD_KD' : 'GD_VP';
+          const recipientGdRole = recipientBlock2 === 'KD' ? 'GD_KD' : 'GD_VP';
+          // 1) Chèn GĐ khối creator (skip nếu recipient chính là GĐ creator — vô nghĩa)
           if (recipientRole !== creatorGdRole) {
-            const gdSnap = await db.collection(COLLECTIONS.USERS).where('roleId', '==', creatorGdRole).limit(1).get();
-            if (!gdSnap.empty) {
-              chain.push(`user:${gdSnap.docs[0].id}`);
+            const creatorGdUid = await resolveGdUid(creatorGdRole);
+            if (creatorGdUid && creatorGdUid !== caller.profile.uid) {
+              chain.push(`user:${creatorGdUid}`);
+            }
+          }
+          // 2) Chèn GĐ khối recipient (skip nếu recipient chính là GĐ recipient — trùng)
+          if (recipientRole !== recipientGdRole) {
+            const recipientGdUid = await resolveGdUid(recipientGdRole);
+            if (recipientGdUid && recipientGdUid !== caller.profile.uid) {
+              // Tránh trùng nếu trùng người với GĐ creator (edge case: cùng 1 user 2 role - không xảy ra)
+              const tag = `user:${recipientGdUid}`;
+              if (!chain.includes(tag)) chain.push(tag);
             }
           }
         }
       }
-      chain.push(`user:${recipientUid}`);
+      // 3) Cuối cùng: recipient được chọn
+      const recipientTag = `user:${recipientUid}`;
+      if (!chain.includes(recipientTag)) chain.push(recipientTag);
       approvalChain = chain;
       status = 'pending_approval';
       currentApprover = approvalChain[0];

@@ -57,15 +57,19 @@ export async function pushToUsers(uids: string[], payload: PushPayload): Promise
     for (const s of snaps) {
       if (!s.exists) continue;
       const x = s.data();
-      // Phase 13.9.2 (2026-06-05): bỏ qua thiết bị enabled=false. Build disabledSet từ fcmDevices.
+      // Phase 13.13.1 (2026-06-06): SOURCE-OF-TRUTH = fcmDevices.
+      // Trước đây load từ x.fcmTokens (legacy) → tokens cũ đã expire vẫn được gửi,
+      // FCM trả invalid → push fail dù fcmDevices có token mới hợp lệ.
+      // Giờ: dedup từ fcmDevices[].token (lọc enabled !== false).
       const devices: any[] = Array.isArray(x?.fcmDevices) ? x.fcmDevices : [];
-      const disabledTokens = new Set<string>(
-        devices.filter((d) => d && d.enabled === false && typeof d.token === 'string').map((d) => d.token),
-      );
-      // Dedup tokens — fcmTokens có thể có duplicate nếu user re-register token cũ → tránh push lặp
-      const tk = Array.isArray(x?.fcmTokens)
-        ? Array.from(new Set(x.fcmTokens.filter((t: any) => typeof t === 'string' && t.length > 20 && !disabledTokens.has(t)))) as string[]
-        : [];
+      const enabledTokens = devices
+        .filter((d) => d && d.enabled !== false && typeof d.token === 'string' && d.token.length > 20)
+        .map((d) => d.token as string);
+      let tk = Array.from(new Set(enabledTokens));
+      // Fallback (backward compat): user chưa từng dùng fcmDevices → đọc legacy fcmTokens.
+      if (tk.length === 0 && Array.isArray(x?.fcmTokens)) {
+        tk = Array.from(new Set(x.fcmTokens.filter((t: any) => typeof t === 'string' && t.length > 20))) as string[];
+      }
       if (tk.length === 0) continue;
       tokenMap.set(s.id, tk);
       allTokens.push(...tk);
@@ -117,15 +121,29 @@ export async function pushToUsers(uids: string[], payload: PushPayload): Promise
         }
       }
     });
-    // Batch cleanup
+    // Cleanup invalid tokens — remove khỏi CẢ fcmDevices (source-of-truth) lẫn fcmTokens (legacy).
+    // Phải read-modify-write vì fcmDevices là array of objects (Firestore không có arrayRemove
+    // theo predicate, chỉ remove element bằng nhau bit-by-bit — không khả dụng cho object).
     if (removeByUid.size > 0) {
-      const batch = db.batch();
-      for (const [uid, tokens] of removeByUid.entries()) {
-        batch.update(db.collection(COLLECTIONS.USERS).doc(uid), {
-          fcmTokens: FieldValue.arrayRemove(...tokens),
-        });
-      }
-      await batch.commit().catch(() => { /* ignore */ });
+      await Promise.all(Array.from(removeByUid.entries()).map(async ([uid, invalidTokens]) => {
+        try {
+          const userRef = db.collection(COLLECTIONS.USERS).doc(uid);
+          const snap = await userRef.get();
+          if (!snap.exists) return;
+          const x = snap.data() as any;
+          const update: Record<string, any> = {};
+          const devices: any[] = Array.isArray(x?.fcmDevices) ? x.fcmDevices : [];
+          const filteredDevices = devices.filter((d) => !invalidTokens.includes(d?.token));
+          if (filteredDevices.length !== devices.length) update.fcmDevices = filteredDevices;
+          if (Array.isArray(x?.fcmTokens)) {
+            // Legacy field cleanup qua arrayRemove (atomic, an toàn race)
+            update.fcmTokens = FieldValue.arrayRemove(...invalidTokens);
+          }
+          if (Object.keys(update).length > 0) await userRef.update(update);
+        } catch (e: any) {
+          console.warn('[push-notifications] cleanup fail uid=' + uid + ':', e?.message);
+        }
+      }));
     }
 
     return { sent: res.successCount, failed: res.failureCount, tokensCleaned: cleaned };

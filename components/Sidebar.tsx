@@ -10,6 +10,8 @@ import {
 } from 'lucide-react';
 import { TasksBadge } from './TasksBadge';
 import { ChatUnreadBadge } from './ChatUnreadBadge';
+import { ChecklistBadge } from './ChecklistBadge';
+import { TechWorkBadge } from './TechWorkBadge';
 import { useMobileNav } from './MobileNavContext';
 
 interface MenuItem {
@@ -171,6 +173,8 @@ export function Sidebar({ userName, userRole, roleCode, menuOverrides }: Sidebar
                       <span className="truncate">{item.label}</span>
                       {item.route === 'giao-viec' && <TasksBadge roleCode={roleCode} />}
                       {item.route === 'tin-nhan' && <ChatUnreadBadge />}
+                      {item.route === 'checklist-v2' && <ChecklistBadge />}
+                      {item.route === 'ky-thuat' && <TechWorkBadge />}
                     </Link>
                   </li>
                 );
