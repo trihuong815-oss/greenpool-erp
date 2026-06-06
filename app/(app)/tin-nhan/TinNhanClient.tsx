@@ -179,9 +179,9 @@ export function TinNhanClient({ currentUserId, currentUserName, currentUserRole 
   }, [convLoading, activeCid, conversations]);
 
   return (
-    <div className="h-full flex">
+    <div className="h-full flex overflow-hidden min-h-0">
       {/* Left pane — conversation list. Mobile: ẩn khi có activeConv. */}
-      <div className={`${activeCid ? 'hidden md:flex' : 'flex'} w-full md:w-80 lg:w-96 border-r border-slate-200 bg-white flex-col`}>
+      <div className={`${activeCid ? 'hidden md:flex' : 'flex'} w-full md:w-80 lg:w-96 border-r border-slate-200 bg-white flex-col overflow-hidden min-h-0`}>
         <div className="p-3 border-b border-slate-100">
           <div className="flex items-center gap-2 mb-2">
             <h2 className="font-bold text-slate-800 flex-1">Tin nhắn</h2>
@@ -282,8 +282,10 @@ export function TinNhanClient({ currentUserId, currentUserName, currentUserRole 
         </div>
       </div>
 
-      {/* Right pane — message thread */}
-      <div className={`${activeCid ? 'flex' : 'hidden md:flex'} flex-1 flex-col bg-slate-50`}>
+      {/* Right pane — message thread.
+          Phase 13.12 (2026-06-06): overflow-hidden + min-h-0 để header sticky, chỉ messages cuộn.
+          Trước đó thiếu → content overflow vọt ra cha → toàn bộ chat cuộn (header trôi). */}
+      <div className={`${activeCid ? 'flex' : 'hidden md:flex'} flex-1 flex-col bg-slate-50 overflow-hidden min-h-0`}>
         {!activeConv ? (
           <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
             <div className="text-center">
@@ -614,7 +616,7 @@ function MessageThread({ conv, currentUserId, onBack }: { conv: ChatConversation
 
   return (
     <>
-      <div className="px-4 py-3 border-b border-slate-200 bg-white flex items-center gap-2">
+      <div className="px-4 py-3 border-b border-slate-200 bg-white flex items-center gap-2 shrink-0">
         <button onClick={onBack} className="md:hidden p-2.5 -ml-1 rounded-lg hover:bg-slate-100 active:bg-slate-200 text-slate-600" aria-label="Quay lại">
           <ChevronLeft size={22} />
         </button>
@@ -922,7 +924,7 @@ function MessageThread({ conv, currentUserId, onBack }: { conv: ChatConversation
           ))}
         </div>
       )}
-      <div className="border-t border-slate-200 bg-white p-3 flex items-end gap-2">
+      <div className="border-t border-slate-200 bg-white p-3 flex items-end gap-2 shrink-0">
         <input ref={imageInputRef} type="file" accept="image/*" multiple hidden onChange={pickFiles} />
         <input ref={fileInputRef} type="file" multiple hidden onChange={pickFiles}
           accept="application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip" />
