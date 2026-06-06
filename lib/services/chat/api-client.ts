@@ -185,10 +185,7 @@ export const chatApi = {
     )).rows;
   },
 
-  // ─── Admin ───
-  async syncChannels(): Promise<{ results: Array<{ id: string; name: string; members: number; created: boolean; added: number; removed: number }> }> {
-    return jsonOrThrow(await fetch('/api/chat/admin/sync-channels', { method: 'POST' }));
-  },
+  // Phase 13.15: bỏ syncChannels — endpoint /api/chat/admin/sync-channels đã xóa Phase 13.11.
 
   // ─── Users ───
   async searchUsers(q: string): Promise<ChatUser[]> {

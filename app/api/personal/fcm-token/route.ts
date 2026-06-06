@@ -123,26 +123,28 @@ export async function POST(req: NextRequest) {
   try {
     const db = getFirebaseAdminDb();
     const ref = db.collection(COLLECTIONS.USERS).doc(ctx.profile.id);
-    const snap = await ref.get();
     const now = Date.now();
-    // Update fcmDevices array — remove existing entry với cùng token, add lại với fresh metadata
-    const oldDevices: any[] = Array.isArray(snap.data()?.fcmDevices) ? snap.data()!.fcmDevices : [];
-    const filtered = oldDevices.filter((d) => d?.token !== token);
-    const existing = oldDevices.find((d) => d?.token === token);
-    // Nếu re-register thiết bị cũ có label tùy chỉnh → giữ label cũ (không override bằng auto-parse)
-    // Re-register cũng auto bật lại (enabled=true) — vì user vừa bấm "Bật thông báo".
-    const device: DeviceMeta = {
-      token,
-      userAgent,
-      label: customLabel || existing?.label || finalLabel,
-      createdAt: existing?.createdAt ?? now,
-      lastSeen: now,
-      enabled: true,
-    };
-    await ref.update({
-      fcmDevices: [...filtered, device],
-      fcmTokens: FieldValue.arrayUnion(token), // legacy — giữ cho push-notifications.ts
-      fcmTokensUpdatedAt: FieldValue.serverTimestamp(),
+    // Phase 13.15 (2026-06-06) — BUG #N2 fix: TRANSACTION cho POST fcm-token.
+    // Trước đây read-modify-write race với cleanup từ push-notifications: 2 tab cùng register +
+    // cleanup chạy song song → metadata mất. Giờ transaction đảm bảo atomic.
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const oldDevices: any[] = Array.isArray(snap.data()?.fcmDevices) ? snap.data()!.fcmDevices : [];
+      const filtered = oldDevices.filter((d) => d?.token !== token);
+      const existing = oldDevices.find((d) => d?.token === token);
+      const device: DeviceMeta = {
+        token,
+        userAgent,
+        label: customLabel || existing?.label || finalLabel,
+        createdAt: existing?.createdAt ?? now,
+        lastSeen: now,
+        enabled: true,
+      };
+      tx.update(ref, {
+        fcmDevices: [...filtered, device],
+        fcmTokens: FieldValue.arrayUnion(token),
+        fcmTokensUpdatedAt: FieldValue.serverTimestamp(),
+      });
     });
     return NextResponse.json({ ok: true });
   } catch (e: any) {

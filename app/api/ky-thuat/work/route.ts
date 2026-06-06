@@ -42,6 +42,9 @@ export async function GET(req: NextRequest) {
     const kind = qs.get('kind');
     const branchId = qs.get('branchId');
     const status = qs.get('status');
+    // Phase 13.15 — BUG #B1 fix: assignee=me → filter chỉ task assigned cho caller.
+    // Dùng cho TechWorkBadge sidebar (đếm "việc của tôi"), không phải scope rộng.
+    const onlyMine = qs.get('assignee') === 'me';
     if (kind && !VALID_KIND.has(kind)) return NextResponse.json({ error: 'kind không hợp lệ' }, { status: 400 });
     if (branchId && scope.branchIds && !scope.branchIds.includes(branchId)) {
       return NextResponse.json({ error: 'Out of scope' }, { status: 403 });
@@ -56,6 +59,7 @@ export async function GET(req: NextRequest) {
       else q = q.where('branchId', 'in', scope.branchIds.slice(0, 10));
     }
     if (status) q = q.where('status', '==', status);
+    if (onlyMine) q = q.where('assigneeIds', 'array-contains', caller.profile.uid);
     q = q.orderBy('createdAt', 'desc').limit(200);
     const snap = await q.get();
     const rows = snap.docs.map((d) => serialize(d.id, d.data()));
@@ -275,9 +279,13 @@ export async function PATCH(req: NextRequest) {
     // Push notification
     const ktNoti = await import('@/lib/firebase/ky-thuat-notifications');
     if (action === 'status_change' && data.kind === 'task') {
+      // Phase 13.15 — BUG #N4 fix: truyền assigneeIds + assigneeNames (multi-assignee canonical).
+      // Trước đây chỉ pass legacy assigneeId → notifyKtStatusChanged chỉ push 1 người dù task multi-assignee.
       await ktNoti.notifyKtStatusChanged({
         id, kind: 'task', title: data.title, branchId: data.branchId,
         createdBy: data.createdBy, createdByName: data.createdByName,
+        assigneeIds: Array.isArray(data.assigneeIds) ? data.assigneeIds : undefined,
+        assigneeNames: Array.isArray(data.assigneeNames) ? data.assigneeNames : undefined,
         assigneeId: data.assigneeId,
       }, { uid: caller.profile.uid, name: caller.actorName ?? '' }, String(patch.status));
     } else if ((action === 'approve' || action === 'reject') && data.kind === 'proposal') {

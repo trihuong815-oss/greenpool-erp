@@ -171,7 +171,7 @@ export function NotiCountsProvider({ children }: { children: ReactNode }) {
           };
         },
       },
-      { source: 'kt_task', url: '/api/ky-thuat/work?kind=task&status=open',
+      { source: 'kt_task', url: '/api/ky-thuat/work?kind=task&status=open&assignee=me',
         parse: (j) => {
           const rows = Array.isArray(j?.rows) ? j.rows : [];
           return {
@@ -289,6 +289,29 @@ export function NotiCountsProvider({ children }: { children: ReactNode }) {
         navigator.serviceWorker.controller.postMessage({ type: 'set-badge', count: value.total });
       }
     } catch { /* silent */ }
+  }, [value.total]);
+
+  // ─── Phase 13.15 — BUG #B5 fix: listen 'badge-reset-request' từ SW notificationclick.
+  // Khi user click noti → SW reset badge=0, nhưng client value.total có thể vẫn > 0
+  // (vì còn task pending khác). Re-post lại total chính xác từ provider state.
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+    const handler = (event: MessageEvent) => {
+      const data = event.data || {};
+      if (data.type === 'badge-reset-request') {
+        try {
+          if ('setAppBadge' in navigator) {
+            if (value.total > 0) (navigator as any).setAppBadge(value.total);
+            else (navigator as any).clearAppBadge();
+          }
+          if (navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({ type: 'set-badge', count: value.total });
+          }
+        } catch { /* silent */ }
+      }
+    };
+    navigator.serviceWorker.addEventListener('message', handler);
+    return () => navigator.serviceWorker.removeEventListener('message', handler);
   }, [value.total]);
 
   return (

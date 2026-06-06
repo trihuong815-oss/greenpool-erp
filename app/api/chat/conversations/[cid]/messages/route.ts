@@ -171,8 +171,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ cid: strin
     const trimmed = text.trim();
     const preview = previewMessage(trimmed, attachments, sticker);
 
-    // Batch: insert message + update conv summary + mark sender đã đọc (last read = now).
-    const batch = db.batch();
+    // Phase 13.15 — BUG #C3 fix: dùng TRANSACTION cho insert message + update conv.
+    // Trước đây batch.update KHÔNG pre-condition: 2 user gửi đồng thời → tin sentAt sớm hơn
+    // có thể ghi đè tin sau (last writer wins) → conv list preview hiển thị sai.
+    // Transaction read lastMessageAt hiện tại, chỉ update nếu now > current.
     const msgDoc: Record<string, unknown> = {
       conversationId: cid,
       senderId: caller.profile.uid,
@@ -185,18 +187,32 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ cid: strin
     if (replyTo) msgDoc.replyTo = replyTo;
     if (forwardedFrom) msgDoc.forwardedFrom = forwardedFrom;
     if (sticker) msgDoc.sticker = sticker;
-    batch.set(msgRef, msgDoc);
-    batch.update(convRef, {
-      lastMessage: {
-        text: preview,
-        senderId: caller.profile.uid,
-        senderName: caller.actorName ?? '',
-        sentAt: now,
-      },
-      lastMessageAt: now,
-      [`readBy.${caller.profile.uid}`]: now,
+    await db.runTransaction(async (tx) => {
+      const fresh = await tx.get(convRef);
+      const currentLastMs = (() => {
+        const lma = fresh.data()?.lastMessageAt;
+        if (!lma) return 0;
+        if (typeof lma?.toMillis === 'function') return lma.toMillis();
+        if (lma instanceof Date) return lma.getTime();
+        return 0;
+      })();
+      const nowMs = now.toMillis();
+      tx.set(msgRef, msgDoc);
+      const convUpdate: Record<string, unknown> = {
+        [`readBy.${caller.profile.uid}`]: now,
+      };
+      // Chỉ update lastMessage nếu tin này MỚI hơn — tránh ghi đè tin của user khác đã commit sau.
+      if (nowMs >= currentLastMs) {
+        convUpdate.lastMessage = {
+          text: preview,
+          senderId: caller.profile.uid,
+          senderName: caller.actorName ?? '',
+          sentAt: now,
+        };
+        convUpdate.lastMessageAt = now;
+      }
+      tx.update(convRef, convUpdate);
     });
-    await batch.commit();
 
     // Audit log: send_msg / send_voice / send_sticker / forward
     {

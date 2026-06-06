@@ -100,11 +100,18 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const link = (event.notification.data && event.notification.data.link) || '/dashboard';
   event.waitUntil((async () => {
-    // Phase 13.10: user đã thấy noti → reset badge
+    // Phase 13.10: user đã thấy noti → reset badge counter local
     await setBadgeCount(0);
     await applyBadgeFromCount(0);
+    // Phase 13.15 — BUG #B5 fix: gửi message tới TẤT CẢ clients để re-apply badge từ
+    // realtime data (provider value.total). Tránh dock=0 nhưng sidebar/chuông vẫn >0.
+    // Client listen 'badge-reset-request' → re-postMessage 'set-badge' lại với total chính xác.
+    const allClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const c of allClients) {
+      try { c.postMessage({ type: 'badge-reset-request', source: 'notificationclick' }); } catch (_) {}
+    }
     // Mở/focus tab
-    const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    const wins = allClients;
     for (const w of wins) {
       if ('focus' in w && w.url.indexOf(self.location.origin) === 0) {
         w.focus();

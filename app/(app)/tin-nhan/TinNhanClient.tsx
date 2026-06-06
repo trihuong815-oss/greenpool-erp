@@ -6,7 +6,7 @@
 // Mỗi side dùng Firestore Web SDK listener riêng → tự cleanup khi unmount/switch conv.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { MessageCircle, Plus, Users, Send, Loader2, X, Search, AlertCircle, ChevronLeft, Hash, RefreshCw, Paperclip, ImageIcon, Smile, FileText, Download, CornerUpLeft, Forward, Mic, Square, Play, Pause, CheckCheck, Sticker } from 'lucide-react';
+import { MessageCircle, Plus, Users, Send, Loader2, X, Search, AlertCircle, ChevronLeft, Hash, Paperclip, ImageIcon, Smile, FileText, Download, CornerUpLeft, Forward, Mic, Square, Play, Pause, CheckCheck, Sticker } from 'lucide-react';
 import { collection, doc, orderBy, query, limit, where, Timestamp } from 'firebase/firestore';
 import { ref as storageRef, getDownloadURL } from 'firebase/storage';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
@@ -69,29 +69,16 @@ function isUnread(c: ChatConversation, currentUid: string): boolean {
 }
 
 export function TinNhanClient({ currentUserId, currentUserName, currentUserRole }: Props) {
-  void currentUserName;
-  const isAdmin = currentUserRole === 'ADMIN' || currentUserRole === 'CEO';
+  void currentUserName; void currentUserRole;
+  // Phase 13.15: bỏ isAdmin sau khi xóa button sync-channels (kênh removed Phase 13.11)
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
   const [convLoading, setConvLoading] = useState(true);
   const [activeCid, setActiveCid] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('all');
   const [showNew, setShowNew] = useState(false);
   const [showGroup, setShowGroup] = useState(false);
-  const [syncing, setSyncing] = useState(false);
+  // Phase 13.15 — BUG #C2 fix: bỏ sync-channels (API đã xóa từ Phase 13.11, button bấm sẽ 404).
   const [error, setError] = useState<string | null>(null);
-
-  async function handleSyncChannels() {
-    if (syncing) return;
-    setSyncing(true);
-    setError(null);
-    try {
-      const res = await chatApi.syncChannels();
-      const totalAdded = res.results.reduce((s, r) => s + r.added, 0);
-      const totalRemoved = res.results.reduce((s, r) => s + r.removed, 0);
-      alert(`Đã sync ${res.results.length} kênh · +${totalAdded} thành viên, -${totalRemoved}.`);
-    } catch (e: any) { setError(e.message); }
-    finally { setSyncing(false); }
-  }
 
   // ─── Conversations realtime (Phase 13.6 — auto-reconnect via subscribeRealtime) ───
   // Helper xử lý: token expire (1h), network flap, idle → tự retry với exponential backoff +
@@ -185,12 +172,7 @@ export function TinNhanClient({ currentUserId, currentUserName, currentUserRole 
         <div className="p-3 border-b border-slate-100">
           <div className="flex items-center gap-2 mb-2">
             <h2 className="font-bold text-slate-800 flex-1">Tin nhắn</h2>
-            {isAdmin && (
-              <button onClick={handleSyncChannels} disabled={syncing} title="Sync kênh (theo cơ sở/phòng)"
-                className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600 disabled:opacity-50">
-                {syncing ? <Loader2 size={18} className="animate-spin" /> : <RefreshCw size={18} />}
-              </button>
-            )}
+            {/* Phase 13.15 — bỏ button sync-channels (kênh đã removed Phase 13.11, API 404) */}
             <button onClick={() => setShowGroup(true)} title="Tạo nhóm"
               className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600">
               <Users size={18} />

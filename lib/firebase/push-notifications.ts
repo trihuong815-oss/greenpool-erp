@@ -89,19 +89,42 @@ export async function pushToUsers(uids: string[], payload: PushPayload): Promise
     const body = sanitize(payload.body).slice(0, 240);
     const link = payload.link ?? '/dashboard';
     const tag = payload.tag ?? 'green-pool';
-    const res = await messaging.sendEachForMulticast({
+    const dataPayload = {
       data: {
         title, body, link, tag,
         ...(payload.data ?? {}),
       },
       // KHÔNG có `notification` field — SW sẽ tự render qua onBackgroundMessage.
-      // KHÔNG có `webpush.notification` cho cùng lý do.
       webpush: {
         // headers Urgency=high → push tới sớm hơn (iOS thường delay nếu Urgency=normal)
         headers: { Urgency: 'high' },
       },
-      tokens: allTokens,
-    });
+    };
+
+    // Phase 13.15 (2026-06-06) — BUG #N3 fix: FCM sendEachForMulticast giới hạn 500 tokens/call.
+    // Khi push role-key tới nhiều user (ADMIN+CEO+GD+QLCS+TP, mỗi user 2-3 device) có thể vượt 500
+    // → toàn batch throw → cleanup không chạy. Chunk theo 500 + merge results.
+    const CHUNK = 500;
+    type FcmResp = Awaited<ReturnType<typeof messaging.sendEachForMulticast>>;
+    const chunks: FcmResp[] = [];
+    for (let i = 0; i < allTokens.length; i += CHUNK) {
+      const slice = allTokens.slice(i, i + CHUNK);
+      try {
+        const r = await messaging.sendEachForMulticast({ ...dataPayload, tokens: slice });
+        chunks.push(r);
+      } catch (e: any) {
+        console.warn('[push-notifications] chunk fail offset=' + i + ':', e?.message);
+        // Synthetic response: all failed for this chunk → tokens không cleanup (an toàn — sẽ retry lần push sau)
+        chunks.push({
+          successCount: 0,
+          failureCount: slice.length,
+          responses: slice.map(() => ({ success: false, error: e } as any)),
+        } as FcmResp);
+      }
+    }
+    const successCount = chunks.reduce((s, c) => s + c.successCount, 0);
+    const failureCount = chunks.reduce((s, c) => s + c.failureCount, 0);
+    const allResponses = chunks.flatMap((c) => c.responses);
 
     // Cleanup invalid tokens — map back uid for each token index
     const tokenOwners: { uid: string; token: string }[] = [];
@@ -110,7 +133,7 @@ export async function pushToUsers(uids: string[], payload: PushPayload): Promise
     }
     let cleaned = 0;
     const removeByUid: Map<string, string[]> = new Map();
-    res.responses.forEach((r, i) => {
+    allResponses.forEach((r, i) => {
       if (!r.success && r.error) {
         const code = r.error.code ?? '';
         if (code.includes('registration-token-not-registered') || code.includes('invalid-argument')) {
@@ -121,32 +144,34 @@ export async function pushToUsers(uids: string[], payload: PushPayload): Promise
         }
       }
     });
-    // Cleanup invalid tokens — remove khỏi CẢ fcmDevices (source-of-truth) lẫn fcmTokens (legacy).
-    // Phải read-modify-write vì fcmDevices là array of objects (Firestore không có arrayRemove
-    // theo predicate, chỉ remove element bằng nhau bit-by-bit — không khả dụng cho object).
+
+    // Phase 13.15 — BUG #N1 fix: cleanup invalid tokens dùng TRANSACTION để tránh race.
+    // Trước đây read-modify-write: nếu user vừa POST token mới ở giữa snapshot read + update,
+    // update sẽ ghi đè token mới → token mất. Transaction read latest snapshot trước khi write.
     if (removeByUid.size > 0) {
       await Promise.all(Array.from(removeByUid.entries()).map(async ([uid, invalidTokens]) => {
         try {
           const userRef = db.collection(COLLECTIONS.USERS).doc(uid);
-          const snap = await userRef.get();
-          if (!snap.exists) return;
-          const x = snap.data() as any;
-          const update: Record<string, any> = {};
-          const devices: any[] = Array.isArray(x?.fcmDevices) ? x.fcmDevices : [];
-          const filteredDevices = devices.filter((d) => !invalidTokens.includes(d?.token));
-          if (filteredDevices.length !== devices.length) update.fcmDevices = filteredDevices;
-          if (Array.isArray(x?.fcmTokens)) {
-            // Legacy field cleanup qua arrayRemove (atomic, an toàn race)
-            update.fcmTokens = FieldValue.arrayRemove(...invalidTokens);
-          }
-          if (Object.keys(update).length > 0) await userRef.update(update);
+          await db.runTransaction(async (tx) => {
+            const snap = await tx.get(userRef);
+            if (!snap.exists) return;
+            const x = snap.data() as any;
+            const update: Record<string, any> = {};
+            const devices: any[] = Array.isArray(x?.fcmDevices) ? x.fcmDevices : [];
+            const filteredDevices = devices.filter((d) => !invalidTokens.includes(d?.token));
+            if (filteredDevices.length !== devices.length) update.fcmDevices = filteredDevices;
+            if (Array.isArray(x?.fcmTokens)) {
+              update.fcmTokens = FieldValue.arrayRemove(...invalidTokens);
+            }
+            if (Object.keys(update).length > 0) tx.update(userRef, update);
+          });
         } catch (e: any) {
           console.warn('[push-notifications] cleanup fail uid=' + uid + ':', e?.message);
         }
       }));
     }
 
-    return { sent: res.successCount, failed: res.failureCount, tokensCleaned: cleaned };
+    return { sent: successCount, failed: failureCount, tokensCleaned: cleaned };
   } catch (e: any) {
     console.warn('[push-notifications] failed:', e?.message);
     return { sent: 0, failed: 0, tokensCleaned: 0 };

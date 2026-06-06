@@ -63,8 +63,17 @@ function kindLabel(kind: TaskDoc['kind']): string {
 export async function notifyTaskCreated(task: TaskDoc): Promise<void> {
   const link = taskLink(task.id);
   if (task.status === 'pending_approval') {
-    // Resolve approver entry: ưu tiên currentApprover (Phase 12.5+), fallback approvalRequiredFrom (legacy)
-    const entry = task.currentApprover || task.approvalRequiredFrom;
+    // Phase 13.15 — BUG #N5 fix: assignment cross-block có approvalRequiredFrom (role) nhưng
+    // có thể không có currentApprover. Resolve theo thứ tự:
+    //   1. currentApprover (Phase 12.5+ — proposal mới)
+    //   2. approvalRequiredFrom (legacy + assignment cross-block) — wrap role: prefix nếu không có
+    let entry = task.currentApprover;
+    if (!entry && task.approvalRequiredFrom) {
+      // approvalRequiredFrom là raw role code (vd "GD_KD") — convert sang format mới
+      entry = task.approvalRequiredFrom.startsWith('user:') || task.approvalRequiredFrom.startsWith('role:')
+        ? task.approvalRequiredFrom
+        : `role:${task.approvalRequiredFrom}`;
+    }
     if (!entry) {
       console.warn('[notifyTaskCreated] pending_approval nhưng không có approver entry:', task.id);
       return;
@@ -77,7 +86,7 @@ export async function notifyTaskCreated(task: TaskDoc): Promise<void> {
       data: { taskId: task.id, kind: 'task_pending_approval' },
     });
     if (res.sent === 0 && res.failed === 0) {
-      console.warn('[notifyTaskCreated] approver entry không có user active:', entry, task.id);
+      console.warn('[notifyTaskCreated] approver entry không có user active hoặc tokens trống:', entry, task.id);
     }
   } else {
     const uids = (await resolveAssigneeUids(task)).filter((u) => u !== task.createdBy);
