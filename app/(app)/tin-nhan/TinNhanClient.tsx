@@ -267,7 +267,7 @@ export function TinNhanClient({ currentUserId, currentUserName, currentUserRole 
       {/* Right pane — message thread.
           Phase 13.12 (2026-06-06): overflow-hidden + min-h-0 để header sticky, chỉ messages cuộn.
           Trước đó thiếu → content overflow vọt ra cha → toàn bộ chat cuộn (header trôi). */}
-      <div className={`${activeCid ? 'flex' : 'hidden md:flex'} flex-1 flex-col bg-slate-50 overflow-hidden min-h-0`}>
+      <div className={`${activeCid ? 'flex' : 'hidden md:flex'} flex-1 flex-col bg-slate-50 overflow-hidden min-h-0 min-w-0`}>
         {!activeConv ? (
           <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
             <div className="text-center">
@@ -691,7 +691,7 @@ function MessageThread({ conv, currentUserId, onBack }: { conv: ChatConversation
         </div>
       )}
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-2">
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 space-y-2">
         {loading && (
           <div className="text-center text-sm text-slate-400 py-6 inline-flex items-center justify-center gap-2">
             <Loader2 size={14} className="animate-spin" /> Đang tải...
@@ -779,9 +779,11 @@ function MessageThread({ conv, currentUserId, onBack }: { conv: ChatConversation
                     </div>
                   );
                 })()}
-                {/* Text bubble — chỉ hiển thị nếu có text */}
+                {/* Text bubble — chỉ hiển thị nếu có text.
+                    Phase 13.16.1: [overflow-wrap:anywhere] để URL/code dài liên tục break đúng
+                    (break-words chỉ break ở word boundary → URL không có space tràn ngang). */}
                 {m.text && (
-                  <div className={`px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap break-words ${
+                  <div className={`px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere] ${
                     isMine
                       ? 'bg-emerald-600 text-white rounded-br-sm'
                       : 'bg-white ring-1 ring-slate-200 text-slate-800 rounded-bl-sm'
@@ -906,7 +908,9 @@ function MessageThread({ conv, currentUserId, onBack }: { conv: ChatConversation
           ))}
         </div>
       )}
-      <div className="border-t border-slate-200 bg-white p-3 flex items-end gap-2 shrink-0">
+      {/* Phase 13.16.1: min-w-0 + gap-1 mobile + shrink-0 cho nút icon → tránh tràn ngang trên mobile,
+          textarea co lại được, nút Send luôn hiện. Desktop giữ gap-2 (sm:gap-2). */}
+      <div className="border-t border-slate-200 bg-white p-2 sm:p-3 flex items-end gap-1 sm:gap-2 shrink-0 min-w-0">
         <input ref={imageInputRef} type="file" accept="image/*" multiple hidden onChange={pickFiles} />
         <input ref={fileInputRef} type="file" multiple hidden onChange={pickFiles}
           accept="application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip" />
@@ -933,19 +937,19 @@ function MessageThread({ conv, currentUserId, onBack }: { conv: ChatConversation
             <button
               onClick={() => imageInputRef.current?.click()} disabled={sending}
               title="Đính ảnh"
-              className="p-2 rounded-full hover:bg-slate-100 text-slate-500 disabled:opacity-40"
+              className="shrink-0 p-2 rounded-full hover:bg-slate-100 text-slate-500 disabled:opacity-40"
             ><ImageIcon size={18} /></button>
             <button
               onClick={() => fileInputRef.current?.click()} disabled={sending}
               title="Đính file"
-              className="p-2 rounded-full hover:bg-slate-100 text-slate-500 disabled:opacity-40"
+              className="shrink-0 p-2 rounded-full hover:bg-slate-100 text-slate-500 disabled:opacity-40"
             ><Paperclip size={18} /></button>
             <button
               onClick={startRecord} disabled={sending}
               title="Ghi âm tin thoại"
-              className="p-2 rounded-full hover:bg-slate-100 text-slate-500 disabled:opacity-40"
+              className="shrink-0 p-2 rounded-full hover:bg-slate-100 text-slate-500 disabled:opacity-40"
             ><Mic size={18} /></button>
-            <div className="relative">
+            <div className="relative shrink-0">
               <button
                 onClick={() => setStickerPickerOpen((v) => !v)} disabled={sending}
                 title="Sticker"
@@ -975,15 +979,16 @@ function MessageThread({ conv, currentUserId, onBack }: { conv: ChatConversation
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
               }}
-              placeholder="Nhập tin nhắn... (Enter để gửi, Shift+Enter xuống dòng)"
+              placeholder="Nhập tin nhắn..."
               rows={1}
               maxLength={2000}
-              className="flex-1 resize-none border border-slate-300 rounded-2xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 max-h-32"
+              className="flex-1 min-w-0 resize-none border border-slate-300 rounded-2xl px-3 sm:px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 max-h-32"
             />
             <button
               onClick={send}
               disabled={sending || (!input.trim() && pendingFiles.length === 0)}
               className="p-2.5 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-40 shrink-0"
+              aria-label="Gửi tin nhắn"
             >
               {sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
             </button>
