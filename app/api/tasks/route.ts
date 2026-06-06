@@ -498,26 +498,42 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: 'Người nhận cấp trên phải là CEO/Chủ tịch' }, { status: 400 });
         }
       } else if (isCreatorTpQlcs) {
-        // Phase 12.9.3 (2026-06-05): TP/QLCS chỉ đề xuất TRONG KHỐI mình
-        const creatorBlock = getBlockOf(creatorRole);
-        const recipientBlock = getBlockOf(recipientRole);
+        // Phase 12.9.4 (anh chốt 2026-06-06): cho phép LIÊN KHỐI cho TP/QLCS.
+        // Validate role hợp lệ, không filter khối ở đây. Server sẽ tự chèn GĐ khối creator vào chain
+        // nếu recipient cross-block (xem build chain bên dưới).
         if (recipientTier === 'peer' && !TP_QLCS_PEER.has(recipientRole)) {
           return NextResponse.json({ error: 'Người nhận ngang cấp phải là TP/QLCS' }, { status: 400 });
         }
-        if (recipientTier === 'peer' && creatorBlock !== 'all' && recipientBlock !== creatorBlock) {
-          return NextResponse.json({ error: 'Đề xuất ngang cấp phải trong cùng khối với bạn' }, { status: 400 });
-        }
-        if (recipientTier === 'senior') {
-          const expectedGd = creatorBlock === 'KD' ? 'GD_KD' : creatorBlock === 'VP' ? 'GD_VP' : null;
-          if (!expectedGd || recipientRole !== expectedGd) {
-            return NextResponse.json({ error: `Người nhận cấp trên phải là ${expectedGd ?? 'GĐ Khối của bạn'}` }, { status: 400 });
-          }
+        if (recipientTier === 'senior' && recipientRole !== 'GD_KD' && recipientRole !== 'GD_VP') {
+          return NextResponse.json({ error: 'Người nhận cấp trên phải là GĐ Khối' }, { status: 400 });
         }
       } else {
         return NextResponse.json({ error: 'Vai trò không được dùng module này' }, { status: 403 });
       }
       recipientUidResolved = recipientUid;
-      approvalChain = [`user:${recipientUid}`];
+      // Phase 12.9.4 (anh chốt 2026-06-06): nếu liên khối → tự chèn GĐ khối creator vào đầu chain.
+      // Chỉ áp dụng cho TP/QLCS (creator KD/VP); GD/ADMIN không cần (đề xuất ngang cấp hoặc CEO).
+      const chain: string[] = [];
+      if (isCreatorTpQlcs) {
+        const creatorBlock = getBlockOf(creatorRole);
+        const recipientBlock = getBlockOf(recipientRole);
+        const isCrossBlockProposal = creatorBlock !== 'all'
+          && recipientBlock !== 'all'
+          && creatorBlock !== recipientBlock;
+        if (isCrossBlockProposal) {
+          // Tìm uid của GĐ khối creator để chèn vào đầu chain
+          const creatorGdRole = creatorBlock === 'KD' ? 'GD_KD' : 'GD_VP';
+          // KHÔNG tự chèn nếu recipient CHÍNH là GĐ khối creator (vô nghĩa - duyệt 2 lần cùng người)
+          if (recipientRole !== creatorGdRole) {
+            const gdSnap = await db.collection(COLLECTIONS.USERS).where('roleId', '==', creatorGdRole).limit(1).get();
+            if (!gdSnap.empty) {
+              chain.push(`user:${gdSnap.docs[0].id}`);
+            }
+          }
+        }
+      }
+      chain.push(`user:${recipientUid}`);
+      approvalChain = chain;
       status = 'pending_approval';
       currentApprover = approvalChain[0];
       approvalRequiredFrom = null;

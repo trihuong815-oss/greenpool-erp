@@ -76,56 +76,68 @@ export function TaskCreateModal(props: {
   const [recipientTier, setRecipientTier] = useState<RecipientTier>('peer');
   const [recipientUid, setRecipientUid] = useState<string>('');
 
-  // Candidates ngang cấp + cấp trên theo role creator
-  // Phase 12.9.3 (anh chốt 2026-06-05): "đề xuất của khối nào sẽ gửi cho khối đó"
-  // → TP/QLCS chỉ thấy người trong cùng khối (peer + senior).
+  // Phase 12.9.4 (anh chốt 2026-06-06): cho phép đề xuất LIÊN KHỐI cho TP/QLCS.
+  // Khi recipient cross-block → server tự chèn GĐ khối creator vào đầu chain (2 cấp duyệt).
+  // Cùng khối → 1 cấp duyệt như cũ.
   const peerCandidates = useMemo<User[]>(() => {
     if (kind !== 'proposal') return [];
     if (isCEO) return [];
-    // ADMIN: ngang cấp = GD_KD + GD_VP (cross-block by nature — ADMIN là tech, không thuộc khối)
+    // ADMIN: ngang cấp = GD_KD + GD_VP
     if (isAdmin) {
       return users
         .filter((u) => u.roleId === 'GD_KD' || u.roleId === 'GD_VP')
         .filter((u) => u.id !== currentUserId)
         .sort((a, b) => a.roleId.localeCompare(b.roleId));
     }
-    // GĐ: ngang cấp = GĐ khối còn lại (cross-block by nature)
+    // GĐ: ngang cấp = GĐ khối còn lại
     if (isGD) {
       const peerGdRole = currentUserRole === 'GD_KD' ? 'GD_VP' : 'GD_KD';
       return users.filter((u) => u.roleId === peerGdRole && u.id !== currentUserId);
     }
-    // TP/QLCS/TIBAN_TT: ngang cấp = TP + QLCS khác CÙNG KHỐI
+    // TP/QLCS/TIBAN_TT: ngang cấp = TP + QLCS CẢ 2 KHỐI (anh chốt 2026-06-06).
+    // Server tự chèn GĐ khối creator nếu recipient khác khối.
     return users
       .filter((u) => PEER_ROLES.has(u.roleId))
-      .filter((u) => (ROLE_BLOCK[u.roleId] ?? 'all') === myBlock)
       .filter((u) => u.id !== currentUserId)
-      .sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+      .sort((a, b) => {
+        // Cùng khối ưu tiên hiển thị trước
+        const blockA = ROLE_BLOCK[a.roleId] ?? 'all';
+        const blockB = ROLE_BLOCK[b.roleId] ?? 'all';
+        const sameA = blockA === myBlock ? 0 : 1;
+        const sameB = blockB === myBlock ? 0 : 1;
+        if (sameA !== sameB) return sameA - sameB;
+        return a.name.localeCompare(b.name, 'vi');
+      });
   }, [kind, users, isCEO, isAdmin, isGD, currentUserRole, currentUserId, myBlock]);
 
   const seniorCandidates = useMemo<User[]>(() => {
     if (kind !== 'proposal') return [];
     if (isCEO) return [];
-    // ADMIN: cấp trên = CEO (top; không gồm ADMIN khác — ngang cấp).
+    // ADMIN: cấp trên = CEO
     if (isAdmin) {
       return users
         .filter((u) => u.roleId === 'CEO')
         .filter((u) => u.id !== currentUserId)
         .sort((a, b) => a.name.localeCompare(b.name, 'vi'));
     }
-    // GĐ: cấp trên = CEO/Chủ tịch (KHÔNG gồm ADMIN)
+    // GĐ: cấp trên = CEO
     if (isGD) {
       return users
         .filter((u) => u.roleId === 'CEO')
         .filter((u) => u.id !== currentUserId)
         .sort((a, b) => a.name.localeCompare(b.name, 'vi'));
     }
-    // TP/QLCS/TIBAN_TT: cấp trên = GĐ KHỐI CỦA MÌNH (KD→GD_KD, VP→GD_VP)
-    const targetGd = myBlock === 'KD' ? 'GD_KD' : myBlock === 'VP' ? 'GD_VP' : null;
-    if (!targetGd) return [];
+    // TP/QLCS/TIBAN_TT: cấp trên = GĐ KHỐI cả 2 (anh chốt 2026-06-06 cho liên khối).
     return users
-      .filter((u) => u.roleId === targetGd)
+      .filter((u) => u.roleId === 'GD_KD' || u.roleId === 'GD_VP')
       .filter((u) => u.id !== currentUserId)
-      .sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+      .sort((a, b) => {
+        // GĐ cùng khối ưu tiên trước
+        const myGd = myBlock === 'KD' ? 'GD_KD' : myBlock === 'VP' ? 'GD_VP' : null;
+        if (a.roleId === myGd && b.roleId !== myGd) return -1;
+        if (b.roleId === myGd && a.roleId !== myGd) return 1;
+        return a.roleId.localeCompare(b.roleId);
+      });
   }, [kind, users, isCEO, isAdmin, isGD, currentUserId, myBlock]);
 
   // Auto chọn người đầu tiên khi đổi tab
@@ -351,7 +363,7 @@ export function TaskCreateModal(props: {
                   ? 'Ngang cấp = GĐ Kinh Doanh / Văn Phòng. Cấp trên = CEO / Chủ tịch.'
                   : isGD
                     ? 'Ngang cấp = GĐ khối còn lại. Cấp trên = CEO / Chủ tịch.'
-                    : `Ngang cấp = các TP + QLCS cùng khối ${myBlock === 'KD' ? 'Kinh Doanh' : myBlock === 'VP' ? 'Văn Phòng' : ''}. Cấp trên = ${myBlock === 'KD' ? 'GĐ Khối Kinh Doanh' : myBlock === 'VP' ? 'GĐ Khối Văn Phòng' : 'GĐ Khối'}.`}
+                    : 'Ngang cấp = các TP + QLCS (cả 2 khối). Cấp trên = GĐ Khối. Nếu liên khối → tự thêm GĐ khối bạn duyệt trước.'}
               </p>
             </Field>
           )}
