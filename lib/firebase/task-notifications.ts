@@ -4,7 +4,7 @@
 import 'server-only';
 import { getFirebaseAdminDb } from './admin';
 import { COLLECTIONS } from './collections';
-import { pushToUsers, pushToRoles } from './push-notifications';
+import { pushToUsers, pushToApproverEntries } from './push-notifications';
 
 interface TaskDoc {
   id: string;
@@ -16,6 +16,9 @@ interface TaskDoc {
   assigneeDeptId?: string | null;
   assigneeFacilityId?: string | null;
   status: string;
+  // Phase 12.5 (2026-06-03): chain entry dạng "user:UID" | "role:GD_KD" | legacy roleCode.
+  // currentApprover ưu tiên dùng khi có; approvalRequiredFrom giữ cho doc cũ (legacy role-key).
+  currentApprover?: string | null;
   approvalRequiredFrom?: string | null;
 }
 
@@ -54,18 +57,28 @@ function kindLabel(kind: TaskDoc['kind']): string {
   return kind === 'proposal' ? 'Đề xuất' : 'Giao việc';
 }
 
-/** Task vừa tạo. Push tới approver (nếu pending_approval) hoặc tới assignees (nếu pending). */
+/** Task vừa tạo. Push tới approver (nếu pending_approval) hoặc tới assignees (nếu pending).
+ *  Phase 13.14 (2026-06-06): hỗ trợ chain Phase 12.5+ — currentApprover dạng "user:UID" | "role:RC".
+ *  Trước đây chỉ check approvalRequiredFrom (null cho proposal mới) → bỏ sót noti approver. */
 export async function notifyTaskCreated(task: TaskDoc): Promise<void> {
   const link = taskLink(task.id);
-  if (task.status === 'pending_approval' && task.approvalRequiredFrom) {
-    // Push to approver (role-based)
-    await pushToRoles([task.approvalRequiredFrom], {
+  if (task.status === 'pending_approval') {
+    // Resolve approver entry: ưu tiên currentApprover (Phase 12.5+), fallback approvalRequiredFrom (legacy)
+    const entry = task.currentApprover || task.approvalRequiredFrom;
+    if (!entry) {
+      console.warn('[notifyTaskCreated] pending_approval nhưng không có approver entry:', task.id);
+      return;
+    }
+    const res = await pushToApproverEntries([entry], {
       title: `📥 ${kindLabel(task.kind)} chờ duyệt`,
       body: `"${task.title}" — từ ${task.createdByName ?? 'người tạo'}`,
       link,
       tag: `task-${task.id}`,
       data: { taskId: task.id, kind: 'task_pending_approval' },
-    }).catch(() => {});
+    });
+    if (res.sent === 0 && res.failed === 0) {
+      console.warn('[notifyTaskCreated] approver entry không có user active:', entry, task.id);
+    }
   } else {
     const uids = (await resolveAssigneeUids(task)).filter((u) => u !== task.createdBy);
     if (uids.length === 0) return;
@@ -75,7 +88,7 @@ export async function notifyTaskCreated(task: TaskDoc): Promise<void> {
       link,
       tag: `task-${task.id}`,
       data: { taskId: task.id, kind: 'task_assigned' },
-    }).catch(() => {});
+    });
   }
 }
 
@@ -86,39 +99,43 @@ export async function notifyTaskCreated(task: TaskDoc): Promise<void> {
  */
 export async function notifyTaskApproved(task: TaskDoc, approverName: string): Promise<void> {
   const link = taskLink(task.id);
-  const isStillPending = task.status === 'pending_approval' && task.approvalRequiredFrom;
+  // Phase 13.14: hỗ trợ chain Phase 12.5+ — chấp nhận cả currentApprover (user:UID/role:RC) lẫn legacy.
+  const nextEntry = task.currentApprover || task.approvalRequiredFrom;
+  const isStillPending = task.status === 'pending_approval' && nextEntry;
   if (isStillPending) {
-    // Push cấp duyệt tiếp theo
-    await pushToRoles([task.approvalRequiredFrom as string], {
+    // Push cấp duyệt tiếp theo (parse user:/role:/legacy)
+    await pushToApproverEntries([nextEntry as string], {
       title: `📥 ${kindLabel(task.kind)} chờ bạn duyệt`,
       body: `"${task.title}" — ${approverName} vừa duyệt, đến lượt bạn`,
       link,
       tag: `task-${task.id}`,
       data: { taskId: task.id, kind: 'task_pending_next_approval' },
-    }).catch(() => {});
+    });
     // Push creator để biết tiến độ
     if (task.createdBy) {
+      const nextLabel = nextEntry.startsWith('user:') ? 'cấp tiếp' : nextEntry.replace(/^role:/, '');
       await pushToUsers([task.createdBy], {
         title: `✓ ${approverName} đã duyệt — chuyển cấp tiếp`,
-        body: `"${task.title}" đang chờ ${task.approvalRequiredFrom} duyệt`,
+        body: `"${task.title}" đang chờ ${nextLabel} duyệt`,
         link,
         tag: `task-${task.id}`,
         data: { taskId: task.id, kind: 'task_approved_step' },
-      }).catch(() => {});
+      });
     }
     return;
   }
-  // Hết chain → đến recipient
+  // Hết chain → đến recipient. Với proposal không có assignee → ít nhất push creator.
   const uids = await resolveAssigneeUids(task);
   uids.push(task.createdBy);
-  const filtered = Array.from(new Set(uids));
+  const filtered = Array.from(new Set(uids.filter(Boolean)));
+  if (filtered.length === 0) return;
   await pushToUsers(filtered, {
     title: `✅ ${kindLabel(task.kind)} được duyệt`,
     body: `"${task.title}" — ${approverName} đã duyệt`,
     link,
     tag: `task-${task.id}`,
     data: { taskId: task.id, kind: 'task_approved' },
-  }).catch(() => {});
+  });
 }
 
 /** Task bị từ chối — push creator + assignees (assignees cần biết để dừng làm việc). */

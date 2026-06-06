@@ -109,15 +109,21 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
       actorName: caller.actorName, actorRole: caller.actorRole, source: 'api',
     });
 
-    await (await import('@/lib/firebase/task-notifications')).notifyTaskApproved({
-      id: taskId, kind: data.kind, title: data.title,
-      createdBy: data.createdBy, createdByName: data.createdByName,
-      assigneeUserIds: data.assigneeUserIds ?? [],
-      assigneeDeptId: data.assigneeDeptId ?? null,
-      assigneeFacilityId: data.assigneeFacilityId ?? null,
-      status: (update.status ?? 'pending') as string,
-      approvalRequiredFrom: (update.approvalRequiredFrom ?? null) as string | null,
-    }, caller.actorName);
+    // Phase 13.14: truyền currentApprover mới sau khi update (= next chain entry hoặc null nếu hết chain)
+    try {
+      await (await import('@/lib/firebase/task-notifications')).notifyTaskApproved({
+        id: taskId, kind: data.kind, title: data.title,
+        createdBy: data.createdBy, createdByName: data.createdByName,
+        assigneeUserIds: data.assigneeUserIds ?? [],
+        assigneeDeptId: data.assigneeDeptId ?? null,
+        assigneeFacilityId: data.assigneeFacilityId ?? null,
+        status: (update.status ?? 'pending') as string,
+        currentApprover: (update.currentApprover ?? null) as string | null,
+        approvalRequiredFrom: (update.approvalRequiredFrom ?? null) as string | null,
+      }, caller.actorName);
+    } catch (e: any) {
+      console.warn('[task approve] notifyTaskApproved fail:', e?.message);
+    }
 
     return NextResponse.json({ ok: true, nextApprover, status: update.status });
   } catch (e) {

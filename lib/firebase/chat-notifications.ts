@@ -27,11 +27,19 @@ export async function notifyNewMessage(args: NotifyArgs): Promise<void> {
   } else {
     title = `💬 ${args.senderName}`;
   }
-  await pushToUsers(args.recipients, {
-    title,
-    body: args.text,
-    link: `/tin-nhan?cid=${encodeURIComponent(args.conversationId)}`,
-    tag: `chat-${args.conversationId}`,
-    data: { kind: 'chat_message', conversationId: args.conversationId },
-  }).catch(() => {});
+  // Phase 13.14: log error rõ ràng thay vì silent catch (giúp debug noti fail).
+  try {
+    const res = await pushToUsers(args.recipients, {
+      title,
+      body: args.text,
+      link: `/tin-nhan?cid=${encodeURIComponent(args.conversationId)}`,
+      tag: `chat-${args.conversationId}`,
+      data: { kind: 'chat_message', conversationId: args.conversationId },
+    });
+    if (res.sent === 0 && args.recipients.length > 0) {
+      console.warn('[chat-noti] 0 push sent cho', args.recipients.length, 'recipient (tokens trống hoặc invalid)');
+    }
+  } catch (e: any) {
+    console.error('[chat-noti] push fail:', e?.message ?? 'unknown', '| recipients=', args.recipients.length);
+  }
 }

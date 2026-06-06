@@ -657,17 +657,23 @@ export async function POST(req: NextRequest) {
       source: 'api',
     });
 
-    // Fire-and-forget push notification
-    await (await import('@/lib/firebase/task-notifications')).notifyTaskCreated({
-      id: ref.id, kind, title,
-      createdBy: caller.profile.uid,
-      createdByName: caller.actorName,
-      assigneeUserIds,
-      assigneeDeptId,
-      assigneeFacilityId,
-      status,
-      approvalRequiredFrom,
-    });
+    // Fire-and-forget push notification (await để Cloud Run không terminate giữa chừng)
+    // Phase 13.14: truyền currentApprover (chain Phase 12.5+: "user:UID" / "role:RC").
+    try {
+      await (await import('@/lib/firebase/task-notifications')).notifyTaskCreated({
+        id: ref.id, kind, title,
+        createdBy: caller.profile.uid,
+        createdByName: caller.actorName,
+        assigneeUserIds,
+        assigneeDeptId,
+        assigneeFacilityId,
+        status,
+        currentApprover,
+        approvalRequiredFrom,
+      });
+    } catch (e: any) {
+      console.warn('[tasks POST] notifyTaskCreated fail:', e?.message);
+    }
 
     return NextResponse.json({ id: ref.id });
   } catch (e: any) {

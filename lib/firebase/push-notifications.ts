@@ -158,6 +158,41 @@ export async function pushToUser(uid: string, payload: PushPayload) {
   return pushToUsers([uid], payload);
 }
 
+/** Phase 13.14 (2026-06-06): push tới approver entry — hỗ trợ 3 format chain Phase 12.5+:
+ *   - "user:UID"   → push 1 user cụ thể
+ *   - "role:RC"    → push tất cả user có role đó
+ *   - "RC" (legacy) → tương đương role:RC
+ *  Hoặc array entry → push tất cả (filter trùng UID).
+ */
+export async function pushToApproverEntries(entries: string[], payload: PushPayload): Promise<{ sent: number; failed: number; tokensCleaned: number }> {
+  const uids = new Set<string>();
+  const roles = new Set<string>();
+  for (const e of entries) {
+    if (!e || typeof e !== 'string') continue;
+    if (e.startsWith('user:')) uids.add(e.slice(5));
+    else if (e.startsWith('role:')) roles.add(e.slice(5));
+    else roles.add(e); // legacy raw role
+  }
+  let totalSent = 0, totalFailed = 0, totalCleaned = 0;
+  // Resolve role → uids (1 query, in clause max 30)
+  if (roles.size > 0) {
+    try {
+      const db = getFirebaseAdminDb();
+      const snap = await db.collection(COLLECTIONS.USERS)
+        .where('status', '==', 'active')
+        .where('roleId', 'in', Array.from(roles).slice(0, 30))
+        .get();
+      snap.docs.forEach((d) => uids.add(d.id));
+    } catch (e: any) {
+      console.warn('[pushToApproverEntries] role resolve:', e?.message);
+    }
+  }
+  if (uids.size === 0) return { sent: 0, failed: 0, tokensCleaned: 0 };
+  const result = await pushToUsers(Array.from(uids), payload);
+  totalSent += result.sent; totalFailed += result.failed; totalCleaned += result.tokensCleaned;
+  return { sent: totalSent, failed: totalFailed, tokensCleaned: totalCleaned };
+}
+
 /** Push tới các user theo role (vd. GD_KD, GD_VP). Dùng cho approval / supervisor notifications. */
 export async function pushToRoles(roleCodes: string[], payload: PushPayload): Promise<{ sent: number; failed: number; tokensCleaned: number }> {
   if (roleCodes.length === 0) return { sent: 0, failed: 0, tokensCleaned: 0 };
