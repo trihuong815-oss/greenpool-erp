@@ -11,7 +11,10 @@ export default async function TinNhanPage() {
   return (
     <>
       <AppTopBar title="Tin nhắn" subtitle="Nhắn 1-1 và nhóm · realtime" icon="home" />
-      <div className="flex-1 overflow-hidden bg-slate-50">
+      {/* Phase 13.16 (2026-06-06): thêm min-h-0 + flex để h-full của TinNhanClient outer
+          tính height đúng trên mobile. Trước đây flex-1 mặc định min-height: auto → child
+          h-full expand theo content → header conv + composer cùng scroll theo messages. */}
+      <div className="flex-1 min-h-0 overflow-hidden bg-slate-50 flex">
         <TinNhanClient
           currentUserId={profile.id}
           currentUserName={profile.displayName ?? profile.email ?? ''}

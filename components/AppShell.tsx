@@ -37,7 +37,10 @@ export function AppShell({ userName, userRole, roleCode, menuOverrides, children
   return (
     <NotiCountsProvider>
     <MobileNavContext.Provider value={{ open, setOpen }}>
-      <div className="h-screen flex overflow-hidden">
+      {/* Phase 13.16 (2026-06-06): h-[100dvh] (dynamic viewport height) thay h-screen.
+          iOS Safari URL bar ẩn/hiện làm 100vh shift → header trôi trên mobile tab (không phải PWA).
+          dvh tự co theo viewport thật. Desktop không bị ảnh hưởng (dvh === vh khi không có browser chrome). */}
+      <div className="h-[100dvh] flex overflow-hidden">
         {/* Desktop sidebar — fixed bên trái */}
         <div className="hidden md:flex">
           <Sidebar userName={userName} userRole={userRole} roleCode={roleCode} menuOverrides={menuOverrides} />

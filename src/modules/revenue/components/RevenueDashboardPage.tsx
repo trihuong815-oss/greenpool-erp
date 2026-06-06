@@ -1970,13 +1970,17 @@ export function RevenueDashboardPage({ viewer, realBranches, initialYear, staleD
     : undefined;
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-900">
+    // Phase 13.16 (2026-06-06): bỏ <main min-h-screen> (nested DOM invalid + không scroll
+    // được khi AppShell đã h-[100dvh] overflow-hidden). Dùng pattern chuẩn: AppTopBar sticky +
+    // <div flex-1 overflow-y-auto> wrap body để scroll bên trong.
+    <>
       <AppTopBar
         title="Doanh số"
         subtitle="Mục tiêu & thực đạt · 5 cơ sở"
         icon="barChart"
       />
 
+      <div className="flex-1 overflow-y-auto bg-slate-50 text-slate-900">
       {/* Body */}
       <div className="mx-auto max-w-7xl px-5 py-6">
         {/* Banner cảnh báo: chênh lệch doanh số per-Sale vs per-Gói > 24h chưa xử lý — chỉ admin thấy */}
@@ -2188,7 +2192,8 @@ export function RevenueDashboardPage({ viewer, realBranches, initialYear, staleD
           onClose={() => setShowTargetModal(false)}
         />
       )}
-    </main>
+      </div>
+    </>
   );
 }
 

@@ -691,7 +691,7 @@ function MessageThread({ conv, currentUserId, onBack }: { conv: ChatConversation
         </div>
       )}
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-2">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-2">
         {loading && (
           <div className="text-center text-sm text-slate-400 py-6 inline-flex items-center justify-center gap-2">
             <Loader2 size={14} className="animate-spin" /> Đang tải...
