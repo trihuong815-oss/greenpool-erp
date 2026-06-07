@@ -41,9 +41,18 @@ export async function proxy(req: NextRequest) {
         } catch { /* malformed origin */ }
       }
       const normalizedHost = host?.toLowerCase() ?? null;
+      // Phase HOTFIX (2026-06-07): PWA installed qua URL alias Vercel (vd
+      // greenpool-erp-trihuong815-6255s-projects.vercel.app) → origin gửi là
+      // alias, Vercel route về canonical → host khác origin → mismatch.
+      // Trust mọi subdomain *.vercel.app: chỉ project owner mới host được.
+      // CSRF defense vẫn nguyên qua SameSite=lax cookie (layer 1).
+      const isVercelSub = (h: string | null) => !!h && h.endsWith('.vercel.app');
       const isAllowed = isDev
         || !origin
-        || (normalizedHost !== null && originHost === normalizedHost);
+        || (originHost !== null && (
+          originHost === normalizedHost
+          || (isVercelSub(originHost) && isVercelSub(normalizedHost))
+        ));
       if (!isAllowed) {
         console.warn('[proxy] origin mismatch — origin=' + origin + ' host=' + host);
         return NextResponse.json({ error: 'Origin không hợp lệ' }, { status: 403 });
