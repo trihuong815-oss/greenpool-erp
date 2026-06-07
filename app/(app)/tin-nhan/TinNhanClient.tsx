@@ -166,7 +166,7 @@ export function TinNhanClient({ currentUserId, currentUserName, currentUserRole 
   }, [convLoading, activeCid, conversations]);
 
   return (
-    <div className="h-full flex overflow-hidden min-h-0">
+    <div className="h-full w-full flex overflow-hidden min-h-0 min-w-0">
       {/* Left pane — conversation list. Mobile: ẩn khi có activeConv. */}
       <div className={`${activeCid ? 'hidden md:flex' : 'flex'} w-full md:w-80 lg:w-96 border-r border-slate-200 bg-white flex-col overflow-hidden min-h-0`}>
         <div className="p-3 border-b border-slate-100">
@@ -717,16 +717,18 @@ function MessageThread({ conv, currentUserId, onBack }: { conv: ChatConversation
             }
           }
           return (
-            <div key={m.id} id={`msg-${m.id}`} className={`group flex ${isMine ? 'justify-end' : 'justify-start'} relative`}>
-              <div className="max-w-[75%] flex flex-col gap-1 items-stretch">
+            <div key={m.id} id={`msg-${m.id}`} className={`group flex ${isMine ? 'justify-end' : 'justify-start'} relative min-w-0`}>
+              {/* Phase 13.16.2: mobile 85% (rộng hơn để có khoảng thở), desktop giữ 75%.
+                  min-w-0 cho bubble outer + children → text/url/file truncate đúng, không tràn. */}
+              <div className="max-w-[85%] sm:max-w-[75%] min-w-0 flex flex-col gap-1 items-stretch">
                 {showSender && (
                   <div className="text-[10px] text-slate-500 mb-0.5 ml-3">{m.senderName}</div>
                 )}
-                {/* Forwarded badge — hiện trên cùng nếu tin là forward */}
+                {/* Forwarded badge — hiện trên cùng nếu tin là forward. truncate trên mobile để không tràn. */}
                 {m.forwardedFrom && (
-                  <div className={`${isMine ? 'self-end' : 'self-start'} text-[10px] text-slate-500 italic inline-flex items-center gap-1`}>
-                    <Forward size={10} /> Chuyển tiếp từ {m.forwardedFrom.senderName}
-                    {m.forwardedFrom.fromConversationName ? ` · ${m.forwardedFrom.fromConversationName}` : ''}
+                  <div className={`${isMine ? 'self-end' : 'self-start'} max-w-full text-[10px] text-slate-500 italic flex items-center gap-1 truncate`}>
+                    <Forward size={10} className="shrink-0" />
+                    <span className="truncate">Chuyển tiếp từ {m.forwardedFrom.senderName}{m.forwardedFrom.fromConversationName ? ` · ${m.forwardedFrom.fromConversationName}` : ''}</span>
                   </div>
                 )}
                 {/* Quote tin được reply (snapshot) — click để scroll tới tin gốc */}
@@ -1312,7 +1314,9 @@ function ChatVoice({ attachment, isMine }: { attachment: ChatAttachment; isMine:
   }
 
   return (
-    <div className={`flex items-center gap-2 px-3 py-2 rounded-2xl min-w-[200px] ${
+    // Phase 13.16.2: bỏ min-w-[200px] cứng → mobile hẹp bubble không bị đẩy ra ngoài.
+    // w-full để chiếm hết bubble parent (đã max-w-[85%] sm:max-w-[75%]).
+    <div className={`flex items-center gap-2 px-3 py-2 rounded-2xl w-full min-w-0 ${
       isMine ? 'bg-emerald-600 text-white' : 'bg-white text-slate-800 ring-1 ring-slate-200'
     }`}>
       <button onClick={toggle}
