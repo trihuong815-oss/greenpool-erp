@@ -199,6 +199,20 @@ export async function pushToApproverEntries(entries: string[], payload: PushPayl
         .where('roleId', 'in', Array.from(roles).slice(0, 30))
         .get();
       snap.docs.forEach((d) => uids.add(d.id));
+
+      // Phase Noti-Audit (2026-06-07): GD_KD slot trống → fallback ADMIN
+      // (Phase 12.9.5: ADMIN đảm nhiệm GĐKD thực tế). Nếu request có role
+      // GD_KD mà không có user nào → query ADMIN bù.
+      if (roles.has('GD_KD') && !roles.has('ADMIN')) {
+        const hasGdKd = snap.docs.some((d) => d.data()?.roleId === 'GD_KD');
+        if (!hasGdKd) {
+          const adminSnap = await db.collection(COLLECTIONS.USERS)
+            .where('status', '==', 'active')
+            .where('roleId', '==', 'ADMIN')
+            .get();
+          adminSnap.docs.forEach((d) => uids.add(d.id));
+        }
+      }
     } catch (e: any) {
       console.warn('[pushToApproverEntries] role resolve:', e?.message);
     }
@@ -218,8 +232,22 @@ export async function pushToRoles(roleCodes: string[], payload: PushPayload): Pr
       .where('status', '==', 'active')
       .where('roleId', 'in', roleCodes.slice(0, 30))  // Firestore in limit 30
       .get();
-    const uids = snap.docs.map((d) => d.id);
-    return pushToUsers(uids, payload);
+    const uids = new Set(snap.docs.map((d) => d.id));
+
+    // Phase Noti-Audit (2026-06-07): GD_KD slot trống → fallback ADMIN
+    // (Phase 12.9.5: ADMIN đảm nhiệm GĐKD thực tế).
+    if (roleCodes.includes('GD_KD') && !roleCodes.includes('ADMIN')) {
+      const hasGdKd = snap.docs.some((d) => d.data()?.roleId === 'GD_KD');
+      if (!hasGdKd) {
+        const adminSnap = await db.collection(COLLECTIONS.USERS)
+          .where('status', '==', 'active')
+          .where('roleId', '==', 'ADMIN')
+          .get();
+        adminSnap.docs.forEach((d) => uids.add(d.id));
+      }
+    }
+
+    return pushToUsers(Array.from(uids), payload);
   } catch (e: any) {
     console.warn('[push-notifications] pushToRoles failed:', e?.message);
     return { sent: 0, failed: 0, tokensCleaned: 0 };
