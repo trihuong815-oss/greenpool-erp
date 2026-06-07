@@ -110,7 +110,7 @@ export function Sidebar({ userName, userRole, roleCode, menuOverrides }: Sidebar
   const initials = userName.split(' ').slice(-2).map(w => w[0]).join('').toUpperCase();
 
   return (
-    <aside className="md:sticky md:top-0 flex h-screen w-72 md:w-64 flex-col border-r border-slate-200 bg-white shadow-xl md:shadow-none">
+    <aside className="md:sticky md:top-0 flex h-screen w-[85vw] max-w-[300px] md:w-64 flex-col border-r border-slate-200 bg-white shadow-xl md:shadow-none">
       {/* Brand header */}
       <div className="border-b border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-cyan-50 px-4 py-5 relative">
         {/* Close button — chỉ hiển thị trên mobile khi sidebar ở drawer mode */}
@@ -185,7 +185,7 @@ export function Sidebar({ userName, userRole, roleCode, menuOverrides }: Sidebar
       </nav>
 
       {/* User footer — emerald brand đồng bộ với Green Pool System */}
-      <div className="border-t border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-cyan-50 px-3 py-3">
+      <div className="border-t border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-cyan-50 px-3 py-3 pb-[max(env(safe-area-inset-bottom),0.75rem)]">
         <div className="flex items-center gap-2.5 rounded-lg bg-white p-2 ring-1 ring-emerald-100 shadow-sm">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-emerald-600 to-teal-700 text-xs font-bold text-white shadow-sm">
             {initials}

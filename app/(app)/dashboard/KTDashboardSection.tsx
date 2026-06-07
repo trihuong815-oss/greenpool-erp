@@ -272,8 +272,9 @@ function LineChart({ series, active }: {
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((p) => p * niceMax);
 
   return (
-    <div className="w-full overflow-x-auto">
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full max-w-full" style={{ minWidth: 480 }}>
+    <div className="w-full">
+      {/* Phase 13.16.4: bỏ minWidth: 480 + overflow-x-auto cha → SVG viewBox tự co theo viewport mobile */}
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full max-w-full">
         {/* Grid + Y axis */}
         {ticks.map((t, i) => (
           <g key={i}>

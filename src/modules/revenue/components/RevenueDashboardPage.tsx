@@ -1999,15 +1999,15 @@ export function RevenueDashboardPage({ viewer, realBranches, initialYear, staleD
                   {staleDiscrepancies.map((d) => {
                     const hoursOld = Math.floor((Date.now() - new Date(d.createdAt).getTime()) / 3600_000);
                     return (
-                      <li key={`${d.branchId}_${d.year}_${d.month}`} className="text-xs flex items-center gap-2 bg-white/60 rounded px-3 py-2 border border-rose-200">
-                        <span className="font-bold text-rose-900 min-w-[180px]">{d.branchName}</span>
+                      <li key={`${d.branchId}_${d.year}_${d.month}`} className="text-xs flex flex-wrap items-center gap-x-2 gap-y-1 bg-white/60 rounded px-3 py-2 border border-rose-200">
+                        <span className="font-bold text-rose-900 sm:min-w-[180px]">{d.branchName}</span>
                         <span className="text-slate-600">T{d.month}/{d.year}</span>
-                        <span className="text-slate-500">
+                        <span className="text-slate-500 break-words">
                           per-Sale: <strong className="text-emerald-700">{d.perSaleRev.toLocaleString('vi-VN')}₫</strong>
                           {' · '}per-Gói: <strong className="text-blue-700">{d.perPkgRev.toLocaleString('vi-VN')}₫</strong>
                           {' · '}chênh <strong className="text-rose-700">{d.diff.toLocaleString('vi-VN')}₫</strong>
                         </span>
-                        <span className="ml-auto text-rose-600 font-semibold">+{hoursOld}h</span>
+                        <span className="sm:ml-auto text-rose-600 font-semibold">+{hoursOld}h</span>
                         <a href={`/doanh-so/nhap?branchId=${d.branchId}&year=${d.year}&month=${d.month}`}
                            className="text-rose-700 hover:text-rose-900 underline font-semibold">
                           → Mở

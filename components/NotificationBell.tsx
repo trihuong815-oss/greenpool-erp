@@ -88,11 +88,11 @@ export function NotificationBell() {
       <button
         onClick={() => setOpen((v) => !v)}
         title={total > 0 ? `${total} thông báo chưa xử lý` : 'Thông báo'}
-        className="relative rounded-lg p-2 text-emerald-100 hover:text-white hover:bg-white/10 transition"
+        className="relative rounded-lg p-2 text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 transition"
       >
         <Bell size={18} />
         {total > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center px-1 ring-2 ring-emerald-700 shadow-sm">
+          <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center px-1 ring-2 ring-white shadow-sm">
             {total > 99 ? '99+' : total}
           </span>
         )}

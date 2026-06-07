@@ -291,7 +291,8 @@ export function GiaoViecClient(props: Props) {
 
       {/* ===== TABS + TOOLBAR ===== */}
       <section ref={tabSectionRef} className="rounded-xl border border-slate-200 bg-white shadow-sm scroll-mt-20">
-        <div className="flex items-stretch border-b border-slate-200">
+        {/* Phase 13.16.4: tabs scroll-x mobile (4 tab tràn 360px), action button stack dưới */}
+        <div className="flex items-stretch border-b border-slate-200 overflow-x-auto sm:overflow-visible">
           <TabButton active={tab === 'received'} onClick={() => jumpToTab('received')} icon={Inbox} label="Nhiệm vụ của tôi" />
           {!isCEO && <TabButton active={tab === 'proposal'} onClick={() => jumpToTab('proposal')} icon={Send} label="Đề xuất" />}
           {showAssignmentTab && <TabButton active={tab === 'assignment'} onClick={() => jumpToTab('assignment')} icon={Send} label="Giao việc" />}
@@ -302,9 +303,9 @@ export function GiaoViecClient(props: Props) {
               badge={approvalCount > 0 ? approvalCount : undefined}
             />
           )}
-          <div className="flex-1" />
+          <div className="hidden sm:block flex-1" />
           {/* View toggle */}
-          <div className="flex items-center gap-1 p-2">
+          <div className="hidden sm:flex items-center gap-1 p-2">
             <button
               onClick={() => setView('list')}
               className={`p-2 rounded-lg transition ${view === 'list' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-400 hover:bg-slate-50'}`}
@@ -323,7 +324,7 @@ export function GiaoViecClient(props: Props) {
           {canCreateProposal && tab === 'proposal' && (
             <button
               onClick={() => setShowCreate('proposal')}
-              className="my-2 mr-2 inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 shadow-sm"
+              className="hidden sm:inline-flex my-2 mr-2 items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 shadow-sm"
             >
               <Plus size={14} /> Tạo đề xuất
             </button>
@@ -331,21 +332,43 @@ export function GiaoViecClient(props: Props) {
           {canCreateAssignment && tab === 'assignment' && (
             <button
               onClick={() => setShowCreate('assignment')}
-              className="my-2 mr-2 inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 shadow-sm"
+              className="hidden sm:inline-flex my-2 mr-2 items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 shadow-sm"
             >
               <Plus size={14} /> Tạo giao việc
             </button>
           )}
         </div>
 
-        {/* Filter bar */}
-        <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-slate-100 bg-slate-50/40">
-          <div className="flex items-center gap-1 text-xs">
+        {/* Mobile-only action button row (stacked dưới tabs) */}
+        {((canCreateProposal && tab === 'proposal') || (canCreateAssignment && tab === 'assignment')) && (
+          <div className="sm:hidden px-3 py-2 border-b border-slate-100 flex">
+            {canCreateProposal && tab === 'proposal' && (
+              <button
+                onClick={() => setShowCreate('proposal')}
+                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-emerald-600 text-white text-sm font-semibold rounded-lg active:bg-emerald-700 shadow-sm"
+              >
+                <Plus size={14} /> Tạo đề xuất
+              </button>
+            )}
+            {canCreateAssignment && tab === 'assignment' && (
+              <button
+                onClick={() => setShowCreate('assignment')}
+                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-emerald-600 text-white text-sm font-semibold rounded-lg active:bg-emerald-700 shadow-sm"
+              >
+                <Plus size={14} /> Tạo giao việc
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Filter bar — Phase 13.16.4: stack mobile, pills scroll-x */}
+        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 px-3 sm:px-4 py-3 border-b border-slate-100 bg-slate-50/40">
+          <div className="flex items-center gap-1 text-xs overflow-x-auto whitespace-nowrap sm:overflow-visible -mx-3 px-3 sm:mx-0 sm:px-0">
             {(['all', 'pending_approval', 'pending', 'in_progress', 'done', 'rejected', 'cancelled'] as const).map((s) => (
               <button
                 key={s}
                 onClick={() => setStatusFilter(s)}
-                className={`px-3 py-1 rounded-full font-medium ring-1 transition ${
+                className={`shrink-0 px-3 py-1 rounded-full font-medium ring-1 transition ${
                   statusFilter === s
                     ? 'bg-emerald-600 text-white ring-emerald-600'
                     : 'bg-white text-slate-600 ring-slate-200 hover:ring-emerald-300 hover:text-emerald-700'
@@ -355,16 +378,16 @@ export function GiaoViecClient(props: Props) {
               </button>
             ))}
           </div>
-          <div className="flex-1" />
+          <div className="hidden sm:block flex-1" />
           <div className="flex items-center gap-2 px-2 py-1 rounded-lg ring-1 ring-slate-200 bg-white">
-            <Search size={14} className="text-slate-400" />
+            <Search size={14} className="text-slate-400 shrink-0" />
             <input
               value={keyword} onChange={(e) => setKeyword(e.target.value)}
               placeholder="Tìm tiêu đề / mô tả…"
-              className="w-48 text-sm bg-transparent outline-none"
+              className="w-full sm:w-48 text-sm bg-transparent outline-none min-w-0"
             />
             {keyword && (
-              <button onClick={() => setKeyword('')} className="text-slate-400 hover:text-slate-700">
+              <button onClick={() => setKeyword('')} className="text-slate-400 hover:text-slate-700 shrink-0">
                 <X size={12} />
               </button>
             )}

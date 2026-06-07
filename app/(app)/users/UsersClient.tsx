@@ -266,8 +266,9 @@ export function UsersClient({ currentUserId, currentUserRole, isAdminUser, facil
         <StatCard label="Đã tắt" value={stats.inactive} cls="bg-slate-100 text-slate-500" />
       </div>
       <div className="card">
-        <div className="flex flex-wrap gap-3 items-end">
-          <label className="block flex-1 min-w-[200px]">
+        {/* Phase 13.16.4: mobile grid 2x2 cho select, search + button full-width riêng */}
+        <div className="space-y-3">
+          <label className="block">
             <span className="block text-xs font-semibold text-slate-600 mb-1">Tìm kiếm</span>
             <div className="relative">
               <Search size={14} className="absolute left-2 top-2.5 text-slate-400" />
@@ -276,41 +277,43 @@ export function UsersClient({ currentUserId, currentUserRole, isAdminUser, facil
                 className="w-full pl-7 pr-3 py-1.5 border border-slate-200 rounded text-sm focus:outline-none focus:border-slate-400" />
             </div>
           </label>
-          <label className="block">
-            <span className="block text-xs font-semibold text-slate-600 mb-1">Vai trò</span>
-            <select value={filterRole} onChange={e => setFilterRole(e.target.value)}
-              className="px-2 py-1.5 border border-slate-200 rounded text-sm">
-              <option value="all">Tất cả</option>
-              {roles.map(r => <option key={r.code} value={r.code}>{r.name}</option>)}
-            </select>
-          </label>
-          <label className="block">
-            <span className="block text-xs font-semibold text-slate-600 mb-1">Cơ sở</span>
-            <select value={filterFacility} onChange={e => setFilterFacility(e.target.value)}
-              className="px-2 py-1.5 border border-slate-200 rounded text-sm">
-              <option value="all">Tất cả</option>
-              {facilities.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-            </select>
-          </label>
-          <label className="block">
-            <span className="block text-xs font-semibold text-slate-600 mb-1">Phòng ban</span>
-            <select value={filterDept} onChange={e => setFilterDept(e.target.value)}
-              className="px-2 py-1.5 border border-slate-200 rounded text-sm">
-              <option value="all">Tất cả</option>
-              {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-            </select>
-          </label>
-          <label className="block">
-            <span className="block text-xs font-semibold text-slate-600 mb-1">Trạng thái</span>
-            <select value={filterActive} onChange={e => setFilterActive(e.target.value as typeof filterActive)}
-              className="px-2 py-1.5 border border-slate-200 rounded text-sm">
-              <option value="all">Tất cả</option>
-              <option value="active">Đang hoạt động</option>
-              <option value="inactive">Đã tắt</option>
-            </select>
-          </label>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3">
+            <label className="block min-w-0">
+              <span className="block text-xs font-semibold text-slate-600 mb-1">Vai trò</span>
+              <select value={filterRole} onChange={e => setFilterRole(e.target.value)}
+                className="w-full px-2 py-1.5 border border-slate-200 rounded text-sm">
+                <option value="all">Tất cả</option>
+                {roles.map(r => <option key={r.code} value={r.code}>{r.name}</option>)}
+              </select>
+            </label>
+            <label className="block min-w-0">
+              <span className="block text-xs font-semibold text-slate-600 mb-1">Cơ sở</span>
+              <select value={filterFacility} onChange={e => setFilterFacility(e.target.value)}
+                className="w-full px-2 py-1.5 border border-slate-200 rounded text-sm">
+                <option value="all">Tất cả</option>
+                {facilities.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+              </select>
+            </label>
+            <label className="block min-w-0">
+              <span className="block text-xs font-semibold text-slate-600 mb-1">Phòng ban</span>
+              <select value={filterDept} onChange={e => setFilterDept(e.target.value)}
+                className="w-full px-2 py-1.5 border border-slate-200 rounded text-sm">
+                <option value="all">Tất cả</option>
+                {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </select>
+            </label>
+            <label className="block min-w-0">
+              <span className="block text-xs font-semibold text-slate-600 mb-1">Trạng thái</span>
+              <select value={filterActive} onChange={e => setFilterActive(e.target.value as typeof filterActive)}
+                className="w-full px-2 py-1.5 border border-slate-200 rounded text-sm">
+                <option value="all">Tất cả</option>
+                <option value="active">Đang hoạt động</option>
+                <option value="inactive">Đã tắt</option>
+              </select>
+            </label>
+          </div>
           <button onClick={() => setShowCreate(true)}
-            className="ml-auto inline-flex items-center gap-2 px-4 py-2 bg-slate-800 text-white text-sm rounded hover:bg-slate-700">
+            className="w-full sm:w-auto sm:ml-auto inline-flex items-center justify-center gap-2 px-4 py-2 bg-slate-800 text-white text-sm rounded hover:bg-slate-700">
             <UserPlus size={14} /> Thêm người dùng
           </button>
         </div>
