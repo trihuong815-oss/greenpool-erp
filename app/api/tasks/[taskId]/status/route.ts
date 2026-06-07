@@ -6,7 +6,9 @@ import { getFirebaseAdminDb } from '@/lib/firebase/admin';
 import { COLLECTIONS } from '@/lib/firebase/collections';
 import { writeAuditLog } from '@/lib/firebase/audit-log';
 import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-auth';
-import { canUpdateTaskStatus, canReopenTask, type TaskForScope, type TaskStatus } from '@/lib/firebase/tasks-scope';
+import { canUpdateTaskStatus, canReopenTask, type TaskStatus } from '@/lib/firebase/tasks-scope';
+// Phase B.3: centralized scope helper.
+import { taskScopeFromDoc as asScope } from '@/lib/firebase/tasks-serialize';
 
 const COL = COLLECTIONS.TASKS;
 // Quy trình:
@@ -25,19 +27,6 @@ const VALID_NEXT: Record<TaskStatus, TaskStatus[]> = {
   rejected: [],
   cancelled: ['pending'],
 };
-
-function asScope(d: Record<string, any>): TaskForScope {
-  return {
-    createdBy: d.createdBy,
-    createdByBlock: d.createdByBlock,
-    assigneeBlock: d.assigneeBlock,
-    assigneeDeptId: d.assigneeDeptId ?? null,
-    assigneeFacilityId: d.assigneeFacilityId ?? null,
-    assigneeUserIds: Array.isArray(d.assigneeUserIds) ? d.assigneeUserIds : [],
-    status: d.status,
-    approvalRequiredFrom: d.approvalRequiredFrom ?? null,
-  };
-}
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: string }> }) {
   try {

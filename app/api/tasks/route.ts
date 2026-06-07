@@ -10,7 +10,7 @@ import { logSystemError } from '@/lib/firebase/system-errors';
 import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-auth';
 import {
   canCreateTask, canCreateAssignment, canCreateProposal, canReadTask, computeApproval, getBlockOf, isCEO, isGD,
-  type Block, type TaskForScope, type TaskStatus,
+  type Block, type TaskStatus,
 } from '@/lib/firebase/tasks-scope';
 
 const COL = COLLECTIONS.TASKS;
@@ -27,42 +27,9 @@ const ALLOWED_FACILITY_IDS = new Set(['HM', 'TK', 'CTT', '24', 'TT']);
 // Production limits
 const LIST_LIMIT = 200;                  // tránh scan toàn collection
 
-function serialize(id: string, data: Record<string, any>): Record<string, any> {
-  const out: Record<string, any> = { id };
-  for (const [k, v] of Object.entries(data)) {
-    if (v && typeof v === 'object' && typeof v.toDate === 'function') out[k] = v.toDate().toISOString();
-    else out[k] = v;
-  }
-  // Defensive normalize — đảm bảo UI luôn nhận đúng shape (legacy docs có thể thiếu field).
-  out.kind = out.kind ?? 'assignment';
-  out.assigneeUserIds = Array.isArray(out.assigneeUserIds) ? out.assigneeUserIds : [];
-  out.attachments = Array.isArray(out.attachments) ? out.attachments : [];
-  out.progressPct = typeof out.progressPct === 'number' ? out.progressPct : 0;
-  out.priority = out.priority ?? 'normal';
-  out.crossBlock = !!out.crossBlock;
-  out.assigneeDeptId = out.assigneeDeptId ?? null;
-  out.assigneeFacilityId = out.assigneeFacilityId ?? null;
-  out.approvalRequiredFrom = out.approvalRequiredFrom ?? null;
-  out.approvedBy = out.approvedBy ?? null;
-  out.approvedAt = out.approvedAt ?? null;
-  out.rejectionReason = out.rejectionReason ?? null;
-  out.dueDate = out.dueDate ?? null;
-  return out;
-}
-
-function asTaskForScope(d: Record<string, any>): TaskForScope {
-  return {
-    createdBy: d.createdBy,
-    createdByBlock: d.createdByBlock,
-    assigneeBlock: d.assigneeBlock,
-    assigneeDeptId: d.assigneeDeptId ?? null,
-    assigneeFacilityId: d.assigneeFacilityId ?? null,
-    assigneeUserIds: Array.isArray(d.assigneeUserIds) ? d.assigneeUserIds : [],
-    status: d.status,
-    approvalRequiredFrom: d.approvalRequiredFrom ?? null,
-    currentApprover: d.currentApprover ?? null,
-  };
-}
+// Phase B.3 (2026-06-07): serialize + scope mapping centralized ở lib/firebase/tasks-serialize.
+// Trước đây duplicate ở 8 route handler → đã miss currentApprover ở [taskId]/route.ts.
+import { serializeTask as serialize, taskScopeFromDoc as asTaskForScope } from '@/lib/firebase/tasks-serialize';
 
 export async function GET(req: NextRequest) {
   try {

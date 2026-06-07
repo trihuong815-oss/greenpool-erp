@@ -12,23 +12,12 @@ import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-aut
 import {
   buildTaskAttachmentPath, getEvidenceBucket, validateTaskAttachment,
 } from '@/lib/firebase/storage';
-import { canDeleteTask, canReadTask, type TaskForScope } from '@/lib/firebase/tasks-scope';
+import { canDeleteTask, canReadTask } from '@/lib/firebase/tasks-scope';
+// Phase B.3: centralized scope helper.
+import { taskScopeFromDoc as asScope } from '@/lib/firebase/tasks-serialize';
 
 const COL = COLLECTIONS.TASKS;
 const READ_TTL_MS = 60 * 60 * 1000;  // 1h
-
-function asScope(d: Record<string, any>): TaskForScope {
-  return {
-    createdBy: d.createdBy,
-    createdByBlock: d.createdByBlock,
-    assigneeBlock: d.assigneeBlock,
-    assigneeDeptId: d.assigneeDeptId ?? null,
-    assigneeFacilityId: d.assigneeFacilityId ?? null,
-    assigneeUserIds: Array.isArray(d.assigneeUserIds) ? d.assigneeUserIds : [],
-    status: d.status,
-    approvalRequiredFrom: d.approvalRequiredFrom ?? null,
-  };
-}
 
 // POST nhận multipart/form-data: field "file" (File) + optional caption
 export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: string }> }) {

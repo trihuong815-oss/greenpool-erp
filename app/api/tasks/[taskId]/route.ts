@@ -7,46 +7,14 @@ import { getFirebaseAdminDb } from '@/lib/firebase/admin';
 import { COLLECTIONS } from '@/lib/firebase/collections';
 import { writeAuditLog } from '@/lib/firebase/audit-log';
 import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-auth';
-import { canDeleteTask, canReadTask, canUpdateTaskMeta, type TaskForScope } from '@/lib/firebase/tasks-scope';
+import { canDeleteTask, canReadTask, canUpdateTaskMeta } from '@/lib/firebase/tasks-scope';
 import { getEvidenceBucket } from '@/lib/firebase/storage';
+// Phase B.3: centralized helpers. Trước đây asScope local MISS currentApprover field
+// → potential permission bug. Helper centralized có đủ field.
+import { serializeTask as serialize, taskScopeFromDoc as asScope } from '@/lib/firebase/tasks-serialize';
 
 const COL = COLLECTIONS.TASKS;
 const VALID_PRIORITY = new Set(['low', 'normal', 'high', 'urgent']);
-
-function serialize(id: string, data: Record<string, any>): Record<string, any> {
-  const out: Record<string, any> = { id };
-  for (const [k, v] of Object.entries(data)) {
-    if (v && typeof v === 'object' && typeof v.toDate === 'function') out[k] = v.toDate().toISOString();
-    else out[k] = v;
-  }
-  // Đồng bộ với GET /api/tasks
-  out.kind = out.kind ?? 'assignment';
-  out.assigneeUserIds = Array.isArray(out.assigneeUserIds) ? out.assigneeUserIds : [];
-  out.attachments = Array.isArray(out.attachments) ? out.attachments : [];
-  out.progressPct = typeof out.progressPct === 'number' ? out.progressPct : 0;
-  out.priority = out.priority ?? 'normal';
-  out.crossBlock = !!out.crossBlock;
-  out.assigneeDeptId = out.assigneeDeptId ?? null;
-  out.assigneeFacilityId = out.assigneeFacilityId ?? null;
-  out.approvalRequiredFrom = out.approvalRequiredFrom ?? null;
-  out.approvedBy = out.approvedBy ?? null;
-  out.approvedAt = out.approvedAt ?? null;
-  out.rejectionReason = out.rejectionReason ?? null;
-  out.dueDate = out.dueDate ?? null;
-  return out;
-}
-function asScope(d: Record<string, any>): TaskForScope {
-  return {
-    createdBy: d.createdBy,
-    createdByBlock: d.createdByBlock,
-    assigneeBlock: d.assigneeBlock,
-    assigneeDeptId: d.assigneeDeptId ?? null,
-    assigneeFacilityId: d.assigneeFacilityId ?? null,
-    assigneeUserIds: Array.isArray(d.assigneeUserIds) ? d.assigneeUserIds : [],
-    status: d.status,
-    approvalRequiredFrom: d.approvalRequiredFrom ?? null,
-  };
-}
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ taskId: string }> }) {
   try {

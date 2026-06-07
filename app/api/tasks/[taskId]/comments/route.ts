@@ -5,22 +5,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getFirebaseAdminDb } from '@/lib/firebase/admin';
 import { COLLECTIONS } from '@/lib/firebase/collections';
 import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-auth';
-import { canCommentTask, canReadTask, type TaskForScope } from '@/lib/firebase/tasks-scope';
+import { canCommentTask, canReadTask } from '@/lib/firebase/tasks-scope';
+// Phase B.3: centralized scope helper. (serialize cho comments giữ local vì comment shape khác task.)
+import { taskScopeFromDoc as asScope } from '@/lib/firebase/tasks-serialize';
 
 const COL = COLLECTIONS.TASKS;
 
-function asScope(d: Record<string, any>): TaskForScope {
-  return {
-    createdBy: d.createdBy,
-    createdByBlock: d.createdByBlock,
-    assigneeBlock: d.assigneeBlock,
-    assigneeDeptId: d.assigneeDeptId ?? null,
-    assigneeFacilityId: d.assigneeFacilityId ?? null,
-    assigneeUserIds: Array.isArray(d.assigneeUserIds) ? d.assigneeUserIds : [],
-    status: d.status,
-    approvalRequiredFrom: d.approvalRequiredFrom ?? null,
-  };
-}
+// Serialize riêng cho COMMENTS subcollection (shape khác task — chỉ authorId/body/kind/createdAt).
 function serialize(id: string, data: Record<string, any>) {
   const out: Record<string, any> = { id };
   for (const [k, v] of Object.entries(data)) {
