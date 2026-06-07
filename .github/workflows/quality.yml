@@ -63,6 +63,19 @@ jobs:
           CRON_SECRET: ci-placeholder
           GEMINI_API_KEY: ci-placeholder
 
+  test:
+    name: Vitest Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci --prefer-offline --no-audit
+      - run: npm test
+
   rules-syntax:
     name: Firestore Rules Compile
     runs-on: ubuntu-latest
