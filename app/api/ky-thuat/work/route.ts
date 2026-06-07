@@ -59,10 +59,15 @@ export async function GET(req: NextRequest) {
       else q = q.where('branchId', 'in', scope.branchIds.slice(0, 10));
     }
     if (status) q = q.where('status', '==', status);
-    if (onlyMine) q = q.where('assigneeIds', 'array-contains', caller.profile.uid);
+    // Phase 13.16.4 hotfix: assigneeIds array-contains + orderBy createdAt cần composite index
+    // (kind + status + assigneeIds + createdAt). Để khỏi block production deploy, em filter
+    // assigneeIds.includes(uid) sau khi fetch (client-side); production index sẽ deploy sau.
     q = q.orderBy('createdAt', 'desc').limit(200);
     const snap = await q.get();
-    const rows = snap.docs.map((d) => serialize(d.id, d.data()));
+    let rows = snap.docs.map((d) => serialize(d.id, d.data()));
+    if (onlyMine) {
+      rows = rows.filter((r: any) => Array.isArray(r.assigneeIds) && r.assigneeIds.includes(caller.profile.uid));
+    }
     return NextResponse.json({ rows });
   } catch (e: any) {
     if (e instanceof UnauthorizedError) return NextResponse.json({ error: e.message }, { status: e.status });
