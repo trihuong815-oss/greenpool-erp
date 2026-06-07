@@ -94,9 +94,22 @@ export default function LoginPage() {
       await completeSession(idToken);
     } catch (e: any) {
       const code: string = e?.code ?? '';
-      let msg = e?.message ?? 'Mã không đúng.';
-      if (code === 'auth/invalid-verification-code') msg = 'Mã 6 chữ số không đúng. Kiểm tra lại app Authenticator.';
-      if (code === 'auth/missing-verification-code') msg = 'Vui lòng nhập mã 6 chữ số.';
+      const rawMsg: string = e?.message ?? '';
+      let msg = rawMsg || 'Mã không đúng.';
+
+      if (code === 'auth/invalid-verification-code') {
+        msg = 'Mã 6 chữ số không đúng. Kiểm tra lại app Authenticator.';
+      } else if (code === 'auth/missing-verification-code') {
+        msg = 'Vui lòng nhập mã 6 chữ số.';
+      } else if (code === 'auth/totp-challenge-timeout' || rawMsg.includes('timeout')) {
+        // HOTFIX (2026-06-07): challenge MFA hết hạn (~5 phút).
+        // Reset về step 1 để user nhập lại email/password.
+        msg = 'Phiên xác thực 2 lớp đã hết hạn. Vui lòng đăng nhập lại.';
+        setMfaResolver(null);
+        setTotpCode('');
+        setPassword('');  // bắt buộc gõ lại pass cho an toàn
+      }
+
       setError(msg);
       setLoading(false);
     }
