@@ -417,6 +417,15 @@ export async function POST(req: NextRequest) {
     let approvalChain: string[] = [];
     let currentApprover: string | null = null;
 
+    // Phase B.7 (2026-06-07): dual-write currentApprover cho assignment để docs mới
+    // có cả 2 field (legacy approvalRequiredFrom + Phase 12.5+ currentApprover).
+    // Khi backfill xong docs cũ (chưa làm), có thể drop legacy field.
+    // Hiện tại canApproveTask đã ưu tiên currentApprover > approvalRequiredFrom.
+    if (kind === 'assignment' && approvalRequiredFrom) {
+      currentApprover = `role:${approvalRequiredFrom}`;
+      approvalChain = [currentApprover];
+    }
+
     // Phase 12.9 (2026-06-04): proposal flow đơn giản hoá — 2 tier: peer / senior.
     //   - peer = ngang cấp; senior = cấp trên trực tiếp
     //   - Client chọn recipientUid trực tiếp → server build chain = [recipientUid] (1 cấp).
