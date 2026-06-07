@@ -830,29 +830,54 @@ function MessageThread({ conv, currentUserId, onBack }: { conv: ChatConversation
                     return <span className="inline-flex items-center gap-0.5 text-emerald-600"><CheckCheck size={11} /> Đã xem {seenBy.length}/{others.length}</span>;
                   })()}
                 </div>
+                {/* Phase 13.16.3 (2026-06-07): action bar — MOBILE render INSIDE bubble column
+                    (sát dưới timestamp, luôn hiện) → không tràn viewport.
+                    DESKTOP giữ position absolute cạnh bubble + hover-only (UX cũ). */}
+                <div className={`md:hidden ${isMine ? 'self-end' : 'self-start'} flex gap-1 mt-0.5`}>
+                  <button
+                    onClick={() => startReply(m)}
+                    className="p-1.5 rounded-full bg-white ring-1 ring-slate-200 active:bg-slate-100 text-slate-500 shadow-sm"
+                    aria-label="Trả lời"
+                  ><CornerUpLeft size={14} /></button>
+                  <button
+                    onClick={() => setForwardingMsg(m)}
+                    className="p-1.5 rounded-full bg-white ring-1 ring-slate-200 active:bg-slate-100 text-slate-500 shadow-sm"
+                    aria-label="Chuyển tiếp"
+                  ><Forward size={14} /></button>
+                  <div className="relative">
+                    <button
+                      onClick={() => setReactPickerFor(reactPickerFor === m.id ? null : m.id)}
+                      className="p-1.5 rounded-full bg-white ring-1 ring-slate-200 active:bg-slate-100 text-slate-500 shadow-sm"
+                      aria-label="Reaction"
+                    ><Smile size={14} /></button>
+                    {reactPickerFor === m.id && (
+                      <div className={`absolute bottom-full mb-1 ${isMine ? 'right-0' : 'left-0'} bg-white ring-1 ring-slate-200 shadow-lg rounded-full px-2 py-1 flex gap-1 z-10`}>
+                        {REACTIONS.map((e) => (
+                          <button key={e} onClick={() => toggleReact(m.id, e)}
+                            className="text-lg active:scale-110 transition">{e}</button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-              {/* Hover/Tap → action bar (Reply + Forward + React).
-                  Mobile: luôn hiện (md:opacity-0 + group-hover) + touch target lớn */}
-              <div className={`absolute top-0 ${isMine ? 'right-full mr-1' : 'left-full ml-1'} opacity-100 md:opacity-0 md:group-hover:opacity-100 transition flex gap-1.5`}>
+              {/* Desktop: action bar absolute cạnh bubble + hover-only (ẩn trên mobile) */}
+              <div className={`hidden md:flex absolute top-0 ${isMine ? 'right-full mr-1' : 'left-full ml-1'} opacity-0 group-hover:opacity-100 transition gap-1.5`}>
                 <button
                   onClick={() => startReply(m)}
-                  className="p-2 rounded-full bg-white ring-1 ring-slate-200 hover:bg-slate-50 active:bg-slate-100 text-slate-500 shadow-sm"
+                  className="p-2 rounded-full bg-white ring-1 ring-slate-200 hover:bg-slate-50 text-slate-500 shadow-sm"
                   title="Trả lời"
                   aria-label="Trả lời"
-                >
-                  <CornerUpLeft size={16} />
-                </button>
+                ><CornerUpLeft size={16} /></button>
                 <button
                   onClick={() => setForwardingMsg(m)}
-                  className="p-2 rounded-full bg-white ring-1 ring-slate-200 hover:bg-slate-50 active:bg-slate-100 text-slate-500 shadow-sm"
+                  className="p-2 rounded-full bg-white ring-1 ring-slate-200 hover:bg-slate-50 text-slate-500 shadow-sm"
                   title="Chuyển tiếp"
                   aria-label="Chuyển tiếp"
-                >
-                  <Forward size={16} />
-                </button>
+                ><Forward size={16} /></button>
                 <button
                   onClick={() => setReactPickerFor(reactPickerFor === m.id ? null : m.id)}
-                  className="p-2 rounded-full bg-white ring-1 ring-slate-200 hover:bg-slate-50 active:bg-slate-100 text-slate-500 shadow-sm relative"
+                  className="p-2 rounded-full bg-white ring-1 ring-slate-200 hover:bg-slate-50 text-slate-500 shadow-sm relative"
                   title="Reaction"
                   aria-label="Reaction"
                 >
