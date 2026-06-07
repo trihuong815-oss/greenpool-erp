@@ -7,9 +7,24 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getFirebaseAdminAuth } from '@/lib/firebase/admin';
 import { SESSION_COOKIE, SESSION_TTL_MS } from '@/lib/firebase/session-auth';
+import { checkRateLimitDistributed } from '@/lib/rate-limit-distributed';
 
 export async function POST(req: NextRequest) {
   try {
+    // Phase C.3 (2026-06-07): rate limit cross-instance để chặn brute force.
+    // 10 attempt / 60s per IP. Distributed → attacker không bypass bằng cách
+    // tới nhiều Vercel edge instance.
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+      || req.headers.get('x-real-ip')
+      || 'unknown';
+    const rl = await checkRateLimitDistributed(`login:${ip}`, 10, 60);
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: 'Quá nhiều lần thử. Đợi rồi thử lại.' },
+        { status: 429, headers: { 'Retry-After': String(rl.retryAfter ?? 60) } }
+      );
+    }
+
     const body = await req.json();
     const idToken: string = body?.idToken;
     if (!idToken) return NextResponse.json({ error: 'Thiếu idToken' }, { status: 400 });

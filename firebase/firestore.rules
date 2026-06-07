@@ -357,6 +357,21 @@ service cloud.firestore {
       }
     }
 
+    // ---- Phase C.2 (2026-06-07): featureFlags ----
+    // Admin UI có thể read/write; client app load qua RSC server-side.
+    // Doc shape: { enabled, allowList?, allowRoles?, rolloutPercent? }.
+    match /featureFlags/{flagKey} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // ---- Phase C.3 (2026-06-07): rateLimits ----
+    // Chỉ Admin SDK (server-side) ghi vào collection này.
+    // Client KHÔNG cần đọc trực tiếp — counter là internal.
+    match /rateLimits/{key} {
+      allow read, write: if false;
+    }
+
     // ---- Catch-all deny ----
     match /{document=**} {
       allow read, write: if false;
