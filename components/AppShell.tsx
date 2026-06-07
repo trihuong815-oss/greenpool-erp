@@ -13,6 +13,7 @@ import { NotiCountsProvider } from '@/lib/hooks/use-noti-counts';
 import { BottomNavBar } from './ui/BottomNavBar';
 import { ToastProvider } from './ui/Toast';
 import { CommandPaletteProvider } from './ui/CommandPalette';
+import { KeyboardShortcuts } from './ui/KeyboardShortcuts';
 
 interface AppShellProps {
   userName: string;
@@ -104,6 +105,9 @@ export function AppShell({ userName, userRole, roleCode, menuOverrides, children
 
         {/* Phase UI-2.1 (2026-06-07): BottomNavBar mobile chỉ — 5 mục tần số cao */}
         <BottomNavBar roleCode={roleCode} />
+
+        {/* Phase UI-3.2 (2026-06-07): global keyboard shortcuts (g+letter, ?) — no UI render */}
+        <KeyboardShortcuts roleCode={roleCode} menuOverrides={menuOverrides} />
       </div>
     </MobileNavContext.Provider>
     </CommandPaletteProvider>

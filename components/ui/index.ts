@@ -24,3 +24,4 @@ export type { ToastTone } from './Toast';
 
 // ─── UI-3: Desktop pro ───
 export { CommandPaletteProvider, useCommandPalette } from './CommandPalette';
+export { KeyboardShortcuts } from './KeyboardShortcuts';
