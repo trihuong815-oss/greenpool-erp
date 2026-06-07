@@ -393,15 +393,16 @@ function SystemProgressCard({
       {/* 2 KPI cân đối: tỷ lệ hoàn thành | còn thiếu */}
       <div className="mb-4 grid grid-cols-2 gap-3">
         <div className="rounded-lg border border-emerald-100 bg-emerald-50/60 p-3">
-          <div className={`text-3xl font-bold tabular-nums leading-tight ${STATUS_TEXT[k]}`}>
+          <div className={`text-xl sm:text-2xl md:text-3xl font-bold tabular-nums leading-tight ${STATUS_TEXT[k]}`}>
             {rate}%
           </div>
           <div className="mt-0.5 text-[11px] font-medium uppercase tracking-wider text-slate-500">
             Tỷ lệ hoàn thành
           </div>
         </div>
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-          <div className="text-3xl font-bold tabular-nums leading-tight text-slate-900">
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 min-w-0">
+          {/* Phase 13.16.5: VND tỷ-tỷ "còn thiếu" tràn mobile → text-lg + break-all */}
+          <div className="text-lg sm:text-xl md:text-3xl font-bold tabular-nums leading-tight text-slate-900 break-all">
             {formatMoney(remaining)}
           </div>
           <div className="mt-0.5 text-[11px] font-medium uppercase tracking-wider text-slate-500">
@@ -612,11 +613,11 @@ function BranchCard({
         <StatusChip rate={yearRate} />
       </header>
 
-      {/* Big number — focal point */}
-      <div className="mb-3">
-        <div className="text-2xl font-bold tabular-nums text-slate-900">
+      {/* Big number — focal point. Phase 13.16.5: responsive font + break-all cho VND tỷ. */}
+      <div className="mb-3 min-w-0">
+        <div className="text-lg sm:text-xl md:text-2xl font-bold tabular-nums text-slate-900 break-all">
           {formatMoney(yearActual)}
-          <span className="ml-1.5 text-sm font-normal text-slate-500">
+          <span className="ml-1.5 text-xs sm:text-sm font-normal text-slate-500 whitespace-nowrap">
             / {formatMoney(yearTarget)}
           </span>
         </div>
@@ -660,14 +661,16 @@ function BranchCard({
             // Multiplier 1.5 để 60%≈good, 40%≈warning (theo convention của SourceCell elsewhere).
             const closeHex = STATUS_BAR_HEX[statusKey(s.closeRatePct * 1.5)];
             return (
-              <li key={s.source} className="flex items-center gap-2 text-xs">
+              // Phase 13.16.5: mobile stack vertical, desktop horizontal — DotScale ẩn mobile để có khoảng thở
+              <li key={s.source} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
                 <Icon size={13} className="text-slate-400 flex-shrink-0" />
-                <span className="w-24 flex-shrink-0 truncate font-medium text-slate-700">
+                <span className="w-20 sm:w-24 flex-shrink-0 truncate font-medium text-slate-700">
                   {SOURCE_LABEL[s.source]}
                 </span>
-                <DotScale pct={s.closeRatePct} hex={BRAND_EMERALD} />
-                <span className="ml-auto flex items-center gap-2 tabular-nums">
-                  {/* Tổng (xám) · Chốt (xanh emerald) / Chưa chốt (amber) */}
+                <span className="hidden sm:inline-flex">
+                  <DotScale pct={s.closeRatePct} hex={BRAND_EMERALD} />
+                </span>
+                <span className="ml-auto flex items-center gap-2 tabular-nums whitespace-nowrap">
                   <span className="text-[11px]">
                     <span className="text-slate-400">{s.actualLeads.toLocaleString("vi-VN")}</span>
                     <span className="text-slate-300 mx-0.5">·</span>
@@ -778,7 +781,7 @@ function MonthlyRevenueChart({ rows }: { rows: MonthlyRow[] }) {
           const rate = getRate(r.actual, r.target);
           const aHex = STATUS_BAR_HEX[statusKey(rate)];
           return (
-            <div key={r.month} className="flex min-w-[36px] flex-1 flex-col items-center">
+            <div key={r.month} className="flex min-w-[22px] sm:min-w-[36px] flex-1 flex-col items-center">
               <div className="flex h-[130px] items-end gap-1">
                 <div
                   className="w-3 rounded-t-sm transition-[height] duration-500"
@@ -850,7 +853,7 @@ function MonthlyLeadChart({ rows }: { rows: MonthlyRow[] }) {
           const total = monthTotals[idx];
           const totalH = (total / max) * H;
           return (
-            <div key={r.month} className="flex min-w-[36px] flex-1 flex-col items-center">
+            <div key={r.month} className="flex min-w-[22px] sm:min-w-[36px] flex-1 flex-col items-center">
               <div
                 className="flex w-6 flex-col-reverse overflow-hidden rounded-t-sm transition-[height] duration-500"
                 style={{ height: `${Math.max(2, totalH)}px` }}
@@ -949,15 +952,15 @@ function BranchDetailModal({
           </button>
         </header>
 
-        {/* Hero KPIs */}
-        <div className="grid grid-cols-2 gap-3 border-b border-slate-100 bg-emerald-50/40 px-6 py-4 md:grid-cols-4">
+        {/* Hero KPIs — Phase 13.16.5: mobile px-3 py-3 gap-2 cho gọn */}
+        <div className="grid grid-cols-2 gap-2 sm:gap-3 border-b border-slate-100 bg-emerald-50/40 px-3 py-3 sm:px-6 sm:py-4 md:grid-cols-4">
           <KpiTile label="Mục tiêu năm" value={formatMoney(yearTarget)} />
           <KpiTile label="Thực đạt năm" value={formatMoney(yearActual)} hex={STATUS_BAR_HEX[statusKey(yearRate)]} />
           <KpiTile label="% Hoàn thành năm" value={`${yearRate}%`} hex={STATUS_BAR_HEX[statusKey(yearRate)]} />
           <KpiTile label={`Tháng ${month}/${year}`} value={`${formatMoney(monthActual)} · ${monthRate}%`} sub={`MT: ${formatMoney(monthTarget)}`} />
         </div>
 
-        <div className="space-y-8 px-6 py-5">
+        <div className="space-y-6 sm:space-y-8 px-3 sm:px-6 py-4 sm:py-5">
           {/* ╔══════════════════════════════════════════════════════════╗
               ║  PHẦN 1 — DOANH SỐ (Revenue)                              ║
               ║  1A: Tổng theo tháng · 1B: Theo Sale theo tháng           ║
@@ -1251,16 +1254,17 @@ function SourceCell({
 }
 
 function KpiTile({ label, value, sub, hex }: { label: string; value: string; sub?: string; hex?: string }) {
+  // Phase 13.16.5: text-sm sm:text-base md:text-lg + break-all + min-w-0 — VND tỷ-tỷ không tràn mobile.
   return (
-    <div className="rounded-lg border border-emerald-100 bg-white px-3 py-2.5">
+    <div className="rounded-lg border border-emerald-100 bg-white px-3 py-2.5 min-w-0">
       <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{label}</div>
       <div
-        className="mt-0.5 text-lg font-bold tabular-nums leading-tight"
+        className="mt-0.5 text-sm sm:text-base md:text-lg font-bold tabular-nums leading-tight break-all"
         style={hex ? { color: hex } : { color: "#0f172a" }}
       >
         {value}
       </div>
-      {sub && <div className="text-[10px] text-slate-500">{sub}</div>}
+      {sub && <div className="text-[10px] text-slate-500 break-all">{sub}</div>}
     </div>
   );
 }
