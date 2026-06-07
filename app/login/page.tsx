@@ -8,6 +8,7 @@ import {
   type MultiFactorResolver,
 } from 'firebase/auth';
 import { getFirebaseClientAuth } from '@/lib/firebase/client';
+import { Button } from '@/components/ui';
 
 // Phase 13.5: hỗ trợ MFA TOTP. Khi user bật 2FA, signInWithEmailAndPassword sẽ throw
 // `auth/multi-factor-auth-required` → bắt error, lấy resolver, hiện step 2 nhập mã 6 chữ số.
@@ -143,12 +144,10 @@ export default function LoginPage() {
               />
             </div>
             {error && <div className="text-sm text-rose-700 bg-rose-50 p-3 rounded-lg">{error}</div>}
-            <button
-              type="submit" disabled={loading}
-              className="w-full bg-gradient-to-r from-emerald-700 to-teal-800 text-white font-semibold py-3 rounded-lg hover:shadow-lg transition-all disabled:opacity-50"
-            >
+            {/* Phase UI-1: migrate sang Button component */}
+            <Button type="submit" size="lg" fullWidth loading={loading}>
               {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
-            </button>
+            </Button>
           </form>
         ) : (
           // ─── Step 2: nhập mã TOTP 6 chữ số ───
@@ -176,18 +175,12 @@ export default function LoginPage() {
               />
             </div>
             {error && <div className="text-sm text-rose-700 bg-rose-50 p-3 rounded-lg">{error}</div>}
-            <button
-              type="submit" disabled={loading || totpCode.length !== 6}
-              className="w-full bg-gradient-to-r from-emerald-700 to-teal-800 text-white font-semibold py-3 rounded-lg hover:shadow-lg transition-all disabled:opacity-50"
-            >
+            <Button type="submit" size="lg" fullWidth loading={loading} disabled={totpCode.length !== 6}>
               {loading ? 'Đang xác thực...' : 'Xác nhận'}
-            </button>
-            <button
-              type="button" onClick={cancelMfa} disabled={loading}
-              className="w-full text-sm text-slate-500 hover:text-slate-700 py-2"
-            >
+            </Button>
+            <Button type="button" variant="ghost" size="sm" fullWidth onClick={cancelMfa} disabled={loading}>
               ← Quay lại đăng nhập
-            </button>
+            </Button>
           </form>
         )}
 
