@@ -34,11 +34,32 @@ export function AppShell({ userName, userRole, roleCode, menuOverrides, children
     return () => window.removeEventListener('keydown', onKey);
   }, [open]);
 
+  // Phase 13.16.9 (2026-06-07): track visualViewport.height để fix iOS Safari keyboard quirk.
+  // dvh + interactive-widget=resizes-content vẫn KHÔNG đủ trên 1 số iOS version — browser tự scroll
+  // content khi input focused → chat header trôi mất. Giải pháp: set CSS var --gp-vh = visualViewport.height
+  // px, container dùng h-[var(--gp-vh,100dvh)] → cố định viewport sau khi keyboard hiện.
+  useEffect(() => {
+    const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+    if (!vv) return;
+    const apply = () => {
+      document.documentElement.style.setProperty('--gp-vh', `${vv.height}px`);
+    };
+    apply();
+    vv.addEventListener('resize', apply);
+    vv.addEventListener('scroll', apply);
+    return () => {
+      vv.removeEventListener('resize', apply);
+      vv.removeEventListener('scroll', apply);
+      document.documentElement.style.removeProperty('--gp-vh');
+    };
+  }, []);
+
   return (
     <NotiCountsProvider>
     <MobileNavContext.Provider value={{ open, setOpen }}>
-      {/* Phase 13.16/13.16.4: h-[100dvh] iOS Safari + safe-area top/bottom cho PWA iPhone notch + home-bar */}
-      <div className="h-[100dvh] flex overflow-hidden pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+      {/* Phase 13.16.9: h-[var(--gp-vh)] fallback dvh — visualViewport tracking giải quyết
+          iOS Safari auto-scroll khi keyboard pop làm chat header trôi mất. */}
+      <div className="h-[var(--gp-vh,100dvh)] flex overflow-hidden pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
         {/* Desktop sidebar — fixed bên trái */}
         <div className="hidden md:flex">
           <Sidebar userName={userName} userRole={userRole} roleCode={roleCode} menuOverrides={menuOverrides} />
