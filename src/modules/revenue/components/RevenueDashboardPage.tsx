@@ -401,8 +401,8 @@ function SystemProgressCard({
           </div>
         </div>
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 min-w-0">
-          {/* Phase 13.16.5: VND tỷ-tỷ "còn thiếu" tràn mobile → text-lg + break-all */}
-          <div className="text-lg sm:text-xl md:text-3xl font-bold tabular-nums leading-tight text-slate-900 break-all">
+          {/* Phase 13.16.7: bỏ break-all (xuống dòng giữa số xấu) → whitespace-nowrap + font nhỏ vừa đủ */}
+          <div className="text-sm sm:text-lg md:text-3xl font-bold tabular-nums leading-tight text-slate-900 whitespace-nowrap overflow-hidden">
             {formatMoney(remaining)}
           </div>
           <div className="mt-0.5 text-[11px] font-medium uppercase tracking-wider text-slate-500">
@@ -613,11 +613,11 @@ function BranchCard({
         <StatusChip rate={yearRate} />
       </header>
 
-      {/* Big number — focal point. Phase 13.16.5: responsive font + break-all cho VND tỷ. */}
+      {/* Big number — Phase 13.16.7: whitespace-nowrap giữ số nguyên dòng, font nhỏ vừa fit mobile */}
       <div className="mb-3 min-w-0">
-        <div className="text-lg sm:text-xl md:text-2xl font-bold tabular-nums text-slate-900 break-all">
-          {formatMoney(yearActual)}
-          <span className="ml-1.5 text-xs sm:text-sm font-normal text-slate-500 whitespace-nowrap">
+        <div className="text-sm sm:text-lg md:text-2xl font-bold tabular-nums text-slate-900 whitespace-nowrap overflow-hidden">
+          <span>{formatMoney(yearActual)}</span>
+          <span className="ml-1.5 text-[10px] sm:text-xs md:text-sm font-normal text-slate-500">
             / {formatMoney(yearTarget)}
           </span>
         </div>
@@ -1254,17 +1254,17 @@ function SourceCell({
 }
 
 function KpiTile({ label, value, sub, hex }: { label: string; value: string; sub?: string; hex?: string }) {
-  // Phase 13.16.5: text-sm sm:text-base md:text-lg + break-all + min-w-0 — VND tỷ-tỷ không tràn mobile.
+  // Phase 13.16.7: whitespace-nowrap giữ số VND nguyên dòng, font nhỏ vừa đủ thay vì break-all.
   return (
-    <div className="rounded-lg border border-emerald-100 bg-white px-3 py-2.5 min-w-0">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{label}</div>
+    <div className="rounded-lg border border-emerald-100 bg-white px-2.5 py-2 sm:px-3 sm:py-2.5 min-w-0">
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 truncate">{label}</div>
       <div
-        className="mt-0.5 text-sm sm:text-base md:text-lg font-bold tabular-nums leading-tight break-all"
+        className="mt-0.5 text-xs sm:text-sm md:text-lg font-bold tabular-nums leading-tight whitespace-nowrap overflow-hidden"
         style={hex ? { color: hex } : { color: "#0f172a" }}
       >
         {value}
       </div>
-      {sub && <div className="text-[10px] text-slate-500 break-all">{sub}</div>}
+      {sub && <div className="text-[10px] text-slate-500 whitespace-nowrap overflow-hidden">{sub}</div>}
     </div>
   );
 }
