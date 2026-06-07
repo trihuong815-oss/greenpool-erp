@@ -26,8 +26,9 @@ const SECURITY_HEADERS = [
     key: 'Content-Security-Policy',
     value: [
       "default-src 'self'",
-      // Script: self + Google/Firebase. unsafe-eval cần cho Firestore Web SDK.
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.googleapis.com https://*.gstatic.com https://www.google.com",
+      // Phase A.5 (2026-06-07): drop 'unsafe-eval' — Firebase SDK v10+ không còn dùng eval.
+      // 'unsafe-inline' giữ tạm cho Next.js inline runtime (sẽ drop khi setup CSP nonce Phase B).
+      "script-src 'self' 'unsafe-inline' https://*.googleapis.com https://*.gstatic.com https://www.google.com",
       // Style: self + Tailwind inline + Google Fonts.
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com data:",
