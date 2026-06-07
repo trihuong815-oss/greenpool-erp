@@ -26,12 +26,15 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   themeColor: '#10b981',
+  // Phase 13.16.8 (2026-06-07): interactiveWidget=resizes-content → khi keyboard mobile
+  // pop up, browser shrink viewport thay vì scroll content → chat header/composer giữ vị trí.
+  interactiveWidget: 'resizes-content',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="vi">
-      <body className="bg-slate-50 text-slate-800 antialiased">
+      <body className="bg-slate-50 text-slate-800 antialiased overflow-hidden overscroll-none">
         {children}
       </body>
     </html>
