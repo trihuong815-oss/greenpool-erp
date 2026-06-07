@@ -14,6 +14,7 @@ import { BottomNavBar } from './ui/BottomNavBar';
 import { ToastProvider } from './ui/Toast';
 import { CommandPaletteProvider } from './ui/CommandPalette';
 import { KeyboardShortcuts } from './ui/KeyboardShortcuts';
+import { FlagGate } from './FlagGate';
 
 interface AppShellProps {
   userName: string;

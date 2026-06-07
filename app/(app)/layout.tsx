@@ -1,5 +1,7 @@
 import { AppShell } from '@/components/AppShell';
 import { SessionRefresher } from '@/components/SessionRefresher';
+import { FeatureFlagsProvider } from '@/lib/feature-flags/client';
+import { loadAllFlags } from '@/lib/feature-flags/server';
 // Phase 13.7 (2026-06-05): bỏ IdleAutoLogout theo yêu cầu anh — UX giống FB/Zalo.
 // Bảo mật giữ qua: auth + 2FA TOTP + Firestore rules + audit log + rate limit + CSP.
 // Session cookie 14d tự renew qua SessionRefresher mỗi 24h.
@@ -28,17 +30,24 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     );
   }
 
+  // Phase C.2 (2026-06-07): load tất cả feature flags 1 lần ở RSC layout,
+  // pass plain Record<string, boolean> qua FeatureFlagsProvider client component.
+  // Cache 60s/(key, uid) ở server → giảm 99% Firestore read.
+  const flags = await loadAllFlags(user.uid, profile.roleCode);
+
   return (
     <>
       <SessionRefresher />
-      <AppShell
-        userName={profile.displayName}
-        userRole={profile.roleName ?? profile.roleCode}
-        roleCode={profile.roleCode}
-        menuOverrides={profile.menuOverrides}
-      >
-        {children}
-      </AppShell>
+      <FeatureFlagsProvider flags={flags}>
+        <AppShell
+          userName={profile.displayName}
+          userRole={profile.roleName ?? profile.roleCode}
+          roleCode={profile.roleCode}
+          menuOverrides={profile.menuOverrides}
+        >
+          {children}
+        </AppShell>
+      </FeatureFlagsProvider>
     </>
   );
 }
