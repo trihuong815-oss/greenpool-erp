@@ -10,6 +10,7 @@ import { Sidebar } from './Sidebar';
 import { MobileNavContext } from './MobileNavContext';
 import { MfaRequiredBanner } from './MfaRequiredBanner';
 import { NotiCountsProvider } from '@/lib/hooks/use-noti-counts';
+import { BottomNavBar } from './ui/BottomNavBar';
 
 interface AppShellProps {
   userName: string;
@@ -83,10 +84,13 @@ export function AppShell({ userName, userRole, roleCode, menuOverrides, children
         </div>
 
         {/* Main content area */}
-        <main className="flex-1 flex flex-col overflow-hidden min-w-0 min-h-0">
+        <main className="flex-1 flex flex-col overflow-hidden min-w-0 min-h-0 pb-14 md:pb-0">
           <MfaRequiredBanner roleCode={roleCode} />
           {children}
         </main>
+
+        {/* Phase UI-2.1 (2026-06-07): BottomNavBar mobile chỉ — 5 mục tần số cao */}
+        <BottomNavBar roleCode={roleCode} />
       </div>
     </MobileNavContext.Provider>
     </NotiCountsProvider>
