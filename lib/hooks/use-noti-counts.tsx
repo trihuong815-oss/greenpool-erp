@@ -10,7 +10,7 @@
 //   tất cả consumer dùng cùng 1 state → guaranteed đồng bộ.
 
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode, useMemo } from 'react';
-import { collection, onSnapshot, query, where, Timestamp } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, Timestamp, limit as fbLimit } from 'firebase/firestore';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { getFirebaseClient, getFirebaseClientDb } from '@/lib/firebase/client';
 
@@ -83,9 +83,12 @@ export function NotiCountsProvider({ children }: { children: ReactNode }) {
       if (!user) { setChat(0); setChatItems([]); return; }
       try {
         const db = getFirebaseClientDb();
+        // Phase A.2: limit(100) tránh user có 200+ conv (group chat lâu năm) tốn reads.
+        // Conv được sort theo lastMessageAt DESC ngầm — 100 conv mới nhất đủ cho unread badge.
         const q = query(
           collection(db, 'conversations'),
           where('participantIds', 'array-contains', user.uid),
+          fbLimit(100),
         );
         unsubConv = onSnapshot(q, (snap) => {
           let n = 0;
@@ -228,12 +231,26 @@ export function NotiCountsProvider({ children }: { children: ReactNode }) {
     setLoading(false);
   }, []);
 
+  // Phase A.2 (2026-06-07): 60s → 180s + pause khi tab hidden.
+  // Trước đây 5 endpoint × poll 60s × N tabs = ~150-300k Firestore reads/h cho 100 users
+  // (75% tổng cost). Giờ 180s + pause hidden → giảm ~66% reads. Realtime data
+  // (chat) vẫn instant qua Firestore listener — chỉ business counters đợi 3 phút.
   useEffect(() => {
     fetchBiz();
-    const id = setInterval(fetchBiz, 60_000);
-    const onVis = () => { if (document.visibilityState === 'visible') fetchBiz(); };
+    let id: ReturnType<typeof setInterval> | null = null;
+    const start = () => { if (!id) id = setInterval(fetchBiz, 180_000); };
+    const stop = () => { if (id) { clearInterval(id); id = null; } };
+    if (document.visibilityState === 'visible') start();
+    const onVis = () => {
+      if (document.visibilityState === 'visible') {
+        fetchBiz(); // refresh ngay khi tab quay lại visible
+        start();
+      } else {
+        stop(); // pause poll khi tab hidden — không lãng phí Firestore reads
+      }
+    };
     document.addEventListener('visibilitychange', onVis);
-    return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVis); };
+    return () => { stop(); document.removeEventListener('visibilitychange', onVis); };
   }, [fetchBiz]);
 
   // ─── Reset biz counts khi auth state thay đổi (logout / switch account) ───

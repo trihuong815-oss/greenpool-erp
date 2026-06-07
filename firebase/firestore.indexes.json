@@ -190,6 +190,17 @@
       ]
     },
     {
+      "_comment": "Phase A.2 (2026-06-07): techWork badge sidebar — TechWorkBadge query ?assignee=me&kind=task&status=open. Trước đây thiếu index nên fallback client-side filter (Phase 13.16.4 hotfix) — sai correctness + waste reads. Composite index này cho phép server-side filter chính xác.",
+      "collectionGroup": "techWork",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "kind", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "assigneeIds", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "_comment": "checklistNotificationsV2: supervisor list — where(role in [...]) where(submittedAt >=) orderBy(submittedAt)",
       "collectionGroup": "checklistNotificationsV2",
       "queryScope": "COLLECTION",

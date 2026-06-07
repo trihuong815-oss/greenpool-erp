@@ -49,6 +49,11 @@ const SECURITY_HEADERS = [
 
 const nextConfig = {
   reactStrictMode: true,
+  // Phase A.1 (2026-06-07): tree-shake heavy package imports.
+  // lucide-react (47 file import) + date-fns (sales/dashboard) → giảm bundle 10-20%.
+  experimental: {
+    optimizePackageImports: ['lucide-react', 'date-fns'],
+  },
   async headers() {
     return [
       {
