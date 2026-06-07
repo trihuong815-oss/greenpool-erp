@@ -652,7 +652,10 @@ function MessageThread({ conv, currentUserId, onBack }: { conv: ChatConversation
               value={searchQ}
               onChange={(e) => runSearch(e.target.value)}
               placeholder="Tìm trong cuộc trò chuyện..."
-              className="w-full pl-9 pr-3 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              type="search"
+              enterKeyHint="search"
+              // Phase 13.16.10: text-base mobile → iOS không auto-zoom khi focus
+              className="w-full pl-9 pr-3 py-2 text-base sm:text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
             />
             {searching && <Loader2 size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 animate-spin" />}
           </div>
@@ -1009,7 +1012,15 @@ function MessageThread({ conv, currentUserId, onBack }: { conv: ChatConversation
               placeholder="Nhập tin nhắn..."
               rows={1}
               maxLength={2000}
-              className="flex-1 min-w-0 resize-none border border-slate-300 rounded-2xl px-3 sm:px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 max-h-32"
+              enterKeyHint="send"
+              autoCorrect="on"
+              autoCapitalize="sentences"
+              spellCheck
+              // Phase 13.16.10 (2026-06-07): ROOT CAUSE fix iOS Safari auto-zoom + auto-scroll.
+              // iOS Safari mặc định nếu input font-size < 16px → ZOOM khi focus → scroll content
+              // để input visible → đẩy chat header ra ngoài viewport (anh báo).
+              // text-base (16px) mobile + sm:text-sm desktop → KHÔNG còn auto-zoom → header đứng yên.
+              className="flex-1 min-w-0 resize-none border border-slate-300 rounded-2xl px-3 sm:px-4 py-2 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 max-h-32"
             />
             <button
               onClick={send}
@@ -1080,7 +1091,9 @@ function NewConvModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
             <input
               autoFocus value={q} onChange={(e) => setQ(e.target.value)}
               placeholder="Tìm theo tên / email / role..."
-              className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              type="search"
+              enterKeyHint="search"
+              className="w-full pl-9 pr-3 py-2 text-base sm:text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
             />
           </div>
         </div>
@@ -1155,14 +1168,17 @@ function NewGroupModal({ onClose, onCreated }: { onClose: () => void; onCreated:
           <input
             value={name} onChange={(e) => setName(e.target.value)} maxLength={100}
             placeholder="Tên nhóm (vd: Sale 24 NCT, Kỹ thuật CTT...)"
-            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            autoCapitalize="words"
+            className="w-full px-3 py-2 text-base sm:text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
           />
           <div className="relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               value={q} onChange={(e) => setQ(e.target.value)}
               placeholder="Tìm thành viên..."
-              className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              type="search"
+              enterKeyHint="search"
+              className="w-full pl-9 pr-3 py-2 text-base sm:text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
             />
           </div>
           {selected.size > 0 && (
@@ -1469,7 +1485,8 @@ function ForwardMessageModal({ msg, fromConvName, currentUserId, onClose, onSent
         </div>
         <div className="p-3 border-b border-slate-100">
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm cuộc trò chuyện..."
-            className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            type="search" enterKeyHint="search"
+            className="w-full px-3 py-2 text-base sm:text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" />
         </div>
         {error && <div className="mx-3 mt-2 p-2 text-xs bg-rose-50 text-rose-700 rounded">{error}</div>}
         <div className="flex-1 overflow-y-auto">

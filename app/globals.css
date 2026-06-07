@@ -59,3 +59,17 @@ input[type='number'] {
   content: '';
   @apply block w-1 h-4 bg-emerald-500 rounded-sm;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Phase 13.16.10 (2026-06-07): iOS Safari anti-auto-zoom fix global.
+   iOS Safari mặc định nếu input/textarea/select font-size < 16px → ZOOM khi focus
+   → scroll content để input visible → đẩy header trôi mất.
+   max(16px, X) đảm bảo font ít nhất 16px trên mobile, GIỮ kích thước desktop bình thường.
+   ═══════════════════════════════════════════════════════════════════════ */
+@media (max-width: 640px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  textarea,
+  select {
+    font-size: max(16px, 1em) !important;
+  }
+}
