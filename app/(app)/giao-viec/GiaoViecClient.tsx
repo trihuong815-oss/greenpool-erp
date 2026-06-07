@@ -723,7 +723,11 @@ function KanbanView({ tasks, departments, branches, onSelect }: {
 function PipelineSteps({ task }: { task: Task }) {
   // Steps phụ thuộc workflow: nếu cần duyệt → 4 bước (Tạo → Duyệt → Đang làm → Hoàn thành)
   //                            nếu không → 3 bước (Tạo → Đang làm → Hoàn thành)
-  const needsApproval = !!task.approvalRequiredFrom || task.crossBlock;
+  // Phase B.7 phase 2: dùng currentApprover thay legacy approvalRequiredFrom.
+  // approvalChain tồn tại từ Phase 12.5+ → length > 0 cũng tính cần duyệt.
+  const needsApproval = !!task.currentApprover
+    || (Array.isArray(task.approvalChain) && task.approvalChain.length > 0)
+    || task.crossBlock;
   const steps = needsApproval
     ? [
         { key: 'created', label: 'Tạo' },

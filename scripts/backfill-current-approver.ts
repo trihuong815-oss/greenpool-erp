@@ -17,14 +17,24 @@
 //
 // KHÔNG xoá field khỏi docs cũ — chỉ stop ghi mới + ngừng đọc.
 
-import { getFirebaseAdminDb } from '../lib/firebase/admin';
-import { COLLECTIONS } from '../lib/firebase/collections';
+import { initializeApp, getApps, cert } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 const APPLY = process.argv.includes('--apply');
 
+function initAdmin() {
+  if (getApps().length > 0) return;
+  const credPath = process.env.GOOGLE_APPLICATION_CREDENTIALS || './secrets/firebase-admin-sa.json';
+  const sa = JSON.parse(readFileSync(resolve(process.cwd(), credPath), 'utf8'));
+  initializeApp({ credential: cert(sa) });
+}
+
 async function main() {
-  const db = getFirebaseAdminDb();
-  const snap = await db.collection(COLLECTIONS.TASKS)
+  initAdmin();
+  const db = getFirestore();
+  const snap = await db.collection('tasks')
     .where('status', '==', 'pending_approval')
     .get();
 

@@ -170,9 +170,11 @@ async function fetchTaskCounts(uid: string, roleCode: string) {
         .get();
       approvalCount = snap.size;
     } else if (isGD) {
+      // Phase B.7 phase 2 (2026-06-07): query theo currentApprover = 'role:<roleCode>'
+      // (Phase 12.5+ format). Legacy approvalRequiredFrom đã drop.
       const snap = await col
         .where('status', '==', 'pending_approval')
-        .where('approvalRequiredFrom', '==', roleCode)
+        .where('currentApprover', '==', `role:${roleCode}`)
         .orderBy('createdAt', 'desc')
         .limit(200)
         .get();

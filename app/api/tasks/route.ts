@@ -88,15 +88,8 @@ export async function GET(req: NextRequest) {
               .limit(LIST_LIMIT)
               .get(),
           );
-          // Q3 (legacy): approvalRequiredFrom == roleCode (doc cũ chưa có currentApprover)
-          queries.push(
-            colRef
-              .where('status', '==', 'pending_approval')
-              .where('approvalRequiredFrom', '==', caller.profile.role_code)
-              .orderBy('createdAt', 'desc')
-              .limit(LIST_LIMIT)
-              .get(),
-          );
+          // Phase B.7 phase 2 (2026-06-07): bỏ Q3 legacy query —
+          // backfill confirmed 0 docs pending_approval còn dùng approvalRequiredFrom.
         }
         const results = await Promise.all(queries);
         results.forEach((snap) => addDocs(snap.docs));
@@ -413,16 +406,16 @@ export async function POST(req: NextRequest) {
     );
     let crossBlock = legacyApproval.crossBlock;
     let status = legacyApproval.status;
-    let approvalRequiredFrom: string | null = legacyApproval.approvalRequiredFrom;
     let approvalChain: string[] = [];
     let currentApprover: string | null = null;
 
-    // Phase B.7 (2026-06-07): dual-write currentApprover cho assignment để docs mới
-    // có cả 2 field (legacy approvalRequiredFrom + Phase 12.5+ currentApprover).
-    // Khi backfill xong docs cũ (chưa làm), có thể drop legacy field.
-    // Hiện tại canApproveTask đã ưu tiên currentApprover > approvalRequiredFrom.
-    if (kind === 'assignment' && approvalRequiredFrom) {
-      currentApprover = `role:${approvalRequiredFrom}`;
+    // Phase B.7 phase 2 (2026-06-07): drop legacy approvalRequiredFrom field.
+    // Backfill script confirmed 0 docs pending_approval còn phụ thuộc.
+    // computeApproval() vẫn trả approvalRequiredFrom (string role) → convert sang
+    // currentApprover format mới 'role:<role>' và bỏ legacy field.
+    const legacyApprover = legacyApproval.approvalRequiredFrom;
+    if (kind === 'assignment' && legacyApprover) {
+      currentApprover = `role:${legacyApprover}`;
       approvalChain = [currentApprover];
     }
 
@@ -557,7 +550,6 @@ export async function POST(req: NextRequest) {
       approvalChain = chain;
       status = 'pending_approval';
       currentApprover = approvalChain[0];
-      approvalRequiredFrom = null;
       // crossBlock theo block recipient vs creator
       const recipientBlock = recipientRole === 'CEO' || recipientRole === 'ADMIN'
         ? 'all' : (recipientRole === 'GD_KD' ? 'KD' : recipientRole === 'GD_VP' ? 'VP'
@@ -582,7 +574,6 @@ export async function POST(req: NextRequest) {
       assigneeUserIds,
       crossBlock,
       status,
-      approvalRequiredFrom,
       approvedBy: null,
       approvedAt: null,
       rejectionReason: null,
@@ -609,8 +600,10 @@ export async function POST(req: NextRequest) {
 
     // Comment "created" event
     const kindLabel = kind === 'proposal' ? 'đề xuất' : 'giao việc';
+    // Phase B.7 phase 2: comment ghi rõ approver tag (vd "role:GD_KD" hoặc "user:UID")
+    // — không còn legacy role string. UI dịch lại sang tên hiển thị.
     const eventBody = status === 'pending_approval'
-      ? `Tạo ${kindLabel} — chờ ${approvalRequiredFrom} duyệt`
+      ? `Tạo ${kindLabel} — chờ ${currentApprover ?? 'cấp trên'} duyệt`
       : `Tạo ${kindLabel}`;
     await ref.collection('comments').add({
       authorId: caller.profile.uid,
@@ -645,7 +638,6 @@ export async function POST(req: NextRequest) {
         assigneeFacilityId,
         status,
         currentApprover,
-        approvalRequiredFrom,
       });
     } catch (e: any) {
       console.warn('[tasks POST] notifyTaskCreated fail:', e?.message);

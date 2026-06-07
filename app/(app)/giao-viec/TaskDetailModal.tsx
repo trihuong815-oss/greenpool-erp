@@ -83,9 +83,9 @@ export function TaskDetailModal(props: {
     (cur.startsWith('role:') && cur.slice(5) === currentUserRole) ||
     (!cur.startsWith('user:') && !cur.startsWith('role:') && cur === currentUserRole)
   );
-  // Legacy fallback: approvalRequiredFrom == role (doc cũ không có currentApprover)
-  const isLegacyRoleApprover = !cur && isGD && task.approvalRequiredFrom === currentUserRole;
-  const isMyBlockApprover = (isGD && isMyTurnByRole) || isLegacyRoleApprover;
+  // Phase B.7 phase 2 (2026-06-07): bỏ legacy fallback approvalRequiredFrom.
+  // Backfill confirmed 0 docs pending_approval còn dùng — currentApprover đủ.
+  const isMyBlockApprover = isGD && isMyTurnByRole;
 
   const isCreator = task.createdBy === currentUserId;
   const isAssigneeUser = task.assigneeUserIds.includes(currentUserId);

@@ -30,6 +30,8 @@ export function serializeTask(id: string, data: Record<string, any>): Record<str
   out.crossBlock = !!out.crossBlock;
   out.assigneeDeptId = out.assigneeDeptId ?? null;
   out.assigneeFacilityId = out.assigneeFacilityId ?? null;
+  // Phase B.7 phase 2 (2026-06-07): không still ghi approvalRequiredFrom mới —
+  // chỉ default null khi serialize doc cũ vẫn còn field này (backward compat read).
   out.approvalRequiredFrom = out.approvalRequiredFrom ?? null;
   out.approvedBy = out.approvedBy ?? null;
   out.approvedAt = out.approvedAt ?? null;
@@ -55,7 +57,7 @@ export function taskScopeFromDoc(d: Record<string, any>): TaskForScope {
     assigneeFacilityId: d.assigneeFacilityId ?? null,
     assigneeUserIds: Array.isArray(d.assigneeUserIds) ? d.assigneeUserIds : [],
     status: d.status,
-    approvalRequiredFrom: d.approvalRequiredFrom ?? null,
+    // Phase B.7 phase 2: bỏ approvalRequiredFrom — canApproveTask chỉ đọc currentApprover.
     currentApprover: d.currentApprover ?? null,
   };
 }

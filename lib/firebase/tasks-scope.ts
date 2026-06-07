@@ -38,9 +38,8 @@ export interface TaskForScope {
   assigneeFacilityId: string | null;
   assigneeUserIds: string[];
   status: TaskStatus;
-  approvalRequiredFrom: string | null;
-  // Phase 12.5 (2026-06-03): chain entry dạng "user:UID" | "role:GD_KD" | legacy "GD_KD".
-  // Khi có currentApprover thì ưu tiên dùng nó; nếu null thì fallback approvalRequiredFrom.
+  // Phase 12.5+ chain entry: 'user:UID' | 'role:GD_KD' (post B.7 phase 2: legacy
+  // approvalRequiredFrom đã drop — backfill confirmed 0 docs phụ thuộc).
   currentApprover?: string | null;
 }
 
@@ -175,7 +174,8 @@ export function canApproveTask(p: CallerProfile, t: TaskForScope): boolean {
   // Quy tắc nghiệp vụ: creator + assignee không tự duyệt
   if (t.createdBy === p.uid) return false;
   if (t.assigneeUserIds.includes(p.uid)) return false;
-  // Phase 12.5: currentApprover (uid/role) > approvalRequiredFrom (legacy role).
+  // Phase 12.5+ (post B.7 phase 2 — 2026-06-07): currentApprover là source of truth.
+  // Legacy approvalRequiredFrom đã được drop — backfill confirmed 0 docs pending_approval.
   // CEO bypass CHỈ khi không có currentApprover user-cụ thể (để creator chỉ đích danh ai duyệt thì ko bị CEO chen ngang).
   if (t.currentApprover) {
     if (t.currentApprover.startsWith('user:')) {
@@ -185,8 +185,8 @@ export function canApproveTask(p: CallerProfile, t: TaskForScope): boolean {
     if (isCEO(p)) return true;
     return false;
   }
-  if (isCEO(p)) return true;
-  return t.approvalRequiredFrom === p.role_code;
+  // Không có currentApprover (orphan doc) → chỉ CEO/ADMIN approve được.
+  return isCEO(p);
 }
 
 // ---- UPDATE STATUS (in_progress / done) ----

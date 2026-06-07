@@ -56,18 +56,14 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
     if (isMultiStep) {
       update.approvalsCompleted = [...completed, newApprovalStep];
       if (nextApprover) {
-        // Còn cấp tiếp → giữ pending_approval, chuyển currentApprover
+        // Còn cấp tiếp → giữ pending_approval, chuyển currentApprover.
+        // Phase B.7 phase 2 (2026-06-07): bỏ ghi approvalRequiredFrom legacy.
         update.status = 'pending_approval';
         update.currentApprover = nextApprover;
-        // approvalRequiredFrom = role nếu nextApprover là role-key; null nếu user-key
-        update.approvalRequiredFrom = nextApprover.startsWith('role:')
-          ? nextApprover.slice(5)
-          : (nextApprover.startsWith('user:') ? null : nextApprover);
       } else {
         // Hết chain → đến recipient
         update.status = 'pending';
         update.currentApprover = null;
-        update.approvalRequiredFrom = null;
         update.approvedBy = caller.profile.uid;
         update.approvedAt = now;
       }
@@ -107,7 +103,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
         assigneeFacilityId: data.assigneeFacilityId ?? null,
         status: (update.status ?? 'pending') as string,
         currentApprover: (update.currentApprover ?? null) as string | null,
-        approvalRequiredFrom: (update.approvalRequiredFrom ?? null) as string | null,
       }, caller.actorName);
     } catch (e: any) {
       console.warn('[task approve] notifyTaskApproved fail:', e?.message);
