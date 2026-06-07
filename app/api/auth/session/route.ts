@@ -4,6 +4,7 @@
 // Cookie: httpOnly, secure (prod), sameSite=lax, TTL 14d (khớp Firebase session cookie max).
 
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { getFirebaseAdminAuth } from '@/lib/firebase/admin';
 import { SESSION_COOKIE, SESSION_TTL_MS } from '@/lib/firebase/session-auth';
 
@@ -31,6 +32,26 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE() {
+  // Phase A.3 (2026-06-07) CRITICAL fix: revoke Firebase refresh tokens trước khi clear cookie.
+  // Trước đây chỉ clear cookie → nếu attacker stole cookie, vẫn dùng được 14 ngày
+  // (verifySessionCookie với checkRevoked=true vẫn return valid vì refresh token chưa revoke).
+  // Giờ revoke tokens → mọi session cũ invalidate ngay → "logout all devices" semantics đúng.
+  try {
+    const cookieStore = await cookies();
+    const sessionCookieValue = cookieStore.get(SESSION_COOKIE)?.value;
+    if (sessionCookieValue) {
+      const auth = getFirebaseAdminAuth();
+      // Decode session cookie để lấy uid → revoke tokens
+      const decoded = await auth.verifySessionCookie(sessionCookieValue, false).catch(() => null);
+      if (decoded?.uid) {
+        await auth.revokeRefreshTokens(decoded.uid).catch((e) => {
+          console.warn('[auth/session DELETE] revokeRefreshTokens fail:', e?.message);
+        });
+      }
+    }
+  } catch (e: any) {
+    console.warn('[auth/session DELETE] decode/revoke skip:', e?.message);
+  }
   const res = NextResponse.json({ ok: true });
   res.cookies.set(SESSION_COOKIE, '', { maxAge: 0, path: '/' });
   return res;

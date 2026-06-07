@@ -23,20 +23,24 @@ service firebase.storage {
   match /b/{bucket}/o {
 
     // ---- Helpers (đồng bộ logic với firestore.rules) ----
+    // Phase A.3 (2026-06-07) CRITICAL: rename profiles/{uid} → users/{uid}, snake_case → camelCase.
+    // Trước đây rules check `profiles/` (collection đã empty từ Phase 4) → mọi role check trả
+    // null → defense-in-depth GONE cho Storage. Admin SDK signed URL bypass nên user không thấy bug,
+    // nhưng direct download URL có thể exploit. Fix: trỏ về `users/`, field roleId/branchId/...
     function isSignedIn() {
       return request.auth != null;
     }
     function userProfile() {
-      return firestore.get(/databases/(default)/documents/profiles/$(request.auth.uid)).data;
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
     }
-    function userRole()       { return userProfile().role_code; }
-    function userFacility()   { return userProfile().facility_id; }
-    function userDepartment() { return userProfile().department_id; }
-    function userShift()      { return userProfile().shift_assignment; }
-    function isSharedShift()  { return userProfile().is_shared_shift_account == true; }
+    function userRole()       { return userProfile().roleId; }
+    function userFacility()   { return userProfile().branchId; }
+    function userDepartment() { return userProfile().departmentId; }
+    function userShift()      { return userProfile().shiftAssignment; }
+    function isSharedShift()  { return userProfile().isSharedShiftAccount == true; }
 
     function isAdmin() {
-      return isSignedIn() && userRole() in ['CEO','GD_KD','GD_VP'];
+      return isSignedIn() && userRole() in ['CEO','ADMIN','GD_KD','GD_VP'];
     }
     function isQLCS() {
       return isSignedIn() && userRole().matches('QLCS_.*');
