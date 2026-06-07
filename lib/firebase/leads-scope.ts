@@ -5,12 +5,14 @@
 // Delete: admin only.
 
 import { isAdmin, isWriteAdmin, isQLCS, isTP, type CallerProfile } from './checklist-scope';
+// Phase B.1: BRANCH_IDS single source of truth.
+import { BRANCH_IDS } from '@/lib/branches';
 
 export interface LeadForScope {
   branchId: string;
 }
 
-const ALL_BRANCHES = ['HM', 'TK', 'CTT', '24', 'TT'] as const;
+const ALL_BRANCHES = BRANCH_IDS;
 
 export function canReadLeads(p: CallerProfile): boolean {
   return !!p.uid;

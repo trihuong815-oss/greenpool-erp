@@ -1,11 +1,15 @@
 // ============================================
 // Green Pool ERP — RBAC & Permissions
-// Logic phân quyền giống prototype, áp dụng phía client
-// (Supabase RLS đảm bảo phía server)
+// Logic phân quyền áp dụng phía client + server (qua scope helpers).
+// Firestore rules là layer cuối cùng (defense-in-depth).
 // ============================================
 
+import { BRANCH_IDS, isBranchId, type BranchId } from './branches';
+
 export type RoleCode = string;
-export type FacilityId = 'HM' | 'TK' | 'CTT' | '24' | 'TT';
+// FacilityId = BranchId — alias để giữ backward compat với code cũ.
+// Tốt hơn import BranchId trực tiếp từ '@/lib/branches' cho code mới.
+export type FacilityId = BranchId;
 
 /** Roles có toàn quyền hệ thống — bypass mọi scope check. ADMIN là role IT/quản trị viên hệ thống. */
 export const TOP_ADMIN_CODES: ReadonlySet<string> = new Set(['CEO', 'ADMIN']);
@@ -181,11 +185,10 @@ export function canSeeAllFacilities(roleCode: string): boolean {
   return isTopAdmin(roleCode) || roleCode === 'GD_KD' || roleCode === 'GD_VP';
 }
 
-const ALL_FACILITIES: FacilityId[] = ['HM','TK','CTT','24','TT'];
-
-function isFacilityId(x: unknown): x is FacilityId {
-  return typeof x === 'string' && (ALL_FACILITIES as string[]).includes(x);
-}
+// Phase B.1: dùng BRANCH_IDS từ lib/branches.ts (single source of truth).
+// Spread thành mutable array để giữ signature backward compat với callers cũ.
+const ALL_FACILITIES: FacilityId[] = [...BRANCH_IDS];
+const isFacilityId = isBranchId;
 
 // Scope cơ sở:
 //   • Admin (CEO/GĐ/GĐ_VP) → toàn bộ 5

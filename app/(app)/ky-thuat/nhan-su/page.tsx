@@ -11,7 +11,8 @@ import { getFirebaseAdminDb } from '@/lib/firebase/admin';
 import { COLLECTIONS } from '@/lib/firebase/collections';
 import { OrgChart } from './OrgChart';
 
-const BRANCH_ORDER = ['HM', 'TK', 'CTT', '24', 'TT'] as const;
+// Phase B.1: BRANCH_IDS single source of truth.
+import { BRANCH_IDS as BRANCH_ORDER } from '@/lib/branches';
 const BRANCH_LABELS: Record<string, string> = {
   HM: 'Hoàng Mai', TK: '20 Thuỵ Khuê', CTT: 'Cung Thể Thao MĐ', '24': '24 NCT', TT: 'Thanh Trì',
 };

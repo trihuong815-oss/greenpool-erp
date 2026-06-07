@@ -3,8 +3,10 @@
 // Writes: admin (any branch), QLCS/staff (chỉ branch của mình).
 
 import { isAdmin, isWriteAdmin, isQLCS, isTP, type CallerProfile } from './checklist-scope';
+// Phase B.1: BRANCH_IDS single source of truth.
+import { BRANCH_IDS } from '@/lib/branches';
 
-const ALL_BRANCHES = ['HM', 'TK', 'CTT', '24', 'TT'] as const;
+const ALL_BRANCHES = BRANCH_IDS;
 
 export function canReadEntries(p: CallerProfile): boolean {
   return !!p.uid;

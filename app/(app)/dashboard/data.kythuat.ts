@@ -12,7 +12,9 @@ import { COLLECTIONS } from '@/lib/firebase/collections';
 import { canReadChemicalEntry, canReadMachine, isValidCttSubArea } from './../../../lib/firebase/ky-thuat-scope';
 import type { CallerProfile } from './../../../lib/firebase/checklist-scope';
 
-const ALL_BRANCHES = ['HM', 'TK', 'CTT', '24', 'TT'] as const;
+// Phase B.1: BRANCH_IDS single source of truth.
+import { BRANCH_IDS } from '@/lib/branches';
+const ALL_BRANCHES = BRANCH_IDS;
 type BranchId = typeof ALL_BRANCHES[number];
 
 export interface KyThuatBranchAgg {

@@ -11,7 +11,9 @@ import {
 } from '@/lib/firebase/ky-thuat-scope';
 import { GiaoViecClient, type WorkRow, type AssigneeOption } from './GiaoViecClient';
 
-const ALL_BRANCHES = ['HM', 'TK', 'CTT', '24', 'TT'] as const;
+// Phase B.1: BRANCH_IDS single source of truth.
+import { BRANCH_IDS } from '@/lib/branches';
+const ALL_BRANCHES = BRANCH_IDS;
 const BRANCH_LABELS: Record<string, string> = {
   HM:  'Green Pool Hoàng Mai',
   TK:  'Green Pool 20 Thuỵ Khuê',

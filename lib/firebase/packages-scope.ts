@@ -3,8 +3,10 @@
 // QLCS + mọi role signed-in: read only (để chọn dropdown trong /doanh-so/nhap).
 
 import { isAdmin, isWriteAdmin, isTP, type CallerProfile } from './checklist-scope';
+// Phase B.1: BRANCH_IDS single source of truth.
+import { BRANCH_IDS } from '@/lib/branches';
 
-const ALL_BRANCHES = ['HM', 'TK', 'CTT', '24', 'TT'] as const;
+const ALL_BRANCHES = BRANCH_IDS;
 
 export interface ResourceForScope {
   branchId: string;

@@ -397,7 +397,8 @@ function ProfileRow({ profile }: { profile: Profile }) {
 }
 
 // Group nhân sự theo cơ sở — dùng khi modal không filter branch (tier-view, hoặc cross-branch)
-const BRANCH_ORDER = ['HM', 'TK', 'CTT', '24', 'TT'];
+// Phase B.1: BRANCH_IDS single source of truth.
+import { BRANCH_IDS as BRANCH_ORDER } from '@/lib/branches';
 const BRANCH_LABEL: Record<string, string> = {
   HM: 'Hoàng Mai', TK: 'Thuỵ Khuê', CTT: 'CTT Mỹ Đình', '24': '24 NCT', TT: 'Thanh Trì',
 };
@@ -409,8 +410,10 @@ function GroupedProfileList({ profiles }: { profiles: Profile[] }) {
     (groups[key] ??= []).push(p);
   }
   const keys = Object.keys(groups).sort((a, b) => {
-    const ia = BRANCH_ORDER.indexOf(a);
-    const ib = BRANCH_ORDER.indexOf(b);
+    // Phase B.1: BRANCH_ORDER là readonly tuple → cast string[] cho indexOf chấp nhận string thường.
+    const order = BRANCH_ORDER as readonly string[];
+    const ia = order.indexOf(a);
+    const ib = order.indexOf(b);
     if (ia === -1 && ib === -1) return a.localeCompare(b);
     if (ia === -1) return 1;
     if (ib === -1) return -1;

@@ -14,7 +14,9 @@ import {
 import { MayClient, type MachineAgg, type MachineSetup, type RunRow } from './MayClient';
 import type { MachineType } from '@/lib/services/ky-thuat/machines-api-client';
 
-const ALL_BRANCHES = ['HM', 'TK', 'CTT', '24', 'TT'] as const;
+// Phase B.1: BRANCH_IDS single source of truth.
+import { BRANCH_IDS } from '@/lib/branches';
+const ALL_BRANCHES = BRANCH_IDS;
 const BRANCH_LABELS: Record<string, string> = {
   HM:  'Green Pool Hoàng Mai',
   TK:  'Green Pool 20 Thuỵ Khuê',
