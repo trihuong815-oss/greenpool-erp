@@ -12,6 +12,7 @@ import { MfaRequiredBanner } from './MfaRequiredBanner';
 import { NotiCountsProvider } from '@/lib/hooks/use-noti-counts';
 import { BottomNavBar } from './ui/BottomNavBar';
 import { ToastProvider } from './ui/Toast';
+import { CommandPaletteProvider } from './ui/CommandPalette';
 
 interface AppShellProps {
   userName: string;
@@ -59,6 +60,7 @@ export function AppShell({ userName, userRole, roleCode, menuOverrides, children
   return (
     <NotiCountsProvider>
     <ToastProvider>
+    <CommandPaletteProvider roleCode={roleCode} menuOverrides={menuOverrides}>
     <MobileNavContext.Provider value={{ open, setOpen }}>
       {/* Phase 13.16.9: h-[var(--gp-vh)] fallback dvh — visualViewport tracking giải quyết
           iOS Safari auto-scroll khi keyboard pop làm chat header trôi mất. */}
@@ -95,6 +97,7 @@ export function AppShell({ userName, userRole, roleCode, menuOverrides, children
         <BottomNavBar roleCode={roleCode} />
       </div>
     </MobileNavContext.Provider>
+    </CommandPaletteProvider>
     </ToastProvider>
     </NotiCountsProvider>
   );

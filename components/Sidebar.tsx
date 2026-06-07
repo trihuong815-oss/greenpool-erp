@@ -1,11 +1,12 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { effectiveMenu } from '@/lib/permissions';
 import {
   Home, BarChart3, CheckSquare, FileText, ListTodo, MessageCircle,
-  Users, DollarSign, FileBarChart, GraduationCap, Megaphone, Settings, LogOut, UserCog, Wrench, KeyRound, X, Briefcase, ShieldCheck,
+  Users, DollarSign, FileBarChart, GraduationCap, Megaphone, Settings, LogOut, UserCog, Wrench, KeyRound, X, Briefcase, ShieldCheck, Search,
   type LucideIcon,
 } from 'lucide-react';
 import { TasksBadge } from './TasksBadge';
@@ -13,6 +14,7 @@ import { ChatUnreadBadge } from './ChatUnreadBadge';
 import { ChecklistBadge } from './ChecklistBadge';
 import { TechWorkBadge } from './TechWorkBadge';
 import { useMobileNav } from './MobileNavContext';
+import { useCommandPalette } from './ui/CommandPalette';
 
 interface MenuItem {
   route: string;
@@ -135,6 +137,9 @@ export function Sidebar({ userName, userRole, roleCode, menuOverrides }: Sidebar
         </div>
       </div>
 
+      {/* Phase UI-3.1 (2026-06-07): Cmd+K Spotlight trigger — desktop hiển thị shortcut hint, mobile vẫn click được */}
+      <SidebarCommandTrigger />
+
       {/* Menu sections */}
       <nav className="flex-1 overflow-y-auto px-3 py-4">
         {visibleSections.map((section) => (
@@ -211,5 +216,33 @@ export function Sidebar({ userName, userRole, roleCode, menuOverrides }: Sidebar
         </div>
       </div>
     </aside>
+  );
+}
+
+/** Phase UI-3.1: nút mở Cmd+K palette, hint shortcut desktop. Tách function để
+ *  dùng useCommandPalette hook không pollute Sidebar render. */
+function SidebarCommandTrigger() {
+  const { toggle } = useCommandPalette();
+  const [isMac, setIsMac] = useState(false);
+  useEffect(() => {
+    if (typeof navigator !== 'undefined') {
+      setIsMac(/Mac|iPhone|iPad/.test(navigator.platform));
+    }
+  }, []);
+  return (
+    <div className="px-3 pt-3">
+      <button
+        type="button"
+        onClick={toggle}
+        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-500 bg-slate-50 hover:bg-slate-100 rounded-lg ring-1 ring-slate-200 transition"
+        aria-label="Tìm nhanh — Cmd K"
+      >
+        <Search size={14} className="text-slate-400" />
+        <span className="flex-1 text-left">Tìm trang…</span>
+        <kbd className="hidden md:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 bg-white border border-slate-200 rounded">
+          {isMac ? '⌘' : 'Ctrl'} K
+        </kbd>
+      </button>
+    </div>
   );
 }

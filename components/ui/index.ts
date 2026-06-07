@@ -21,3 +21,6 @@ export { EmptyState } from './EmptyState';
 
 export { ToastProvider, useToast } from './Toast';
 export type { ToastTone } from './Toast';
+
+// ─── UI-3: Desktop pro ───
+export { CommandPaletteProvider, useCommandPalette } from './CommandPalette';
