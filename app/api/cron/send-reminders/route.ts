@@ -15,6 +15,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { timingSafeEqual } from 'node:crypto';
 import { getFirebaseAdmin, getFirebaseAdminDb } from '@/lib/firebase/admin';
 import { COLLECTIONS } from '@/lib/firebase/collections';
+import { extractFcmTokens, cleanupInvalidFcmTokens } from '@/lib/firebase/fcm-tokens';
 
 export const maxDuration = 60;
 
@@ -89,8 +90,8 @@ export async function POST(req: NextRequest) {
   for (const [uid, tasks] of byOwner.entries()) {
     const userSnap = await db.collection(COLLECTIONS.USERS).doc(uid).get();
     if (!userSnap.exists) continue;
-    const user = userSnap.data() as { fcmTokens?: string[]; displayName?: string };
-    const tokens = Array.isArray(user.fcmTokens) ? user.fcmTokens.filter((t) => typeof t === 'string') : [];
+    const user = userSnap.data() as any;
+    const tokens = extractFcmTokens(user);
     if (tokens.length === 0) {
       // User chưa register token → vẫn mark sent để khỏi spam log
       for (const t of tasks) taskMarkSent.push(t.id);
@@ -140,14 +141,16 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Cleanup invalid tokens
+  // Cleanup invalid tokens — group by uid (Phase B.6 helper)
+  const removeByUid = new Map<string, string[]>();
   for (const { uid, token } of tokensToRemove) {
-    try {
-      await db.collection(COLLECTIONS.USERS).doc(uid).update({
-        fcmTokens: FieldValue.arrayRemove(token),
-      });
-    } catch { /* ignore */ }
+    const arr = removeByUid.get(uid) ?? [];
+    arr.push(token);
+    removeByUid.set(uid, arr);
   }
+  await Promise.all(Array.from(removeByUid.entries()).map(
+    ([uid, tokens]) => cleanupInvalidFcmTokens(db, uid, tokens)
+  ));
 
   // Mark tasks as reminderSent — atomic via transaction để tránh race với /check-my-reminders
   // (cùng task có thể được fetch song song bởi cron + user trigger)

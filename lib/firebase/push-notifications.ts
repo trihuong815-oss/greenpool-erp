@@ -14,6 +14,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { getMessaging } from 'firebase-admin/messaging';
 import { getFirebaseAdmin, getFirebaseAdminDb } from './admin';
 import { COLLECTIONS } from './collections';
+import { extractFcmTokens } from './fcm-tokens';
 
 export interface PushPayload {
   /** Notification title — ≤ 60 ký tự khuyến nghị */
@@ -57,19 +58,9 @@ export async function pushToUsers(uids: string[], payload: PushPayload): Promise
     for (const s of snaps) {
       if (!s.exists) continue;
       const x = s.data();
-      // Phase 13.13.1 (2026-06-06): SOURCE-OF-TRUTH = fcmDevices.
-      // Trước đây load từ x.fcmTokens (legacy) → tokens cũ đã expire vẫn được gửi,
-      // FCM trả invalid → push fail dù fcmDevices có token mới hợp lệ.
-      // Giờ: dedup từ fcmDevices[].token (lọc enabled !== false).
-      const devices: any[] = Array.isArray(x?.fcmDevices) ? x.fcmDevices : [];
-      const enabledTokens = devices
-        .filter((d) => d && d.enabled !== false && typeof d.token === 'string' && d.token.length > 20)
-        .map((d) => d.token as string);
-      let tk = Array.from(new Set(enabledTokens));
-      // Fallback (backward compat): user chưa từng dùng fcmDevices → đọc legacy fcmTokens.
-      if (tk.length === 0 && Array.isArray(x?.fcmTokens)) {
-        tk = Array.from(new Set(x.fcmTokens.filter((t: any) => typeof t === 'string' && t.length > 20))) as string[];
-      }
+      // Phase B.6 (2026-06-07): extractFcmTokens centralized — đồng nhất logic
+      // với 5 cron routes. Source-of-truth = fcmDevices, fallback fcmTokens legacy.
+      const tk = extractFcmTokens(x);
       if (tk.length === 0) continue;
       tokenMap.set(s.id, tk);
       allTokens.push(...tk);

@@ -10,10 +10,10 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getMessaging } from 'firebase-admin/messaging';
-import { FieldValue } from 'firebase-admin/firestore';
 import { timingSafeEqual } from 'node:crypto';
 import { getFirebaseAdmin, getFirebaseAdminDb } from '@/lib/firebase/admin';
 import { COLLECTIONS } from '@/lib/firebase/collections';
+import { extractFcmTokens, cleanupInvalidFcmTokens } from '@/lib/firebase/fcm-tokens';
 
 export const maxDuration = 60;
 
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
   const candidates: { uid: string; tokens: string[]; displayName: string }[] = [];
   for (const d of usersSnap.docs) {
     const x = d.data();
-    const tokens = Array.isArray(x.fcmTokens) ? x.fcmTokens.filter((t: any) => typeof t === 'string') : [];
+    const tokens = extractFcmTokens(x);
     if (tokens.length === 0) continue;
     candidates.push({ uid: d.id, tokens, displayName: x.displayName ?? '' });
   }
@@ -150,14 +150,16 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Cleanup invalid tokens
+  // Cleanup invalid tokens — group by uid để 1 transaction/uid (Phase B.6 helper)
+  const removeByUid = new Map<string, string[]>();
   for (const { uid, token } of tokensToRemove) {
-    try {
-      await db.collection(COLLECTIONS.USERS).doc(uid).update({
-        fcmTokens: FieldValue.arrayRemove(token),
-      });
-    } catch { /* ignore */ }
+    const arr = removeByUid.get(uid) ?? [];
+    arr.push(token);
+    removeByUid.set(uid, arr);
   }
+  await Promise.all(Array.from(removeByUid.entries()).map(
+    ([uid, tokens]) => cleanupInvalidFcmTokens(db, uid, tokens)
+  ));
 
   return NextResponse.json({
     ok: true,

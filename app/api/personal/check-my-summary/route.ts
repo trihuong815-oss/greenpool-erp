@@ -6,11 +6,11 @@
 // → mỗi user × ngày × kind chỉ gửi 1 lần (cron hoặc client trigger — bên nào tới trước).
 
 import { NextRequest, NextResponse } from 'next/server';
-import { FieldValue } from 'firebase-admin/firestore';
 import { getMessaging } from 'firebase-admin/messaging';
 import { getCurrentProfile } from '@/lib/firebase/current-profile';
 import { getFirebaseAdmin, getFirebaseAdminDb } from '@/lib/firebase/admin';
 import { COLLECTIONS } from '@/lib/firebase/collections';
+import { extractFcmTokens, cleanupInvalidFcmTokens } from '@/lib/firebase/fcm-tokens';
 
 export const maxDuration = 30;
 
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
 
   // Get tokens
   const userSnap = await userRef.get();
-  const tokens: string[] = (userSnap.data()?.fcmTokens ?? []).filter((t: any) => typeof t === 'string');
+  const tokens: string[] = extractFcmTokens(userSnap.data());
   if (tokens.length === 0) return NextResponse.json({ ok: true, msg: 'No tokens' });
 
   // Tasks today (morning) hoặc tomorrow (evening)
@@ -125,7 +125,7 @@ export async function POST(req: NextRequest) {
       if (!r.success && r.error?.code?.includes('not-registered')) tokensToRemove.push(tokens[i]);
     });
     if (tokensToRemove.length > 0) {
-      await userRef.update({ fcmTokens: FieldValue.arrayRemove(...tokensToRemove) }).catch(() => {});
+      await cleanupInvalidFcmTokens(db, ctx.profile.id, tokensToRemove);
     }
     return NextResponse.json({ ok: true, sent: res.successCount, tasksCount: tasksDate.length });
   } catch (e: any) {

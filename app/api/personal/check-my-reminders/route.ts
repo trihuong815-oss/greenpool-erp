@@ -11,6 +11,7 @@ import { getMessaging } from 'firebase-admin/messaging';
 import { getCurrentProfile } from '@/lib/firebase/current-profile';
 import { getFirebaseAdmin, getFirebaseAdminDb } from '@/lib/firebase/admin';
 import { COLLECTIONS } from '@/lib/firebase/collections';
+import { extractFcmTokens, cleanupInvalidFcmTokens } from '@/lib/firebase/fcm-tokens';
 
 export async function POST() {
   const ctx = await getCurrentProfile();
@@ -38,7 +39,7 @@ export async function POST() {
 
   // Get user tokens
   const userSnap = await db.collection(COLLECTIONS.USERS).doc(ctx.profile.id).get();
-  const tokens: string[] = (userSnap.data()?.fcmTokens ?? []).filter((t: any) => typeof t === 'string');
+  const tokens: string[] = extractFcmTokens(userSnap.data());
   if (tokens.length === 0) {
     // Vẫn mark sent để không loop check
     const batch = db.batch();
@@ -93,13 +94,9 @@ export async function POST() {
     }
   }
 
-  // Cleanup invalid tokens (atomic per token via arrayRemove)
+  // Cleanup invalid tokens — dùng helper Phase B.6 (clean cả fcmDevices + fcmTokens)
   if (tokensToRemove.length > 0) {
-    try {
-      await db.collection(COLLECTIONS.USERS).doc(ctx.profile.id).update({
-        fcmTokens: FieldValue.arrayRemove(...tokensToRemove),
-      });
-    } catch { /* ignore */ }
+    await cleanupInvalidFcmTokens(db, ctx.profile.id, tokensToRemove);
   }
 
   return NextResponse.json({ ok: true, sent, pending: pending.length, tokensCleaned: tokensToRemove.length });
