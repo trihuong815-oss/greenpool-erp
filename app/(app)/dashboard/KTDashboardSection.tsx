@@ -131,7 +131,8 @@ export function KTDashboardSection({ summary, visibleBranchIds, myRoleCode }: Pr
               </div>
               <div className="min-w-0 flex-1">
                 <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{m.label}</div>
-                <div className="text-xl font-bold tabular-nums mt-0.5 text-slate-800">{fmt(seriesTotals[k])}</div>
+                {/* Phase 13.16.6: text-base sm:text-xl + break-all cho kWh 6 chữ số mobile */}
+                <div className="text-base sm:text-xl font-bold tabular-nums mt-0.5 text-slate-800 break-all leading-tight">{fmt(seriesTotals[k])}</div>
                 <div className="text-[10px] text-slate-500">{m.unit}{!isAll ? ` · ${visibleBranches.length} cơ sở` : ' · cả hệ thống'}</div>
               </div>
             </Link>

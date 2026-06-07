@@ -354,7 +354,8 @@ function TaskTile({ icon: Icon, label, value, sub, accent, href, onClick }: {
           <Icon size={16} />
         </div>
       </div>
-      <div className="text-3xl font-bold tabular-nums text-slate-900 leading-tight">{value}</div>
+      {/* Phase 13.16.6: text-2xl sm:text-3xl mobile — 4-5 chữ số không chen label */}
+      <div className="text-2xl sm:text-3xl font-bold tabular-nums text-slate-900 leading-tight">{value}</div>
       <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500 mt-0.5 truncate">{label}</div>
       {sub && <div className="text-[10px] text-slate-400 mt-1 truncate">{sub}</div>}
     </>

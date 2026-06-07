@@ -600,11 +600,12 @@ export function PersonalWorkClient({ profile, initialTasks }: Props) {
               const overdue = isOverdueDate(t.dueDate, t.status);
               const effectiveStatus: TaskStatus = overdue ? 'overdue' : t.status;
               return (
-                <li key={t.id} className="px-4 py-3 hover:bg-slate-50/60 transition">
-                  <div className="flex items-start gap-2">
+                // Phase 13.16.6: mobile gọn — title line-clamp-1, badges row riêng, touch ≥44px
+                <li key={t.id} className="px-3 sm:px-4 py-2.5 sm:py-3 hover:bg-slate-50/60 transition">
+                  <div className="flex items-start gap-2 min-w-0">
                     <button
                       onClick={() => handleToggleStatus(t, t.status === 'done' ? 'todo' : 'done')}
-                      className={`mt-0.5 h-5 w-5 rounded border-2 shrink-0 flex items-center justify-center transition ${
+                      className={`mt-1.5 sm:mt-0.5 h-6 w-6 sm:h-5 sm:w-5 rounded border-2 shrink-0 flex items-center justify-center transition ${
                         t.status === 'done'
                           ? 'border-emerald-600 bg-emerald-600 text-white'
                           : 'border-slate-300 hover:border-emerald-400'
@@ -614,49 +615,49 @@ export function PersonalWorkClient({ profile, initialTasks }: Props) {
                       {t.status === 'done' && <CheckCircle size={14} />}
                     </button>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <div className={`font-semibold text-sm ${t.status === 'done' ? 'text-slate-400 line-through' : 'text-slate-800'}`}>
-                          {t.title}
-                        </div>
+                      <div className={`font-semibold text-sm line-clamp-2 ${t.status === 'done' ? 'text-slate-400 line-through' : 'text-slate-800'}`}>
+                        {t.title}
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-wrap mt-1">
                         <span className={`text-[10px] px-1.5 py-0.5 rounded ring-1 ${PRIORITY_COLOR[t.priority]}`}>
                           {PRIORITY_LABEL[t.priority]}
                         </span>
                         <span className={`text-[10px] px-1.5 py-0.5 rounded ${STATUS_COLOR[effectiveStatus]}`}>
                           {STATUS_LABEL[effectiveStatus]}
                         </span>
-                        <span className="text-[10px] text-slate-400">· {CATEGORY_LABEL[t.category]}</span>
+                        <span className="text-[10px] text-slate-400 truncate">· {CATEGORY_LABEL[t.category]}</span>
                       </div>
                       {t.description && (
                         <div className="text-xs text-slate-600 mt-0.5 line-clamp-2">{t.description}</div>
                       )}
-                      <div className="flex items-center gap-3 mt-1 text-[11px] text-slate-500 flex-wrap">
+                      <div className="flex items-center gap-2 sm:gap-3 mt-1 text-[11px] text-slate-500 flex-wrap">
                         {t.dueDate && (
                           <span className={`inline-flex items-center gap-1 ${overdue ? 'text-rose-600 font-semibold' : ''}`}>
-                            <Calendar size={11} /> {t.dueDate}
+                            <Calendar size={11} className="shrink-0" /> {t.dueDate}
                             {t.scheduledTime && <span className="font-mono text-emerald-700 ml-0.5">· {t.scheduledTime}</span>}
                           </span>
                         )}
                         {t.reminderAt && (
                           <span className="inline-flex items-center gap-1 text-amber-700">
-                            <Bell size={11} /> {new Date(t.reminderAt).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                            <Bell size={11} className="shrink-0" /> {new Date(t.reminderAt).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                           </span>
                         )}
                       </div>
                     </div>
-                    <div className="flex items-start gap-1 shrink-0">
+                    <div className="flex items-start gap-0.5 shrink-0">
                       <button
                         onClick={() => { setEditingTask(t); setTaskModalOpen(true); }}
-                        className="p-1.5 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded"
-                        title="Sửa"
+                        className="p-2.5 sm:p-1.5 text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 rounded active:bg-emerald-100"
+                        aria-label="Sửa"
                       >
-                        <Edit3 size={14} />
+                        <Edit3 size={16} />
                       </button>
                       <button
                         onClick={() => handleDeleteTask(t.id)}
-                        className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded"
-                        title="Xoá"
+                        className="p-2.5 sm:p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded active:bg-rose-100"
+                        aria-label="Xoá"
                       >
-                        <Trash2 size={14} />
+                        <Trash2 size={16} />
                       </button>
                     </div>
                   </div>
@@ -773,11 +774,12 @@ function KpiCard({ label, value, icon: Icon, color }: {
     rose:    'bg-rose-50 text-rose-800 ring-rose-200',
   };
   return (
-    <div className={`rounded-xl ring-1 px-3 py-2.5 flex items-center gap-2 ${colorCls[color]}`}>
-      <div className="rounded-md bg-white/60 p-1.5"><Icon size={16} /></div>
-      <div>
-        <div className="text-[10px] font-semibold uppercase tracking-wider opacity-80">{label}</div>
-        <div className="text-xl font-bold tabular-nums leading-tight">{value}</div>
+    // Phase 13.16.6: mobile gọn — icon top, label/value dưới, value text-lg tránh chen icon
+    <div className={`rounded-xl ring-1 px-2 py-2 sm:px-3 sm:py-2.5 flex items-center gap-2 min-w-0 ${colorCls[color]}`}>
+      <div className="rounded-md bg-white/60 p-1.5 shrink-0"><Icon size={16} /></div>
+      <div className="min-w-0 flex-1">
+        <div className="text-[10px] font-semibold uppercase tracking-wider opacity-80 truncate">{label}</div>
+        <div className="text-lg sm:text-xl font-bold tabular-nums leading-tight">{value}</div>
       </div>
     </div>
   );

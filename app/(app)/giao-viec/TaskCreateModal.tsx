@@ -392,7 +392,8 @@ export function TaskCreateModal(props: {
                               : 'bg-white text-slate-600 ring-slate-200 hover:ring-emerald-200'
                           } disabled:opacity-40`}
                         >
-                          {b === 'KD' ? '🏭 Khối Kinh Doanh' : '🏢 Khối Văn Phòng'}
+                          <span className="sm:hidden">{b === 'KD' ? '🏭 KD' : '🏢 VP'}</span>
+                          <span className="hidden sm:inline">{b === 'KD' ? '🏭 Khối Kinh Doanh' : '🏢 Khối Văn Phòng'}</span>
                           <span className="ml-1 text-[10px] opacity-60">
                             ({total}{isMyBlock ? ' · của bạn' : ''})
                           </span>
