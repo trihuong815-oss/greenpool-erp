@@ -32,15 +32,20 @@ export async function proxy(req: NextRequest) {
       const origin = req.headers.get('origin');
       const host = req.headers.get('host');
       const isDev = process.env.NODE_ENV !== 'production';
-      // Same-origin = pass. Server-side fetch (no Origin) = pass.
-      // Cross-origin POST từ attacker site → origin.host !== request.host → block.
+      // Phase HOTFIX (2026-06-07): parse origin → so HOST (lowercase, không
+      // trailing slash, có thể có port). Robust hơn so chuỗi raw.
+      let originHost: string | null = null;
+      if (origin) {
+        try {
+          originHost = new URL(origin).host.toLowerCase();
+        } catch { /* malformed origin */ }
+      }
+      const normalizedHost = host?.toLowerCase() ?? null;
       const isAllowed = isDev
         || !origin
-        || (host !== null && (
-          origin === `https://${host}`
-          || origin === `http://${host}`
-        ));
+        || (normalizedHost !== null && originHost === normalizedHost);
       if (!isAllowed) {
+        console.warn('[proxy] origin mismatch — origin=' + origin + ' host=' + host);
         return NextResponse.json({ error: 'Origin không hợp lệ' }, { status: 403 });
       }
     }
