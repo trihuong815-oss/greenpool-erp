@@ -73,11 +73,21 @@ export function BottomNavBar({ roleCode: _roleCode }: { roleCode: string }) {
           return (
             <li key={tab.label}>
               {tab.href ? (
-                <Link href={tab.href} className="block h-full">
+                <Link
+                  href={tab.href}
+                  aria-current={isActive ? 'page' : undefined}
+                  aria-label={badge > 0 ? `${tab.label} (${badge} mới)` : tab.label}
+                  className="block h-full"
+                >
                   {inner}
                 </Link>
               ) : (
-                <button type="button" onClick={tab.onClick} className="block h-full w-full">
+                <button
+                  type="button"
+                  onClick={tab.onClick}
+                  aria-label={tab.label}
+                  className="block h-full w-full"
+                >
                   {inner}
                 </button>
               )}

@@ -85,6 +85,7 @@ export function AppShell({ userName, userRole, roleCode, menuOverrides, children
           />
         )}
         <div
+          id="mobile-nav-drawer"
           className={`md:hidden fixed inset-y-0 left-0 z-50 transform transition-transform duration-200 ease-out ${
             open ? 'translate-x-0' : '-translate-x-full'
           }`}

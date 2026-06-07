@@ -157,6 +157,7 @@ export function Sidebar({ userName, userRole, roleCode, menuOverrides }: Sidebar
                   <li key={item.route}>
                     <Link
                       href={`/${item.route}`}
+                      aria-current={isActive ? 'page' : undefined}
                       className={`group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${
                         isActive
                           ? 'bg-emerald-50 font-semibold text-emerald-800'

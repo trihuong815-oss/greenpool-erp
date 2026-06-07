@@ -41,7 +41,7 @@ interface AppTopBarProps {
 
 export function AppTopBar({ title, subtitle, icon, children }: AppTopBarProps) {
   const Icon = icon ? ICON_MAP[icon] : null;
-  const { setOpen } = useMobileNav();
+  const { open, setOpen } = useMobileNav();
 
   return (
     <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
@@ -52,8 +52,10 @@ export function AppTopBar({ title, subtitle, icon, children }: AppTopBarProps) {
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="md:hidden flex h-9 w-9 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100"
             aria-label="Mở menu"
+            aria-expanded={open}
+            aria-controls="mobile-nav-drawer"
+            className="md:hidden flex h-9 w-9 items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100"
           >
             <Menu size={20} />
           </button>
