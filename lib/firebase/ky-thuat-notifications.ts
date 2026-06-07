@@ -50,6 +50,30 @@ export async function notifyKtTaskCreated(task: WorkDoc): Promise<void> {
   }).catch(() => {});
 }
 
+/** Phase Noti-Audit (2026-06-07): Báo cáo KT (report) được tạo — push cấp trên trực tiếp.
+ *  Tương đương proposal pattern nhưng dành cho "đã làm xong, báo cáo lại" thay vì "xin duyệt".
+ *  Approver list khớp với proposal: TP_KT + GD_KD + ADMIN/CEO + QLCS branch (nếu có specialization). */
+export async function notifyKtReportCreated(rep: WorkDoc): Promise<void> {
+  const approvers: string[] = ['TP_KT', 'GD_KD', 'ADMIN', 'CEO'];
+  // QLCS của branch luôn được biết báo cáo KT tại cơ sở mình
+  const QLCS_BY_BRANCH: Record<string, string> = {
+    HM: 'QLCS_HM', TK: 'QLCS_TK', CTT: 'QLCS_CTT', '24': 'QLCS_24NCT', TT: 'QLCS_TT',
+  };
+  const qlcs = QLCS_BY_BRANCH[rep.branchId];
+  if (qlcs) approvers.push(qlcs);
+  // Phụ trách cùng specialization (HT/XLN) — nếu có
+  if (rep.specialization === 'HT') approvers.push('PP_HT');
+  else if (rep.specialization === 'XLN') approvers.push('PP_XLN');
+
+  await pushToRoles(approvers, {
+    title: `${KIND_LABEL.report} mới`,
+    body: `"${rep.title}" — từ ${rep.createdByName ?? 'KTV'} @${rep.branchId}`,
+    link: workLink(),
+    tag: `kt-${rep.id}`,
+    data: { workId: rep.id, kind: 'kt_report_created' },
+  }).catch(() => {});
+}
+
 /** Proposal KT được tạo — push approver. */
 export async function notifyKtProposalCreated(prop: WorkDoc): Promise<void> {
   // Expense → QLCS của branch + TP_KT + GD_KD + ADMIN/CEO

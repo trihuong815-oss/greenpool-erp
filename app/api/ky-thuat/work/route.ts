@@ -170,6 +170,15 @@ export async function POST(req: NextRequest) {
         proposalType: (doc as any).proposalType,
         specialization: (doc as any).specialization,
       });
+    } else if (kind === 'report') {
+      // Phase Noti-Audit (2026-06-07): bổ sung noti khi KTV tạo báo cáo —
+      // cấp trên (TP_KT/GD_KD/ADMIN/CEO/QLCS branch/PP cùng specialization)
+      // nhận push để biết báo cáo mới đã được nộp.
+      await ktNoti.notifyKtReportCreated({
+        id: ref.id, kind: 'report', title, branchId,
+        createdBy: caller.profile.uid, createdByName: caller.actorName,
+        specialization: (doc as any).specialization,
+      });
     }
 
     return NextResponse.json({ ok: true, id: ref.id });
