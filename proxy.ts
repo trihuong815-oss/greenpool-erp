@@ -13,23 +13,44 @@ const SESSION_COOKIE = 'gp_session';
 
 // Phase A.5 (2026-06-07): Origin check CSRF defense-in-depth.
 // SameSite=lax cookie là layer 1; Origin check là layer 2 (chặn cross-origin POST từ XSS-driven submit).
-// Phase HOTFIX (2026-06-07): bỏ ALLOWED_ORIGINS hard-coded — user trên mobile/preview
-// deploy alias bị 403. Chỉ check same-host: origin.host == request.host = pass.
-// Vercel set host từ TCP socket, attacker không spoof được trên prod.
+// Phase HOTFIX (2026-06-07): logic robust với Vercel alias + PWA + custom domain:
+// - Same-host = pass.
+// - Cả origin lẫn host kết thúc .vercel.app = pass (Vercel canonical/alias/preview).
+// - !origin (server-side fetch) = pass.
+
+const ORIGIN_BYPASS_PREFIXES = [
+  '/api/cron/',        // Vercel cron internal call không có Origin
+  '/api/fcm-config',   // Service Worker fetch no-cors
+];
+
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const method = req.method;
 
   // ─── Phase A.5: Origin check cho /api/ non-GET ───
-  // Phase HOTFIX-EMERGENCY (2026-06-07): TẠM BYPASS Origin check để xác nhận
-  // user vào được. CSRF defense chính = SameSite=lax cookie (browser-level) +
-  // Firebase session cookie verify (server-level). Origin check là layer phụ.
-  // Sẽ bật lại sau khi confirm root cause (cache cũ vs logic check sai).
   if (pathname.startsWith('/api/') && method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
-    const origin = req.headers.get('origin');
-    const host = req.headers.get('host');
-    // Log mọi POST/PUT/DELETE để debug — tạm thời.
-    console.log('[proxy debug] ' + method + ' ' + pathname + ' origin=' + origin + ' host=' + host);
+    const bypass = ORIGIN_BYPASS_PREFIXES.some((p) => pathname.startsWith(p));
+    if (!bypass) {
+      const origin = req.headers.get('origin');
+      const host = req.headers.get('host');
+      const isDev = process.env.NODE_ENV !== 'production';
+      let originHost: string | null = null;
+      if (origin) {
+        try { originHost = new URL(origin).host.toLowerCase(); } catch { /* malformed */ }
+      }
+      const normalizedHost = host?.toLowerCase() ?? null;
+      const isVercelSub = (h: string | null) => !!h && h.endsWith('.vercel.app');
+      const isAllowed = isDev
+        || !origin
+        || (originHost !== null && (
+          originHost === normalizedHost
+          || (isVercelSub(originHost) && isVercelSub(normalizedHost))
+        ));
+      if (!isAllowed) {
+        console.warn('[proxy] origin mismatch — origin=' + origin + ' host=' + host);
+        return NextResponse.json({ error: 'Origin không hợp lệ' }, { status: 403 });
+      }
+    }
   }
 
   // ─── Auth gate ───
