@@ -73,3 +73,54 @@ input[type='number'] {
     font-size: max(16px, 1em) !important;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Phase UI-4 (2026-06-07): Accessibility polish.
+   - Skip link cho keyboard navigation user (Tab đầu trang → bypass sidebar).
+   - Global focus-visible ring nhất quán cho mọi interactive element
+     (button/a/input chưa có :focus-visible custom dùng emerald ring 2px).
+   - Reduce motion: tôn trọng prefers-reduced-motion → tắt animation
+     không cần thiết (carousel, transitions dài).
+   - Selection color emerald cho brand consistency.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Skip link — visible chỉ khi focus, helps screen reader / Tab user
+   nhảy qua sidebar/nav vào main content. */
+.skip-link {
+  @apply absolute left-2 top-2 z-[100] -translate-y-16 focus-visible:translate-y-0
+         bg-emerald-700 text-white text-sm font-semibold px-3 py-2 rounded-lg shadow-lg
+         transition-transform focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400;
+}
+
+/* Global focus-visible (keyboard-only) — ring brand thay vì default browser ring xấu.
+   focus-visible KHÔNG hiển thị khi click chuột → giữ UI sạch.
+   *: chỉ áp dụng cho element interactive (button, a, input, select, textarea, [tabindex]). */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid #10b981;       /* emerald-500 */
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Selection color — brand emerald thay vì xanh OS default */
+::selection {
+  background: rgba(16, 185, 129, 0.25);
+  color: #0f172a;
+}
+
+/* Reduce motion — accessibility: user setting "Giảm chuyển động" */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

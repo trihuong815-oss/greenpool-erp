@@ -64,6 +64,11 @@ export function AppShell({ userName, userRole, roleCode, menuOverrides, children
     <MobileNavContext.Provider value={{ open, setOpen }}>
       {/* Phase 13.16.9: h-[var(--gp-vh)] fallback dvh — visualViewport tracking giải quyết
           iOS Safari auto-scroll khi keyboard pop làm chat header trôi mất. */}
+      {/* Phase UI-4 (2026-06-07): skip link — Tab đầu trang để nhảy qua sidebar.
+          Chỉ visible khi keyboard focus, không ảnh hưởng UX click chuột. */}
+      <a href="#main-content" className="skip-link">
+        Bỏ qua menu, vào nội dung chính
+      </a>
       <div className="h-[var(--gp-vh,100dvh)] flex overflow-hidden pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
         {/* Desktop sidebar — fixed bên trái */}
         <div className="hidden md:flex">
@@ -88,7 +93,11 @@ export function AppShell({ userName, userRole, roleCode, menuOverrides, children
         </div>
 
         {/* Main content area */}
-        <main className="flex-1 flex flex-col overflow-hidden min-w-0 min-h-0 pb-14 md:pb-0">
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="flex-1 flex flex-col overflow-hidden min-w-0 min-h-0 pb-14 md:pb-0"
+        >
           <MfaRequiredBanner roleCode={roleCode} />
           {children}
         </main>
