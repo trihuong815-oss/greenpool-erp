@@ -152,21 +152,35 @@ service cloud.firestore {
     //  trực tiếp — hiện UI luôn ghi qua API routes, nên rule này chủ yếu là
     //  defense-in-depth.)
     match /auditLogs/{logId} {
+      // Phase C.4 (2026-06-07): WORM (write-once read-many) contract.
+      // - Log entry là bằng chứng compliance; cấm sửa/xoá sau khi ghi.
+      // - Create chỉ chấp nhận shape hợp lệ → chặn tampering ghi rác/fake.
+      // - Update/delete = false TUYỆT ĐỐI (cả client lẫn admin SDK nên tránh).
+
       // Đọc: admin xem mọi log; user xem log thuộc instance có scope.
       allow read: if isAdmin()
         || (resource.data.instanceId is string
             && matchesUserScope(instanceDoc(resource.data.instanceId)));
 
-      // Insert: actor phải = current uid + (nếu là checklist module) có scope với instance.
+      // Insert: validate shape + actor = current uid + scope check.
+      // Required fields: action (str), module (str trong allow-list), userId, createdAt.
       allow create: if isSignedIn()
         && request.resource.data.userId == request.auth.uid
+        // Shape validation — defense-in-depth chống ghi log méo
+        && request.resource.data.action is string
+        && request.resource.data.action.size() > 0
+        && request.resource.data.action.size() <= 100
+        && request.resource.data.module is string
+        && request.resource.data.module in ['checklist','sales','users','templates','dashboard','giaoviec','ky-thuat']
+        && request.resource.data.createdAt is timestamp
         && (
           request.resource.data.module != 'checklist'
           || (request.resource.data.instanceId is string
               && matchesUserScope(instanceDoc(request.resource.data.instanceId)))
         );
 
-      // Tuyệt đối không cho client update/delete.
+      // WORM: tuyệt đối KHÔNG cho update/delete — kể cả admin client.
+      // Admin SDK (server-side) bypass rules nhưng codebase guard via grep CI.
       allow update, delete: if false;
     }
 

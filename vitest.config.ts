@@ -19,6 +19,10 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './'),
+      // Phase C.4 (2026-06-07): shim `server-only` cho test môi trường node.
+      // Next.js `server-only` package chỉ tồn tại trong webpack bundle; vitest
+      // chạy raw Node → cần alias rỗng để import không throw.
+      'server-only': path.resolve(__dirname, './tests/__mocks__/server-only.ts'),
     },
   },
 });
