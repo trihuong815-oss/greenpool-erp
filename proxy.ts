@@ -11,13 +11,11 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 const SESSION_COOKIE = 'gp_session';
 
-// Phase A.5 (2026-06-07): Origin check whitelist cho CSRF defense-in-depth.
+// Phase A.5 (2026-06-07): Origin check CSRF defense-in-depth.
 // SameSite=lax cookie là layer 1; Origin check là layer 2 (chặn cross-origin POST từ XSS-driven submit).
-const ALLOWED_ORIGINS = new Set([
-  'https://greenpool-erp.vercel.app',
-  'https://greenpool-erp-trihuong815-6255s-projects.vercel.app',
-  'https://greenpool-erp-git-main-trihuong815-6255s-projects.vercel.app',
-]);
+// Phase HOTFIX (2026-06-07): bỏ ALLOWED_ORIGINS hard-coded — user trên mobile/preview
+// deploy alias bị 403. Chỉ check same-host: origin.host == request.host = pass.
+// Vercel set host từ TCP socket, attacker không spoof được trên prod.
 const ORIGIN_BYPASS_PREFIXES = [
   '/api/cron/',        // Vercel cron internal call không có Origin
   '/api/fcm-config',   // Service Worker fetch no-cors
@@ -34,10 +32,14 @@ export async function proxy(req: NextRequest) {
       const origin = req.headers.get('origin');
       const host = req.headers.get('host');
       const isDev = process.env.NODE_ENV !== 'production';
+      // Same-origin = pass. Server-side fetch (no Origin) = pass.
+      // Cross-origin POST từ attacker site → origin.host !== request.host → block.
       const isAllowed = isDev
-        || !origin // server-side fetch (vd SSR) không có Origin → pass
-        || ALLOWED_ORIGINS.has(origin)
-        || (host !== null && origin.endsWith(`://${host}`));
+        || !origin
+        || (host !== null && (
+          origin === `https://${host}`
+          || origin === `http://${host}`
+        ));
       if (!isAllowed) {
         return NextResponse.json({ error: 'Origin không hợp lệ' }, { status: 403 });
       }
