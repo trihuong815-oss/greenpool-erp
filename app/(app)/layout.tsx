@@ -9,10 +9,23 @@ import { loadAllFlags } from '@/lib/feature-flags/server';
 // PWAAppBadge component đã trở thành no-op, không cần render ở đây nữa.
 import { getCurrentProfile } from '@/lib/firebase/current-profile';
 import { redirect } from 'next/navigation';
+import { cookies } from 'next/headers';
+import { SESSION_COOKIE } from '@/lib/firebase/session-auth';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const r = await getCurrentProfile();
-  if (!r) redirect('/login');
+  if (!r) {
+    // Phase HOTFIX (2026-06-07): clear cookie KHI session revoked/expired để
+    // tránh redirect loop. Trước đây cookie vẫn ở browser → proxy thấy hasSession=true
+    // → khi /login load lại sẽ bị redirect /dashboard → loop.
+    // Set cookie maxAge=0 ở RSC vẫn work (Next.js cho mutate cookies trong Server
+    // Component nếu là Route, không phải Page — nhưng layout RSC vẫn được).
+    try {
+      const c = await cookies();
+      c.set(SESSION_COOKIE, '', { maxAge: 0, path: '/' });
+    } catch { /* swallow nếu Next không cho mutate ở Layout RSC */ }
+    redirect('/login');
+  }
   const { user, profile } = r;
 
   if (!profile.roleCode) {

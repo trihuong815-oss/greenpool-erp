@@ -61,9 +61,13 @@ export async function proxy(req: NextRequest) {
   if (!hasSession && !isLoginPage && !isPublicAsset) {
     return NextResponse.redirect(new URL('/login', req.url));
   }
-  if (hasSession && isLoginPage) {
-    return NextResponse.redirect(new URL('/dashboard', req.url));
-  }
+  // Phase HOTFIX (2026-06-07): KHÔNG redirect /login → /dashboard khi có cookie.
+  // Lý do: cookie có thể bị REVOKED (Phase A.3 logout-revoke-tokens) trong khi
+  // browser vẫn giữ cookie. Layout (app)/ verify fail → redirect /login → proxy
+  // redirect /dashboard → LOOP "nhiều sự chuyển hướng" (mobile báo lỗi).
+  // Trade-off UX: user đã login mà mở /login sẽ thấy form login (Firebase Auth
+  // client SDK persistence vẫn detect → có thể tự redirect /dashboard ở client).
+  // An toàn hơn redirect loop.
 
   return NextResponse.next();
 }
