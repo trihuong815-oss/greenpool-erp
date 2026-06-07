@@ -8,26 +8,61 @@ import { cookies } from 'next/headers';
 import { getFirebaseAdminAuth } from '@/lib/firebase/admin';
 import { SESSION_COOKIE, SESSION_TTL_MS } from '@/lib/firebase/session-auth';
 import { checkRateLimitDistributed } from '@/lib/rate-limit-distributed';
+import { parseUidFromIdToken } from '@/lib/auth/parse-jwt';
+import { writeAuditLog } from '@/lib/firebase/audit-log';
 
 export async function POST(req: NextRequest) {
   try {
-    // Phase C.3 (2026-06-07): rate limit cross-instance để chặn brute force.
-    // 10 attempt / 60s per IP. Distributed → attacker không bypass bằng cách
-    // tới nhiều Vercel edge instance.
+    // Phase HIGH-1 fix (2026-06-07): defense-in-depth rate limit.
+    //
+    // Trust boundary: Vercel edge SET `x-forwarded-for` từ TCP socket, attacker
+    // KHÔNG inject được header (Vercel strip header inbound trước khi route).
+    // Tuy nhiên defense-in-depth: dùng 2 bucket parallel.
+    //
+    // 1. login:ip  — 30/60s per IP. Cao hơn 10/60s vì corporate NAT share IP
+    //    (5 cơ sở qua 1 public IP → cần room).
+    // 2. login:uid — 20/300s per account. Chống credential stuffing 1 victim
+    //    qua nhiều IP (botnet residential). Generous limit để legit retry password.
+    //
+    // Spoof uid trong rate-limit key chỉ làm KEY khác, KHÔNG bypass auth (verify
+    // bởi createSessionCookie). Worst case: spoof victim uid → slow down victim
+    // 5 phút — không brick account.
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
       || req.headers.get('x-real-ip')
       || 'unknown';
-    const rl = await checkRateLimitDistributed(`login:${ip}`, 10, 60);
-    if (!rl.ok) {
+    const ipRl = await checkRateLimitDistributed(`login:ip:${ip}`, 30, 60);
+    if (!ipRl.ok) {
       return NextResponse.json(
         { error: 'Quá nhiều lần thử. Đợi rồi thử lại.' },
-        { status: 429, headers: { 'Retry-After': String(rl.retryAfter ?? 60) } }
+        { status: 429, headers: { 'Retry-After': String(ipRl.retryAfter ?? 60) } }
       );
     }
 
     const body = await req.json();
     const idToken: string = body?.idToken;
     if (!idToken) return NextResponse.json({ error: 'Thiếu idToken' }, { status: 400 });
+
+    // Per-account bucket — uid parse từ JWT payload (KHÔNG verify, chỉ key).
+    const claimedUid = parseUidFromIdToken(idToken);
+    if (claimedUid) {
+      const uidRl = await checkRateLimitDistributed(`login:uid:${claimedUid}`, 20, 300);
+      if (!uidRl.ok) {
+        // Audit log để admin biết account bị tấn công credential stuffing.
+        await writeAuditLog({
+          action: 'login_rate_limit_uid',
+          module: 'users',
+          userId: claimedUid,
+          branchId: null,
+          before: null,
+          after: { ip, retryAfter: uidRl.retryAfter },
+          source: 'api',
+        }).catch(() => { /* swallow audit fail */ });
+        return NextResponse.json(
+          { error: 'Tài khoản đang bị nhiều lần đăng nhập sai. Đợi rồi thử lại.' },
+          { status: 429, headers: { 'Retry-After': String(uidRl.retryAfter ?? 300) } }
+        );
+      }
+    }
 
     const auth = getFirebaseAdminAuth();
     const sessionCookie = await auth.createSessionCookie(idToken, { expiresIn: SESSION_TTL_MS });

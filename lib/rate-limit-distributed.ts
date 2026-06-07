@@ -29,6 +29,34 @@ import { getFirebaseAdminDb } from './firebase/admin';
 const COLLECTION = 'rateLimits';
 const MAX_TIMESTAMPS_STORED = 200; // hard cap doc size
 
+/** Phase HIGH-3 fix (2026-06-07): in-memory throttle log fail-open
+ *  events — không spam stderr khi Firestore down kéo dài.
+ *  Log 1 lần / 60s per key prefix. */
+const lastFailLogAt = new Map<string, number>();
+const FAIL_LOG_THROTTLE_MS = 60_000;
+
+function logFailOpen(key: string, errMsg: string) {
+  const now = Date.now();
+  const prefix = key.split(':')[0] || 'unknown';
+  const last = lastFailLogAt.get(prefix) ?? 0;
+  if (now - last < FAIL_LOG_THROTTLE_MS) return;
+  lastFailLogAt.set(prefix, now);
+  console.warn('[rate-limit-distributed] FAIL OPEN prefix=' + prefix + ':', errMsg);
+  // Best-effort audit log để admin biết rate limiter đang xuống. Fire-and-forget,
+  // dynamic import để tránh circular (audit-log không import rate-limit).
+  import('./firebase/audit-log').then(({ writeAuditLog }) => {
+    writeAuditLog({
+      action: 'rate_limit_fail_open',
+      module: 'users',
+      userId: 'system',
+      branchId: null,
+      before: null,
+      after: { keyPrefix: prefix, error: errMsg },
+      source: 'api',
+    }).catch(() => { /* swallow audit error */ });
+  }).catch(() => { /* swallow import error */ });
+}
+
 export interface RateLimitResult {
   ok: boolean;
   /** Số request còn lại trong window. */
@@ -102,8 +130,9 @@ export async function checkRateLimitDistributed(
       return { ok: true, remaining: limit - next.length };
     });
   } catch (e: any) {
-    // Fail-open: lỗi Firestore không nên break login flow → log + cho qua.
-    console.warn('[rate-limit-distributed] FAIL OPEN key=' + key + ':', e?.message);
+    // Phase HIGH-3 fix (2026-06-07): fail-open KHÔNG break login flow, nhưng
+    // log audit + warn throttled để admin nhận biết khi rate limit vô hiệu.
+    logFailOpen(key, e?.message ?? 'unknown');
     return { ok: true, remaining: -1 };
   }
 }

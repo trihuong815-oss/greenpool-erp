@@ -64,6 +64,12 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
                      (cur === 'cancelled' && newStatus === 'pending');
     // Resubmit sau bổ sung (requested_revision → pending): CHỈ creator được làm
     // (recipient không được tự đánh dấu creator đã bổ sung xong).
+    //
+    // Phase B.7 phase 2 audit (2026-06-07): resubmit KHÔNG re-evaluate approval.
+    // State machine: requested_revision chỉ đến từ in_progress (line 17 spec),
+    // tức task đã được duyệt ít nhất 1 lần. Bổ sung chỉ là tinh chỉnh content,
+    // không cần GĐ duyệt lại. Nếu future cần re-approval (vd cross-block, đổi
+    // cost) → handle riêng ở /request-revision route hoặc tạo task mới.
     const isResubmit = cur === 'requested_revision' && newStatus === 'pending';
     const allowed = isReopen
       ? canReopenTask(caller.profile, scope)
