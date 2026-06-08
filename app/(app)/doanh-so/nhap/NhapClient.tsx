@@ -232,7 +232,16 @@ export function NhapClient(props: Props) {
     }
   }
 
-  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [period, branchId, branchStaff.length]);
+  useEffect(() => {
+    // Phase Sales-UX (2026-06-08): khi đổi period (ngày/tháng/năm) → reset rows về
+    // default trước khi load() async. User mong "sang ngày mới tự làm sạch dữ liệu"
+    // — không phải đợi load xong rồi tự xoá. Nếu period mới có data sẵn → load
+    // sẽ override defaults với data thật. Nếu chưa có data → form trống cho user
+    // nhập ngay.
+    setRows(buildDefaultRows());
+    load();
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [period, branchId, branchStaff.length]);
 
   function updateCell(rowIdx: number, metric: CellMetric, value: number) {
     setRows((prev) => prev.map((r, i) => {
@@ -732,7 +741,13 @@ function SimpleRevenueSection({ branchId, period, periodType, periodLabel, staff
     }
   }
 
-  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [branchId, period, periodType, staff.length]);
+  useEffect(() => {
+    // Phase Sales-UX (2026-06-08): reset rows về 0 khi đổi period, đồng bộ với
+    // Pipeline section. User nhập ngày mới → form sạch ngay.
+    setRows(staff.map((s) => ({ saleId: s.id, saleName: s.name, revenue: 0, isExisting: false })));
+    load();
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [branchId, period, periodType, staff.length]);
 
   function updateRow(idx: number, revenue: number) {
     setRows((rs) => rs.map((r, i) => i === idx ? { ...r, revenue: Math.max(0, revenue) } : r));
