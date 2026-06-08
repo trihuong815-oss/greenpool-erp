@@ -52,6 +52,7 @@ export function MessageThread({ conv, currentUserId, onBack }: { conv: ChatConve
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const dispName = convDisplayName(conv, currentUserId);
   const memberCount = conv.participantIds.length;
@@ -720,9 +721,23 @@ export function MessageThread({ conv, currentUserId, onBack }: { conv: ChatConve
               )}
             </div>
             <textarea
+              ref={textareaRef}
               value={input}
               onChange={(e) => { setInput(e.target.value); if (e.target.value.length > 0) pingTyping(); else stopTyping(); }}
               onBlur={stopTyping}
+              onFocus={() => {
+                // Phase 13.16.11 (2026-06-08): fix iOS Safari/PWA — khi keyboard hiện,
+                // browser tự scroll input vào view nhưng đôi khi đặt composer LÊN CAO quá
+                // (anh báo: "composer di chuyển lên trên, phải vuốt xuống mới thấy").
+                // Sau khi keyboard mở (~300ms), bring composer vào view với block='end' →
+                // composer dính sát top keyboard, messages cuộn lên đúng.
+                setTimeout(() => {
+                  textareaRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
+                  if (scrollRef.current) {
+                    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+                  }
+                }, 300);
+              }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
               }}
