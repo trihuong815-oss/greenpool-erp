@@ -509,10 +509,17 @@ export async function POST(req: NextRequest) {
       const chain: string[] = [];
       // Helper: resolve uid của GĐ role, fallback ADMIN nếu GD_KD trống.
       const resolveGdUid = async (gdRole: 'GD_KD' | 'GD_VP'): Promise<string | null> => {
-        const snap = await db.collection(COLLECTIONS.USERS).where('roleId', '==', gdRole).limit(1).get();
+        // Phase Fix (2026-06-09): filter status='active' để KHÔNG resolve về
+        // user inactive (vd ADMIN cũ trihuong815@gmail.com inactive vẫn match
+        // → chain[0] = inactive uid → người đang đăng nhập không có nút duyệt).
+        const snap = await db.collection(COLLECTIONS.USERS)
+          .where('status', '==', 'active')
+          .where('roleId', '==', gdRole).limit(1).get();
         if (!snap.empty) return snap.docs[0].id;
         if (gdRole === 'GD_KD') {
-          const adminSnap = await db.collection(COLLECTIONS.USERS).where('roleId', '==', 'ADMIN').limit(1).get();
+          const adminSnap = await db.collection(COLLECTIONS.USERS)
+            .where('status', '==', 'active')
+            .where('roleId', '==', 'ADMIN').limit(1).get();
           if (!adminSnap.empty) return adminSnap.docs[0].id;
         }
         return null;
