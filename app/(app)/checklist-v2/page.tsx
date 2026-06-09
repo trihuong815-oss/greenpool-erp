@@ -11,6 +11,7 @@ import {
 } from '@/lib/checklist-v2/templates';
 import { ChecklistV2Client } from './ChecklistV2Client';
 import { SupervisorView } from './SupervisorView';
+import { ChecklistHeatmap } from './ChecklistHeatmap';
 
 interface PageProps {
   searchParams: Promise<{ shift?: string }>;
@@ -44,8 +45,10 @@ export default async function ChecklistV2Page({ searchParams }: PageProps) {
             subtitle={`Giám sát · ${profile.roleName ?? profile.roleCode}`}
             icon="checkSquare"
           />
-          <div className="flex-1 overflow-y-auto p-3 md:p-6 bg-slate-50">
+          <div className="flex-1 overflow-y-auto p-3 md:p-6 bg-slate-50 space-y-6">
             <SupervisorView myUid={profile.id} myRoleLabel={profile.roleName ?? profile.roleCode} />
+            {/* Phase Checklist-Chart (2026-06-09): heatmap thống kê cho supervisor */}
+            <ChecklistHeatmap />
           </div>
         </>
       );
@@ -90,12 +93,21 @@ export default async function ChecklistV2Page({ searchParams }: PageProps) {
           displayName={profile.displayName}
         />
         {showSupervisorPanel && (
-          <div className="border-t border-slate-200 pt-6">
-            <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-3">
-              Xem checklist các cơ sở khác
+          <>
+            <div className="border-t border-slate-200 pt-6">
+              <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-3">
+                Xem checklist các cơ sở khác
+              </div>
+              <SupervisorView myUid={profile.id} myRoleLabel={profile.roleName ?? profile.roleCode} />
             </div>
-            <SupervisorView myUid={profile.id} myRoleLabel={profile.roleName ?? profile.roleCode} />
-          </div>
+            {/* Phase Checklist-Chart (2026-06-09): heatmap thống kê N ngày */}
+            <div className="border-t border-slate-200 pt-6">
+              <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-3">
+                Thống kê tổng quát
+              </div>
+              <ChecklistHeatmap />
+            </div>
+          </>
         )}
       </div>
     </>
