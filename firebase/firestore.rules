@@ -372,6 +372,18 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // ---- Phase PWA-Stability (2026-06-09): inAppNotifications ----
+    // Per-user noti queue. Owner read/update (mark seenAt). Server-only create
+    // (Admin SDK bypass rules). Delete deny — server cleanup tự.
+    match /inAppNotifications/{uid}/items/{notiId} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow update: if isSignedIn() && request.auth.uid == uid
+        // Chỉ cho update field seenAt (mark seen) — KHÔNG cho sửa title/body
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['seenAt']);
+      allow create: if false;   // Admin SDK only
+      allow delete: if false;
+    }
+
     // ---- Catch-all deny ----
     match /{document=**} {
       allow read, write: if false;

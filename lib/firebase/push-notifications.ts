@@ -49,6 +49,19 @@ export async function pushToUsers(uids: string[], payload: PushPayload): Promise
   const uniq = Array.from(new Set(uids.filter((u): u is string => typeof u === 'string' && u.length > 0)));
   if (uniq.length === 0) return { sent: 0, failed: 0, tokensCleaned: 0 };
 
+  // Phase PWA-Stability (2026-06-09): dual-write inAppNotifications.
+  // Đảm bảo user MỞ APP sẽ thấy noti dù FCM web push fail (token expired,
+  // SW killed, OS block). KHÔNG await — fire-and-forget, không block FCM.
+  import('./in-app-noti').then(({ writeInAppNotiBatch }) => {
+    writeInAppNotiBatch(uniq, {
+      title: payload.title,
+      body: payload.body,
+      link: payload.link ?? null,
+      kind: payload.data?.kind ?? 'generic',
+      data: payload.data ?? {},
+    }).catch(() => {});
+  }).catch(() => {});
+
   try {
     const db = getFirebaseAdminDb();
     // Fetch users parallel
