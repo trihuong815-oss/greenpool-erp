@@ -7,7 +7,6 @@ import {
 } from 'lucide-react';
 import { TodayBadge } from './TodayBadge';
 import { NotificationBell } from './NotificationBell';
-import { InAppNotiBell } from './InAppNotiBell';
 import { useMobileNav } from './MobileNavContext';
 
 // Map tên → component icon. Pass string từ Server Component an toàn (function refs không serialize qua RSC boundary).
@@ -79,9 +78,8 @@ export function AppTopBar({ title, subtitle, icon, children }: AppTopBarProps) {
 
         {/* Right utilities — Bell + Today badge */}
         <div className="flex shrink-0 items-center gap-1 md:gap-2">
-          {/* Phase PWA-Stability (2026-06-09): in-app realtime bell — guarantee
-              user thấy noti dù FCM web push fail. */}
-          <InAppNotiBell />
+          {/* NotificationBell (Phase 13.13) đọc 6 nguồn realtime — đã cover
+              approval/task/checklist. InAppNotiBell mới đã gỡ tránh trùng. */}
           <NotificationBell />
           <TodayBadge />
         </div>

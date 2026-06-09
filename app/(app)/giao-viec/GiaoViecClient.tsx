@@ -91,17 +91,28 @@ export function GiaoViecClient(props: Props) {
   const [statusFilter, setStatusFilter] = useState<TaskStatus | 'all'>('all');
 
   // Deep-link: Dashboard tile click → /giao-viec?focus=<type> → tự jump tab + filter
+  // Phase Stability 2026-06-09: thêm ?taskId=XXX → auto fetch + mở TaskDetailModal
   const searchParams = useSearchParams();
   useEffect(() => {
     const focus = searchParams.get('focus');
-    if (!focus) return;
+    const taskIdParam = searchParams.get('taskId');
     if (focus === 'approval' && showApprovalTab) { setTab('approval'); setStatusFilter('all'); }
     else if (focus === 'received')   { setTab('received'); setStatusFilter('all'); }
     else if (focus === 'pending')    { setTab('received'); setStatusFilter('pending'); }
     else if (focus === 'inprogress') { setTab('received'); setStatusFilter('in_progress'); }
-    requestAnimationFrame(() => {
-      tabSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
+    if (focus) {
+      requestAnimationFrame(() => {
+        tabSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    }
+    // Auto open modal nếu có taskId trong URL (deep-link từ noti)
+    if (taskIdParam) {
+      // Default tab=approval cho GĐ/CEO/ADMIN nếu chưa set
+      if (showApprovalTab && !focus) setTab('approval');
+      tasksApi.get(taskIdParam)
+        .then((t) => setSelectedTask(t))
+        .catch((e) => console.warn('[deep-link taskId] fetch fail:', e?.message));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
   const [keyword, setKeyword] = useState('');

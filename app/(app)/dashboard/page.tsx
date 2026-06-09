@@ -170,15 +170,28 @@ async function fetchTaskCounts(uid: string, roleCode: string) {
         .get();
       approvalCount = snap.size;
     } else if (isGD) {
-      // Phase B.7 phase 2 (2026-06-07): query theo currentApprover = 'role:<roleCode>'
-      // (Phase 12.5+ format). Legacy approvalRequiredFrom đã drop.
-      const snap = await col
-        .where('status', '==', 'pending_approval')
-        .where('currentApprover', '==', `role:${roleCode}`)
-        .orderBy('createdAt', 'desc')
-        .limit(200)
-        .get();
-      approvalCount = snap.size;
+      // Phase B.7 phase 2 (2026-06-07): query theo currentApprover = 'role:<roleCode>'.
+      // Phase Stability 2026-06-09: query 2 lần — role-key + user-key (Phase 12.5+
+      // proposal cross-block có thể assign user cụ thể qua chain). Merge để
+      // GĐ Khối thấy đủ docs chờ mình duyệt.
+      const [roleSnap, userSnap] = await Promise.all([
+        col
+          .where('status', '==', 'pending_approval')
+          .where('currentApprover', '==', `role:${roleCode}`)
+          .orderBy('createdAt', 'desc')
+          .limit(200)
+          .get(),
+        col
+          .where('status', '==', 'pending_approval')
+          .where('currentApprover', '==', `user:${uid}`)
+          .orderBy('createdAt', 'desc')
+          .limit(200)
+          .get(),
+      ]);
+      const seen = new Set<string>();
+      roleSnap.docs.forEach((d) => seen.add(d.id));
+      userSnap.docs.forEach((d) => seen.add(d.id));
+      approvalCount = seen.size;
     }
   } catch (e: any) {
     console.warn('[dashboard fetchTaskCounts] approval query failed:', e?.code, e?.message);
