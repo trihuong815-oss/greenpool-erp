@@ -15,6 +15,8 @@ import { ToastProvider } from './ui/Toast';
 import { CommandPaletteProvider } from './ui/CommandPalette';
 import { KeyboardShortcuts } from './ui/KeyboardShortcuts';
 import { FlagGate } from './FlagGate';
+import { PushHeartbeat } from './PushHeartbeat';
+import { NotiHealthBanner } from './NotiHealthBanner';
 
 interface AppShellProps {
   userName: string;
@@ -102,6 +104,8 @@ export function AppShell({ userName, userRole, roleCode, menuOverrides, children
           className="flex-1 flex flex-col overflow-hidden min-w-0 min-h-0 pb-14 md:pb-0"
         >
           <MfaRequiredBanner roleCode={roleCode} />
+          {/* Phase PWA-Stability (2026-06-09): cảnh báo persistent khi noti subscription unhealthy */}
+          <NotiHealthBanner />
           {children}
         </main>
 
@@ -110,6 +114,9 @@ export function AppShell({ userName, userRole, roleCode, menuOverrides, children
 
         {/* Phase UI-3.2 (2026-06-07): global keyboard shortcuts (g+letter, ?) — no UI render */}
         <KeyboardShortcuts roleCode={roleCode} menuOverrides={menuOverrides} />
+
+        {/* Phase PWA-Stability (2026-06-09): self-healing notification subscription — no UI render */}
+        <PushHeartbeat />
       </div>
     </MobileNavContext.Provider>
     </CommandPaletteProvider>

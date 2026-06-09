@@ -85,6 +85,34 @@ async function ensureSWRegistration(): Promise<ServiceWorkerRegistration | null>
   }
 }
 
+/** Phase PWA-Stability (2026-06-09): trả token đang cache + đảm bảo Messaging
+ *  đã init. Dùng cho heartbeat — KHÔNG request permission lại, KHÔNG re-register.
+ *  Returns null nếu chưa từng enable hoặc browser không hỗ trợ. */
+export async function getCurrentFcmToken(): Promise<string | null> {
+  if (_currentToken) return _currentToken;
+  // Có thể cache đã mất (page reload) nhưng SW vẫn có subscription
+  // → thử getToken silent (không trigger permission UI nếu đã grant).
+  if (!isFcmSupported()) return null;
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return null;
+  const vapid = process.env.NEXT_PUBLIC_FCM_VAPID_KEY;
+  if (!vapid) return null;
+  const swReg = await ensureSWRegistration();
+  if (!swReg) return null;
+  const messaging = await loadMessaging();
+  if (!messaging) return null;
+  try {
+    const { getToken } = await import('firebase/messaging');
+    const token = await getToken(messaging, { vapidKey: vapid, serviceWorkerRegistration: swReg });
+    if (token) {
+      _currentToken = token;
+      return token;
+    }
+  } catch (e: any) {
+    console.warn('[messaging-client] getCurrentFcmToken fail:', e?.message);
+  }
+  return null;
+}
+
 /** Force update SW + re-register token. Gọi từ banner hoặc settings khi user báo noti không tới.
  *  Trả {updated: boolean, newToken?: string}. */
 export async function forceRefreshPushSetup(): Promise<{ updated: boolean; newToken?: string; error?: string }> {
