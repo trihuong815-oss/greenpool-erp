@@ -67,6 +67,10 @@ export default async function ChecklistV2Page({ searchParams }: PageProps) {
   }
 
   const templates = templatesForRole(role);
+  // Phase Checklist-Visibility (2026-06-09): QLCS được xem checklist của các
+  // QLCS cơ sở khác. Render SupervisorView dưới khu vực nhập của mình.
+  const supScope = checklistV2SupervisorScope(profile.roleCode);
+  const showSupervisorPanel = !!supScope && supScope.length > 0;
 
   return (
     <>
@@ -75,7 +79,7 @@ export default async function ChecklistV2Page({ searchParams }: PageProps) {
         subtitle={`${ROLE_LABEL_V2[role]} · hôm nay ${today}`}
         icon="checkSquare"
       />
-      <div className="flex-1 overflow-y-auto p-3 md:p-6 bg-slate-50">
+      <div className="flex-1 overflow-y-auto p-3 md:p-6 bg-slate-50 space-y-6">
         <ChecklistV2Client
           role={role}
           templates={templates}
@@ -85,6 +89,14 @@ export default async function ChecklistV2Page({ searchParams }: PageProps) {
           branchName={profile.branchName}
           displayName={profile.displayName}
         />
+        {showSupervisorPanel && (
+          <div className="border-t border-slate-200 pt-6">
+            <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold mb-3">
+              Xem checklist các cơ sở khác
+            </div>
+            <SupervisorView myUid={profile.id} myRoleLabel={profile.roleName ?? profile.roleCode} />
+          </div>
+        )}
       </div>
     </>
   );

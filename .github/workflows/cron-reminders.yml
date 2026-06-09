@@ -9,6 +9,11 @@ on:
     - cron: '0 0 * * *'      # morning summary 07:00 VN
     - cron: '0 13 * * *'     # evening summary 20:00 VN
     - cron: '0 * * * *'      # cleanup-checklists mỗi giờ
+    # Phase Checklist-Reminder (2026-06-09): nhắc QLCS/PP nếu chưa submit
+    # 1 tiếng sau deadline mỗi shift.
+    - cron: '0 1 * * *'      # checklist morning: deadline 07:00 VN → reminder 08:00 VN = 01:00 UTC
+    - cron: '30 7 * * *'     # checklist afternoon: deadline 13:30 VN → reminder 14:30 VN = 07:30 UTC
+    - cron: '30 15 * * *'    # checklist evening: deadline 21:30 VN → reminder 22:30 VN = 15:30 UTC
   workflow_dispatch:          # manual trigger để test
 
 # Concurrency: cancel runs cũ nếu chậm — tránh chồng chéo
@@ -88,3 +93,45 @@ jobs:
             echo "::error::Cleanup checklists cron failed with status $response"
             exit 1
           fi
+
+  checklist-reminder-morning:
+    if: github.event.schedule == '0 1 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Call checklist-reminder?shift=morning
+        run: |
+          response=$(curl -s -o /tmp/body -w "%{http_code}" \
+            -X POST "${{ secrets.APP_HOSTING_URL }}/api/cron/checklist-reminder?shift=morning" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "content-type: application/json")
+          echo "Status: $response"; cat /tmp/body
+          if [ "$response" -ne 200 ]; then exit 1; fi
+
+  checklist-reminder-afternoon:
+    if: github.event.schedule == '30 7 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Call checklist-reminder?shift=afternoon
+        run: |
+          response=$(curl -s -o /tmp/body -w "%{http_code}" \
+            -X POST "${{ secrets.APP_HOSTING_URL }}/api/cron/checklist-reminder?shift=afternoon" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "content-type: application/json")
+          echo "Status: $response"; cat /tmp/body
+          if [ "$response" -ne 200 ]; then exit 1; fi
+
+  checklist-reminder-evening:
+    if: github.event.schedule == '30 15 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Call checklist-reminder?shift=evening
+        run: |
+          response=$(curl -s -o /tmp/body -w "%{http_code}" \
+            -X POST "${{ secrets.APP_HOSTING_URL }}/api/cron/checklist-reminder?shift=evening" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "content-type: application/json")
+          echo "Status: $response"; cat /tmp/body
+          if [ "$response" -ne 200 ]; then exit 1; fi

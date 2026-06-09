@@ -202,5 +202,11 @@ export function checklistV2SupervisorScope(roleCode: string): ChecklistRole[] | 
   if (roleCode === 'TP_KT') {
     return ['PP_HT', 'PP_XLN'];
   }
+  // Phase Checklist-Visibility (2026-06-09): QLCS xem được checklist của
+  // QLCS cơ sở khác (cross-branch transparency theo yêu cầu anh).
+  // Chỉ trong role QLCS — không cho xem PP.
+  if (/^QLCS_/.test(roleCode)) {
+    return ['QLCS'];
+  }
   return null;
 }
