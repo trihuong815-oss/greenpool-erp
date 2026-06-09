@@ -174,19 +174,36 @@ export function canApproveTask(p: CallerProfile, t: TaskForScope): boolean {
   // Quy tắc nghiệp vụ: creator + assignee không tự duyệt
   if (t.createdBy === p.uid) return false;
   if (t.assigneeUserIds.includes(p.uid)) return false;
-  // Phase 12.5+ (post B.7 phase 2 — 2026-06-07): currentApprover là source of truth.
-  // Legacy approvalRequiredFrom đã được drop — backfill confirmed 0 docs pending_approval.
-  // CEO bypass CHỈ khi không có currentApprover user-cụ thể (để creator chỉ đích danh ai duyệt thì ko bị CEO chen ngang).
+  // Phase 12.5+ (post B.7 phase 2 + Stability 2026-06-09):
+  // currentApprover là source of truth. Quyền duyệt 3 lớp override để KHÔNG
+  // bao giờ kẹt chain:
+  //   1. Người được chỉ đích danh (uid match hoặc role match)
+  //   2. GĐ Khối same-block với assignee/creator block (override cấp dưới)
+  //   3. ADMIN/CEO super-admin (override mọi cấp toàn hệ thống)
+  //
+  // Lý do (2026-06-09): user yêu cầu "thông suốt với tất cả hệ thống".
+  // Tránh dead-end khi user/role được chỉ đích danh vắng. Người được chỉ vẫn
+  // nhận noti là người duyệt CHÍNH; người override duyệt thay khi cần.
+  const myBlock = getBlockOf(p.role_code);
+  const sameBlock = !!myBlock && myBlock !== 'all' && (
+    t.assigneeBlock === myBlock || t.createdByBlock === myBlock
+  );
+  const canOverrideAsGd = isGD(p) && sameBlock;
+
   if (t.currentApprover) {
     if (t.currentApprover.startsWith('user:')) {
-      return t.currentApprover.slice(5) === p.uid;
+      if (t.currentApprover.slice(5) === p.uid) return true; // được chỉ đích danh
+      if (canOverrideAsGd) return true;                       // GĐ Khối same-block override
+      if (isCEO(p)) return true;                              // super-admin override
+      return false;
     }
     if (matchApprover(t.currentApprover, p.uid, p.role_code)) return true;
+    if (canOverrideAsGd) return true;
     if (isCEO(p)) return true;
     return false;
   }
-  // Không có currentApprover (orphan doc) → chỉ CEO/ADMIN approve được.
-  return isCEO(p);
+  // Không có currentApprover (orphan doc) → GĐ Khối same-block + CEO/ADMIN.
+  return canOverrideAsGd || isCEO(p);
 }
 
 // ---- UPDATE STATUS (in_progress / done) ----

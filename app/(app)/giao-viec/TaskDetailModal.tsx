@@ -101,14 +101,25 @@ export function TaskDetailModal(props: {
     !!isAssigneeFacility;
 
   // Quy tắc: creator + assignee KHÔNG tự duyệt task của mình.
-  // Phase 12.5: thêm user-based approver (isMyTurnByUid). CEO bypass CHỈ khi chain không chỉ đích danh user khác.
+  // Phase 12.5: user-based approver (isMyTurnByUid).
+  // Stability 2026-06-09: 3 lớp override để không kẹt chain:
+  //   1. được chỉ đích danh user
+  //   2. role mình tới lượt (GĐ Khối)
+  //   3. GĐ Khối same-block override cấp dưới trong khối
+  //   4. ADMIN/CEO override toàn hệ thống
+  // Logic gd-same-block-override:
+  const isGdSameBlockOverride = isGD && task.status === 'pending_approval' && (
+    (currentUserRole === 'GD_KD' && (task.assigneeBlock === 'KD' || (task as any).createdByBlock === 'KD'))
+    || (currentUserRole === 'GD_VP' && (task.assigneeBlock === 'VP' || (task as any).createdByBlock === 'VP'))
+  );
   const canApprove = task.status === 'pending_approval'
     && !isCreator
     && !isAssigneeUser
     && (
-      isMyTurnByUid                                             // được chỉ đích danh
-      || isMyBlockApprover                                       // đến lượt role mình (GĐ Khối)
-      || (isCEO && !(cur && cur.startsWith('user:')))            // CEO bypass nếu chain không chỉ user khác
+      isMyTurnByUid
+      || isMyBlockApprover
+      || isGdSameBlockOverride
+      || isCEO
     );
   const canDelete = isAdmin || isCreator;
 
