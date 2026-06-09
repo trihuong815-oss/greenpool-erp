@@ -17,6 +17,7 @@ import { KeyboardShortcuts } from './ui/KeyboardShortcuts';
 import { FlagGate } from './FlagGate';
 import { PushHeartbeat } from './PushHeartbeat';
 import { NotiHealthBanner } from './NotiHealthBanner';
+import { ForceEnableNotiModal } from './ForceEnableNotiModal';
 
 interface AppShellProps {
   userName: string;
@@ -117,6 +118,9 @@ export function AppShell({ userName, userRole, roleCode, menuOverrides, children
 
         {/* Phase PWA-Stability (2026-06-09): self-healing notification subscription — no UI render */}
         <PushHeartbeat />
+
+        {/* Phase PWA-Stability (2026-06-09): modal BẮT BUỘC bật noti khi login — đảm bảo 100% user lãnh đạo nhận noti */}
+        <ForceEnableNotiModal roleCode={roleCode} />
       </div>
     </MobileNavContext.Provider>
     </CommandPaletteProvider>
