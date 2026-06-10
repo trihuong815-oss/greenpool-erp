@@ -90,15 +90,17 @@ export function TaskDetailModal(props: {
   const isAssigneeUser = task.assigneeUserIds.includes(currentUserId);
   const isAssigneeDept = task.assigneeDeptId && task.assigneeDeptId === currentDepartmentId;
   const isAssigneeFacility = task.assigneeFacilityId && task.assigneeFacilityId === currentBranchId;
-  // Quy tắc: chỉ assignee (trực tiếp hoặc theo dept/facility) mới được cập nhật tiến độ.
-  // Creator KHÔNG được tự đánh dấu hoàn thành (trừ khi cũng là assignee chính thức).
-  // Stability 2026-06-10: BỎ isAdminSystem bypass — ADMIN duyệt xong KHÔNG cần
-  // thấy nút "Bắt đầu/Hoàn thành" cho task của người khác. ADMIN chỉ thực hiện
-  // task khi chính mình là assignee. (Sửa data lỗi vẫn dùng được qua Firebase Console.)
-  const canUpdateStatus =
+  // Stability 2026-06-10 v2 (anh chốt): PROPOSAL KHÔNG có nút thực hiện.
+  // Đề xuất là "xin duyệt" — chỉ có 3 nút: Duyệt / Bổ sung / Từ chối.
+  // Cuối chain → status='done' (fix be438ef) → hết quy trình.
+  //
+  // ASSIGNMENT giữ logic cũ: assignee user/dept/facility thấy nút Bắt đầu/
+  // Hoàn thành/Huỷ.
+  const canUpdateStatus = task.kind !== 'proposal' && (
     isAssigneeUser ||
     !!isAssigneeDept ||
-    !!isAssigneeFacility;
+    !!isAssigneeFacility
+  );
 
   // Quy tắc: creator + assignee KHÔNG tự duyệt task của mình.
   // Phase 12.5: user-based approver.
