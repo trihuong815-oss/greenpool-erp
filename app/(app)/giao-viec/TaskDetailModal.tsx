@@ -72,7 +72,6 @@ export function TaskDetailModal(props: {
   const [showApprove, setShowApprove] = useState(false);
   const [approveComment, setApproveComment] = useState('');
 
-  const isCEO = currentUserRole === 'CEO' || currentUserRole === 'ADMIN';
   const isGD = GD_ROLES.has(currentUserRole);
   const isAdmin = ADMIN.has(currentUserRole);
   // Phase 12.5: currentApprover có thể là "user:UID" | "role:RC" | legacy "RC"
@@ -99,21 +98,12 @@ export function TaskDetailModal(props: {
     ? (task.status === 'requested_revision' && (isCreator || isAdmin))
     : (isAssigneeUser || !!isAssigneeDept || !!isAssigneeFacility);
 
-  // Quy tắc: creator + assignee KHÔNG tự duyệt task của mình.
-  // Phase 12.5: user-based approver.
-  // Stability 2026-06-09: 4 lớp override để không kẹt chain.
-  // Stability 2026-06-10: phân biệt CHÍNH CHỦ (lớp 1+2) vs OVERRIDE (lớp 3+4)
-  // để UI confirm dialog tránh duyệt thay nhầm.
-  const isGdSameBlockOverride = isGD && task.status === 'pending_approval' && (
-    (currentUserRole === 'GD_KD' && (task.assigneeBlock === 'KD' || (task as any).createdByBlock === 'KD'))
-    || (currentUserRole === 'GD_VP' && (task.assigneeBlock === 'VP' || (task as any).createdByBlock === 'VP'))
-  );
-  const isDirectApprover = isMyTurnByUid || isMyBlockApprover;  // chính chủ
-  const isOverrideApprover = !isDirectApprover && (isGdSameBlockOverride || isCEO);
+  // Stability 2026-06-10 v5 (anh chốt): BỎ override — CHỈ chính chủ duyệt.
+  // Chain ai được chỉ định thì người đó duyệt. ADMIN/CEO không jump vào.
   const canApprove = task.status === 'pending_approval'
     && !isCreator
     && !isAssigneeUser
-    && (isDirectApprover || isOverrideApprover);
+    && (isMyTurnByUid || isMyBlockApprover);
   const canDelete = isAdmin || isCreator;
 
   const assigneeLabel = task.assigneeDeptId
@@ -504,42 +494,19 @@ export function TaskDetailModal(props: {
                 </div>
               )}
 
-              {/* Phase 12.5 — Approval block. Stability 2026-06-10: phân biệt
-                  chính chủ vs override để UI rõ ràng + confirm dialog. */}
+              {/* Approval block — chính chủ duyệt (bỏ override theo spec anh 2026-06-10). */}
               {canApprove && (
-                <div className={`rounded-lg border-2 p-3 space-y-2 ${
-                  isOverrideApprover
-                    ? 'border-orange-300 bg-orange-50/60'
-                    : 'border-amber-300 bg-amber-50/60'
-                }`}>
-                  <div className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1 ${
-                    isOverrideApprover ? 'text-orange-800' : 'text-amber-800'
-                  }`}>
-                    <AlertTriangle size={12} />
-                    {isOverrideApprover
-                      ? `Bạn có thể DUYỆT THAY (cấp gốc: ${
-                          cur?.startsWith('user:')
-                            ? users.find((u) => u.id === cur.slice(5))?.name ?? 'người chỉ định'
-                            : cur?.startsWith('role:')
-                              ? cur.slice(5)
-                              : 'người chỉ định'
-                        })`
-                      : 'Đến lượt bạn duyệt'}
+                <div className="rounded-lg border-2 border-amber-300 bg-amber-50/60 p-3 space-y-2">
+                  <div className="text-xs font-bold uppercase tracking-wider flex items-center gap-1 text-amber-800">
+                    <AlertTriangle size={12} /> Đến lượt bạn duyệt
                   </div>
-                  {isOverrideApprover && (
-                    <div className="text-[11px] text-orange-700 bg-orange-100/50 rounded p-2">
-                      ⚠ Bạn đang OVERRIDE — chỉ duyệt thay khi người được chỉ định vắng/quá hạn.
-                      Mỗi lần bấm "Xác nhận duyệt" sẽ advance chain 1 cấp.
-                    </div>
-                  )}
 
                   {/* IDLE: 3 nút cho proposal (Duyệt/Bổ sung/Từ chối) hoặc
-                      2 nút cho assignment (Duyệt/Từ chối — không có Bổ sung).
-                      Spec anh chốt 2026-06-10. */}
+                      2 nút cho assignment (Duyệt/Từ chối — không có Bổ sung). */}
                   {!showApprove && !showReject && !showRevisionForm && (
                     <div className={`grid gap-2 ${task.kind === 'proposal' ? 'grid-cols-3' : 'grid-cols-2'}`}>
                       <button onClick={() => setShowApprove(true)} className={btnSuccess}>
-                        <CheckCircle2 size={14} /> {isOverrideApprover ? 'Duyệt thay' : 'Duyệt'}
+                        <CheckCircle2 size={14} /> Duyệt
                       </button>
                       {task.kind === 'proposal' && (
                         <button onClick={() => setShowRevisionForm(true)} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-semibold rounded-lg bg-orange-600 hover:bg-orange-700 text-white shadow-sm">

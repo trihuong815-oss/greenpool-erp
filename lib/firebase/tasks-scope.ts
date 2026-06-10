@@ -170,40 +170,20 @@ export function computeApproval(
 // Creator + Assignee KHÔNG được tự duyệt task của mình — kể cả CEO (trừ ADMIN)
 export function canApproveTask(p: CallerProfile, t: TaskForScope): boolean {
   if (t.status !== 'pending_approval') return false;
-  if (isAdminSystem(p)) return true;
-  // Quy tắc nghiệp vụ: creator + assignee không tự duyệt
+  // Quy tắc nghiệp vụ: creator + assignee không tự duyệt.
   if (t.createdBy === p.uid) return false;
   if (t.assigneeUserIds.includes(p.uid)) return false;
-  // Phase 12.5+ (post B.7 phase 2 + Stability 2026-06-09):
-  // currentApprover là source of truth. Quyền duyệt 3 lớp override để KHÔNG
-  // bao giờ kẹt chain:
-  //   1. Người được chỉ đích danh (uid match hoặc role match)
-  //   2. GĐ Khối same-block với assignee/creator block (override cấp dưới)
-  //   3. ADMIN/CEO super-admin (override mọi cấp toàn hệ thống)
-  //
-  // Lý do (2026-06-09): user yêu cầu "thông suốt với tất cả hệ thống".
-  // Tránh dead-end khi user/role được chỉ đích danh vắng. Người được chỉ vẫn
-  // nhận noti là người duyệt CHÍNH; người override duyệt thay khi cần.
-  const myBlock = getBlockOf(p.role_code);
-  const sameBlock = !!myBlock && myBlock !== 'all' && (
-    t.assigneeBlock === myBlock || t.createdByBlock === myBlock
-  );
-  const canOverrideAsGd = isGD(p) && sameBlock;
-
+  // Stability 2026-06-10 v5 (anh chốt): BỎ override — CHỈ chính chủ duyệt.
+  // Chain ai được chỉ định thì người đó duyệt. ADMIN/CEO không jump vào.
+  // ADMIN system bypass GIỮ cho repair data lỗi (không hiện trên UI bình thường).
+  if (isAdminSystem(p)) return true; // bypass technical, không phải nghiệp vụ
   if (t.currentApprover) {
     if (t.currentApprover.startsWith('user:')) {
-      if (t.currentApprover.slice(5) === p.uid) return true; // được chỉ đích danh
-      if (canOverrideAsGd) return true;                       // GĐ Khối same-block override
-      if (isCEO(p)) return true;                              // super-admin override
-      return false;
+      return t.currentApprover.slice(5) === p.uid;
     }
-    if (matchApprover(t.currentApprover, p.uid, p.role_code)) return true;
-    if (canOverrideAsGd) return true;
-    if (isCEO(p)) return true;
-    return false;
+    return matchApprover(t.currentApprover, p.uid, p.role_code);
   }
-  // Không có currentApprover (orphan doc) → GĐ Khối same-block + CEO/ADMIN.
-  return canOverrideAsGd || isCEO(p);
+  return false;
 }
 
 // ---- UPDATE STATUS (in_progress / done) ----

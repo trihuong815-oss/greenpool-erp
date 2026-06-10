@@ -147,6 +147,23 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
       status: newStatus,
     }, { uid: caller.profile.uid, name: caller.actorName }, newStatus);
 
+    // Stability 2026-06-10: khi creator RESUBMIT proposal sau bổ sung → push noti
+    // tới approver đang chờ (pausedAtApprover trước khi clear) — "Đã bổ sung, mời duyệt".
+    if (isResubmit && data.kind === 'proposal' && data.pausedAtApprover && patch.currentApprover) {
+      try {
+        const pushModule = await import('@/lib/firebase/push-notifications');
+        await pushModule.pushToApproverEntries([patch.currentApprover as string], {
+          title: `📝 Đề xuất đã được bổ sung — chờ duyệt`,
+          body: `${caller.actorName ?? data.createdByName ?? 'Người tạo'} vừa bổ sung "${data.title}". Mời bạn duyệt lại.`,
+          link: `/giao-viec?taskId=${taskId}`,
+          tag: `task-${taskId}`,
+          data: { taskId, kind: 'task_resubmitted_after_revision' },
+        });
+      } catch (e: any) {
+        console.warn('[status route] push resubmit fail:', e?.message);
+      }
+    }
+
     return NextResponse.json({ ok: true });
   } catch (e) {
     if (e instanceof UnauthorizedError) return NextResponse.json({ error: e.message }, { status: e.status });
