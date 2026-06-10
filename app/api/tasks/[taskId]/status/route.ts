@@ -95,6 +95,15 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
     if (newStatus === 'done') patch.progressPct = 100;
     else if (progressPct !== null) patch.progressPct = progressPct;
 
+    // Stability 2026-06-10: nếu resubmit từ requested_revision của PROPOSAL +
+    // có pausedAtApprover (yêu cầu bổ sung từ approver trong chain) → quay
+    // lại đúng cấp đó để tiếp tục duyệt. KHÔNG để creator bypass approval.
+    if (isResubmit && data.kind === 'proposal' && data.pausedAtApprover) {
+      patch.status = 'pending_approval';
+      patch.currentApprover = data.pausedAtApprover;
+      patch.pausedAtApprover = null;
+    }
+
     // Phase 12 — Đề xuất v2: recipient bắt đầu → bắt buộc nhập dự kiến hoàn thành
     if (newStatus === 'in_progress' && data.kind === 'proposal') {
       const exp = typeof body?.expectedCompletionDate === 'string' ? body.expectedCompletionDate.trim() : '';

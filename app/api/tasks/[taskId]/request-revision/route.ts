@@ -10,7 +10,7 @@ import { getFirebaseAdminDb } from '@/lib/firebase/admin';
 import { COLLECTIONS } from '@/lib/firebase/collections';
 import { writeAuditLog } from '@/lib/firebase/audit-log';
 import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-auth';
-import { canUpdateTaskStatus } from '@/lib/firebase/tasks-scope';
+import { canUpdateTaskStatus, canApproveTask } from '@/lib/firebase/tasks-scope';
 // Phase B.3: centralized scope helper.
 import { taskScopeFromDoc as asScope } from '@/lib/firebase/tasks-serialize';
 
@@ -36,18 +36,27 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
     if (data.kind !== 'proposal') {
       return NextResponse.json({ error: 'Chỉ áp dụng cho đề xuất.' }, { status: 400 });
     }
-    // Chỉ ở trạng thái pending hoặc in_progress mới cho yêu cầu bổ sung
-    if (data.status !== 'pending' && data.status !== 'in_progress') {
+    // Stability 2026-06-10: cho phép yêu cầu bổ sung khi đề xuất đang trong
+    // chain duyệt (pending_approval) HOẶC đã đến tay recipient (pending/in_progress).
+    if (data.status !== 'pending' && data.status !== 'in_progress' && data.status !== 'pending_approval') {
       return NextResponse.json({
-        error: 'Chỉ yêu cầu bổ sung khi đề xuất đã đến tay người nhận (pending/in_progress).',
+        error: 'Đề xuất ở trạng thái này không thể yêu cầu bổ sung.',
       }, { status: 409 });
     }
-    // Quyền: chỉ assignee (recipient), không cho creator tự gửi
     if (data.createdBy === caller.profile.uid) {
-      return NextResponse.json({ error: 'Người tạo không thể tự yêu cầu bổ sung — chỉ người nhận mới thực hiện.' }, { status: 403 });
+      return NextResponse.json({ error: 'Người tạo không thể tự yêu cầu bổ sung.' }, { status: 403 });
     }
-    if (!canUpdateTaskStatus(caller.profile, asScope(data))) {
-      return NextResponse.json({ error: 'Bạn không có quyền yêu cầu bổ sung trên đề xuất này.' }, { status: 403 });
+    // Quyền: assignee (recipient — pending/in_progress) HOẶC approver
+    // (đang trong chain — pending_approval).
+    const isInChain = data.status === 'pending_approval';
+    if (isInChain) {
+      if (!canApproveTask(caller.profile, asScope(data))) {
+        return NextResponse.json({ error: 'Bạn không có quyền yêu cầu bổ sung — chưa đến lượt bạn duyệt.' }, { status: 403 });
+      }
+    } else {
+      if (!canUpdateTaskStatus(caller.profile, asScope(data))) {
+        return NextResponse.json({ error: 'Bạn không có quyền yêu cầu bổ sung.' }, { status: 403 });
+      }
     }
 
     const now = new Date();
@@ -57,12 +66,18 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
       requestedAt: now.toISOString(),
       message,
     };
-    await ref.update({
+    const updateData: Record<string, unknown> = {
       status: 'requested_revision',
       revisionRequests: FieldValue.arrayUnion(revision),
       updatedAt: now,
       updatedBy: caller.profile.uid,
-    });
+    };
+    // Khi yêu cầu bổ sung trong chain → lưu vị trí pause để resume đúng cấp
+    // sau khi creator bổ sung xong + gửi lại.
+    if (isInChain && data.currentApprover) {
+      updateData.pausedAtApprover = data.currentApprover;
+    }
+    await ref.update(updateData);
     await ref.collection('comments').add({
       authorId: caller.profile.uid,
       authorName: caller.actorName,
