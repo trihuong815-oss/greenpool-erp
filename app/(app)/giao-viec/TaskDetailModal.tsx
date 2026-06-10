@@ -533,15 +533,19 @@ export function TaskDetailModal(props: {
                     </div>
                   )}
 
-                  {/* IDLE: 3 nút action */}
+                  {/* IDLE: 3 nút cho proposal (Duyệt/Bổ sung/Từ chối) hoặc
+                      2 nút cho assignment (Duyệt/Từ chối — không có Bổ sung).
+                      Spec anh chốt 2026-06-10. */}
                   {!showApprove && !showReject && !showRevisionForm && (
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className={`grid gap-2 ${task.kind === 'proposal' ? 'grid-cols-3' : 'grid-cols-2'}`}>
                       <button onClick={() => setShowApprove(true)} className={btnSuccess}>
                         <CheckCircle2 size={14} /> {isOverrideApprover ? 'Duyệt thay' : 'Duyệt'}
                       </button>
-                      <button onClick={() => setShowRevisionForm(true)} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-semibold rounded-lg bg-orange-600 hover:bg-orange-700 text-white shadow-sm">
-                        <AlertTriangle size={14} /> Bổ sung
-                      </button>
+                      {task.kind === 'proposal' && (
+                        <button onClick={() => setShowRevisionForm(true)} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-semibold rounded-lg bg-orange-600 hover:bg-orange-700 text-white shadow-sm">
+                          <AlertTriangle size={14} /> Bổ sung
+                        </button>
+                      )}
                       <button onClick={() => setShowReject(true)} className={btnDanger}>
                         <XCircle size={14} /> Từ chối
                       </button>
