@@ -90,17 +90,14 @@ export function TaskDetailModal(props: {
   const isAssigneeUser = task.assigneeUserIds.includes(currentUserId);
   const isAssigneeDept = task.assigneeDeptId && task.assigneeDeptId === currentDepartmentId;
   const isAssigneeFacility = task.assigneeFacilityId && task.assigneeFacilityId === currentBranchId;
-  // Stability 2026-06-10 v2 (anh chốt): PROPOSAL KHÔNG có nút thực hiện.
-  // Đề xuất là "xin duyệt" — chỉ có 3 nút: Duyệt / Bổ sung / Từ chối.
-  // Cuối chain → status='done' (fix be438ef) → hết quy trình.
-  //
-  // ASSIGNMENT giữ logic cũ: assignee user/dept/facility thấy nút Bắt đầu/
-  // Hoàn thành/Huỷ.
-  const canUpdateStatus = task.kind !== 'proposal' && (
-    isAssigneeUser ||
-    !!isAssigneeDept ||
-    !!isAssigneeFacility
-  );
+  // Stability 2026-06-10 v3: PROPOSAL chỉ có 1 case cần update status:
+  //   - creator/admin gửi lại sau khi bổ sung (requested_revision → pending_approval)
+  // → render block để hiện nút "Gửi lại sau bổ sung".
+  // Các trạng thái khác của proposal: KHÔNG có nút status (chỉ approval block).
+  // ASSIGNMENT: giữ logic cũ — assignee user/dept/facility thấy nút thực hiện.
+  const canUpdateStatus = task.kind === 'proposal'
+    ? (task.status === 'requested_revision' && (isCreator || isAdmin))
+    : (isAssigneeUser || !!isAssigneeDept || !!isAssigneeFacility);
 
   // Quy tắc: creator + assignee KHÔNG tự duyệt task của mình.
   // Phase 12.5: user-based approver.
