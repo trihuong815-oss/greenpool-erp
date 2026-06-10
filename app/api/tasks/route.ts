@@ -607,10 +607,12 @@ export async function POST(req: NextRequest) {
 
     // Comment "created" event
     const kindLabel = kind === 'proposal' ? 'đề xuất' : 'giao việc';
-    // Phase B.7 phase 2: comment ghi rõ approver tag (vd "role:GD_KD" hoặc "user:UID")
-    // — không còn legacy role string. UI dịch lại sang tên hiển thị.
+    // Phase Stability 2026-06-10: resolve approver entry → tên người Vietnamese
+    // thay vì raw "user:UID" hay "role:GD_VP".
+    const approverDisplay = await (await import('@/lib/firebase/approver-name'))
+      .resolveApproverName(currentApprover);
     const eventBody = status === 'pending_approval'
-      ? `Tạo ${kindLabel} — chờ ${currentApprover ?? 'cấp trên'} duyệt`
+      ? `Tạo ${kindLabel} — chờ ${approverDisplay} duyệt`
       : `Tạo ${kindLabel}`;
     await ref.collection('comments').add({
       authorId: caller.profile.uid,

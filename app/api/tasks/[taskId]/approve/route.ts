@@ -75,11 +75,15 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
     }
 
     await ref.update(update);
+    // Phase Stability 2026-06-10: resolve next approver entry → tên VN
+    const nextApproverDisplay = nextApprover
+      ? await (await import('@/lib/firebase/approver-name')).resolveApproverName(nextApprover)
+      : null;
     await ref.collection('comments').add({
       authorId: caller.profile.uid,
       authorName: caller.actorName,
       authorRole: caller.actorRole,
-      body: comment || (nextApprover ? `Đã duyệt — chuyển ${nextApprover} duyệt tiếp` : 'Đã duyệt'),
+      body: comment || (nextApproverDisplay ? `Đã duyệt — chuyển ${nextApproverDisplay} duyệt tiếp` : 'Đã duyệt'),
       kind: 'approval',
       createdAt: now,
     });
