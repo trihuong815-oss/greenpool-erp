@@ -133,14 +133,21 @@ export async function notifyTaskApproved(task: TaskDoc, approverName: string): P
     }
     return;
   }
-  // Hết chain → đến recipient. Với proposal không có assignee → ít nhất push creator.
+  // Hết chain. Stability 2026-06-10:
+  // - PROPOSAL: status='done' → notify creator "đã duyệt, hoàn tất quy trình"
+  // - ASSIGNMENT: status='pending' → notify assignee "bắt đầu thực hiện"
   const uids = await resolveAssigneeUids(task);
   uids.push(task.createdBy);
   const filtered = Array.from(new Set(uids.filter(Boolean)));
   if (filtered.length === 0) return;
+  const isProposal = task.kind === 'proposal';
   await pushToUsers(filtered, {
-    title: `✅ ${kindLabel(task.kind)} được duyệt`,
-    body: `"${task.title}" — ${approverName} đã duyệt`,
+    title: isProposal
+      ? `✅ Đề xuất đã được duyệt — hoàn tất`
+      : `✅ Giao việc được duyệt — bắt đầu thực hiện`,
+    body: isProposal
+      ? `"${task.title}" — ${approverName} đã duyệt. Quy trình hoàn tất.`
+      : `"${task.title}" — ${approverName} đã duyệt, vui lòng thực hiện.`,
     link,
     tag: `task-${task.id}`,
     data: { taskId: task.id, kind: 'task_approved' },

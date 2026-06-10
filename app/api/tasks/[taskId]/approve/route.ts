@@ -61,17 +61,30 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
         update.status = 'pending_approval';
         update.currentApprover = nextApprover;
       } else {
-        // Hết chain → đến recipient
-        update.status = 'pending';
+        // Hết chain.
+        // Stability 2026-06-10: PROPOSAL duyệt xong = HẾT (status='done') —
+        // user yêu cầu "duyệt xong báo lại creator là đã được duyệt là được".
+        // ASSIGNMENT duyệt xong → status='pending' → assignee bắt đầu thực hiện.
         update.currentApprover = null;
         update.approvedBy = caller.profile.uid;
         update.approvedAt = now;
+        if (data.kind === 'proposal') {
+          update.status = 'done';
+          update.progressPct = 100;
+        } else {
+          update.status = 'pending';
+        }
       }
     } else {
       // Legacy single-step
-      update.status = 'pending';
       update.approvedBy = caller.profile.uid;
       update.approvedAt = now;
+      if (data.kind === 'proposal') {
+        update.status = 'done';
+        update.progressPct = 100;
+      } else {
+        update.status = 'pending';
+      }
     }
 
     await ref.update(update);
