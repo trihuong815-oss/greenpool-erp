@@ -75,7 +75,6 @@ export function TaskDetailModal(props: {
   const isCEO = currentUserRole === 'CEO' || currentUserRole === 'ADMIN';
   const isGD = GD_ROLES.has(currentUserRole);
   const isAdmin = ADMIN.has(currentUserRole);
-  const isAdminSystem = currentUserRole === 'ADMIN';
   // Phase 12.5: currentApprover có thể là "user:UID" | "role:RC" | legacy "RC"
   const cur = task.currentApprover ?? null;
   const isMyTurnByUid = !!cur && cur.startsWith('user:') && cur.slice(5) === currentUserId;
@@ -93,9 +92,10 @@ export function TaskDetailModal(props: {
   const isAssigneeFacility = task.assigneeFacilityId && task.assigneeFacilityId === currentBranchId;
   // Quy tắc: chỉ assignee (trực tiếp hoặc theo dept/facility) mới được cập nhật tiến độ.
   // Creator KHÔNG được tự đánh dấu hoàn thành (trừ khi cũng là assignee chính thức).
-  // ADMIN system bypass để sửa data hỏng.
+  // Stability 2026-06-10: BỎ isAdminSystem bypass — ADMIN duyệt xong KHÔNG cần
+  // thấy nút "Bắt đầu/Hoàn thành" cho task của người khác. ADMIN chỉ thực hiện
+  // task khi chính mình là assignee. (Sửa data lỗi vẫn dùng được qua Firebase Console.)
   const canUpdateStatus =
-    isAdminSystem ||
     isAssigneeUser ||
     !!isAssigneeDept ||
     !!isAssigneeFacility;
