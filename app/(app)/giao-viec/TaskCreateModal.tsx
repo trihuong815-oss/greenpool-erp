@@ -49,7 +49,7 @@ export default function TaskCreateModal({
   const [description, setDescription] = useState('');
   const [coordType, setCoordType] = useState<CoordType>('dieu-phoi');
   const [coordScope, setCoordScope] = useState<CoordScope>('noi-bo-khoi');
-  const [priority, setPriority] = useState<TaskPriority>('medium');
+  const [priority, setPriority] = useState<TaskPriority>('normal');
   const [dueDate, setDueDate] = useState('');
   const [goal, setGoal] = useState('');
 
@@ -81,9 +81,9 @@ export default function TaskCreateModal({
   // Filter users by dept
   const deptUsers = useMemo(() => {
     if (assigneeType === 'dept' && assigneeDeptId)
-      return users.filter(u => u.deptId === assigneeDeptId || (u as any).departmentId === assigneeDeptId);
+      return users.filter(u => u.departmentId === assigneeDeptId || u.departmentId === assigneeDeptId);
     if (assigneeType === 'facility' && assigneeFacilityId)
-      return users.filter(u => (u as any).facilityId === assigneeFacilityId || (u as any).branchId === assigneeFacilityId);
+      return users.filter(u => u.branchId === assigneeFacilityId || u.branchId === assigneeFacilityId);
     return users;
   }, [users, assigneeDeptId, assigneeFacilityId, assigneeType]);
 
@@ -107,9 +107,9 @@ export default function TaskCreateModal({
       }
       // Auto-fill ownerName when ownerId changes
       if (key === 'ownerId') {
-        const u = users.find(u => u.id === val || u.uid === val);
+        const u = users.find(u => u.id === val || u.id === val);
         next.ownerName = u?.name || u?.displayName || val;
-        next.ownerRole = u?.roleCode || u?.role || '';
+        next.ownerRole = u?.roleId || '';
       }
       return next;
     }));
@@ -207,7 +207,7 @@ export default function TaskCreateModal({
                     <select value={priority} onChange={e => setPriority(e.target.value as TaskPriority)}
                       className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 bg-white">
                       <option value="high">Cao</option>
-                      <option value="medium">Trung binh</option>
+                      <option value="normal">Trung binh</option>
                       <option value="low">Thap</option>
                     </select>
                   </Field>
@@ -259,15 +259,15 @@ export default function TaskCreateModal({
                 <Field label="Nguoi chiu trach nhiem (Owner) — co the chon nhieu nguoi thuc hien">
                   <div className="max-h-32 overflow-y-auto rounded-lg border border-slate-200 divide-y divide-slate-50">
                     {deptUsers.slice(0, 20).map(u => {
-                      const uid = u.id || u.uid || '';
+                      const uid = u.id || u.id || '';
                       const checked = assigneeUserIds.includes(uid);
                       return (
                         <label key={uid} className="flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 cursor-pointer">
                           <input type="checkbox" checked={checked}
                             onChange={() => setAssigneeUserIds(prev => checked ? prev.filter(x => x !== uid) : [...prev, uid])}
                             className="rounded text-emerald-600" />
-                          <span className="text-sm text-slate-700">{u.name || u.displayName}</span>
-                          <span className="text-xs text-slate-400 ml-auto">{u.roleCode || u.role || ''}</span>
+                          <span className="text-sm text-slate-700">{u.displayName}</span>
+                          <span className="text-xs text-slate-400 ml-auto">{u.roleId || ''}</span>
                         </label>
                       );
                     })}
@@ -315,8 +315,8 @@ export default function TaskCreateModal({
                           className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-500 bg-white">
                           <option value="">Chon nguoi...</option>
                           {users.slice(0,50).map(u => {
-                            const uid = u.id || u.uid || '';
-                            return <option key={uid} value={uid}>{u.name || u.displayName} ({u.roleCode || ''})</option>;
+                            const uid = u.id || u.id || '';
+                            return <option key={uid} value={uid}>{u.displayName} ({u.roleId || ''})</option>;
                           })}
                         </select>
                       </Field>
