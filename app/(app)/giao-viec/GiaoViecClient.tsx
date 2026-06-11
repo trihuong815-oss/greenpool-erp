@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import {
   Plus, Search, X, ListChecks, Inbox, Send, ShieldCheck,
   Loader2, ArrowRight, CalendarDays, AlertTriangle, CheckCircle2,
-  Clock, LayoutGrid, List as ListIcon, TrendingUp, Users2,
+  Clock, LayoutGrid, GitBranch, List as ListIcon, TrendingUp, Users2,
   type LucideIcon,
 } from 'lucide-react';
 import { tasksApi, type Task, type TaskListMode, type TaskStatus, type TaskKind } from '@/lib/services/tasks/api-client';
@@ -28,7 +28,7 @@ interface Props {
 }
 
 type TabKey = 'received' | 'proposal' | 'assignment' | 'approval' | 'lien-khoi';
-type ViewMode = 'list' | 'kanban';
+type ViewMode = 'list' | 'kanban' | 'flow';
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
   pending_approval: 'Chờ duyệt',
@@ -349,6 +349,13 @@ export function GiaoViecClient(props: Props) {
             >
               <LayoutGrid size={16} />
             </button>
+            <button
+              onClick={() => setView('flow')}
+              className={`p-2 rounded-lg transition ${view === 'flow' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-400 hover:bg-slate-50'}`}
+              title="Xem luồng công việc"
+            >
+              <GitBranch size={16} />
+            </button>
           </div>
           {canCreateProposal && tab === 'proposal' && (
             <button
@@ -435,6 +442,15 @@ export function GiaoViecClient(props: Props) {
             <EmptyState tab={tab} />
           ) : view === 'kanban' ? (
             <KanbanView
+              tasks={tasks}
+              departments={departments}
+              branches={branches}
+              users={users}
+              onSelect={setSelectedTask}
+              currentUserId={currentUserId}
+            />
+          ) : view === 'flow' ? (
+            <FlowView
               tasks={tasks}
               departments={departments}
               branches={branches}
@@ -831,6 +847,172 @@ function KanbanView({ tasks, departments, branches, onSelect }: {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+// ============================================================================
+// FLOW VIEW — Xem luồng công việc với nhiều thành viên
+// ============================================================================
+
+function MemberAvatar({ name, role, state, size = 'md' }: {
+  name: string; role?: string; state: 'done' | 'active' | 'pending' | 'skipped';
+  size?: 'sm' | 'md' | 'lg';
+}) {
+  const initials = name.split(' ').map(w => w.charAt(0).toUpperCase()).slice(0,2).join('');
+  const sizeClass = size === 'lg' ? 'h-10 w-10 text-sm' : size === 'sm' ? 'h-6 w-6 text-[9px]' : 'h-8 w-8 text-xs';
+  const stateClass = {
+    done:    'bg-emerald-500 text-white ring-2 ring-emerald-200',
+    active:  'bg-blue-500 text-white ring-2 ring-blue-300 shadow-md',
+    pending: 'bg-slate-200 text-slate-500 ring-1 ring-slate-300',
+    skipped: 'bg-rose-100 text-rose-500 ring-1 ring-rose-200',
+  }[state];
+  return (
+    <div className="flex flex-col items-center gap-0.5 min-w-0">
+      <div className={`rounded-full font-bold flex items-center justify-center shrink-0 ${sizeClass} ${stateClass}`}>
+        {state === 'done' ? '✓' : state === 'skipped' ? '✕' : initials}
+      </div>
+      <span className="text-[9px] text-slate-600 font-medium text-center max-w-[56px] leading-tight line-clamp-1 w-full">{name.split(' ').slice(-1)[0]}</span>
+      {role && <span className="text-[8px] text-slate-400 text-center truncate max-w-[56px]">{role}</span>}
+    </div>
+  );
+}
+
+function FlowConnector({ state }: { state: 'done' | 'active' | 'pending' }) {
+  const cls = state === 'done' ? 'bg-emerald-400' : state === 'active' ? 'bg-blue-400' : 'bg-slate-200';
+  return <div className={`h-0.5 flex-1 min-w-[12px] max-w-[40px] rounded-full mx-0.5 mt-4 ${cls}`} />;
+}
+
+function FlowTaskCard({ task, users, departments, branches, onSelect }: {
+  task: Task;
+  users: { id: string; name: string; roleId: string }[];
+  departments: Department[];
+  branches: Branch[];
+  onSelect: () => void;
+}) {
+  const today = new Date().toISOString().slice(0, 10);
+  const isOverdue = !!task.dueDate && task.dueDate < today && !['done', 'cancelled', 'rejected'].includes(task.status);
+  const isTerminal = task.status === 'rejected' || task.status === 'cancelled';
+  const isDone = task.status === 'done';
+  const isPendingApproval = task.status === 'pending_approval';
+  const isInProgress = task.status === 'in_progress';
+  const isPending = task.status === 'pending';
+  const creator = { name: task.createdByName || '—', role: task.createdByRole };
+  const approvalChain: string[] = Array.isArray(task.approvalChain) ? task.approvalChain : [];
+  const approvedRoles = new Set((task.approvalsCompleted || []).map((a: { role: string }) => a.role));
+  const assigneeNames: string[] = [];
+  if (task.assigneeDeptId) {
+    const d = departments.find(d => d.id === task.assigneeDeptId);
+    if (d) assigneeNames.push(d.name);
+  } else if (task.assigneeFacilityId) {
+    const b = branches.find(b => b.id === task.assigneeFacilityId);
+    if (b) assigneeNames.push(b.name);
+  } else {
+    task.assigneeUserIds.slice(0, 3).forEach(uid => {
+      const u = users.find(u => u.id === uid);
+      if (u) assigneeNames.push(u.name);
+    });
+    if (task.assigneeUserIds.length > 3) assigneeNames.push('+' + (task.assigneeUserIds.length - 3));
+  }
+  const creatorState: 'done' | 'active' | 'pending' | 'skipped' = isTerminal ? 'skipped' : 'done';
+  const ROLE_SHORT: Record<string, string> = {
+    GD_KD: 'GĐ KD', GD_VP: 'GĐ VP', CEO: 'CEO', ADMIN: 'Admin', PP_KD: 'PP KD', PP_HT: 'PP HT',
+  };
+  const priorityBorder: Record<string, string> = {
+    low: 'border-slate-200', normal: 'border-slate-200', high: 'border-amber-400', urgent: 'border-rose-400',
+  };
+  return (
+    <button
+      onClick={onSelect}
+      className={`w-full text-left rounded-xl border-2 bg-white p-4 hover:shadow-md transition-all group ${isTerminal ? 'border-rose-200 opacity-75' : isOverdue ? 'border-rose-400' : (priorityBorder[task.priority] || 'border-slate-200')}`}
+    >
+      <div className="flex items-start justify-between gap-2 mb-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ring-1 ${STATUS_BG[task.status]}`}>{STATUS_LABEL[task.status]}</span>
+            {task.crossBlock && <span className="text-[9px] font-bold px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded">LIÊN KHỐI</span>}
+            {isOverdue && <span className="text-[9px] font-bold px-1.5 py-0.5 bg-rose-100 text-rose-700 rounded">⚠ QUÁ HẠN</span>}
+          </div>
+          <h4 className="mt-1 text-sm font-semibold text-slate-900 group-hover:text-emerald-700 line-clamp-1">{task.title}</h4>
+        </div>
+        <div className="text-right shrink-0 space-y-0.5">
+          {task.dueDate && <div className={`text-[10px] font-semibold ${isOverdue ? 'text-rose-600' : 'text-slate-400'}`}>📅 {task.dueDate}</div>}
+          {task.progressPct > 0 && isInProgress && <div className="text-[10px] font-bold text-sky-600">{task.progressPct}%</div>}
+        </div>
+      </div>
+      {task.progressPct > 0 && isInProgress && (
+        <div className="h-1 bg-slate-100 rounded-full mb-3 overflow-hidden">
+          <div className="h-full bg-blue-400 rounded-full" style={{ width: `${task.progressPct}%` }} />
+        </div>
+      )}
+      <div className="flex items-start gap-0 overflow-x-auto pb-1 scrollbar-none">
+        <MemberAvatar name={creator.name} role={creator.role || 'Tạo'} state={creatorState} />
+        <FlowConnector state={isTerminal ? 'pending' : 'done'} />
+        {approvalChain.map((role, idx) => {
+          const approved = approvedRoles.has(role);
+          const isCurrent = task.currentApprover === role && isPendingApproval;
+          const st: 'done'|'active'|'pending'|'skipped' = isTerminal ? 'skipped' : approved ? 'done' : isCurrent ? 'active' : 'pending';
+          const cst: 'done'|'active'|'pending' = approved ? 'done' : isCurrent ? 'active' : 'pending';
+          return (<div key={role} className="flex items-start">
+            <MemberAvatar name={ROLE_SHORT[role] || role} role="Duyệt" state={st} />
+            {idx < approvalChain.length - 1 && <FlowConnector state={cst} />}
+          </div>);
+        })}
+        {approvalChain.length > 0 && (
+          <FlowConnector state={isTerminal ? 'pending' : approvalChain.every(r => approvedRoles.has(r)) ? 'done' : isPendingApproval ? 'active' : 'pending'} />
+        )}
+        {assigneeNames.slice(0, 3).map((name, idx) => {
+          const execSt: 'done'|'active'|'pending'|'skipped' = isTerminal ? 'skipped' : isDone ? 'done' : isInProgress ? 'active' : isPending ? 'pending' : 'pending';
+          return (<div key={name + idx} className="flex items-start">
+            <MemberAvatar name={name} role="Thực hiện" state={execSt} />
+            {idx < Math.min(assigneeNames.length, 3) - 1 && <FlowConnector state={execSt === 'done' ? 'done' : 'pending'} />}
+          </div>);
+        })}
+        <FlowConnector state={isTerminal ? 'pending' : isDone ? 'done' : 'pending'} />
+        <MemberAvatar name={isDone ? (task.updatedBy || 'Xong') : 'Kết thúc'} role={isDone ? '✓ Xong' : 'Chờ'} state={isTerminal ? 'skipped' : isDone ? 'done' : 'pending'} />
+      </div>
+    </button>
+  );
+}
+
+function FlowView({ tasks, departments, branches, users, onSelect }: {
+  tasks: Task[];
+  departments: Department[];
+  branches: Branch[];
+  users: { id: string; name: string; roleId: string; branchId: string | null; departmentId: string | null }[];
+  onSelect: (task: Task) => void;
+}) {
+  const active = tasks.filter(t => ['pending_approval', 'pending', 'in_progress'].includes(t.status));
+  const done = tasks.filter(t => t.status === 'done');
+  const terminal = tasks.filter(t => ['rejected', 'cancelled'].includes(t.status));
+  const renderGroup = (grp: Task[], label: string, accent: string) => {
+    if (grp.length === 0) return null;
+    return (
+      <div>
+        <div className={`text-[10px] font-bold uppercase tracking-wider mb-3 ${accent}`}>{label} ({grp.length})</div>
+        <div className="space-y-3">
+          {grp.map(t => (
+            <FlowTaskCard key={t.id} task={t} users={users} departments={departments} branches={branches} onSelect={() => onSelect(t)} />
+          ))}
+        </div>
+      </div>
+    );
+  };
+  return (
+    <div className="p-4 space-y-6">
+      <div className="flex items-center gap-4 text-[10px] text-slate-500 flex-wrap border-b border-slate-100 pb-3">
+        <span className="font-bold text-slate-600 flex items-center gap-1">
+          <GitBranch size={12} /> Luồng công việc
+        </span>
+        <span className="flex items-center gap-1"><span className="h-4 w-4 rounded-full bg-emerald-500 inline-flex items-center justify-center text-white text-[7px]">✓</span> Xong</span>
+        <span className="flex items-center gap-1"><span className="h-4 w-4 rounded-full bg-blue-500 inline-flex items-center justify-center text-white text-[7px]">●</span> Đang xử lý</span>
+        <span className="flex items-center gap-1"><span className="h-4 w-4 rounded-full bg-slate-200 inline-flex items-center justify-center text-slate-400 text-[7px]">○</span> Chờ</span>
+        <span className="ml-auto text-slate-400">{tasks.length} nhiệm vụ</span>
+      </div>
+      {renderGroup(active, 'Đang hoạt động', 'text-blue-600')}
+      {renderGroup(done, 'Đã hoàn thành', 'text-emerald-600')}
+      {renderGroup(terminal, 'Đã kết thúc', 'text-rose-500')}
+      {tasks.length === 0 && <div className="text-center py-12 text-slate-400 text-sm">Không có nhiệm vụ</div>}
     </div>
   );
 }
