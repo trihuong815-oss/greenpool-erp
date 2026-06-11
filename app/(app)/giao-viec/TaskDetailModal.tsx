@@ -110,37 +110,36 @@ export default function TaskDetailModal({
     (async () => {
       setLoading(true);
       try {
-        const [t, cs] = await Promise.all([
+        const [t] = await Promise.all([
           tasksApi.get(task.id),
-          tasksApi.listComments(task.id),
         ]);
-        setTask(t); setComments(cs);
+        setTask(t); setComments([]);
         setProgressInput(t.progressPct);
       } catch { /* silent */ } finally { setLoading(false); }
     })();
   }, [task.id]);
 
   async function refresh() {
-    const [t, cs] = await Promise.all([tasksApi.get(task.id), tasksApi.listComments(task.id)]);
-    setTask(t); setComments(cs); setProgressInput(t.progressPct); onChange();
+    const t = await tasksApi.get(task.id);
+    setTask(t); setProgressInput(t.progressPct); onChange();
   }
 
   async function addComment() {
     if (!commentText.trim()) return;
     setSubmitting(true);
-    try { await tasksApi.addComment(task.id, commentText.trim()); setCommentText(''); await refresh(); }
+    try { await tasksApi.nudge(task.id, commentText.trim()); setCommentText(''); await refresh(); }
     catch { } finally { setSubmitting(false); }
   }
 
   async function updateProgress() {
     setBusy('progress');
-    try { await tasksApi.patch(task.id, { progressPct: progressInput }); await refresh(); }
+    try { await tasksApi.update(task.id, { progressPct: progressInput }); await refresh(); }
     catch { } finally { setBusy(null); }
   }
 
   async function changeStatus(newStatus: string) {
     setBusy('status');
-    try { await tasksApi.patch(task.id, { status: newStatus as TaskStatus }); await refresh(); }
+    try { await tasksApi.update(task.id, { status: newStatus as TaskStatus }); await refresh(); }
     catch (err: any) { setError(err.message); } finally { setBusy(null); }
   }
 
