@@ -554,11 +554,18 @@ function TableView({ tasks, departments, branches, users, onSelect }: {
             const block = BLOCK_LABEL[t.assigneeBlock] ?? { label: t.assigneeBlock, bg: 'bg-slate-100 text-slate-700' };
             const pct = Math.max(0, Math.min(100, t.progressPct ?? 0));
 
-            // Phối hợp: lấy tên từ users nếu có assigneeUserIds
-            const collabUsers = (t.assigneeUserIds ?? []).slice(0, 3).map(uid => {
-              const u = users.find(u => u.id === uid);
-              return u ? u.name.split(' ').pop() ?? u.name : uid.slice(0, 4);
-            });
+
+            // Phối hợp: ưu tiên collaboratorDeptIds/FacilityIds, fallback về assigneeUserIds
+            const collabDepts = ((t as any).collaboratorDeptIds ?? []).map((id: string) => departments.find(d => d.id === id)?.name ?? id);
+            const collabFacilities = ((t as any).collaboratorFacilityIds ?? []).map((id: string) => branches.find(b => b.id === id)?.name ?? id);
+            const allCollabNames = [...collabDepts, ...collabFacilities];
+            const collabUsers = allCollabNames.length === 0
+              ? (t.assigneeUserIds ?? []).slice(0, 3).map(uid => {
+                  const u = users.find(u => u.id === uid);
+                  return u ? u.name.split(' ').pop() ?? u.name : uid.slice(0, 4);
+                })
+              : [];
+
 
             const waitingOn =
               t.status === 'pending_approval' ? (t.currentApprover ?? 'Người duyệt')
@@ -593,8 +600,15 @@ function TableView({ tasks, departments, branches, users, onSelect }: {
                     {block.label}
                   </span>
                 </td>
-                <td className="py-2.5 pr-3">
-                  {collabUsers.length > 0 ? (
+                <td className="py-2.5 pr-3 min-w-[100px] max-w-[160px]">
+                  {allCollabNames.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {allCollabNames.slice(0, 2).map((n, i) => (
+                        <span key={i} className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 text-[10px] font-semibold truncate max-w-[70px]" title={n}>{n}</span>
+                      ))}
+                      {allCollabNames.length > 2 && <span className="text-[10px] text-slate-400">+{allCollabNames.length - 2}</span>}
+                    </div>
+                  ) : collabUsers.length > 0 ? (
                     <div className="flex -space-x-1">
                       {collabUsers.map((n, i) => (
                         <div key={i} className="h-5 w-5 rounded-full bg-emerald-100 border border-white flex items-center justify-center text-[9px] font-bold text-emerald-700" title={n}>
