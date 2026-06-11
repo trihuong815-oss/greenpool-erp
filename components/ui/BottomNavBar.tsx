@@ -26,7 +26,7 @@ export function BottomNavBar({ roleCode: _roleCode }: { roleCode: string }) {
   const tabs: TabItem[] = [
     { href: '/dashboard',       label: 'Tổng quan', icon: Home },
     { href: '/tin-nhan',         label: 'Tin nhắn',  icon: MessageCircle, badgeKey: 'chat' },
-    { href: '/giao-viec',        label: 'Giao việc', icon: ListTodo,      badgeKey: 'tasks' },
+    { href: '/giao-viec',        label: 'Điều phối', icon: ListTodo,      badgeKey: 'tasks' },
     { href: '/doanh-so',         label: 'Doanh số',  icon: BarChart3 },
     { label: 'Khác', icon: Menu, onClick: () => setOpen(true) },
   ];
