@@ -133,13 +133,13 @@ export default function TaskDetailModal({
 
   async function updateProgress() {
     setBusy('progress');
-    try { await tasksApi.update(task.id, { progressPct: progressInput }); await refresh(); }
+    try { await tasksApi.updateStatus(task.id, { status: getTaskStatus(task) as TaskStatus, progressPct: progressInput }); await refresh(); }
     catch { } finally { setBusy(null); }
   }
 
   async function changeStatus(newStatus: string) {
     setBusy('status');
-    try { await tasksApi.update(task.id, { status: newStatus as TaskStatus }); await refresh(); }
+    try { await tasksApi.updateStatus(task.id, { status: newStatus as TaskStatus }); await refresh(); }
     catch (err: any) { setError(err.message); } finally { setBusy(null); }
   }
 
