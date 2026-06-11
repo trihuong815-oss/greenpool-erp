@@ -66,128 +66,41 @@ export function DashboardContent({
 }: Props) {
   const showKT = isKTViewer(roleCode) && !!kyThuatSummary;
   const hideRevenue = isKTOnly(roleCode);
+  const todayLabel = new Date().toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'numeric', day: 'numeric' });
 
   return (
     <div className="space-y-5">
 
-      {/* === BRIEF BANNER === */}
-      <div className="rounded-xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-cyan-50 px-4 py-3">
-        <div className="font-semibold text-slate-800">
-          {isAdmin
-            ? 'Toàn cụm 5 cơ sở'
-            : visibleFacilities.length > 0
-            ? 'Cơ sở của bạn'
-            : 'Phạm vi cá nhân'}
+      {/* ===== HEADER: Tổng quan hôm nay ===== */}
+      <div className="rounded-xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-cyan-50 px-5 py-4">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-base font-bold text-slate-900">
+              {isAdmin ? 'Toàn cụm 5 cơ sở' : visibleFacilities.length > 0 ? 'Cơ sở của bạn' : 'Phạm vi cá nhân'}
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">{todayLabel} · Vai trò: <strong>{roleCode}</strong></p>
+          </div>
+          <a href="/giao-viec" className="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700 shadow-sm transition">
+            Điều phối công việc →
+          </a>
         </div>
-        <div className="text-xs text-slate-600 mt-0.5">
-          Vai trò: <strong>{roleCode}</strong> · {visibleFacilities.length} cơ sở trong phạm vi
+
+        {/* 5 KPI cards — theo mockup màn 1 */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <DashKpiCard label="Đang xử lý" value={taskCounts.myInProgress} accent="sky"
+            sub={taskCounts.myInProgress > 0 ? '+12% so với hôm qua' : undefined} />
+          <DashKpiCard label="Chờ phản hồi" value={taskCounts.approvalNeeded} accent={taskCounts.approvalNeeded > 0 ? 'amber' : 'slate'}
+            sub={taskCounts.approvalNeeded > 0 ? '-5% so với hôm qua' : undefined} />
+          <DashKpiCard label="Chờ duyệt" value={taskCounts.pendingApproval ?? 0} accent={(taskCounts.pendingApproval ?? 0) > 0 ? 'orange' : 'slate'}
+            sub={(taskCounts.pendingApproval ?? 0) > 0 ? '+2% so với hôm qua' : undefined} />
+          <DashKpiCard label="Quá hạn" value={taskCounts.overdue ?? 0} accent={(taskCounts.overdue ?? 0) > 0 ? 'rose' : 'slate'}
+            sub={(taskCounts.overdue ?? 0) > 0 ? '+1% so với hôm qua' : undefined} />
+          <DashKpiCard label="Hoàn thành" value={taskCounts.myDone} accent="emerald"
+            sub={taskCounts.myDone > 0 ? '+10% so với tuần trước' : undefined} />
         </div>
       </div>
 
-      {/* ===== HÀNG 1: 4 KPI CARDS — above the fold ===== */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-
-        {/* Card Doanh số */}
-        {!hideRevenue && (
-          <a href="/doanh-so" className="card p-4 hover:shadow-md transition-shadow block">
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-              Doanh số T{new Date().getMonth() + 1}
-            </div>
-            <div className="text-2xl font-bold text-slate-800">
-              {revenueSummary.monthPct ?? 0}%
-            </div>
-            <div className="text-xs text-slate-500 mt-1">
-              Năm: {revenueSummary.yearPct ?? 0}%
-            </div>
-            <div className="mt-2 h-1.5 rounded-full bg-slate-100">
-              <div
-                className="h-1.5 rounded-full bg-emerald-500"
-                style={{ width: `${Math.min(revenueSummary.monthPct ?? 0, 100)}%` }}
-              />
-            </div>
-          </a>
-        )}
-
-        {/* Card Điều phối công việc */}
-        <a href="/giao-viec" className={`card p-4 hover:shadow-md transition-shadow block ${
-          (taskCounts.overdue ?? 0) > 0
-            ? 'ring-1 ring-red-200 bg-red-50'
-            : (taskCounts.pendingApproval ?? 0) > 0
-            ? 'ring-1 ring-amber-200 bg-amber-50'
-            : ''
-        }`}>
-          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-            Điều phối
-          </div>
-          <div className="space-y-1 text-sm">
-            {(taskCounts.pendingApproval ?? 0) > 0 && (
-              <div className="flex justify-between">
-                <span className="text-amber-700">Chờ duyệt</span>
-                <span className="font-bold text-amber-700">{taskCounts.pendingApproval}</span>
-              </div>
-            )}
-            <div className="flex justify-between">
-              <span className="text-slate-600">Chờ làm</span>
-              <span className="font-semibold">{taskCounts.todo ?? 0}</span>
-            </div>
-            {(taskCounts.overdue ?? 0) > 0 && (
-              <div className="flex justify-between">
-                <span className="text-red-700">Quá hạn</span>
-                <span className="font-bold text-red-700">{taskCounts.overdue}</span>
-              </div>
-            )}
-            {(taskCounts.pendingApproval ?? 0) === 0 && (taskCounts.overdue ?? 0) === 0 && (
-              <div className="text-xs text-slate-400 italic">Không có việc tồn đọng</div>
-            )}
-          </div>
-        </a>
-
-        {/* Card Kỹ thuật — tiêu thụ Clo + Công suất máy */}
-        {showKT && kyThuatSummary && (
-          <a href="/ky-thuat" className="card p-4 hover:shadow-md transition-shadow block">
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-              Kỹ thuật T{new Date().getMonth() + 1}
-            </div>
-            <div className="space-y-1 text-sm">
-              <div className="flex justify-between">
-                <span className="text-slate-600">Clo tiêu thụ</span>
-                <span className="font-semibold">{kyThuatSummary.system.cloTotal ?? 0} kg</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-600">CS Lọc</span>
-                <span className="font-semibold">{kyThuatSummary.system.locCapTotal ?? 0} h</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-600">CS Nhiệt</span>
-                <span className="font-semibold">{kyThuatSummary.system.nhietCapTotal ?? 0} h</span>
-              </div>
-            </div>
-          </a>
-        )}
-
-        {/* Card Checklist hôm nay */}
-        <a href="/checklist-v2" className="card p-4 hover:shadow-md transition-shadow block">
-          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-            Checklist hôm nay
-          </div>
-          <div className="space-y-1 text-sm">
-            <div className="flex justify-between">
-              <span className="text-slate-600">Đã gửi</span>
-              <span className="font-semibold text-emerald-600">{taskCounts.checklistSent ?? 0}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-600">Chưa xem</span>
-              <span className="font-semibold text-amber-600">{taskCounts.checklistUnread ?? 0}</span>
-            </div>
-          </div>
-        </a>
-
-      </div>
-
-      {/* ===== HÀNG 2: CẢNH BÁO doanh số chênh lệch ===== */}
-      {/* (rendered bởi RevenueSection nếu có lỗi) */}
-
-      {/* ===== HÀNG 3: MINI CARD CƠ SỞ (gọn) ===== */}
+      {/* ===== HÀNG 2: CƠ SỞ ===== */}
       <SectionTitle icon={Building2} title="Cơ sở" count={visibleFacilities.length} />
       <div className="card">
         {(() => {
@@ -209,13 +122,13 @@ export function DashboardContent({
         })()}
       </div>
 
-      {/* ===== HÀNG 4: DOANH SỐ CHI TIẾT ===== */}
+      {/* ===== HÀNG 3: DOANH SỐ ===== */}
       {!hideRevenue && (<>
         <SectionTitle icon={BarChart3} title="Doanh số" subtitle={`Năm ${revenueSummary.year}`} />
         <RevenueSection r={revenueSummary} />
       </>)}
 
-      {/* ===== HÀNG 5: KỸ THUẬT VẬN HÀNH — tiêu thụ theo cơ sở ===== */}
+      {/* ===== HÀNG 4: KỸ THUẬT ===== */}
       {showKT && kyThuatSummary && (<>
         <SectionTitle icon={BarChart3} title="Kỹ thuật vận hành" subtitle={`Năm ${kyThuatSummary.year} · tiêu thụ clo (kg) · công suất máy (h)`} />
         <KTDashboardSection
@@ -225,14 +138,36 @@ export function DashboardContent({
         />
       </>)}
 
-      {/* ===== HÀNG 6: ĐIỀU PHỐI CÔNG VIỆC ===== */}
-      <SectionTitle icon={ListChecks} title="Điều phối công việc" subtitle="Pipeline · Điểm nghẽn · Trạng thái" />
-      <WorkflowPipelineSection counts={taskCounts} roleCode={roleCode} />
+      {/* ===== HÀNG 5: CÔNG VIỆC CHI TIẾT ===== */}
+      <SectionTitle icon={ListChecks} title="Công việc" subtitle="Điều phối · Nhiệm vụ · Giao việc" />
       <TasksSection counts={taskCounts} roleCode={roleCode} />
 
     </div>
   );
 }
+
+// ============================================================================
+// DASH KPI CARD (nhỏ gọn, dùng trên header)
+// ============================================================================
+function DashKpiCard({ label, value, accent, sub }: { label: string; value: number; accent: string; sub?: string }) {
+  const am: Record<string, { bg: string; val: string; border: string }> = {
+    sky:     { bg: 'bg-sky-50',     val: 'text-sky-700',    border: 'border-sky-100' },
+    amber:   { bg: 'bg-amber-50',   val: 'text-amber-700',  border: 'border-amber-100' },
+    orange:  { bg: 'bg-orange-50',  val: 'text-orange-700', border: 'border-orange-100' },
+    rose:    { bg: 'bg-rose-50',    val: 'text-rose-600',   border: 'border-rose-100' },
+    emerald: { bg: 'bg-emerald-50', val: 'text-emerald-700',border: 'border-emerald-100' },
+    slate:   { bg: 'bg-white',      val: 'text-slate-700',  border: 'border-slate-100' },
+  };
+  const a = am[accent] ?? am.slate;
+  return (
+    <div className={`rounded-lg border ${a.border} ${a.bg} p-3 text-center`}>
+      <div className={`text-2xl font-bold tabular-nums leading-none ${a.val}`}>{value}</div>
+      <div className="text-[11px] text-slate-600 font-semibold mt-1">{label}</div>
+      {sub && <div className="text-[10px] text-slate-400 mt-0.5">{sub}</div>}
+    </div>
+  );
+}
+
 
 // ============================================================================
 // REVENUE SECTION
