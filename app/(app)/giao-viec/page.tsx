@@ -11,11 +11,11 @@ export default async function GiaoViecPage() {
   if (!canAccessRoute(profile.roleCode, 'giao-viec', profile.menuOverrides)) {
     return (
       <>
-        <AppTopBar title="ÃÂiÃ¡Â»Âu phÃ¡Â»Âi cÃÂ´ng viÃ¡Â»Âc" icon="task" />
+        <AppTopBar title="ÃÂÃÂiÃÂ¡ÃÂ»ÃÂu phÃÂ¡ÃÂ»ÃÂi cÃÂÃÂ´ng viÃÂ¡ÃÂ»ÃÂc" icon="task" />
         <div className="flex-1 flex items-center justify-center p-3 md:p-6 bg-slate-50">
           <div className="card text-center py-12 max-w-md">
-            <div className="text-5xl mb-4">Ã°ÂÂÂ</div>
-            <div className="font-bold text-slate-800 text-lg mb-2">KhÃÂ´ng cÃÂ³ quyÃ¡Â»Ân truy cÃ¡ÂºÂ­p</div>
+            <div className="text-5xl mb-4">ÃÂ°ÃÂÃÂÃÂ</div>
+            <div className="font-bold text-slate-800 text-lg mb-2">KhÃÂÃÂ´ng cÃÂÃÂ³ quyÃÂ¡ÃÂ»ÃÂn truy cÃÂ¡ÃÂºÃÂ­p</div>
           </div>
         </div>
       </>
@@ -50,20 +50,23 @@ export default async function GiaoViecPage() {
   return (
     <>
       <AppTopBar
-        title="ÃÂiÃ¡Â»Âu phÃ¡Â»Âi cÃÂ´ng viÃ¡Â»Âc"
-        subtitle="Workflow 3 cÃ¡ÂºÂ¥p ÃÂ· LiÃÂªn khÃ¡Â»Âi ÃÂ· PhÃÂª duyÃ¡Â»Ât tÃ¡Â»Â± ÃÂÃ¡Â»Âng"
+        title="ÃÂÃÂiÃÂ¡ÃÂ»ÃÂu phÃÂ¡ÃÂ»ÃÂi cÃÂÃÂ´ng viÃÂ¡ÃÂ»ÃÂc"
+        subtitle="Workflow 3 cÃÂ¡ÃÂºÃÂ¥p ÃÂÃÂ· LiÃÂÃÂªn khÃÂ¡ÃÂ»ÃÂi ÃÂÃÂ· PhÃÂÃÂª duyÃÂ¡ÃÂ»ÃÂt tÃÂ¡ÃÂ»ÃÂ± ÃÂÃÂÃÂ¡ÃÂ»ÃÂng"
         icon="task"
       />
       <div className="flex-1 overflow-y-auto p-3 md:p-6 bg-slate-50">
         <GiaoViecClient
-          currentUserId={profile.id}
-          currentUserName={profile.displayName}
-          currentUserRole={profile.roleCode}
-          currentBranchId={profile.branchId ?? null}
-          currentDepartmentId={profile.departmentId ?? null}
+          userId={profile.id}
+          userName={profile.displayName ?? ''}
+          userRole={profile.roleName ?? ''}
+          roleCode={profile.roleCode ?? ''}
           departments={departments}
           branches={branches}
-          users={users}
+          users={users as any}
+          isAdmin={['ADMIN','CEO','CHU_DAU_TU'].includes(profile.roleCode ?? '')}
+          isCEO={['CEO','CHU_DAU_TU'].includes(profile.roleCode ?? '')}
+          canCreateAssignment={true}
+          canCreateProposal={true}
         />
       </div>
     </>
