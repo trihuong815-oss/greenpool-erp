@@ -325,7 +325,7 @@ export function GiaoViecClient(props: Props) {
                 <button key={t.id} onClick={() => setSelectedTask(t)} className="w-full text-left rounded-lg border border-rose-100 bg-rose-50/50 p-2 hover:bg-rose-50 transition">
                   <div className="text-xs font-semibold text-slate-800 truncate">{t.title}</div>
                   <div className="flex items-center gap-2 mt-1 text-xs text-rose-600 font-medium">
-                    <CalendarDays size={9} /> {formatDate(t.dueDate)}
+                    <CalendarDays size={12} /> {formatDate(t.dueDate)}
                     <span className="text-slate-400 font-normal">ÃÂ· {t.createdByName}</span>
                   </div>
                 </button>
@@ -379,7 +379,7 @@ export function GiaoViecClient(props: Props) {
             />
             {keyword && (
               <button onClick={() => setKeyword('')} className="text-slate-400 hover:text-slate-700">
-                <X size={11} />
+                <X size={12} />
               </button>
             )}
           </div>
@@ -736,7 +736,7 @@ function KanbanView({ tasks, departments, branches, users, onSelect, currentUser
                     </div>
                     {t.dueDate && (
                       <div className={`flex items-center gap-1 text-xs ${overdue ? 'text-rose-600 font-semibold' : 'text-slate-400'}`}>
-                        <CalendarDays size={9} /> {formatDate(t.dueDate)}
+                        <CalendarDays size={12} /> {formatDate(t.dueDate)}
                       </div>
                     )}
                     <div className="mt-1.5 flex items-center gap-1.5">
