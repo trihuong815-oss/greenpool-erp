@@ -259,14 +259,6 @@ export function GiaoViecClient(props: Props) {
           onClick={() => jumpToTab('received')}
         />
         <CategoryCard
-          title="Đề xuất tôi tạo"
-          subtitle="Theo dõi đến khi hoàn thành"
-          icon={Send}
-          stats={statsByCategory.proposal}
-          active={tab === 'proposal'}
-          onClick={() => jumpToTab('proposal')}
-        />
-        {showAssignmentTab && (
           <CategoryCard
             title="Giao việc"
             subtitle="Theo dõi tiến độ thực hiện"
@@ -323,7 +315,6 @@ export function GiaoViecClient(props: Props) {
         {/* Phase 13.16.4: tabs scroll-x mobile (4 tab tràn 360px), action button stack dưới */}
         <div className="flex items-stretch border-b border-slate-200 overflow-x-auto sm:overflow-visible">
           <TabButton active={tab === 'received'} onClick={() => jumpToTab('received')} icon={Inbox} label="Nhiệm vụ của tôi" />
-          {!isCEO && <TabButton active={tab === 'proposal'} onClick={() => jumpToTab('proposal')} icon={Send} label="Đề xuất" />}
           {showAssignmentTab && <TabButton active={tab === 'assignment'} onClick={() => jumpToTab('assignment')} icon={Send} label="Giao việc" />}
           {showApprovalTab && (
             <TabButton
@@ -357,14 +348,6 @@ export function GiaoViecClient(props: Props) {
               <GitBranch size={16} />
             </button>
           </div>
-          {canCreateProposal && tab === 'proposal' && (
-            <button
-              onClick={() => setShowCreate('proposal')}
-              className="hidden sm:inline-flex my-2 mr-2 items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 shadow-sm"
-            >
-              <Plus size={14} /> Tạo đề xuất
-            </button>
-          )}
           {canCreateAssignment && tab === 'assignment' && (
             <button
               onClick={() => setShowCreate('assignment')}
@@ -376,16 +359,8 @@ export function GiaoViecClient(props: Props) {
         </div>
 
         {/* Mobile-only action button row (stacked dưới tabs) */}
-        {((canCreateProposal && tab === 'proposal') || (canCreateAssignment && tab === 'assignment')) && (
+        {canCreateAssignment && tab === 'assignment' && (
           <div className="sm:hidden px-3 py-2 border-b border-slate-100 flex">
-            {canCreateProposal && tab === 'proposal' && (
-              <button
-                onClick={() => setShowCreate('proposal')}
-                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2.5 bg-emerald-600 text-white text-sm font-semibold rounded-lg active:bg-emerald-700 shadow-sm"
-              >
-                <Plus size={14} /> Tạo đề xuất
-              </button>
-            )}
             {canCreateAssignment && tab === 'assignment' && (
               <button
                 onClick={() => setShowCreate('assignment')}
