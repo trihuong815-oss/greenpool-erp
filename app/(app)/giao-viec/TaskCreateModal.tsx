@@ -60,7 +60,7 @@ export default function TaskCreateModal({
   const [assigneeType, setAssigneeType] = useState<'dept' | 'facility'>('dept');
   const [assigneeUserIds, setAssigneeUserIds] = useState<string[]>([]);
 
-  // DON VI PHOI HOP — multiple units with per-unit detail
+  // DON VI PHOI HOP â multiple units with per-unit detail
   const [collabUnits, setCollabUnits] = useState<CollabUnit[]>([]);
 
   // WAITING-FOR
@@ -108,7 +108,7 @@ export default function TaskCreateModal({
       // Auto-fill ownerName when ownerId changes
       if (key === 'ownerId') {
         const u = users.find(u => u.id === val || u.id === val);
-        next.ownerName = u?.name || u?.displayName || val;
+        next.ownerName = u?.displayName || val;
         next.ownerRole = u?.roleId || '';
       }
       return next;
@@ -256,7 +256,7 @@ export default function TaskCreateModal({
                     </select>
                   </Field>
                 )}
-                <Field label="Nguoi chiu trach nhiem (Owner) — co the chon nhieu nguoi thuc hien">
+                <Field label="Nguoi chiu trach nhiem (Owner) â co the chon nhieu nguoi thuc hien">
                   <div className="max-h-32 overflow-y-auto rounded-lg border border-slate-200 divide-y divide-slate-50">
                     {deptUsers.slice(0, 20).map(u => {
                       const uid = u.id || u.id || '';
