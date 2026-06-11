@@ -1,864 +1,396 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { X, Loader2, Paperclip, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
+import { X, Loader2, Plus, Trash2, ChevronDown } from 'lucide-react';
 import {
   tasksApi,
   type Block, type TaskPriority, type TaskKind,
+  type CoordType, type CoordScope, type CollabUnit, type CollabUnitStatus,
 } from '@/lib/services/tasks/api-client';
 import { ROLE_BLOCK } from '@/lib/permissions';
+import type { UserPublic } from '@/lib/types';
 
-// Phase 12.9 (2026-06-04): Form Đề xuất đơn giản hoá.
-//   - 2 tab: NGANG CẤP / CẤP TRÊN
-//   - Mỗi tab → dropdown user phù hợp
-//   - Server: chain = [recipientUid] (1 cấp duyệt)
-//   - Module /giao-viec chỉ cho TP/QLCS/GD/CEO/ADMIN.
-
-// Phase 12.9: chỉ tầng 3 (theo sơ đồ org).
-// TIBAN_TT đã hạ xuống tầng 4 (thuộc phòng NS) — không nằm trong pool này nữa.
-const PEER_ROLES = new Set([
-  'TP_KT', 'TP_DT', 'TP_MKT', 'TP_GS', 'TP_KE', 'TP_NS',
-  'QLCS_HM', 'QLCS_TK', 'QLCS_CTT', 'QLCS_24NCT', 'QLCS_TT',
-]);
-
-// Phase 12.9.6 (2026-06-06): cấu trúc tabs khối cho TP/QLCS.
-//   - Khối KD: phòng ban (TP_KT/DT/MKT) + cơ sở (QLCS_*) + lãnh đạo (GD_KD / ADMIN fallback)
-//   - Khối VP: phòng ban (TP_KE/GS/NS) + lãnh đạo (GD_VP) — VP không có cơ sở
-const TP_ROLES_KD = new Set(['TP_KT', 'TP_DT', 'TP_MKT']);
-const TP_ROLES_VP = new Set(['TP_GS', 'TP_KE', 'TP_NS']);
-const QLCS_ROLES = new Set(['QLCS_HM', 'QLCS_TK', 'QLCS_CTT', 'QLCS_24NCT', 'QLCS_TT']);
-
-interface Department { id: string; name: string; blockId: 'KD' | 'VP' | null; }
-interface Branch { id: string; name: string; }
-interface User { id: string; name: string; roleId: string; branchId: string | null; departmentId: string | null; }
-
-type AssigneeKind = 'department' | 'facility' | 'user';
-type RecipientTier = 'peer' | 'senior';
-
-export function TaskCreateModal(props: {
-  kind: TaskKind;
-  currentUserId: string;
-  currentUserRole: string;
-  currentDepartmentId: string | null;
-  currentBranchId: string | null;
-  departments: Department[];
-  branches: Branch[];
-  users: User[];
+interface Props {
+  kind: 'assignment' | 'proposal';
+  departments: { id: string; name: string }[];
+  branches: { id: string; name: string }[];
+  users: UserPublic[];
+  roleCode: string; userRole: string; userId: string; userName: string;
   onClose: () => void;
-  onCreated: () => void;
-}) {
-  const {
-    kind, currentUserId, currentUserRole, currentDepartmentId, currentBranchId,
-    departments, branches, users, onClose, onCreated,
-  } = props;
-  const kindLabel = kind === 'proposal' ? 'đề xuất' : 'giao việc';
+  onChange: () => void;
+}
 
-  const myBlock = ROLE_BLOCK[currentUserRole] ?? 'all';
-  // Phase 12.9.1 (anh chốt 2026-06-05): ADMIN ≠ CEO. ADMIN trong CTY xếp dưới CEO/Chủ tịch
-  // → ADMIN vẫn cần đề xuất (peer GD_KD/GD_VP, senior CEO/Chủ tịch).
-  const isCEO = currentUserRole === 'CEO'; // CHỈ CEO thuần (không ADMIN)
-  const isAdmin = currentUserRole === 'ADMIN';
-  const isGD = currentUserRole === 'GD_KD' || currentUserRole === 'GD_VP';
-  const isTP = currentUserRole.startsWith('TP_');
-  const isQLCS = currentUserRole.startsWith('QLCS_');
-  // Phase 12.9.6: TP/QLCS dùng UI tabs khối (KD/VP) + 3 nhóm.
-  const isCreatorTpQlcs = isTP || isQLCS;
+const COORD_TYPE_OPTIONS: { value: CoordType; label: string; desc: string }[] = [
+  { value: 'dieu-phoi', label: 'Dieu phoi', desc: 'Phan cong nhieu don vi cung thuc hien' },
+  { value: 'ho-tro', label: 'Ho tro', desc: 'Don vi khac ho tro co so / phong ban' },
+  { value: 'de-xuat', label: 'De xuat', desc: 'De xuat len tren hoac ngang cap' },
+  { value: 'phe-duyet', label: 'Phe duyet', desc: 'Yeu cau phe duyet tu GD / CEO' },
+  { value: 'canh-bao', label: 'Canh bao', desc: 'Canh bao / escalation can xu ly ngay' },
+];
+const SCOPE_OPTIONS: { value: CoordScope; label: string }[] = [
+  { value: 'noi-bo-phong', label: 'Noi bo phong ban' },
+  { value: 'noi-bo-khoi', label: 'Noi bo khoi (KD / VP)' },
+  { value: 'lien-khoi', label: 'Lien khoi KD - VP' },
+  { value: 'lien-co-so', label: 'Lien co so (nhieu branch)' },
+  { value: 'du-an', label: 'Du an / Project' },
+];
 
+const emptyUnit = (): CollabUnit => ({
+  unitId: '', unitType: 'dept', unitName: '', ownerId: '', ownerName: '', ownerRole: '',
+  assignment: '', deliverable: '', dueDate: null, status: 'chua-tiep-nhan',
+});
+
+export default function TaskCreateModal({
+  kind, departments, branches, users, roleCode, userRole, userId, userName,
+  onClose, onChange,
+}: Props) {
+  // THONG TIN CHUNG
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [priority, setPriority] = useState<TaskPriority>('normal');
-  const [dueDate, setDueDate] = useState<string>('');
-  const [files, setFiles] = useState<File[]>([]);
-  const [saving, setSaving] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [coordType, setCoordType] = useState<CoordType>('dieu-phoi');
+  const [coordScope, setCoordScope] = useState<CoordScope>('noi-bo-khoi');
+  const [priority, setPriority] = useState<TaskPriority>('medium');
+  const [dueDate, setDueDate] = useState('');
+  const [goal, setGoal] = useState('');
 
-  // ─── ASSIGNMENT state (giao việc — giữ nguyên) ───
-  const [assigneeBlock, setAssigneeBlock] = useState<Block>(myBlock === 'VP' ? 'VP' : 'KD');
-  const [assigneeKind, setAssigneeKind] = useState<AssigneeKind>('department');
-  const [assigneeDeptId, setAssigneeDeptId] = useState<string>('');
-  const [assigneeFacilityId, setAssigneeFacilityId] = useState<string>('');
+  // CHU TRI
+  const [assigneeBlock, setAssigneeBlock] = useState<Block>('KD');
+  const [assigneeDeptId, setAssigneeDeptId] = useState('');
+  const [assigneeFacilityId, setAssigneeFacilityId] = useState('');
+  const [assigneeType, setAssigneeType] = useState<'dept' | 'facility'>('dept');
   const [assigneeUserIds, setAssigneeUserIds] = useState<string[]>([]);
-  const [goal, setGoal] = useState<string>('');
-  const [collaboratorDeptIds, setCollaboratorDeptIds] = useState<string[]>([]);
-  const [collaboratorFacilityIds, setCollaboratorFacilityIds] = useState<string[]>([]);
-  // Mock-Frame-7 (2026-06-12): mô tả nhiệm vụ riêng cho mỗi đơn vị phối hợp.
-  // key = `dept:<id>` hoặc `facility:<id>`. Đánh dấu rõ ai hỗ trợ làm gì.
-  const [collaboratorRoles, setCollaboratorRoles] = useState<Record<string, string>>({});
-  // "Kết quả bàn giao dự kiến" — khác `goal` (mục tiêu). Output cụ thể bàn giao.
-  const [expectedDeliverable, setExpectedDeliverable] = useState<string>('');
 
-  // ─── PROPOSAL state (Phase 12.9 — đơn giản hoá) ───
-  const [recipientTier, setRecipientTier] = useState<RecipientTier>('peer');
-  const [recipientUid, setRecipientUid] = useState<string>('');
-  // Phase 12.9.6: cho TP/QLCS — chọn khối nhận (default = khối creator).
-  const [recipientBlock, setRecipientBlock] = useState<'KD' | 'VP'>(myBlock === 'VP' ? 'VP' : 'KD');
+  // DON VI PHOI HOP — multiple units with per-unit detail
+  const [collabUnits, setCollabUnits] = useState<CollabUnit[]>([]);
 
-  // Phase 12.9.4 (anh chốt 2026-06-06): cho phép đề xuất LIÊN KHỐI cho TP/QLCS.
-  // Khi recipient cross-block → server tự chèn GĐ khối creator vào đầu chain (2 cấp duyệt).
-  // Cùng khối → 1 cấp duyệt như cũ.
-  const peerCandidates = useMemo<User[]>(() => {
-    if (kind !== 'proposal') return [];
-    if (isCEO) return [];
-    // ADMIN: ngang cấp = GD_KD + GD_VP
-    if (isAdmin) {
-      return users
-        .filter((u) => u.roleId === 'GD_KD' || u.roleId === 'GD_VP')
-        .filter((u) => u.id !== currentUserId)
-        .sort((a, b) => a.roleId.localeCompare(b.roleId));
-    }
-    // GĐ: ngang cấp = GĐ khối còn lại
-    if (isGD) {
-      const peerGdRole = currentUserRole === 'GD_KD' ? 'GD_VP' : 'GD_KD';
-      return users.filter((u) => u.roleId === peerGdRole && u.id !== currentUserId);
-    }
-    // TP/QLCS/TIBAN_TT: ngang cấp = TP + QLCS CẢ 2 KHỐI (anh chốt 2026-06-06).
-    // Server tự chèn GĐ khối creator nếu recipient khác khối.
-    return users
-      .filter((u) => PEER_ROLES.has(u.roleId))
-      .filter((u) => u.id !== currentUserId)
-      .sort((a, b) => {
-        // Cùng khối ưu tiên hiển thị trước
-        const blockA = ROLE_BLOCK[a.roleId] ?? 'all';
-        const blockB = ROLE_BLOCK[b.roleId] ?? 'all';
-        const sameA = blockA === myBlock ? 0 : 1;
-        const sameB = blockB === myBlock ? 0 : 1;
-        if (sameA !== sameB) return sameA - sameB;
-        return a.name.localeCompare(b.name, 'vi');
-      });
-  }, [kind, users, isCEO, isAdmin, isGD, currentUserRole, currentUserId, myBlock]);
+  // WAITING-FOR
+  const [waitingForUnitId, setWaitingForUnitId] = useState('');
+  const [waitingForContent, setWaitingForContent] = useState('');
 
-  const seniorCandidates = useMemo<User[]>(() => {
-    if (kind !== 'proposal') return [];
-    if (isCEO) return [];
-    // ADMIN: cấp trên = CEO
-    if (isAdmin) {
-      return users
-        .filter((u) => u.roleId === 'CEO')
-        .filter((u) => u.id !== currentUserId)
-        .sort((a, b) => a.name.localeCompare(b.name, 'vi'));
-    }
-    // GĐ: cấp trên = CEO
-    if (isGD) {
-      return users
-        .filter((u) => u.roleId === 'CEO')
-        .filter((u) => u.id !== currentUserId)
-        .sort((a, b) => a.name.localeCompare(b.name, 'vi'));
-    }
-    // TP/QLCS/TIBAN_TT: cấp trên = GĐ KHỐI cả 2 (anh chốt 2026-06-06 cho liên khối).
-    // Phase 12.9.5: nếu slot GD_KD trống → hiển thị ADMIN (anh đảm nhiệm GĐKD thực tế).
-    // Server resolveGdUid cũng fallback ADMIN cho GD_KD → UI & chain đồng bộ.
-    const hasGdKd = users.some((u) => u.roleId === 'GD_KD');
-    return users
-      .filter((u) =>
-        u.roleId === 'GD_KD'
-        || u.roleId === 'GD_VP'
-        || (!hasGdKd && u.roleId === 'ADMIN'),  // ADMIN xuất hiện thay GD_KD khi slot trống
-      )
-      .filter((u) => u.id !== currentUserId)
-      .sort((a, b) => {
-        // GĐ cùng khối ưu tiên trước. ADMIN coi như GD_KD (khối KD).
-        const aGd = a.roleId === 'ADMIN' ? 'GD_KD' : a.roleId;
-        const bGd = b.roleId === 'ADMIN' ? 'GD_KD' : b.roleId;
-        const myGd = myBlock === 'KD' ? 'GD_KD' : myBlock === 'VP' ? 'GD_VP' : null;
-        if (aGd === myGd && bGd !== myGd) return -1;
-        if (bGd === myGd && aGd !== myGd) return 1;
-        return aGd.localeCompare(bGd);
-      });
-  }, [kind, users, isCEO, isAdmin, isGD, currentUserId, myBlock]);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  // Phase 12.9.6: groups theo khối cho TP/QLCS — 3 nhóm: phòng ban / cơ sở / lãnh đạo.
-  //   KD: TP_KT/DT/MKT + 5 QLCS + GD_KD (fallback ADMIN nếu trống)
-  //   VP: TP_KE/GS/NS + GD_VP (VP không có cơ sở)
-  const blockGroups = useMemo(() => {
-    if (!isCreatorTpQlcs || kind !== 'proposal') return null;
-    const hasGdKd = users.some((u) => u.roleId === 'GD_KD');
-    const sortByName = (a: User, b: User) => a.name.localeCompare(b.name, 'vi');
-    const notSelf = (u: User) => u.id !== currentUserId;
-    return {
-      KD: {
-        dept: users.filter((u) => TP_ROLES_KD.has(u.roleId)).filter(notSelf).sort(sortByName),
-        facility: users.filter((u) => QLCS_ROLES.has(u.roleId)).filter(notSelf)
-          .sort((a, b) => a.roleId.localeCompare(b.roleId)),
-        leadership: users.filter((u) => u.roleId === 'GD_KD' || (!hasGdKd && u.roleId === 'ADMIN')).filter(notSelf),
-      },
-      VP: {
-        dept: users.filter((u) => TP_ROLES_VP.has(u.roleId)).filter(notSelf).sort(sortByName),
-        facility: [] as User[],
-        leadership: users.filter((u) => u.roleId === 'GD_VP').filter(notSelf),
-      },
-    } as const;
-  }, [isCreatorTpQlcs, kind, users, currentUserId]);
-
-  // Auto chọn người đầu tiên khi đổi tab — cho cả 2 chế độ UI.
+  // Derive: assigneeBlock from dept
   useEffect(() => {
-    if (kind !== 'proposal') return;
-    let list: User[];
-    if (isCreatorTpQlcs && blockGroups) {
-      const g = blockGroups[recipientBlock];
-      list = [...g.dept, ...g.facility, ...g.leadership];
-    } else {
-      list = recipientTier === 'peer' ? peerCandidates : seniorCandidates;
+    if (assigneeType === 'dept' && assigneeDeptId) {
+      const block = (ROLE_BLOCK as Record<string, Block>)[assigneeDeptId] || 'KD';
+      setAssigneeBlock(block);
     }
-    if (list.length > 0 && !list.find((u) => u.id === recipientUid)) {
-      setRecipientUid(list[0].id);
-    } else if (list.length === 0) {
-      setRecipientUid('');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recipientTier, recipientBlock, isCreatorTpQlcs, blockGroups, peerCandidates, seniorCandidates, kind]);
+  }, [assigneeDeptId, assigneeType]);
 
-  const creatorBlocked = kind === 'proposal' && isCEO;
+  // Filter users by dept
+  const deptUsers = useMemo(() => {
+    if (assigneeType === 'dept' && assigneeDeptId)
+      return users.filter(u => u.deptId === assigneeDeptId || (u as any).departmentId === assigneeDeptId);
+    if (assigneeType === 'facility' && assigneeFacilityId)
+      return users.filter(u => (u as any).facilityId === assigneeFacilityId || (u as any).branchId === assigneeFacilityId);
+    return users;
+  }, [users, assigneeDeptId, assigneeFacilityId, assigneeType]);
 
-  // Assignment constraints (giữ nguyên)
-  const deptsInBlock = useMemo(
-    () => departments.filter((d) => d.blockId === assigneeBlock),
-    [departments, assigneeBlock],
-  );
-  const usersInScope = useMemo(() => {
-    return users.filter((u) => {
-      const ub = ROLE_BLOCK[u.roleId];
-      if (ub !== assigneeBlock && ub !== 'all') return false;
-      if (assigneeKind === 'department' && assigneeDeptId && u.departmentId !== assigneeDeptId) return false;
-      if (assigneeKind === 'facility' && assigneeFacilityId && u.branchId !== assigneeFacilityId) return false;
-      return true;
-    });
-  }, [users, assigneeBlock, assigneeKind, assigneeDeptId, assigneeFacilityId]);
-  const isCrossBlock = myBlock !== 'all' && myBlock !== assigneeBlock;
-  const isCrossDept =
-    !isCrossBlock && !isCEO && !isGD &&
-    ((assigneeKind === 'department' && assigneeDeptId && assigneeDeptId !== currentDepartmentId) ||
-     (assigneeKind === 'facility' && assigneeFacilityId && assigneeFacilityId !== currentBranchId));
-  const willNeedApproval = (isCrossBlock && !isCEO) || !!isCrossDept;
-  const targetGDLabel = isCrossBlock
-    ? (assigneeBlock === 'KD' ? 'GĐ Khối Kinh Doanh' : 'GĐ Khối Văn Phòng')
-    : (myBlock === 'KD' ? 'GĐ Khối Kinh Doanh' : myBlock === 'VP' ? 'GĐ Khối Văn Phòng' : 'GĐ Khối');
-
-  async function submit() {
-    setError(null);
-    if (creatorBlocked) {
-      setError('CEO/Chủ tịch không cần tạo đề xuất — tự ra quyết định trực tiếp.');
-      return;
-    }
-    if (!title.trim()) { setError('Tiêu đề bắt buộc'); return; }
-
-    if (kind === 'proposal') {
-      if (!recipientUid) {
-        setError(isCreatorTpQlcs
-          ? 'Chưa chọn đối tượng nhận đề xuất.'
-          : (recipientTier === 'peer' ? 'Không có người ngang cấp để gửi đề xuất.' : 'Không có người cấp trên để gửi đề xuất.'));
-        return;
+  // CollabUnit helpers
+  function addCollabUnit() {
+    setCollabUnits(prev => [...prev, emptyUnit()]);
+  }
+  function removeCollabUnit(idx: number) {
+    setCollabUnits(prev => prev.filter((_, i) => i !== idx));
+  }
+  function updateCollabUnit(idx: number, key: keyof CollabUnit, val: string) {
+    setCollabUnits(prev => prev.map((cu, i) => {
+      if (i !== idx) return cu;
+      const next = { ...cu, [key]: val };
+      // Auto-fill unitName when unitId changes
+      if (key === 'unitId') {
+        const dept = departments.find(d => d.id === val);
+        const branch = branches.find(b => b.id === val);
+        next.unitName = dept?.name || branch?.name || val;
+        next.unitType = dept ? 'dept' : 'facility';
       }
-    } else {
-      if (assigneeKind === 'department' && !assigneeDeptId) { setError('Chọn phòng ban'); return; }
-      if (assigneeKind === 'facility' && !assigneeFacilityId) { setError('Chọn cơ sở'); return; }
-      if (assigneeKind === 'user' && assigneeUserIds.length === 0) { setError('Chọn ít nhất 1 người'); return; }
-    }
+      // Auto-fill ownerName when ownerId changes
+      if (key === 'ownerId') {
+        const u = users.find(u => u.id === val || u.uid === val);
+        next.ownerName = u?.name || u?.displayName || val;
+        next.ownerRole = u?.roleCode || u?.role || '';
+      }
+      return next;
+    }));
+  }
 
-    setSaving(true);
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!title.trim()) { setError('Vui long nhap tieu de'); return; }
+    setBusy(true); setError(null);
     try {
-      let createBody: Parameters<typeof tasksApi.create>[0];
-      if (kind === 'proposal') {
-        // Phase 12.9.6: TP/QLCS dùng tab khối → infer tier client-side từ role recipient.
-        //   recipient role = GD_KD/GD_VP/ADMIN  → senior
-        //   recipient role = TP_*/QLCS_*       → peer
-        let finalTier: RecipientTier = recipientTier;
-        if (isCreatorTpQlcs) {
-          const r = users.find((u) => u.id === recipientUid);
-          const role = r?.roleId ?? '';
-          finalTier = (role === 'GD_KD' || role === 'GD_VP' || role === 'ADMIN') ? 'senior' : 'peer';
-        }
-        createBody = {
-          kind: 'proposal',
-          title: title.trim(),
-          description: description.trim(),
-          assigneeBlock: (myBlock === 'all' ? 'KD' : myBlock) as Block,
-          assigneeDeptId: null,
-          assigneeFacilityId: null,
-          assigneeUserIds: [],
-          priority,
-          dueDate: dueDate || null,
-          proposalType: null,
-          financialGroup: null,
-          estimatedCost: null,
-          // Phase 12.9: server build chain từ recipientUid + tier
-          recipientTier: finalTier,
-          recipientUid,
-        } as any;
-      } else {
-        createBody = {
-          kind,
-          title: title.trim(),
-          description: description.trim(),
-          assigneeBlock,
-          assigneeDeptId: assigneeKind === 'department' ? assigneeDeptId : null,
-          assigneeFacilityId: assigneeKind === 'facility' ? assigneeFacilityId : null,
-          assigneeUserIds: assigneeKind === 'user' ? assigneeUserIds : [],
-          priority,
-          dueDate: dueDate || null,
-          proposalType: null,
-          financialGroup: null,
-          estimatedCost: null,
-          goal: goal.trim() || null,
-          collaboratorDeptIds,
-          collaboratorFacilityIds,
-          // Mock-Frame-7 (2026-06-12): mô tả nhiệm vụ riêng + kết quả bàn giao
-          collaboratorRoles: Object.fromEntries(
-            Object.entries(collaboratorRoles)
-              .map(([k, v]) => [k, (v ?? '').trim()])
-              .filter(([, v]) => v),
-          ),
-          expectedDeliverable: expectedDeliverable.trim() || null,
-        } as any;
-      }
-      const { id } = await tasksApi.create(createBody);
-
-      if (files.length > 0) {
-        for (let i = 0; i < files.length; i++) {
-          setUploadProgress(`Đang upload ${i + 1}/${files.length} (${files[i].name})...`);
-          try {
-            await tasksApi.uploadAttachment(id, files[i]);
-          } catch (upErr: any) {
-            setError(`Tạo ${kindLabel} OK, nhưng upload file "${files[i].name}" thất bại: ${upErr.message}.`);
-          }
-        }
-      }
-      onCreated();
-    } catch (e: any) {
-      const msg = e?.message ?? 'unknown';
-      if (msg === 'Failed to fetch' || msg.includes('NetworkError')) {
-        setError('Không kết nối được server. Kiểm tra mạng.');
-      } else {
-        setError(msg);
-      }
+      const body: any = {
+        kind,
+        title: title.trim(),
+        description: description.trim(),
+        priority,
+        dueDate: dueDate || null,
+        goal: goal.trim() || null,
+        assigneeBlock,
+        assigneeDeptId: assigneeType === 'dept' ? assigneeDeptId || null : null,
+        assigneeFacilityId: assigneeType === 'facility' ? assigneeFacilityId || null : null,
+        assigneeUserIds,
+        coordType,
+        coordScope,
+        collabUnits: collabUnits.filter(cu => cu.unitId),
+        waitingFor: waitingForUnitId ? {
+          unitId: waitingForUnitId,
+          unitName: departments.find(d => d.id === waitingForUnitId)?.name ||
+                    branches.find(b => b.id === waitingForUnitId)?.name || waitingForUnitId,
+          content: waitingForContent,
+          since: new Date().toISOString(),
+        } : null,
+        crossBlock: coordScope === 'lien-khoi' || coordScope === 'du-an',
+      };
+      await tasksApi.create(body);
+      onChange();
+    } catch (err: any) {
+      setError(err.message || 'Co loi xay ra');
     } finally {
-      setSaving(false);
-      setUploadProgress(null);
+      setBusy(false);
     }
   }
 
   return (
     <div className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm flex items-end sm:items-center justify-center sm:p-4" onClick={onClose}>
-      <div className="bg-white shadow-2xl w-full sm:max-w-2xl h-full sm:h-auto sm:max-h-[90vh] sm:rounded-2xl flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white shadow-2xl w-full sm:max-w-2xl h-full sm:h-auto sm:max-h-[92vh] sm:rounded-2xl flex flex-col overflow-hidden"
+        onClick={e => e.stopPropagation()}>
+
+        {/* HEADER */}
         <div className="px-5 py-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white flex items-center justify-between">
           <div>
-            <h2 className="text-base font-bold">Tạo {kindLabel} mới</h2>
-            <p className="text-xs text-emerald-50/90 mt-0.5">
-              {kind === 'proposal'
-                ? '1 cấp duyệt — người nhận trực tiếp duyệt'
-                : (willNeedApproval
-                    ? (isCrossBlock ? `Liên khối → ${targetGDLabel} sẽ duyệt` : `Liên phòng/cơ sở → ${targetGDLabel} sẽ duyệt`)
-                    : 'Đi thẳng đến người nhận, không cần duyệt')}
-            </p>
+            <h2 className="text-base font-bold">Tao dieu phoi moi</h2>
+            <p className="text-xs text-emerald-50/80 mt-0.5">Khai bao day du thong tin chu tri + don vi phoi hop</p>
           </div>
-          <button onClick={onClose} className="text-white/80 hover:text-white"><X size={20} /></button>
+          <button onClick={onClose} className="text-white/70 hover:text-white"><X size={20} /></button>
         </div>
 
-        <div className="flex-1 overflow-auto p-5 space-y-4">
-          {error && (
-            <div className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-lg p-3">{error}</div>
-          )}
-          {creatorBlocked && (
-            <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
-              CEO/Chủ tịch không cần tạo đề xuất — tự ra quyết định trực tiếp.
-            </div>
-          )}
+        {/* BODY */}
+        <form onSubmit={handleSubmit} className="flex-1 overflow-auto">
+          <div className="p-5 space-y-6">
+            {error && <div className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-lg p-3">{error}</div>}
 
-          <Field label="Tiêu đề *">
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              maxLength={200}
-              placeholder="Ngắn gọn, dễ hiểu"
-              className={inputCls}
-            />
-          </Field>
+            {/* ===== THONG TIN CHUNG ===== */}
+            <section>
+              <SectionHeading>Thong tin chung</SectionHeading>
+              <div className="space-y-4">
+                <Field label="Tieu de *">
+                  <input value={title} onChange={e => setTitle(e.target.value)} maxLength={200}
+                    placeholder="VD: Mo lop he Green Pool Linh Dam..."
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" />
+                </Field>
+                <Field label="Muc tieu / Ket qua mong doi">
+                  <input value={goal} onChange={e => setGoal(e.target.value)}
+                    placeholder="VD: Tuyen du 120 hoc vien, doanh thu du kien 240 trieu"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" />
+                </Field>
+                <Field label="Mo ta them">
+                  <textarea value={description} onChange={e => setDescription(e.target.value)} rows={2}
+                    placeholder="Them boi canh, yeu cau cu the..."
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 resize-none" />
+                </Field>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Loai dieu phoi *">
+                    <select value={coordType} onChange={e => setCoordType(e.target.value as CoordType)}
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 bg-white">
+                      {COORD_TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Pham vi">
+                    <select value={coordScope} onChange={e => setCoordScope(e.target.value as CoordScope)}
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 bg-white">
+                      {SCOPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Muc do uu tien">
+                    <select value={priority} onChange={e => setPriority(e.target.value as TaskPriority)}
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 bg-white">
+                      <option value="high">Cao</option>
+                      <option value="medium">Trung binh</option>
+                      <option value="low">Thap</option>
+                    </select>
+                  </Field>
+                  <Field label="Deadline">
+                    <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500" />
+                  </Field>
+                </div>
+              </div>
+            </section>
 
-          {kind === 'assignment' && (
-            <>
-              <Field label="Mục tiêu / Kết quả cần đạt">
-                <input
-                  type="text"
-                  value={goal}
-                  onChange={(e) => setGoal(e.target.value)}
-                  placeholder="VD: Mở lớp bơi tại Linh Đàm, đảm bảo kế hoạch..."
-                  className={inputCls}
-                  maxLength={300}
-                />
-              </Field>
-              {/* Mock-Frame-7 (2026-06-12): Kết quả bàn giao dự kiến — output cụ thể
-                  khác với mục tiêu (intent). VD mục tiêu = "Mở lớp bơi",
-                  bàn giao = "Hợp đồng + danh sách HV + lịch lớp tuần đầu". */}
-              <Field label="Kết quả bàn giao dự kiến (tuỳ chọn)">
-                <input
-                  type="text"
-                  value={expectedDeliverable}
-                  onChange={(e) => setExpectedDeliverable(e.target.value)}
-                  placeholder="VD: Bàn giao hợp đồng + danh sách HV + lịch lớp tuần đầu"
-                  className={inputCls}
-                  maxLength={300}
-                />
-              </Field>
-            </>
-          )}
-          <Field label="Mô tả">
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              maxLength={5000}
-              placeholder="Mục tiêu, các bước, kết quả mong muốn..."
-              className={inputCls}
-            />
-          </Field>
-
-          {/* ═══ FORM ĐỀ XUẤT (Phase 12.9 — đơn giản 2 mục) ═══ */}
-          {kind === 'proposal' && !creatorBlocked && (
-            <Field label="Đối tượng nhận đề xuất *">
-              {/* Phase 12.9.6 (2026-06-06): TP/QLCS dùng tab KHỐI (KD/VP) + 3 nhóm.
-                  GD/ADMIN giữ tab peer/senior cũ (chỉ có vài lựa chọn cố định). */}
-              {isCreatorTpQlcs && blockGroups ? (
-                <>
-                  {/* Tabs 2 khối */}
-                  <div className="grid grid-cols-2 gap-2 mb-2">
-                    {(['KD', 'VP'] as const).map((b) => {
-                      const g = blockGroups[b];
-                      const total = g.dept.length + g.facility.length + g.leadership.length;
-                      const isMyBlock = b === myBlock;
+            {/* ===== CHU TRI ===== */}
+            <section>
+              <SectionHeading>Chu tri (Owner duy nhat)</SectionHeading>
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Kieu phan cong">
+                    <select value={assigneeType} onChange={e => setAssigneeType(e.target.value as 'dept' | 'facility')}
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 bg-white">
+                      <option value="dept">Phong ban</option>
+                      <option value="facility">Co so</option>
+                    </select>
+                  </Field>
+                  <Field label="Khoi chu tri">
+                    <select value={assigneeBlock} onChange={e => setAssigneeBlock(e.target.value as Block)}
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 bg-white">
+                      <option value="KD">Kinh doanh</option>
+                      <option value="VP">Van phong</option>
+                    </select>
+                  </Field>
+                </div>
+                {assigneeType === 'dept' ? (
+                  <Field label="Don vi chu tri">
+                    <select value={assigneeDeptId} onChange={e => setAssigneeDeptId(e.target.value)}
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 bg-white">
+                      <option value="">Chon phong ban...</option>
+                      {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                    </select>
+                  </Field>
+                ) : (
+                  <Field label="Co so chu tri">
+                    <select value={assigneeFacilityId} onChange={e => setAssigneeFacilityId(e.target.value)}
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 bg-white">
+                      <option value="">Chon co so...</option>
+                      {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    </select>
+                  </Field>
+                )}
+                <Field label="Nguoi chiu trach nhiem (Owner) — co the chon nhieu nguoi thuc hien">
+                  <div className="max-h-32 overflow-y-auto rounded-lg border border-slate-200 divide-y divide-slate-50">
+                    {deptUsers.slice(0, 20).map(u => {
+                      const uid = u.id || u.uid || '';
+                      const checked = assigneeUserIds.includes(uid);
                       return (
-                        <button
-                          key={b}
-                          type="button"
-                          onClick={() => setRecipientBlock(b)}
-                          disabled={total === 0}
-                          className={`px-3 py-2 rounded-lg text-sm font-semibold ring-1 transition ${
-                            recipientBlock === b
-                              ? 'bg-emerald-50 text-emerald-800 ring-emerald-300'
-                              : 'bg-white text-slate-600 ring-slate-200 hover:ring-emerald-200'
-                          } disabled:opacity-40`}
-                        >
-                          <span className="sm:hidden">{b === 'KD' ? '🏭 KD' : '🏢 VP'}</span>
-                          <span className="hidden sm:inline">{b === 'KD' ? '🏭 Khối Kinh Doanh' : '🏢 Khối Văn Phòng'}</span>
-                          <span className="ml-1 text-xs opacity-60">
-                            ({total}{isMyBlock ? ' · của bạn' : ''})
-                          </span>
-                        </button>
+                        <label key={uid} className="flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 cursor-pointer">
+                          <input type="checkbox" checked={checked}
+                            onChange={() => setAssigneeUserIds(prev => checked ? prev.filter(x => x !== uid) : [...prev, uid])}
+                            className="rounded text-emerald-600" />
+                          <span className="text-sm text-slate-700">{u.name || u.displayName}</span>
+                          <span className="text-xs text-slate-400 ml-auto">{u.roleCode || u.role || ''}</span>
+                        </label>
                       );
                     })}
                   </div>
-                  {/* Dropdown 3 nhóm cho khối được chọn */}
-                  {(() => {
-                    const g = blockGroups[recipientBlock];
-                    const total = g.dept.length + g.facility.length + g.leadership.length;
-                    if (total === 0) {
-                      return (
-                        <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-2.5">
-                          Khối {recipientBlock === 'KD' ? 'Kinh Doanh' : 'Văn Phòng'} chưa có người nhận hợp lệ.
-                        </div>
-                      );
-                    }
-                    const renderOpt = (u: User) => (
-                      <option key={u.id} value={u.id}>
-                        {u.name} · {u.roleId}
-                      </option>
-                    );
-                    return (
-                      <select
-                        value={recipientUid}
-                        onChange={(e) => setRecipientUid(e.target.value)}
-                        className={inputCls}
-                      >
-                        <option value="">-- Chọn người nhận --</option>
-                        {g.dept.length > 0 && (
-                          <optgroup label="📋 Phòng ban (Trưởng phòng)">
-                            {g.dept.map(renderOpt)}
-                          </optgroup>
-                        )}
-                        {g.facility.length > 0 && (
-                          <optgroup label="🏊 Cơ sở (Quản lý cơ sở)">
-                            {g.facility.map(renderOpt)}
-                          </optgroup>
-                        )}
-                        {g.leadership.length > 0 && (
-                          <optgroup label="👔 Lãnh đạo (Giám đốc Khối)">
-                            {g.leadership.map(renderOpt)}
-                          </optgroup>
-                        )}
-                      </select>
-                    );
-                  })()}
-                  {/* Hint liên khối */}
-                  <p className="mt-1.5 text-xs text-slate-500">
-                    {recipientBlock !== myBlock
-                      ? `⚠ Liên khối → chain 3 cấp: GĐ khối bạn (${myBlock === 'KD' ? 'KD' : 'VP'}) → GĐ khối nhận (${recipientBlock}) → người nhận.`
-                      : 'Trong khối — gửi trực tiếp 1 cấp duyệt (trừ khi chọn GĐ khối → 1 cấp luôn).'}
-                  </p>
-                </>
-              ) : (
-              <>
-              <div className="grid grid-cols-2 gap-2 mb-2">
-                {(['peer', 'senior'] as const).map((t) => {
-                  const list = t === 'peer' ? peerCandidates : seniorCandidates;
-                  return (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => setRecipientTier(t)}
-                      disabled={list.length === 0}
-                      className={`px-3 py-2 rounded-lg text-sm font-semibold ring-1 transition ${
-                        recipientTier === t
-                          ? 'bg-emerald-50 text-emerald-800 ring-emerald-300'
-                          : 'bg-white text-slate-600 ring-slate-200 hover:ring-emerald-200'
-                      } disabled:opacity-40`}
-                    >
-                      {t === 'peer' ? '↔ Ngang cấp' : '↑ Cấp trên'}
-                      <span className="ml-1 text-xs opacity-60">({list.length})</span>
-                    </button>
-                  );
-                })}
+                </Field>
               </div>
-              {(() => {
-                const list = recipientTier === 'peer' ? peerCandidates : seniorCandidates;
-                if (list.length === 0) {
-                  return (
-                    <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-2.5">
-                      Không có {recipientTier === 'peer' ? 'người ngang cấp' : 'người cấp trên'} để gửi đề xuất.
-                    </div>
-                  );
-                }
-                // Phase 12.9.5: group dropdown thành "Trong khối" / "Liên khối" (tách rõ cho anh).
-                // ADMIN coi như khối KD (đảm nhiệm GĐKD ảo) — đồng bộ server resolveGdUid.
-                const effectiveBlockOf = (roleId: string): 'KD' | 'VP' | 'all' =>
-                  roleId === 'ADMIN' ? 'KD' : (ROLE_BLOCK[roleId] ?? 'all');
-                const inBlockList = list.filter((u) => {
-                  const b = effectiveBlockOf(u.roleId);
-                  return myBlock === 'all' || b === 'all' || b === myBlock;
-                });
-                const crossBlockList = list.filter((u) => {
-                  const b = effectiveBlockOf(u.roleId);
-                  return myBlock !== 'all' && b !== 'all' && b !== myBlock;
-                });
-                const blockLabel = (b: 'KD' | 'VP' | 'all') =>
-                  b === 'KD' ? 'Kinh Doanh' : b === 'VP' ? 'Văn Phòng' : 'toàn cty';
-                const renderOpt = (u: User) => {
-                  const b = effectiveBlockOf(u.roleId);
-                  return (
-                    <option key={u.id} value={u.id}>
-                      {u.name} · {u.roleId}{b !== 'all' ? ` (${blockLabel(b)})` : ' (toàn cty)'}
-                    </option>
-                  );
-                };
-                return (
-                  <select
-                    value={recipientUid}
-                    onChange={(e) => setRecipientUid(e.target.value)}
-                    className={inputCls}
-                  >
-                    <option value="">-- Chọn người nhận --</option>
-                    {inBlockList.length > 0 && (
-                      <optgroup label={`▸ Trong khối${myBlock !== 'all' ? ` (${blockLabel(myBlock)})` : ''}`}>
-                        {inBlockList.map(renderOpt)}
-                      </optgroup>
-                    )}
-                    {crossBlockList.length > 0 && (
-                      <optgroup label="▸ Liên khối (qua GĐ khối duyệt thêm)">
-                        {crossBlockList.map(renderOpt)}
-                      </optgroup>
-                    )}
-                  </select>
-                );
-              })()}
-              <p className="mt-1.5 text-xs text-slate-500">
-                {isAdmin
-                  ? 'Ngang cấp = GĐ Kinh Doanh / Văn Phòng. Cấp trên = CEO / Chủ tịch.'
-                  : isGD
-                    ? 'Ngang cấp = GĐ khối còn lại. Cấp trên = CEO / Chủ tịch.'
-                    : 'Ngang cấp = các TP + QLCS (cả 2 khối). Cấp trên = GĐ Khối. Liên khối → chain: GĐ khối bạn → GĐ khối nhận → người nhận.'}
-              </p>
-              </>
+            </section>
+
+            {/* ===== DON VI PHOI HOP ===== */}
+            <section>
+              <div className="flex items-center justify-between mb-3">
+                <SectionHeading noMargin>Don vi phoi hop</SectionHeading>
+                <button type="button" onClick={addCollabUnit}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700 transition">
+                  <Plus size={12} /> Them don vi
+                </button>
+              </div>
+              {collabUnits.length === 0 && (
+                <p className="text-xs text-slate-400 text-center py-4 border border-dashed border-slate-200 rounded-lg">
+                  Chua co don vi phoi hop. Nhan "Them don vi" de them.
+                </p>
               )}
-            </Field>
-          )}
-
-          {/* ═══ FORM GIAO VIỆC (giữ nguyên) ═══ */}
-          {kind === 'assignment' && (
-            <>
-              <Field label="Khối nhận">
-                <div className="flex gap-2">
-                  {(['KD', 'VP'] as const).map((b) => (
-                    <button
-                      key={b}
-                      onClick={() => {
-                        setAssigneeBlock(b);
-                        setAssigneeDeptId('');
-                        setAssigneeFacilityId('');
-                        setAssigneeUserIds([]);
-                      }}
-                      className={`flex-1 px-4 py-2 rounded-lg text-sm font-semibold ring-1 transition ${
-                        assigneeBlock === b
-                          ? 'bg-emerald-600 text-white ring-emerald-600 shadow-sm'
-                          : 'bg-white text-slate-600 ring-slate-200 hover:ring-emerald-300 hover:text-emerald-700'
-                      }`}
-                    >
-                      {b === 'KD' ? '💼 Khối Kinh Doanh' : '📑 Khối Văn Phòng'}
-                      {b !== myBlock && myBlock !== 'all' && (
-                        <span className="ml-1 text-xs opacity-75">(liên khối)</span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </Field>
-
-              <Field label="Giao cho">
-                <div className="flex gap-1 mb-2 bg-slate-100 p-1 rounded-lg">
-                  {(['department', 'facility', 'user'] as const).map((k) => (
-                    <button
-                      key={k}
-                      onClick={() => { setAssigneeKind(k); setAssigneeUserIds([]); }}
-                      className={`flex-1 py-1.5 text-xs rounded font-medium ${
-                        assigneeKind === k ? 'bg-white shadow text-emerald-700' : 'text-slate-600 hover:bg-white/50'
-                      }`}
-                    >
-                      {k === 'department' ? 'Phòng ban' : k === 'facility' ? 'Cơ sở' : 'Cá nhân'}
-                    </button>
-                  ))}
-                </div>
-
-                {assigneeKind === 'department' && (
-                  <select
-                    value={assigneeDeptId}
-                    onChange={(e) => setAssigneeDeptId(e.target.value)}
-                    className={inputCls}
-                  >
-                    <option value="">-- Chọn phòng --</option>
-                    {deptsInBlock.map((d) => (
-                      <option key={d.id} value={d.id}>
-                        {d.name}{d.id === currentDepartmentId ? ' (phòng của bạn)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                {assigneeKind === 'facility' && (
-                  <select
-                    value={assigneeFacilityId}
-                    onChange={(e) => setAssigneeFacilityId(e.target.value)}
-                    className={inputCls}
-                  >
-                    <option value="">-- Chọn cơ sở --</option>
-                    {branches.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.id} · {b.name}{b.id === currentBranchId ? ' (cơ sở của bạn)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                {assigneeKind === 'user' && (
-                  <div className="max-h-40 overflow-auto border border-slate-200 rounded-lg p-2 bg-slate-50/40 space-y-1">
-                    {usersInScope.length === 0 && (
-                      <div className="text-xs text-slate-400 text-center py-3">Không có người nhận phù hợp</div>
-                    )}
-                    {usersInScope.map((u) => {
-                      const checked = assigneeUserIds.includes(u.id);
-                      return (
-                        <label key={u.id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-white cursor-pointer text-sm">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={(e) => {
-                              setAssigneeUserIds((p) => e.target.checked ? [...p, u.id] : p.filter((x) => x !== u.id));
-                            }}
-                            className="text-emerald-600 focus:ring-emerald-500"
-                          />
-                          <span className="font-medium text-slate-800">{u.name}</span>
-                          <span className="text-xs text-slate-400">{u.roleId}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                )}
-              </Field>
-            </>
-          )}
-
-          <div className="grid grid-cols-2 gap-3">
-          {kind === 'assignment' && (
-            <Field label="Đơn vị phối hợp (tuỳ chọn)">
-              <div className="space-y-2">
-                {departments.length > 0 && (
-                  <div>
-                    <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Phòng ban</div>
-                    <div className="max-h-28 overflow-auto border border-slate-200 rounded-lg p-2 bg-slate-50/40 space-y-0.5">
-                      {departments.map((d) => (
-                        <label key={d.id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-white cursor-pointer text-sm">
-                          <input
-                            type="checkbox"
-                            checked={collaboratorDeptIds.includes(d.id)}
-                            onChange={(e) => setCollaboratorDeptIds(p => e.target.checked ? [...p, d.id] : p.filter(x => x !== d.id))}
-                            className="text-emerald-600 focus:ring-emerald-500"
-                          />
-                          <span className="font-medium text-slate-800">{d.name}</span>
-                          {d.blockId && <span className="text-xs text-slate-400">{d.blockId}</span>}
-                        </label>
-                      ))}
+              <div className="space-y-4">
+                {collabUnits.map((cu, idx) => (
+                  <div key={idx} className="rounded-xl border border-indigo-100 bg-indigo-50/30 p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-xs font-bold text-indigo-700">Don vi phoi hop #{idx+1}</span>
+                      <button type="button" onClick={() => removeCollabUnit(idx)} className="text-slate-400 hover:text-rose-500"><Trash2 size={13} /></button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="Don vi">
+                        <select value={cu.unitId} onChange={e => updateCollabUnit(idx, 'unitId', e.target.value)}
+                          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-500 bg-white">
+                          <option value="">Chon don vi...</option>
+                          <optgroup label="Phong ban">
+                            {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                          </optgroup>
+                          <optgroup label="Co so">
+                            {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                          </optgroup>
+                        </select>
+                      </Field>
+                      <Field label="Nguoi phu trach">
+                        <select value={cu.ownerId} onChange={e => updateCollabUnit(idx, 'ownerId', e.target.value)}
+                          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-500 bg-white">
+                          <option value="">Chon nguoi...</option>
+                          {users.slice(0,50).map(u => {
+                            const uid = u.id || u.uid || '';
+                            return <option key={uid} value={uid}>{u.name || u.displayName} ({u.roleCode || ''})</option>;
+                          })}
+                        </select>
+                      </Field>
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      <Field label="Noi dung can ho tro *">
+                        <input value={cu.assignment} onChange={e => updateCollabUnit(idx, 'assignment', e.target.value)}
+                          placeholder="VD: Thiet ke banner tuyen sinh 3 size"
+                          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-500" />
+                      </Field>
+                      <Field label="Ket qua can ban giao">
+                        <input value={cu.deliverable} onChange={e => updateCollabUnit(idx, 'deliverable', e.target.value)}
+                          placeholder="VD: Banner hoan chinh JPG + PNG du 3 kich co"
+                          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-500" />
+                      </Field>
+                      <Field label="Deadline rieng">
+                        <input type="date" value={cu.dueDate || ''} onChange={e => updateCollabUnit(idx, 'dueDate', e.target.value)}
+                          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-500" />
+                      </Field>
                     </div>
                   </div>
-                )}
-                {branches.length > 0 && (
-                  <div>
-                    <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Cơ sở</div>
-                    <div className="max-h-24 overflow-auto border border-slate-200 rounded-lg p-2 bg-slate-50/40 space-y-0.5">
-                      {branches.map((b) => (
-                        <label key={b.id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-white cursor-pointer text-sm">
-                          <input
-                            type="checkbox"
-                            checked={collaboratorFacilityIds.includes(b.id)}
-                            onChange={(e) => setCollaboratorFacilityIds(p => e.target.checked ? [...p, b.id] : p.filter(x => x !== b.id))}
-                            className="text-emerald-600 focus:ring-emerald-500"
-                          />
-                          <span className="font-medium text-slate-800">{b.name}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Mock-Frame-7 (2026-06-12): mô tả nhiệm vụ riêng cho từng đơn vị đã tick.
-                    Anh chốt — để biết ai phối hợp hỗ trợ làm gì. */}
-                {(collaboratorDeptIds.length > 0 || collaboratorFacilityIds.length > 0) && (
-                  <div className="mt-2 pt-2 border-t border-slate-200">
-                    <div className="text-xs font-semibold text-slate-600 mb-1.5">Nhiệm vụ của mỗi đơn vị phối hợp</div>
-                    <div className="space-y-1.5">
-                      {collaboratorDeptIds.map((id) => {
-                        const d = departments.find((x) => x.id === id);
-                        const key = `dept:${id}`;
-                        return (
-                          <div key={key} className="flex items-center gap-2">
-                            <span className="text-xs font-medium text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded shrink-0 min-w-[88px]">{d?.name ?? id}</span>
-                            <input
-                              type="text"
-                              value={collaboratorRoles[key] ?? ''}
-                              onChange={(e) => setCollaboratorRoles((p) => ({ ...p, [key]: e.target.value }))}
-                              placeholder="vd. Thiết kế poster, gửi MKT trước 15/06"
-                              maxLength={200}
-                              className="flex-1 text-sm border border-slate-200 rounded-md px-2 py-1 focus:outline-none focus:border-emerald-500"
-                            />
-                          </div>
-                        );
-                      })}
-                      {collaboratorFacilityIds.map((id) => {
-                        const b = branches.find((x) => x.id === id);
-                        const key = `facility:${id}`;
-                        return (
-                          <div key={key} className="flex items-center gap-2">
-                            <span className="text-xs font-medium text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded shrink-0 min-w-[88px]">{b?.name ?? id}</span>
-                            <input
-                              type="text"
-                              value={collaboratorRoles[key] ?? ''}
-                              onChange={(e) => setCollaboratorRoles((p) => ({ ...p, [key]: e.target.value }))}
-                              placeholder="vd. Bố trí phòng, hỗ trợ tiếp đón"
-                              maxLength={200}
-                              className="flex-1 text-sm border border-slate-200 rounded-md px-2 py-1 focus:outline-none focus:border-emerald-500"
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
+                ))}
               </div>
-            </Field>
-          )}
-            <Field label="Mức độ ưu tiên">
-              {/* Mock-Frame-7 (2026-06-12): 3 chip thay dropdown — Thấp / Trung bình / Cao.
-                  "urgent" giữ trong type cho API/CEO override, không expose UI tạo. */}
-              <div className="grid grid-cols-3 gap-1.5">
-                {([
-                  { v: 'low',    label: 'Thấp',       active: 'bg-slate-200 text-slate-800 ring-slate-400' },
-                  { v: 'normal', label: 'Trung bình', active: 'bg-sky-100 text-sky-800 ring-sky-400' },
-                  { v: 'high',   label: 'Cao',        active: 'bg-rose-100 text-rose-800 ring-rose-400' },
-                ] as const).map(({ v, label, active }) => {
-                  const isOn = priority === v;
-                  return (
-                    <button
-                      key={v}
-                      type="button"
-                      onClick={() => setPriority(v)}
-                      className={`px-3 py-2 rounded-lg text-sm font-semibold ring-1 transition ${
-                        isOn ? active : 'bg-white text-slate-500 ring-slate-200 hover:ring-slate-300'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
+            </section>
+
+            {/* ===== WAITING-FOR ENGINE ===== */}
+            <section>
+              <SectionHeading>Dang cho ai? (Waiting-For)</SectionHeading>
+              <p className="text-xs text-slate-500 mb-3">Neu hien tai dang can ai do phan hoi / bao cao truoc khi tien hanh, khai bao o day.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Dang cho don vi nao">
+                  <select value={waitingForUnitId} onChange={e => setWaitingForUnitId(e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 bg-white">
+                    <option value="">Khong cho ai</option>
+                    <optgroup label="Phong ban">
+                      {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                    </optgroup>
+                    <optgroup label="Co so">
+                      {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    </optgroup>
+                  </select>
+                </Field>
+                <Field label="Dang cho noi dung gi">
+                  <input value={waitingForContent} onChange={e => setWaitingForContent(e.target.value)}
+                    placeholder="VD: Xac nhan ngan sach, Ban thiet ke..."
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500" />
+                </Field>
               </div>
-            </Field>
-            <Field label="Hạn chót">
-              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={inputCls} />
-            </Field>
+            </section>
           </div>
 
-          <Field label="File đính kèm (tuỳ chọn)">
-            <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-2 border border-dashed border-emerald-300 rounded-lg text-sm text-emerald-700 hover:bg-emerald-50">
-              <Paperclip size={14} />
-              Chọn file (ảnh, PDF, Office, ZIP — tối đa 20MB/file)
-              <input
-                type="file"
-                multiple
-                onChange={(e) => {
-                  const list = Array.from(e.target.files ?? []);
-                  setFiles((p) => [...p, ...list]);
-                  e.target.value = '';
-                }}
-                className="hidden"
-              />
-            </label>
-            {files.length > 0 && (
-              <ul className="mt-2 space-y-1">
-                {files.map((f, i) => (
-                  <li key={i} className="flex items-center gap-2 text-xs px-2 py-1 bg-slate-50 rounded">
-                    <Paperclip size={11} className="text-slate-400" />
-                    <span className="flex-1 truncate text-slate-700">{f.name}</span>
-                    <span className="text-slate-400 tabular-nums">{(f.size / 1024).toFixed(0)} KB</span>
-                    <button
-                      type="button"
-                      onClick={() => setFiles((p) => p.filter((_, j) => j !== i))}
-                      className="text-slate-400 hover:text-rose-600"
-                    >
-                      <Trash2 size={11} />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {uploadProgress && (
-              <p className="mt-1 text-xs text-emerald-700">{uploadProgress}</p>
-            )}
-          </Field>
-        </div>
-
-        <div className="px-5 py-3 border-t border-slate-200 flex items-center justify-end gap-2 bg-slate-50/40">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">Huá»·</button>
-          <button
-            onClick={submit}
-            disabled={saving || creatorBlocked}
-            className="px-5 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-50 shadow-sm inline-flex items-center gap-2"
-          >
-            {saving && <Loader2 size={14} className="animate-spin" />}
-            {kind === 'proposal' ? 'Gửi để duyệt' : (willNeedApproval ? 'Gửi để duyệt' : `Tạo ${kindLabel}`)}
-          </button>
-        </div>
+          {/* FOOTER */}
+          <div className="sticky bottom-0 px-5 py-3 bg-white border-t border-slate-100 flex items-center justify-between gap-3">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition">Huy</button>
+            <button type="submit" disabled={busy || !title.trim()}
+              className="inline-flex items-center gap-2 px-5 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition shadow-sm">
+              {busy ? <Loader2 size={14} className="animate-spin" /> : null}
+              Tao dieu phoi
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
 }
 
-const inputCls = 'w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 outline-none';
-
+// Sub-components
+function SectionHeading({ children, noMargin }: { children: React.ReactNode; noMargin?: boolean }) {
+  return <h3 className={`text-xs font-bold uppercase tracking-wider text-slate-500 ${noMargin ? '' : 'mb-3'}`}>{children}</h3>;
+}
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">{label}</label>
+      <label className="block text-xs font-semibold text-slate-600 mb-1">{label}</label>
       {children}
     </div>
   );
