@@ -1,12 +1,12 @@
 'use client';
 
-// Khu KT dashboard cho TP_KT/PP/ADMIN/CEO/GD/KT viên cơ sở.
-// - 4 KPI tổng (clo · axit · lọc · nhiệt)
-// - 12-tháng line chart 4 line (SVG, no chart lib)
-// - Per-branch cards: ảnh + tổng 4 chỉ số (zero-fill nếu chưa có data)
+// Khu KT dashboard cho TP_KT/PP/ADMIN/CEO/GD/KT viÃªn cÆ¡ sá».
+// - 4 KPI tá»ng (clo Â· axit Â· lá»c Â· nhiá»t)
+// - 12-thÃ¡ng line chart 4 line (SVG, no chart lib)
+// - Per-branch cards: áº£nh + tá»ng 4 chá» sá» (zero-fill náº¿u chÆ°a cÃ³ data)
 // Visibility:
-//   • TP/PP/ADMIN/CEO/GD: thấy toàn 5 cơ sở
-//   • KT viên cơ sở X: chỉ thấy X (filter qua visibleBranchIds prop)
+//   â¢ TP/PP/ADMIN/CEO/GD: tháº¥y toÃ n 5 cÆ¡ sá»
+//   â¢ KT viÃªn cÆ¡ sá» X: chá» tháº¥y X (filter qua visibleBranchIds prop)
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -14,20 +14,20 @@ import { FlaskConical, Droplet, Filter, Flame } from 'lucide-react';
 import type { KyThuatSummary, KyThuatBranchAgg } from './data.kythuat';
 
 const BRANCH_LABEL: Record<string, string> = {
-  HM:  'Hoàng Mai',
-  TK:  '20 Thuỵ Khuê',
-  CTT: 'CTT Mỹ Đình',
+  HM:  'HoÃ ng Mai',
+  TK:  '20 Thuá»µ KhuÃª',
+  CTT: 'CTT Má»¹ ÄÃ¬nh',
   '24':'24 NCT',
-  TT:  'Thanh Trì',
+  TT:  'Thanh TrÃ¬',
 };
 
-// Path khớp 100% file trong public/ — KHÔNG tự đoán đuôi/space, dùng `ls public` để verify.
+// Path khá»p 100% file trong public/ â KHÃNG tá»± ÄoÃ¡n ÄuÃ´i/space, dÃ¹ng `ls public` Äá» verify.
 const BRANCH_PHOTOS: Record<string, string> = {
-  HM:  '/hoàng mai.png.jpg',
-  TK:  '/thụy khuê.png.jpg',
+  HM:  '/hoÃ ng mai.png.jpg',
+  TK:  '/thá»¥y khuÃª.png.jpg',
   CTT: '/CTT.png',
   '24':'/24 NCT.png',
-  TT:  '/thanh trì.png',
+  TT:  '/thanh trÃ¬.png',
 };
 const BRANCH_FALLBACK: Record<string, string> = {
   HM:  'https://images.unsplash.com/photo-1576013551627-0cc20b96c2a7?auto=format&fit=crop&w=800&q=80',
@@ -43,16 +43,16 @@ type MetricKey = 'clo' | 'axit' | 'loc' | 'nhiet';
 
 const METRIC_META: Record<MetricKey, { label: string; unit: string; color: string; Icon: typeof FlaskConical }> = {
   clo:   { label: 'Clo',             unit: 'kg',  color: '#059669', Icon: FlaskConical },  // emerald-600
-  axit:  { label: 'Axit (pH)',       unit: 'lít', color: '#d97706', Icon: Droplet },       // amber-600
-  loc:   { label: 'Công suất Lọc',   unit: 'kWh', color: '#0891b2', Icon: Filter },        // cyan-600 — đo công suất điện
-  nhiet: { label: 'Công suất Nhiệt', unit: 'kWh', color: '#e11d48', Icon: Flame },         // rose-600  — đo công suất điện
+  axit:  { label: 'Axit (pH)',       unit: 'lÃ­t', color: '#d97706', Icon: Droplet },       // amber-600
+  loc:   { label: 'CÃ´ng suáº¥t Lá»c',   unit: 'kWh', color: '#0891b2', Icon: Filter },        // cyan-600 â Äo cÃ´ng suáº¥t Äiá»n
+  nhiet: { label: 'CÃ´ng suáº¥t Nhiá»t', unit: 'kWh', color: '#e11d48', Icon: Flame },         // rose-600  â Äo cÃ´ng suáº¥t Äiá»n
 };
 
 interface Props {
   summary: KyThuatSummary;
-  /** Cơ sở user được xem. ['HM','TK','CTT','24','TT'] = full; ['HM'] = KT viên Hoàng Mai. */
+  /** CÆ¡ sá» user ÄÆ°á»£c xem. ['HM','TK','CTT','24','TT'] = full; ['HM'] = KT viÃªn HoÃ ng Mai. */
   visibleBranchIds: string[];
-  /** Role hiện tại — chỉ để hiển thị badge "scope" */
+  /** Role hiá»n táº¡i â chá» Äá» hiá»n thá» badge "scope" */
   myRoleCode: string;
 }
 
@@ -62,12 +62,12 @@ function fmt(v: number): string {
 
 export function KTDashboardSection({ summary, visibleBranchIds, myRoleCode }: Props) {
   const isAll = visibleBranchIds.length === 5;
-  // Filter các branch hiển thị
+  // Filter cÃ¡c branch hiá»n thá»
   const visibleBranches = useMemo(
     () => summary.byBranch.filter((b) => visibleBranchIds.includes(b.branchId)),
     [summary.byBranch, visibleBranchIds],
   );
-  // Tính tổng = system nếu full, ngược lại reaggregate từ visible branches
+  // TÃ­nh tá»ng = system náº¿u full, ngÆ°á»£c láº¡i reaggregate tá»« visible branches
   const totals = useMemo(() => {
     if (isAll) return summary.system;
     const out = {
@@ -115,7 +115,7 @@ export function KTDashboardSection({ summary, visibleBranchIds, myRoleCode }: Pr
 
   return (
     <div className="space-y-4">
-      {/* Tổng 4 chỉ số */}
+      {/* Tá»ng 4 chá» sá» */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {(['clo', 'axit', 'loc', 'nhiet'] as MetricKey[]).map((k) => {
           const m = METRIC_META[k];
@@ -130,22 +130,22 @@ export function KTDashboardSection({ summary, visibleBranchIds, myRoleCode }: Pr
                 <Icon size={20} />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{m.label}</div>
-                {/* Phase 13.16.7: whitespace-nowrap giữ kWh nguyên dòng, font nhỏ vừa đủ */}
+                <div className="text-xs font-bold uppercase tracking-wider text-slate-500">{m.label}</div>
+                {/* Phase 13.16.7: whitespace-nowrap giá»¯ kWh nguyÃªn dÃ²ng, font nhá» vá»«a Äá»§ */}
                 <div className="text-sm sm:text-xl font-bold tabular-nums mt-0.5 text-slate-800 whitespace-nowrap overflow-hidden leading-tight">{fmt(seriesTotals[k])}</div>
-                <div className="text-[10px] text-slate-500">{m.unit}{!isAll ? ` · ${visibleBranches.length} cơ sở` : ' · cả hệ thống'}</div>
+                <div className="text-xs text-slate-500">{m.unit}{!isAll ? ` Â· ${visibleBranches.length} cÆ¡ sá»` : ' Â· cáº£ há» thá»ng'}</div>
               </div>
             </Link>
           );
         })}
       </div>
 
-      {/* Line chart 12 tháng */}
+      {/* Line chart 12 thÃ¡ng */}
       <div className="card">
         <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
           <div>
-            <div className="text-sm font-bold text-slate-800">Diễn biến 12 tháng — {summary.year}</div>
-            <div className="text-[11px] text-slate-500">Bấm chip để bật/tắt series</div>
+            <div className="text-sm font-bold text-slate-800">Diá»n biáº¿n 12 thÃ¡ng â {summary.year}</div>
+            <div className="text-xs text-slate-500">Báº¥m chip Äá» báº­t/táº¯t series</div>
           </div>
           <div className="flex items-center gap-1.5 flex-wrap">
             {(['clo', 'axit', 'loc', 'nhiet'] as MetricKey[]).map((k) => {
@@ -155,7 +155,7 @@ export function KTDashboardSection({ summary, visibleBranchIds, myRoleCode }: Pr
                 <button
                   key={k}
                   onClick={() => setActive((a) => ({ ...a, [k]: !a[k] }))}
-                  className={`px-2 py-1 rounded text-[11px] font-semibold ring-1 transition inline-flex items-center gap-1 ${
+                  className={`px-2 py-1 rounded text-xs font-semibold ring-1 transition inline-flex items-center gap-1 ${
                     on ? 'bg-white' : 'bg-slate-100 text-slate-400 ring-slate-200 line-through'
                   }`}
                   style={on ? { color: m.color, borderColor: m.color, boxShadow: `inset 0 0 0 1px ${m.color}` } : undefined}
@@ -172,10 +172,10 @@ export function KTDashboardSection({ summary, visibleBranchIds, myRoleCode }: Pr
 
       {/* Per-branch breakdown */}
       <div className="space-y-2">
-        <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng theo cơ sở</div>
+        <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tá»ng theo cÆ¡ sá»</div>
         {visibleBranches.length === 0 ? (
           <div className="card text-center text-sm text-slate-400 py-8">
-            Bạn chưa được gán cơ sở để xem.
+            Báº¡n chÆ°a ÄÆ°á»£c gÃ¡n cÆ¡ sá» Äá» xem.
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -187,15 +187,15 @@ export function KTDashboardSection({ summary, visibleBranchIds, myRoleCode }: Pr
       </div>
 
       {!isAll && (
-        <div className="text-[11px] text-slate-500">
-          Bạn đang xem <strong>{visibleBranches.length}</strong> cơ sở thuộc vai trò <code>{myRoleCode}</code>.
+        <div className="text-xs text-slate-500">
+          Báº¡n Äang xem <strong>{visibleBranches.length}</strong> cÆ¡ sá» thuá»c vai trÃ² <code>{myRoleCode}</code>.
         </div>
       )}
     </div>
   );
 }
 
-// ────────── Branch card ──────────
+// ââââââââââ Branch card ââââââââââ
 function BranchKpiCard({ agg }: { agg: KyThuatBranchAgg }) {
   const img = BRANCH_PHOTOS[agg.branchId];
   const fallback = BRANCH_FALLBACK[agg.branchId];
@@ -223,9 +223,9 @@ function BranchKpiCard({ agg }: { agg: KyThuatBranchAgg }) {
       </div>
       <div className="p-3 grid grid-cols-2 gap-2 text-sm">
         <KpiMini label="Clo" value={agg.cloTotal} unit="kg" color="#059669" />
-        <KpiMini label="Axit" value={agg.axitTotal} unit="lít" color="#d97706" />
-        <KpiMini label="CS Lọc" value={agg.locCapTotal} unit="kWh" color="#0891b2" />
-        <KpiMini label="CS Nhiệt" value={agg.nhietCapTotal} unit="kWh" color="#e11d48" />
+        <KpiMini label="Axit" value={agg.axitTotal} unit="lÃ­t" color="#d97706" />
+        <KpiMini label="CS Lá»c" value={agg.locCapTotal} unit="kWh" color="#0891b2" />
+        <KpiMini label="CS Nhiá»t" value={agg.nhietCapTotal} unit="kWh" color="#e11d48" />
       </div>
     </div>
   );
@@ -234,16 +234,16 @@ function BranchKpiCard({ agg }: { agg: KyThuatBranchAgg }) {
 function KpiMini({ label, value, unit, color }: { label: string; value: number; unit: string; color: string }) {
   return (
     <div className="rounded-md px-2 py-1.5 ring-1 ring-slate-100 bg-slate-50/50">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{label}</div>
+      <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</div>
       <div className="tabular-nums font-bold" style={{ color }}>
-        {value > 0 ? fmt(value) : '—'}
-        <span className="ml-1 text-[10px] font-normal text-slate-400">{unit}</span>
+        {value > 0 ? fmt(value) : 'â'}
+        <span className="ml-1 text-xs font-normal text-slate-400">{unit}</span>
       </div>
     </div>
   );
 }
 
-// ────────── SVG line chart ──────────
+// ââââââââââ SVG line chart ââââââââââ
 function LineChart({ series, active }: {
   series: Record<MetricKey, number[]>;
   active: Record<MetricKey, boolean>;
@@ -253,15 +253,15 @@ function LineChart({ series, active }: {
   const innerW = W - padL - padR;
   const innerH = H - padT - padB;
 
-  // Max value across active series (0 → 1 để khỏi chia 0)
+  // Max value across active series (0 â 1 Äá» khá»i chia 0)
   const allActiveValues = (Object.keys(series) as MetricKey[])
     .filter((k) => active[k])
     .flatMap((k) => series[k]);
   const maxV = Math.max(1, ...allActiveValues);
-  // Round-up cho axis label đẹp hơn
+  // Round-up cho axis label Äáº¹p hÆ¡n
   const niceMax = niceCeil(maxV);
 
-  // X scale: 12 tháng → 12 điểm (centered)
+  // X scale: 12 thÃ¡ng â 12 Äiá»m (centered)
   function xOf(i: number): number {
     return padL + (innerW * i) / 11;
   }
@@ -274,7 +274,7 @@ function LineChart({ series, active }: {
 
   return (
     <div className="w-full">
-      {/* Phase 13.16.4: bỏ minWidth: 480 + overflow-x-auto cha → SVG viewBox tự co theo viewport mobile */}
+      {/* Phase 13.16.4: bá» minWidth: 480 + overflow-x-auto cha â SVG viewBox tá»± co theo viewport mobile */}
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full max-w-full">
         {/* Grid + Y axis */}
         {ticks.map((t, i) => (
