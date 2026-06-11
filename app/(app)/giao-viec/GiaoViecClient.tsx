@@ -32,13 +32,13 @@ type TabKey = 'my-tasks' | 'assigned-by-me' | 'cross-block' | 'pending-response'
 type ViewMode = 'table' | 'kanban';
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
-  pending_approval: 'Chờ duyệt',
-  pending: 'Chờ làm',
-  in_progress: 'Đang làm',
-  requested_revision: 'Yêu cầu bổ sung',
-  done: 'Hoàn thành',
-  rejected: 'Từ chối',
-  cancelled: 'Huỷ',
+  pending_approval: 'Chá» duyá»t',
+  pending: 'Chá» lÃ m',
+  in_progress: 'Äang lÃ m',
+  requested_revision: 'YÃªu cáº§u bá» sung',
+  done: 'HoÃ n thÃ nh',
+  rejected: 'Tá»« chá»i',
+  cancelled: 'Huá»·',
 };
 const STATUS_BG: Record<TaskStatus, string> = {
   pending_approval: 'bg-amber-50 text-amber-700 ring-amber-200',
@@ -50,7 +50,7 @@ const STATUS_BG: Record<TaskStatus, string> = {
   cancelled: 'bg-slate-50 text-slate-400 ring-slate-200',
 };
 const PRIORITY_LABEL: Record<string, string> = {
-  low: 'Thấp', normal: 'Bình thường', high: 'Cao', urgent: 'Khẩn',
+  low: 'Tháº¥p', normal: 'BÃ¬nh thÆ°á»ng', high: 'Cao', urgent: 'Kháº©n',
 };
 const PRIORITY_DOT: Record<string, string> = {
   low: 'bg-slate-300', normal: 'bg-sky-400', high: 'bg-amber-400', urgent: 'bg-rose-500',
@@ -58,12 +58,12 @@ const PRIORITY_DOT: Record<string, string> = {
 const BLOCK_LABEL: Record<string, { label: string; bg: string }> = {
   KD: { label: 'KD', bg: 'bg-blue-100 text-blue-700' },
   VP: { label: 'VP', bg: 'bg-violet-100 text-violet-700' },
-  all: { label: 'Toàn công ty', bg: 'bg-slate-100 text-slate-700' },
+  all: { label: 'ToÃ n cÃ´ng ty', bg: 'bg-slate-100 text-slate-700' },
 };
 const GD_ROLES = new Set(['GD_KD', 'GD_VP', 'CEO', 'ADMIN']);
 
 function formatDate(d: string | null | undefined) {
-  if (!d) return '—';
+  if (!d) return 'â';
   const [y, m, day] = d.split('-');
   return `${day}/${m}/${y}`;
 }
@@ -110,7 +110,7 @@ export function GiaoViecClient(props: Props) {
   const [refreshKey, setRefreshKey] = useState(0);
   function refresh() { setRefreshKey((k) => k + 1); }
 
-  // Map tab → API mode
+  // Map tab â API mode
   const mode: TaskListMode =
     tab === 'my-tasks' ? 'assigned'
     : tab === 'assigned-by-me' ? 'created'
@@ -200,14 +200,14 @@ export function GiaoViecClient(props: Props) {
     return { inProgress, pendingApproval, pendingDone, overdue, done };
   }, [allTasks, today]);
 
-  // Per-dept stats for "Công việc theo khối"
+  // Per-dept stats for "CÃ´ng viá»c theo khá»i"
   const perDeptStats = useMemo(() => {
     const map: Record<string, { id: string; name: string; total: number; done: number; inProgress: number; overdue: number }> = {};
     allTasks.forEach((t) => {
       const key = t.assigneeDeptId ?? (t.assigneeFacilityId ? `branch:${t.assigneeFacilityId}` : 'misc');
       const name = t.assigneeDeptId
         ? (departments.find((d) => d.id === t.assigneeDeptId)?.name ?? t.assigneeDeptId)
-        : (t.assigneeFacilityId ? (branches.find((b) => b.id === t.assigneeFacilityId)?.name ?? t.assigneeFacilityId) : 'Cá nhân');
+        : (t.assigneeFacilityId ? (branches.find((b) => b.id === t.assigneeFacilityId)?.name ?? t.assigneeFacilityId) : 'CÃ¡ nhÃ¢n');
       map[key] ??= { id: key, name, total: 0, done: 0, inProgress: 0, overdue: 0 };
       map[key].total += 1;
       if (t.status === 'done') map[key].done += 1;
@@ -220,20 +220,20 @@ export function GiaoViecClient(props: Props) {
   const todayLabel = new Date().toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'numeric', day: 'numeric' });
 
   const tabDef: { key: TabKey; label: string; badge?: number }[] = [
-    { key: 'my-tasks', label: 'Tôi phụ trách' },
-    { key: 'assigned-by-me', label: 'Tôi giao' },
-    ...(showLienKhoiTab ? [{ key: 'cross-block' as TabKey, label: 'Liên khối' }] : []),
-    { key: 'pending-response', label: 'Chờ phản hồi', badge: approvalCount || undefined },
-    { key: 'overdue', label: 'Quá hạn', badge: kpi.overdue || undefined },
+    { key: 'my-tasks', label: 'TÃ´i phá»¥ trÃ¡ch' },
+    { key: 'assigned-by-me', label: 'TÃ´i giao' },
+    ...(showLienKhoiTab ? [{ key: 'cross-block' as TabKey, label: 'LiÃªn khá»i' }] : []),
+    { key: 'pending-response', label: 'Chá» pháº£n há»i', badge: approvalCount || undefined },
+    { key: 'overdue', label: 'QuÃ¡ háº¡n', badge: kpi.overdue || undefined },
   ];
   return (
     <div className="max-w-7xl mx-auto space-y-5">
 
-      {/* ===== HEADER: Tổng quan hôm nay ===== */}
+      {/* ===== HEADER: Tá»ng quan hÃ´m nay ===== */}
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-base font-bold text-slate-900">Tổng quan hôm nay</h2>
+            <h2 className="text-base font-bold text-slate-900">Tá»ng quan hÃ´m nay</h2>
             <p className="text-xs text-slate-500 mt-0.5">{todayLabel}</p>
           </div>
           <div className="flex items-center gap-2">
@@ -242,35 +242,35 @@ export function GiaoViecClient(props: Props) {
                 onClick={() => setShowCreate(canCreateAssignment ? 'assignment' : 'proposal')}
                 className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 shadow-sm transition"
               >
-                <Plus size={15} /> Tạo điều phối
+                <Plus size={15} /> Táº¡o Äiá»u phá»i
               </button>
             )}
-            <button onClick={refresh} className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition" title="Làm mới">
+            <button onClick={refresh} className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition" title="LÃ m má»i">
               <RefreshCw size={15} />
             </button>
           </div>
         </div>
 
-        {/* KPI cards — 5 ô theo mockup */}
+        {/* KPI cards â 5 Ã´ theo mockup */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          <KpiCard label="Đang xử lý" value={kpi.inProgress} icon={Clock} accent="sky" sub={kpi.inProgress > 0 ? `+${Math.round(kpi.inProgress/Math.max(allTasks.length,1)*100)}% tổng` : undefined} />
-          <KpiCard label="Chờ phản hồi" value={kpi.pendingApproval} icon={ShieldCheck} accent={kpi.pendingApproval > 0 ? 'amber' : 'slate'} />
-          <KpiCard label="Chờ duyệt" value={kpi.pendingDone} icon={AlertTriangle} accent={kpi.pendingDone > 0 ? 'orange' : 'slate'} />
-          <KpiCard label="Quá hạn" value={kpi.overdue} icon={AlertTriangle} accent={kpi.overdue > 0 ? 'rose' : 'slate'} />
-          <KpiCard label="Hoàn thành" value={kpi.done} icon={CheckCircle2} accent="emerald" sub={allTasks.length > 0 ? `+${Math.round(kpi.done/allTasks.length*100)}% tổng` : undefined} />
+          <KpiCard label="Äang xá»­ lÃ½" value={kpi.inProgress} icon={Clock} accent="sky" sub={kpi.inProgress > 0 ? `+${Math.round(kpi.inProgress/Math.max(allTasks.length,1)*100)}% tá»ng` : undefined} />
+          <KpiCard label="Chá» pháº£n há»i" value={kpi.pendingApproval} icon={ShieldCheck} accent={kpi.pendingApproval > 0 ? 'amber' : 'slate'} />
+          <KpiCard label="Chá» duyá»t" value={kpi.pendingDone} icon={AlertTriangle} accent={kpi.pendingDone > 0 ? 'orange' : 'slate'} />
+          <KpiCard label="QuÃ¡ háº¡n" value={kpi.overdue} icon={AlertTriangle} accent={kpi.overdue > 0 ? 'rose' : 'slate'} />
+          <KpiCard label="HoÃ n thÃ nh" value={kpi.done} icon={CheckCircle2} accent="emerald" sub={allTasks.length > 0 ? `+${Math.round(kpi.done/allTasks.length*100)}% tá»ng` : undefined} />
         </div>
       </section>
 
-      {/* ===== HÀNG 2: Công việc theo khối + Tắc nghẽn + Quá hạn ===== */}
+      {/* ===== HÃNG 2: CÃ´ng viá»c theo khá»i + Táº¯c ngháº½n + QuÃ¡ háº¡n ===== */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
-        {/* Công việc theo khối */}
+        {/* CÃ´ng viá»c theo khá»i */}
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
-            <Building2 size={14} className="text-emerald-600" /> Công việc theo khối
+            <Building2 size={14} className="text-emerald-600" /> CÃ´ng viá»c theo khá»i
           </h3>
           {perDeptStats.length === 0 ? (
-            <div className="text-xs text-slate-400 text-center py-6">Chưa có dữ liệu</div>
+            <div className="text-xs text-slate-400 text-center py-6">ChÆ°a cÃ³ dá»¯ liá»u</div>
           ) : (
             <div className="space-y-2">
               {perDeptStats.slice(0, 5).map((d) => {
@@ -282,8 +282,8 @@ export function GiaoViecClient(props: Props) {
                       <span className="text-slate-500 tabular-nums">{d.total} ({pct}%)</span>
                     </div>
                     <div className="h-2 bg-slate-100 rounded-full overflow-hidden flex">
-                      <div className="bg-emerald-500 h-full" style={{ width: `${pct}%` }} title={`Hoàn thành: ${d.done}`} />
-                      <div className="bg-sky-400 h-full" style={{ width: `${d.total > 0 ? d.inProgress/d.total*100 : 0}%` }} title={`Đang làm: ${d.inProgress}`} />
+                      <div className="bg-emerald-500 h-full" style={{ width: `${pct}%` }} title={`HoÃ n thÃ nh: ${d.done}`} />
+                      <div className="bg-sky-400 h-full" style={{ width: `${d.total > 0 ? d.inProgress/d.total*100 : 0}%` }} title={`Äang lÃ m: ${d.inProgress}`} />
                     </div>
                   </div>
                 );
@@ -292,33 +292,33 @@ export function GiaoViecClient(props: Props) {
           )}
         </div>
 
-        {/* Tắc nghẽn hiện tại */}
+        {/* Táº¯c ngháº½n hiá»n táº¡i */}
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
-            <AlertTriangle size={14} className="text-amber-500" /> Tắc nghẽn hiện tại
+            <AlertTriangle size={14} className="text-amber-500" /> Táº¯c ngháº½n hiá»n táº¡i
           </h3>
           {perDeptStats.filter(d => d.overdue > 0).length === 0 ? (
-            <div className="text-xs text-emerald-600 text-center py-6 font-medium">✓ Không có tắc nghẽn</div>
+            <div className="text-xs text-emerald-600 text-center py-6 font-medium">â KhÃ´ng cÃ³ táº¯c ngháº½n</div>
           ) : (
             <div className="space-y-2">
               {perDeptStats.filter(d => d.overdue > 0).slice(0, 5).map((d, i) => (
                 <div key={d.id} className="flex items-center gap-2 text-xs">
                   <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-100 text-amber-700 font-bold text-[10px] shrink-0">{i + 1}</span>
                   <span className="font-medium text-slate-700 flex-1 truncate">{d.name}</span>
-                  <span className="text-rose-600 font-semibold tabular-nums">{d.overdue} việc</span>
+                  <span className="text-rose-600 font-semibold tabular-nums">{d.overdue} viá»c</span>
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        {/* Công việc quá hạn */}
+        {/* CÃ´ng viá»c quÃ¡ háº¡n */}
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
-            <Clock size={14} className="text-rose-500" /> Công việc quá hạn
+            <Clock size={14} className="text-rose-500" /> CÃ´ng viá»c quÃ¡ háº¡n
           </h3>
           {allTasks.filter(t => t.dueDate && t.dueDate < today && !['done','cancelled','rejected'].includes(t.status)).length === 0 ? (
-            <div className="text-xs text-emerald-600 text-center py-6 font-medium">✓ Không có việc quá hạn</div>
+            <div className="text-xs text-emerald-600 text-center py-6 font-medium">â KhÃ´ng cÃ³ viá»c quÃ¡ háº¡n</div>
           ) : (
             <div className="space-y-2">
               {allTasks.filter(t => t.dueDate && t.dueDate < today && !['done','cancelled','rejected'].includes(t.status)).slice(0, 4).map(t => (
@@ -326,13 +326,13 @@ export function GiaoViecClient(props: Props) {
                   <div className="text-xs font-semibold text-slate-800 truncate">{t.title}</div>
                   <div className="flex items-center gap-2 mt-1 text-[10px] text-rose-600 font-medium">
                     <CalendarDays size={9} /> {formatDate(t.dueDate)}
-                    <span className="text-slate-400 font-normal">· {t.createdByName}</span>
+                    <span className="text-slate-400 font-normal">Â· {t.createdByName}</span>
                   </div>
                 </button>
               ))}
               {allTasks.filter(t => t.dueDate && t.dueDate < today && !['done','cancelled','rejected'].includes(t.status)).length > 4 && (
                 <button onClick={() => jumpToTab('overdue')} className="text-xs text-emerald-700 font-semibold hover:underline">
-                  Xem tất cả →
+                  Xem táº¥t cáº£ â
                 </button>
               )}
             </div>
@@ -340,7 +340,7 @@ export function GiaoViecClient(props: Props) {
         </div>
       </div>
 
-      {/* ===== DANH SÁCH ĐIỀU PHỐI ===== */}
+      {/* ===== DANH SÃCH ÄIá»U PHá»I ===== */}
       <section ref={tabSectionRef} className="rounded-xl border border-slate-200 bg-white shadow-sm scroll-mt-20">
         {/* Tab header */}
         <div className="flex items-center border-b border-slate-200 px-1 overflow-x-auto">
@@ -363,17 +363,6 @@ export function GiaoViecClient(props: Props) {
             </button>
           ))}
           <div className="flex-1" />
-          {/* Action buttons */}
-          <div className="flex items-center gap-1.5 px-3 py-2 shrink-0">
-            {(canCreateAssignment || canCreateProposal) && (
-              <button
-                onClick={() => setShowCreate(canCreateAssignment ? 'assignment' : 'proposal')}
-                className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700 shadow-sm transition"
-              >
-                <Plus size={12} /> Tạo điều phối
-              </button>
-            )}
-          </div>
         </div>
 
         {/* Filter bar */}
@@ -383,7 +372,7 @@ export function GiaoViecClient(props: Props) {
             <Search size={12} className="text-slate-400 shrink-0" />
             <input
               type="text"
-              placeholder="Tìm kiếm công việc..."
+              placeholder="TÃ¬m kiáº¿m cÃ´ng viá»c..."
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
               className="bg-transparent outline-none flex-1 placeholder:text-slate-400"
@@ -408,7 +397,7 @@ export function GiaoViecClient(props: Props) {
                       : 'bg-white text-slate-600 ring-slate-200 hover:ring-emerald-300 hover:text-emerald-700'
                   }`}
                 >
-                  {s === 'all' ? 'Tất cả' : STATUS_LABEL[s]}
+                  {s === 'all' ? 'Táº¥t cáº£' : STATUS_LABEL[s]}
                 </button>
               ))}
             </div>
@@ -416,7 +405,7 @@ export function GiaoViecClient(props: Props) {
 
           {/* View toggle */}
           <div className="ml-auto flex items-center gap-1">
-            <button onClick={() => setView('table')} className={`p-1.5 rounded-lg transition ${view === 'table' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-400 hover:bg-slate-100'}`} title="Bảng">
+            <button onClick={() => setView('table')} className={`p-1.5 rounded-lg transition ${view === 'table' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-400 hover:bg-slate-100'}`} title="Báº£ng">
               <ListIcon size={14} />
             </button>
             <button onClick={() => setView('kanban')} className={`p-1.5 rounded-lg transition ${view === 'kanban' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-400 hover:bg-slate-100'}`} title="Kanban">
@@ -429,7 +418,7 @@ export function GiaoViecClient(props: Props) {
         <div className="p-4">
           {loading ? (
             <div className="text-center py-12 text-slate-500">
-              <Loader2 size={20} className="inline animate-spin mr-2" /> Đang tải…
+              <Loader2 size={20} className="inline animate-spin mr-2" /> Äang táº£iâ¦
             </div>
           ) : error ? (
             <div className="text-sm text-rose-700 bg-rose-50 p-3 rounded-lg border border-rose-200">{error}</div>
@@ -458,24 +447,24 @@ export function GiaoViecClient(props: Props) {
         {/* Pagination hint */}
         {tasks.length >= 20 && (
           <div className="px-4 py-3 border-t border-slate-100 text-xs text-slate-500 flex items-center justify-between">
-            <span>Hiện thị 1–{tasks.length} trong {tasks.length} công việc</span>
+            <span>Hiá»n thá» 1â{tasks.length} trong {tasks.length} cÃ´ng viá»c</span>
           </div>
         )}
       </section>
-      {/* Liên khối section */}
+      {/* LiÃªn khá»i section */}
       {tab === 'cross-block' && showLienKhoiTab && (
         <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex items-center gap-2 mb-4">
             <Users2 size={18} className="text-indigo-600" />
-            <h3 className="font-semibold text-slate-800 text-sm">Tổng quan liên khối</h3>
-            <span className="ml-auto text-xs text-slate-400">Theo dõi nhiệm vụ giao/nhận giữa các khối</span>
+            <h3 className="font-semibold text-slate-800 text-sm">Tá»ng quan liÃªn khá»i</h3>
+            <span className="ml-auto text-xs text-slate-400">Theo dÃµi nhiá»m vá»¥ giao/nháº­n giá»¯a cÃ¡c khá»i</span>
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
             {[
-              { label: 'Tổng liên khối', value: allTasks.filter(t => t.crossBlock).length, color: 'text-slate-800' },
-              { label: 'Đang xử lý', value: allTasks.filter(t => t.crossBlock && t.status === 'in_progress').length, color: 'text-sky-700' },
-              { label: 'Chờ phản hồi', value: allTasks.filter(t => t.crossBlock && t.status === 'pending_approval').length, color: 'text-amber-700' },
-              { label: 'Quá hạn', value: allTasks.filter(t => t.crossBlock && t.dueDate && t.dueDate < today && !['done','cancelled','rejected'].includes(t.status)).length, color: 'text-rose-700' },
+              { label: 'Tá»ng liÃªn khá»i', value: allTasks.filter(t => t.crossBlock).length, color: 'text-slate-800' },
+              { label: 'Äang xá»­ lÃ½', value: allTasks.filter(t => t.crossBlock && t.status === 'in_progress').length, color: 'text-sky-700' },
+              { label: 'Chá» pháº£n há»i', value: allTasks.filter(t => t.crossBlock && t.status === 'pending_approval').length, color: 'text-amber-700' },
+              { label: 'QuÃ¡ háº¡n', value: allTasks.filter(t => t.crossBlock && t.dueDate && t.dueDate < today && !['done','cancelled','rejected'].includes(t.status)).length, color: 'text-rose-700' },
             ].map(c => (
               <div key={c.label} className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-center">
                 <div className={`text-2xl font-bold tabular-nums ${c.color}`}>{c.value}</div>
@@ -523,7 +512,7 @@ export function GiaoViecClient(props: Props) {
 }
 
 // ============================================================================
-// TABLE VIEW — chính theo mockup
+// TABLE VIEW â chÃ­nh theo mockup
 // ============================================================================
 function TableView({ tasks, departments, branches, users, onSelect }: {
   tasks: Task[];
@@ -538,7 +527,7 @@ function TableView({ tasks, departments, branches, users, onSelect }: {
       <table className="w-full text-xs">
         <thead>
           <tr className="border-b border-slate-200">
-            {['#', 'Công việc', 'Loại', 'Khối chủ trì', 'Phối hợp', 'Trạng thái', 'Tiến độ', 'Đang chờ', 'Deadline'].map(h => (
+            {['#', 'CÃ´ng viá»c', 'Loáº¡i', 'Khá»i chá»§ trÃ¬', 'Phá»i há»£p', 'Tráº¡ng thÃ¡i', 'Tiáº¿n Äá»', 'Äang chá»', 'Deadline'].map(h => (
               <th key={h} className="text-left text-[11px] font-semibold text-slate-500 uppercase tracking-wide pb-2 pr-3 whitespace-nowrap">{h}</th>
             ))}
           </tr>
@@ -550,12 +539,12 @@ function TableView({ tasks, departments, branches, users, onSelect }: {
               ? departments.find(d => d.id === t.assigneeDeptId)?.name ?? t.assigneeDeptId
               : t.assigneeFacilityId
                 ? branches.find(b => b.id === t.assigneeFacilityId)?.name ?? t.assigneeFacilityId
-                : '—';
+                : 'â';
             const block = BLOCK_LABEL[t.assigneeBlock] ?? { label: t.assigneeBlock, bg: 'bg-slate-100 text-slate-700' };
             const pct = Math.max(0, Math.min(100, t.progressPct ?? 0));
 
 
-            // Phối hợp: ưu tiên collaboratorDeptIds/FacilityIds, fallback về assigneeUserIds
+            // Phá»i há»£p: Æ°u tiÃªn collaboratorDeptIds/FacilityIds, fallback vá» assigneeUserIds
             const collabDepts = ((t as any).collaboratorDeptIds ?? []).map((id: string) => departments.find(d => d.id === id)?.name ?? id);
             const collabFacilities = ((t as any).collaboratorFacilityIds ?? []).map((id: string) => branches.find(b => b.id === id)?.name ?? id);
             const allCollabNames = [...collabDepts, ...collabFacilities];
@@ -568,9 +557,9 @@ function TableView({ tasks, departments, branches, users, onSelect }: {
 
 
             const waitingOn =
-              t.status === 'pending_approval' ? (t.currentApprover ?? 'Người duyệt')
+              t.status === 'pending_approval' ? (t.currentApprover ?? 'NgÆ°á»i duyá»t')
               : t.status === 'requested_revision' ? t.createdByName
-              : '—';
+              : 'â';
 
             return (
               <tr
@@ -581,10 +570,10 @@ function TableView({ tasks, departments, branches, users, onSelect }: {
                 <td className="py-2.5 pr-3 text-slate-400 tabular-nums">{idx + 1}</td>
                 <td className="py-2.5 pr-3 min-w-[200px] max-w-[280px]">
                   <div className="flex items-start gap-2">
-                    <span className={`mt-0.5 h-1.5 w-1.5 rounded-full shrink-0 ${PRIORITY_DOT[t.priority] ?? 'bg-slate-300'}`} title={`Ưu tiên: ${PRIORITY_LABEL[t.priority] ?? t.priority}`} />
+                    <span className={`mt-0.5 h-1.5 w-1.5 rounded-full shrink-0 ${PRIORITY_DOT[t.priority] ?? 'bg-slate-300'}`} title={`Æ¯u tiÃªn: ${PRIORITY_LABEL[t.priority] ?? t.priority}`} />
                     <div className="min-w-0">
                       <div className="font-semibold text-slate-800 truncate group-hover:text-emerald-700 leading-tight">{t.title}</div>
-                      <div className="text-[10px] text-slate-400 mt-0.5 truncate">#{t.id.slice(-6).toUpperCase()} · {t.createdByName}</div>
+                      <div className="text-[10px] text-slate-400 mt-0.5 truncate">#{t.id.slice(-6).toUpperCase()} Â· {t.createdByName}</div>
                     </div>
                   </div>
                 </td>
@@ -592,7 +581,7 @@ function TableView({ tasks, departments, branches, users, onSelect }: {
                   <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${
                     t.kind === 'proposal' ? 'bg-violet-100 text-violet-700' : 'bg-sky-100 text-sky-700'
                   }`}>
-                    {t.kind === 'proposal' ? 'Đề xuất' : 'Điều phối'}
+                    {t.kind === 'proposal' ? 'Äá» xuáº¥t' : 'Äiá»u phá»i'}
                   </span>
                 </td>
                 <td className="py-2.5 pr-3">
@@ -622,7 +611,7 @@ function TableView({ tasks, departments, branches, users, onSelect }: {
                       )}
                     </div>
                   ) : (
-                    <span className="text-slate-400">—</span>
+                    <span className="text-slate-400">â</span>
                   )}
                 </td>
                 <td className="py-2.5 pr-3">
@@ -649,7 +638,7 @@ function TableView({ tasks, departments, branches, users, onSelect }: {
                       {overdue && <span className="ml-1 text-[9px] text-rose-500 font-bold">QH</span>}
                     </span>
                   ) : (
-                    <span className="text-slate-400">—</span>
+                    <span className="text-slate-400">â</span>
                   )}
                 </td>
               </tr>
@@ -694,11 +683,11 @@ function KpiCard({ label, value, icon: Icon, accent, sub }: {
 // ============================================================================
 function EmptyState({ tab }: { tab: TabKey }) {
   const msg =
-    tab === 'my-tasks' ? 'Chưa có nhiệm vụ nào được giao cho bạn'
-    : tab === 'assigned-by-me' ? 'Bạn chưa giao việc nào'
-    : tab === 'cross-block' ? 'Không có việc liên khối'
-    : tab === 'pending-response' ? 'Không có việc chờ phản hồi'
-    : 'Không có việc quá hạn';
+    tab === 'my-tasks' ? 'ChÆ°a cÃ³ nhiá»m vá»¥ nÃ o ÄÆ°á»£c giao cho báº¡n'
+    : tab === 'assigned-by-me' ? 'Báº¡n chÆ°a giao viá»c nÃ o'
+    : tab === 'cross-block' ? 'KhÃ´ng cÃ³ viá»c liÃªn khá»i'
+    : tab === 'pending-response' ? 'KhÃ´ng cÃ³ viá»c chá» pháº£n há»i'
+    : 'KhÃ´ng cÃ³ viá»c quÃ¡ háº¡n';
   return (
     <div className="rounded-xl border-2 border-dashed border-slate-200 py-16 text-center">
       <Inbox size={32} className="mx-auto text-slate-300 mb-3" />
@@ -708,13 +697,13 @@ function EmptyState({ tab }: { tab: TabKey }) {
 }
 
 // ============================================================================
-// KANBAN VIEW (giữ nguyên từ phiên bản cũ)
+// KANBAN VIEW (giá»¯ nguyÃªn tá»« phiÃªn báº£n cÅ©)
 // ============================================================================
 const KANBAN_COLS: { key: TaskStatus; label: string; bg: string; dot: string }[] = [
-  { key: 'pending_approval', label: 'Chờ duyệt',   bg: 'bg-amber-50',   dot: 'bg-amber-400' },
-  { key: 'pending',          label: 'Chờ làm',     bg: 'bg-slate-50',   dot: 'bg-slate-400' },
-  { key: 'in_progress',      label: 'Đang làm',    bg: 'bg-sky-50',     dot: 'bg-sky-500' },
-  { key: 'done',             label: 'Hoàn thành',  bg: 'bg-emerald-50', dot: 'bg-emerald-500' },
+  { key: 'pending_approval', label: 'Chá» duyá»t',   bg: 'bg-amber-50',   dot: 'bg-amber-400' },
+  { key: 'pending',          label: 'Chá» lÃ m',     bg: 'bg-slate-50',   dot: 'bg-slate-400' },
+  { key: 'in_progress',      label: 'Äang lÃ m',    bg: 'bg-sky-50',     dot: 'bg-sky-500' },
+  { key: 'done',             label: 'HoÃ n thÃ nh',  bg: 'bg-emerald-50', dot: 'bg-emerald-500' },
 ];
 
 function KanbanView({ tasks, departments, branches, users, onSelect, currentUserId }: {
@@ -760,7 +749,7 @@ function KanbanView({ tasks, departments, branches, users, onSelect, currentUser
                 );
               })}
               {colTasks.length === 0 && (
-                <div className="text-[11px] text-slate-400 text-center py-4">Không có</div>
+                <div className="text-[11px] text-slate-400 text-center py-4">KhÃ´ng cÃ³</div>
               )}
             </div>
           </div>
