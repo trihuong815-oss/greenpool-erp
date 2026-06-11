@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import {
   Plus, Search, X, ListChecks, Inbox, Send, ShieldCheck,
   Loader2, ArrowRight, CalendarDays, AlertTriangle, CheckCircle2,
-  Clock, LayoutGrid, List as ListIcon, TrendingUp,
+  Clock, LayoutGrid, List as ListIcon, TrendingUp, Users2,
   type LucideIcon,
 } from 'lucide-react';
 import { tasksApi, type Task, type TaskListMode, type TaskStatus, type TaskKind } from '@/lib/services/tasks/api-client';
@@ -27,7 +27,7 @@ interface Props {
   users: User[];
 }
 
-type TabKey = 'received' | 'proposal' | 'assignment' | 'approval';
+type TabKey = 'received' | 'proposal' | 'assignment' | 'approval' | 'lien-khoi';
 type ViewMode = 'list' | 'kanban';
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
@@ -75,6 +75,7 @@ export function GiaoViecClient(props: Props) {
   const canCreateAssignment = isGD || isCEO || isAdmin;
   const canCreateProposal = canCreate && !isCEO; // ADMIN được tạo đề xuất
   const showAssignmentTab = isGD || isCEO || isAdmin; // ẩn tab Giao việc cho TP/QLCS
+  const showLienKhoiTab = isCEO || isAdmin; // chỉ CEO/ADMIN thấy tổng quan liên khối
 
   const [tab, setTab] = useState<TabKey>('received');
   const tabSectionRef = useRef<HTMLElement | null>(null);
@@ -272,6 +273,16 @@ export function GiaoViecClient(props: Props) {
             onClick={() => jumpToTab('assignment')}
           />
         )}
+        {showLienKhoiTab && (
+          <CategoryCard
+            title="Liên khối"
+            subtitle="Tổng quan nhiệm vụ xuất/nhập giữa các khối"
+            icon={Users2}
+            stats={statsByCategory.assignment}
+            active={tab === 'lien-khoi'}
+            onClick={() => jumpToTab('lien-khoi')}
+          />
+        )}
       </section>
 
       {/* Tổng tổng quan nhanh */}
@@ -438,6 +449,33 @@ export function GiaoViecClient(props: Props) {
       </section>
 
       {/* Create modal */}
+      {/* ===== TAB: LIÊN KHỐI ===== */}
+      {tab === 'lien-khoi' && showLienKhoiTab && (
+        <section className="space-y-4">
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex items-center gap-2 mb-4">
+              <Users2 size={18} className="text-indigo-600" />
+              <h3 className="font-semibold text-slate-800 text-sm">Tổng quan liên khối</h3>
+              <span className="ml-auto text-xs text-slate-400">Theo dõi nhiệm vụ giao/nhận giữa các khối</span>
+            </div>
+            {perDeptStats.length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-8">Chưa có dữ liệu liên khối</p>
+            ) : (
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                {perDeptStats.map((d) => (
+                  <div key={d.deptId} className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                    <p className="font-medium text-slate-700 text-sm truncate">{d.deptName}</p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      {d.total} việc · <span className="text-sky-600">{d.inProgress} đang làm</span> · <span className="text-emerald-600">{d.done} xong</span>
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
       {showCreate && (
         <TaskCreateModal
           kind={showCreate}
