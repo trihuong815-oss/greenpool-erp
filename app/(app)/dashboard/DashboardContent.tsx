@@ -210,7 +210,7 @@ export function DashboardContent({
 
       {/* ===== HÀNG 5: KỸ THUẬT VẬN HÀNH — tiêu thụ theo cơ sở ===== */}
       {showKT && kyThuatSummary && (<>
-        <SectionTitle icon={BarChart3} title="Kỹ thuật vận hành" subtitle={`Năm ${kyThuatSummary.year} · clo · công suất máy`} />
+        <SectionTitle icon={BarChart3} title="Kỹ thuật vận hành" subtitle={`Năm ${kyThuatSummary.year} · tiêu thụ clo (kg) · công suất máy (h)`} />
         <KTDashboardSection
           summary={kyThuatSummary}
           visibleBranchIds={ktVisibleBranchIds ?? []}
