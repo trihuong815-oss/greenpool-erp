@@ -26,6 +26,8 @@ interface TaskCounts {
   myInProgress: number;
   myDone: number;
   myTotal: number;
+  checklistSent?: number;
+  checklistUnread?: number;
 }
 
 interface Props {
