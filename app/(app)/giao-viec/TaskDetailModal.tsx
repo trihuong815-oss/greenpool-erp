@@ -226,15 +226,15 @@ export function TaskDetailModal(props: {
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2 mb-1 flex-wrap">
-                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ring-1 ${STATUS_BG[task.status]}`}>
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold ring-1 ${STATUS_BG[task.status]}`}>
                   {STATUS_LABEL[task.status]}
                 </span>
                 {task.crossBlock && (
-                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900">LIÊN KHỐI</span>
+                  <span className="px-1.5 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-900">LIÊN KHỐI</span>
                 )}
                 {overdue && (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-900">
-                    <AlertTriangle size={10} /> QUÁ HẠN
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-bold bg-rose-100 text-rose-900">
+                    <AlertTriangle size={12} /> QUÁ HẠN
                   </span>
                 )}
               </div>
@@ -256,28 +256,75 @@ export function TaskDetailModal(props: {
                 <div className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-lg p-3">{error}</div>
               )}
 
+              {/* ===== INFO HEADER: Mục tiêu + người tham gia ===== */}
+
+              {/* Goal / Mục tiêu nếu có */}
+              {(task as any).goal && (
+                <div className="rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-2">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-emerald-700 mb-0.5">Mục tiêu</div>
+                  <p className="text-sm text-slate-800 font-medium">{(task as any).goal}</p>
+                </div>
+              )}
+
               {/* Meta grid */}
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <Meta label="Người tạo">{task.createdByName} <span className="text-slate-400">({task.createdByRole})</span></Meta>
-                <Meta label="Khối nhận">{task.assigneeBlock} · {assigneeLabel}</Meta>
+                <Meta label="Người phụ trách">
+                  {task.assigneeDeptId
+                    ? (departments.find(d => d.id === task.assigneeDeptId)?.name ?? task.assigneeDeptId)
+                    : task.assigneeFacilityId
+                      ? (branches.find(b => b.id === task.assigneeFacilityId)?.name ?? task.assigneeFacilityId)
+                      : task.assigneeUserIds.length > 0
+                        ? (
+                          <span className="flex flex-col gap-0.5">
+                            {task.assigneeUserIds.slice(0, 4).map(uid => {
+                              const u = users.find(u => u.id === uid);
+                              return <span key={uid} className="inline-flex items-center gap-1"><span className="h-4 w-4 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold flex items-center justify-center shrink-0">{(u?.name ?? uid).charAt(0)}</span>{u?.name ?? uid}</span>;
+                            })}
+                            {task.assigneeUserIds.length > 4 && <span className="text-slate-400">+{task.assigneeUserIds.length - 4} người khác</span>}
+                          </span>
+                        )
+                        : <span className="text-slate-400">(chưa gán)</span>
+                  }
+                </Meta>
+                <Meta label="Khối chủ trì">{task.assigneeBlock}{task.crossBlock && <span className="ml-1.5 px-1.5 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-800">LIÊN KHỐI</span>}</Meta>
                 <Meta label="Ưu tiên"><PriorityChip p={task.priority} /></Meta>
                 <Meta label="Hạn chót">
                   {task.dueDate ? (
                     <span className={`inline-flex items-center gap-1 ${overdue ? 'text-rose-700 font-semibold' : ''}`}>
                       <CalendarDays size={12} /> {task.dueDate}
+                      {overdue && <span className="text-xs text-rose-500 font-bold">(QH)</span>}
                     </span>
                   ) : <span className="text-slate-400">—</span>}
                 </Meta>
-                <Meta label="Tạo lúc">{fmtDateTime(task.createdAt)}</Meta>
                 <Meta label="Tiến độ">
                   <ProgressBar pct={task.progressPct} />
                 </Meta>
+                <Meta label="Tạo lúc">{fmtDateTime(task.createdAt)}</Meta>
+                <Meta label="Cập nhật">{fmtDateTime(task.updatedAt)}</Meta>
               </div>
+
+              {/* Đơn vị phối hợp */}
+              {((task as any).collaboratorDeptIds?.length > 0 || (task as any).collaboratorFacilityIds?.length > 0) && (
+                <div className="rounded-lg border border-indigo-100 bg-indigo-50/40 p-3">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-indigo-700 mb-2">Đơn vị phối hợp</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {((task as any).collaboratorDeptIds ?? []).map((id: string) => {
+                      const d = departments.find(dep => dep.id === id);
+                      return <span key={id} className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold">{d?.name ?? id}</span>;
+                    })}
+                    {((task as any).collaboratorFacilityIds ?? []).map((id: string) => {
+                      const b = branches.find(br => br.id === id);
+                      return <span key={id} className="px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 text-xs font-semibold">{b?.name ?? id}</span>;
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Phase 12.5 — Luồng duyệt đề xuất (chain) — entry: "user:UID" | "role:RC" | legacy "RC" */}
               {task.kind === 'proposal' && task.approvalChain && task.approvalChain.length > 0 && (
                 <div className="rounded-lg border border-blue-200 bg-blue-50/40 p-3">
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-blue-700 mb-2">Luồng duyệt ({task.approvalChain.length} cấp)</div>
+                  <div className="text-xs font-semibold uppercase tracking-wider text-blue-700 mb-2">Luồng duyệt ({task.approvalChain.length} cấp)</div>
                   <div className="flex items-center gap-2 flex-wrap">
                     {task.approvalChain.map((entry, i) => {
                       // Parse entry: user:UID | role:RC | legacy RC
@@ -299,7 +346,7 @@ export function TaskDetailModal(props: {
                       const isCurrent = task.currentApprover === entry && !done;
                       return (
                         <div key={i} className="flex items-center gap-1.5">
-                          <span className="text-[10px] font-bold text-slate-400">{i + 1}.</span>
+                          <span className="text-xs font-bold text-slate-400">{i + 1}.</span>
                           <div className={`px-2.5 py-1 rounded-md text-xs font-semibold ring-1 ${
                             done ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
                             : isCurrent ? 'bg-amber-50 text-amber-700 ring-amber-300 animate-pulse'
@@ -319,7 +366,7 @@ export function TaskDetailModal(props: {
               {/* Phase 12 — Lịch sử yêu cầu bổ sung (nếu có) */}
               {task.revisionRequests && task.revisionRequests.length > 0 && (
                 <div className="rounded-lg border border-orange-200 bg-orange-50/40 p-3 space-y-2">
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-orange-700">Yêu cầu bổ sung từ người nhận</div>
+                  <div className="text-xs font-semibold uppercase tracking-wider text-orange-700">Yêu cầu bổ sung từ người nhận</div>
                   {task.revisionRequests.slice(-3).map((r, i) => (
                     <div key={i} className="text-sm text-slate-700 border-l-2 border-orange-300 pl-2">
                       <div className="font-medium text-orange-800">{r.name} <span className="text-xs text-slate-400 font-normal">· {fmtDateTime(r.requestedAt)}</span></div>
@@ -342,7 +389,7 @@ export function TaskDetailModal(props: {
               {task.kind === 'proposal' && (task as any).recipientTier && (
                 <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-3 flex items-center gap-3 flex-wrap">
                   <div>
-                    <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700 mb-0.5">Đối tượng đề xuất</div>
+                    <div className="text-xs font-semibold uppercase tracking-wider text-emerald-700 mb-0.5">Đối tượng đề xuất</div>
                     <div className="text-sm font-semibold text-slate-800">
                       {(task as any).recipientTier === 'peer' ? '↔ Ngang cấp' : '↑ Cấp trên'}
                     </div>
@@ -354,14 +401,14 @@ export function TaskDetailModal(props: {
               {task.kind === 'proposal' && !((task as any).recipientTier) && (task as any).proposalScope && (
                 <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-3 flex items-center gap-3 flex-wrap">
                   <div>
-                    <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700 mb-0.5">Loại đề xuất</div>
+                    <div className="text-xs font-semibold uppercase tracking-wider text-emerald-700 mb-0.5">Loại đề xuất</div>
                     <div className="text-sm font-semibold text-slate-800">
                       {(task as any).proposalScope === 'in_block' ? '🏠 Trong khối' : '🔀 Liên khối'}
                     </div>
                   </div>
                   {(task as any).proposalScope === 'cross_block' && (task as any).proposalSubtype && (
                     <div>
-                      <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700 mb-0.5">Tính chất</div>
+                      <div className="text-xs font-semibold uppercase tracking-wider text-emerald-700 mb-0.5">Tính chất</div>
                       <div className="text-sm font-medium text-slate-700">
                         {(task as any).proposalSubtype === 'regular' ? 'Thường xuyên' : 'Phát sinh (qua GĐ khối)'}
                       </div>
@@ -374,18 +421,18 @@ export function TaskDetailModal(props: {
               {task.kind === 'proposal' && task.proposalType && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-3 flex items-center gap-3 flex-wrap">
                   <div>
-                    <div className="text-[10px] font-semibold uppercase tracking-wider text-amber-700 mb-0.5">Nội dung đề xuất</div>
+                    <div className="text-xs font-semibold uppercase tracking-wider text-amber-700 mb-0.5">Nội dung đề xuất</div>
                     <div className="text-sm font-semibold text-slate-800">{PROPOSAL_TYPE_LABEL[task.proposalType]}</div>
                   </div>
                   {task.proposalType === 'tai_chinh' && task.financialGroup && (
                     <div>
-                      <div className="text-[10px] font-semibold uppercase tracking-wider text-amber-700 mb-0.5">Nhóm chi</div>
+                      <div className="text-xs font-semibold uppercase tracking-wider text-amber-700 mb-0.5">Nhóm chi</div>
                       <div className="text-sm font-medium text-slate-700">{FINANCIAL_GROUP_LABEL[task.financialGroup]}</div>
                     </div>
                   )}
                   {task.estimatedCost != null && task.estimatedCost > 0 && (
                     <div className="ml-auto text-right">
-                      <div className="text-[10px] font-semibold uppercase tracking-wider text-amber-700 mb-0.5">Chi phí dự kiến</div>
+                      <div className="text-xs font-semibold uppercase tracking-wider text-amber-700 mb-0.5">Chi phí dự kiến</div>
                       <div className="text-sm font-bold text-amber-800 tabular-nums">{task.estimatedCost.toLocaleString('vi-VN')}₫</div>
                     </div>
                   )}
@@ -395,7 +442,7 @@ export function TaskDetailModal(props: {
               {/* Description */}
               {task.description && (
                 <div className="rounded-lg border border-slate-200 bg-slate-50/40 p-3">
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Mô tả</div>
+                  <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Mô tả</div>
                   <p className="text-sm text-slate-700 whitespace-pre-wrap">{task.description}</p>
                 </div>
               )}
@@ -403,7 +450,7 @@ export function TaskDetailModal(props: {
               {/* Status update controls */}
               {canUpdateStatus && !['rejected', 'cancelled'].includes(task.status) && (
                 <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-3 space-y-2">
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700">Cập nhật trạng thái</div>
+                  <div className="text-xs font-semibold uppercase tracking-wider text-emerald-700">Cập nhật trạng thái</div>
                   {task.status === 'in_progress' && (
                     <div className="flex items-center gap-2">
                       <label className="text-xs font-medium text-slate-600 shrink-0">Tiến độ:</label>
@@ -545,7 +592,7 @@ export function TaskDetailModal(props: {
                   {showRevisionForm && (
                     <div className="space-y-2">
                       <div className="text-xs font-semibold text-orange-800">Nội dung cần bổ sung (bắt buộc)</div>
-                      <p className="text-[11px] text-slate-600">Đề xuất sẽ chuyển trạng thái "Yêu cầu bổ sung". Người tạo bổ sung rồi gửi lại cho bạn duyệt.</p>
+                      <p className="text-xs text-slate-600">Đề xuất sẽ chuyển trạng thái "Yêu cầu bổ sung". Người tạo bổ sung rồi gửi lại cho bạn duyệt.</p>
                       <textarea
                         value={revisionMessage}
                         onChange={(e) => setRevisionMessage(e.target.value)}
@@ -622,8 +669,8 @@ export function TaskDetailModal(props: {
 
               {/* Attachments */}
               <div>
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1">
-                  <Paperclip size={11} /> File đính kèm ({attachments.length})
+                <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1">
+                  <Paperclip size={12} /> File đính kèm ({attachments.length})
                 </div>
                 {attachments.length > 0 && (
                   <ul className="space-y-1 mb-2">
@@ -638,10 +685,10 @@ export function TaskDetailModal(props: {
                           >
                             {a.fileName}
                           </a>
-                          <span className="text-[10px] text-slate-400 tabular-nums shrink-0">
+                          <span className="text-xs text-slate-400 tabular-nums shrink-0">
                             {(a.size / 1024).toFixed(0)} KB
                           </span>
-                          <span className="text-[10px] text-slate-400 truncate shrink-0 max-w-[100px]">{a.uploadedByName}</span>
+                          <span className="text-xs text-slate-400 truncate shrink-0 max-w-[100px]">{a.uploadedByName}</span>
                           {a.downloadUrl && (
                             <a href={a.downloadUrl} target="_blank" rel="noreferrer"
                               className="p-1 text-slate-400 hover:text-emerald-700"
@@ -679,8 +726,8 @@ export function TaskDetailModal(props: {
 
               {/* Timeline */}
               <div>
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1">
-                  <MessageSquare size={11} /> Lịch sử & Trao đổi ({comments.length})
+                <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1">
+                  <MessageSquare size={12} /> Lịch sử & Trao đổi ({comments.length})
                 </div>
                 <div className="space-y-2 max-h-72 overflow-auto pr-1">
                   {comments.map((c) => (
@@ -746,7 +793,7 @@ const btnSecondary= 'inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 t
 function Meta({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-0.5">{label}</div>
+      <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-0.5">{label}</div>
       <div className="text-sm text-slate-800">{children}</div>
     </div>
   );
@@ -788,7 +835,7 @@ function CommentRow({ c }: { c: TaskComment }) {
     <div className={`flex items-start gap-2 p-2 rounded-lg ${isEvent ? k.bg : 'bg-white border border-slate-100'}`}>
       <span className={`text-sm shrink-0 ${k.text}`}>{k.icon}</span>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between gap-2 text-[11px]">
+        <div className="flex items-center justify-between gap-2 text-xs">
           <span className="font-semibold text-slate-800 truncate">{c.authorName}</span>
           <span className="text-slate-400 tabular-nums shrink-0">{fmtDateTime(c.createdAt)}</span>
         </div>

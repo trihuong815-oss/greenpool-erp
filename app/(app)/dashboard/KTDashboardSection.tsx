@@ -130,10 +130,10 @@ export function KTDashboardSection({ summary, visibleBranchIds, myRoleCode }: Pr
                 <Icon size={20} />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{m.label}</div>
+                <div className="text-xs font-bold uppercase tracking-wider text-slate-500">{m.label}</div>
                 {/* Phase 13.16.7: whitespace-nowrap giữ kWh nguyên dòng, font nhỏ vừa đủ */}
                 <div className="text-sm sm:text-xl font-bold tabular-nums mt-0.5 text-slate-800 whitespace-nowrap overflow-hidden leading-tight">{fmt(seriesTotals[k])}</div>
-                <div className="text-[10px] text-slate-500">{m.unit}{!isAll ? ` · ${visibleBranches.length} cơ sở` : ' · cả hệ thống'}</div>
+                <div className="text-xs text-slate-500">{m.unit}{!isAll ? ` · ${visibleBranches.length} cơ sở` : ' · cả hệ thống'}</div>
               </div>
             </Link>
           );
@@ -145,7 +145,7 @@ export function KTDashboardSection({ summary, visibleBranchIds, myRoleCode }: Pr
         <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
           <div>
             <div className="text-sm font-bold text-slate-800">Diễn biến 12 tháng — {summary.year}</div>
-            <div className="text-[11px] text-slate-500">Bấm chip để bật/tắt series</div>
+            <div className="text-xs text-slate-500">Bấm chip để bật/tắt series</div>
           </div>
           <div className="flex items-center gap-1.5 flex-wrap">
             {(['clo', 'axit', 'loc', 'nhiet'] as MetricKey[]).map((k) => {
@@ -155,7 +155,7 @@ export function KTDashboardSection({ summary, visibleBranchIds, myRoleCode }: Pr
                 <button
                   key={k}
                   onClick={() => setActive((a) => ({ ...a, [k]: !a[k] }))}
-                  className={`px-2 py-1 rounded text-[11px] font-semibold ring-1 transition inline-flex items-center gap-1 ${
+                  className={`px-2 py-1 rounded text-xs font-semibold ring-1 transition inline-flex items-center gap-1 ${
                     on ? 'bg-white' : 'bg-slate-100 text-slate-400 ring-slate-200 line-through'
                   }`}
                   style={on ? { color: m.color, borderColor: m.color, boxShadow: `inset 0 0 0 1px ${m.color}` } : undefined}
@@ -187,7 +187,7 @@ export function KTDashboardSection({ summary, visibleBranchIds, myRoleCode }: Pr
       </div>
 
       {!isAll && (
-        <div className="text-[11px] text-slate-500">
+        <div className="text-xs text-slate-500">
           Bạn đang xem <strong>{visibleBranches.length}</strong> cơ sở thuộc vai trò <code>{myRoleCode}</code>.
         </div>
       )}
@@ -234,10 +234,10 @@ function BranchKpiCard({ agg }: { agg: KyThuatBranchAgg }) {
 function KpiMini({ label, value, unit, color }: { label: string; value: number; unit: string; color: string }) {
   return (
     <div className="rounded-md px-2 py-1.5 ring-1 ring-slate-100 bg-slate-50/50">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{label}</div>
+      <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</div>
       <div className="tabular-nums font-bold" style={{ color }}>
         {value > 0 ? fmt(value) : '—'}
-        <span className="ml-1 text-[10px] font-normal text-slate-400">{unit}</span>
+        <span className="ml-1 text-xs font-normal text-slate-400">{unit}</span>
       </div>
     </div>
   );

@@ -79,6 +79,9 @@ export function TaskCreateModal(props: {
   const [assigneeDeptId, setAssigneeDeptId] = useState<string>('');
   const [assigneeFacilityId, setAssigneeFacilityId] = useState<string>('');
   const [assigneeUserIds, setAssigneeUserIds] = useState<string[]>([]);
+  const [goal, setGoal] = useState<string>('');
+  const [collaboratorDeptIds, setCollaboratorDeptIds] = useState<string[]>([]);
+  const [collaboratorFacilityIds, setCollaboratorFacilityIds] = useState<string[]>([]);
 
   // ─── PROPOSAL state (Phase 12.9 — đơn giản hoá) ───
   const [recipientTier, setRecipientTier] = useState<RecipientTier>('peer');
@@ -291,6 +294,9 @@ export function TaskCreateModal(props: {
           proposalType: null,
           financialGroup: null,
           estimatedCost: null,
+          goal: goal.trim() || null,
+          collaboratorDeptIds,
+          collaboratorFacilityIds,
         };
       }
       const { id } = await tasksApi.create(createBody);
@@ -356,6 +362,18 @@ export function TaskCreateModal(props: {
             />
           </Field>
 
+          {kind === 'assignment' && (
+            <Field label="Mục tiêu (tuỳ chọn)">
+              <input
+                type="text"
+                value={goal}
+                onChange={(e) => setGoal(e.target.value)}
+                placeholder="VD: Mở lớp bơi tại Linh Đàm, đảm bảo kế hoạch..."
+                className={inputCls}
+                maxLength={300}
+              />
+            </Field>
+          )}
           <Field label="Mô tả">
             <textarea
               value={description}
@@ -394,7 +412,7 @@ export function TaskCreateModal(props: {
                         >
                           <span className="sm:hidden">{b === 'KD' ? '🏭 KD' : '🏢 VP'}</span>
                           <span className="hidden sm:inline">{b === 'KD' ? '🏭 Khối Kinh Doanh' : '🏢 Khối Văn Phòng'}</span>
-                          <span className="ml-1 text-[10px] opacity-60">
+                          <span className="ml-1 text-xs opacity-60">
                             ({total}{isMyBlock ? ' · của bạn' : ''})
                           </span>
                         </button>
@@ -443,7 +461,7 @@ export function TaskCreateModal(props: {
                     );
                   })()}
                   {/* Hint liên khối */}
-                  <p className="mt-1.5 text-[11px] text-slate-500">
+                  <p className="mt-1.5 text-xs text-slate-500">
                     {recipientBlock !== myBlock
                       ? `⚠ Liên khối → chain 3 cấp: GĐ khối bạn (${myBlock === 'KD' ? 'KD' : 'VP'}) → GĐ khối nhận (${recipientBlock}) → người nhận.`
                       : 'Trong khối — gửi trực tiếp 1 cấp duyệt (trừ khi chọn GĐ khối → 1 cấp luôn).'}
@@ -467,7 +485,7 @@ export function TaskCreateModal(props: {
                       } disabled:opacity-40`}
                     >
                       {t === 'peer' ? '↔ Ngang cấp' : '↑ Cấp trên'}
-                      <span className="ml-1 text-[10px] opacity-60">({list.length})</span>
+                      <span className="ml-1 text-xs opacity-60">({list.length})</span>
                     </button>
                   );
                 })}
@@ -523,7 +541,7 @@ export function TaskCreateModal(props: {
                   </select>
                 );
               })()}
-              <p className="mt-1.5 text-[11px] text-slate-500">
+              <p className="mt-1.5 text-xs text-slate-500">
                 {isAdmin
                   ? 'Ngang cấp = GĐ Kinh Doanh / Văn Phòng. Cấp trên = CEO / Chủ tịch.'
                   : isGD
@@ -557,7 +575,7 @@ export function TaskCreateModal(props: {
                     >
                       {b === 'KD' ? '💼 Khối Kinh Doanh' : '📑 Khối Văn Phòng'}
                       {b !== myBlock && myBlock !== 'all' && (
-                        <span className="ml-1 text-[10px] opacity-75">(liên khối)</span>
+                        <span className="ml-1 text-xs opacity-75">(liên khối)</span>
                       )}
                     </button>
                   ))}
@@ -636,6 +654,49 @@ export function TaskCreateModal(props: {
           )}
 
           <div className="grid grid-cols-2 gap-3">
+          {kind === 'assignment' && (
+            <Field label="Đơn vị phối hợp (tuỳ chọn)">
+              <div className="space-y-2">
+                {departments.length > 0 && (
+                  <div>
+                    <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Phòng ban</div>
+                    <div className="max-h-28 overflow-auto border border-slate-200 rounded-lg p-2 bg-slate-50/40 space-y-0.5">
+                      {departments.map((d) => (
+                        <label key={d.id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-white cursor-pointer text-sm">
+                          <input
+                            type="checkbox"
+                            checked={collaboratorDeptIds.includes(d.id)}
+                            onChange={(e) => setCollaboratorDeptIds(p => e.target.checked ? [...p, d.id] : p.filter(x => x !== d.id))}
+                            className="text-emerald-600 focus:ring-emerald-500"
+                          />
+                          <span className="font-medium text-slate-800">{d.name}</span>
+                          {d.blockId && <span className="text-xs text-slate-400">{d.blockId}</span>}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {branches.length > 0 && (
+                  <div>
+                    <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Cơ sở</div>
+                    <div className="max-h-24 overflow-auto border border-slate-200 rounded-lg p-2 bg-slate-50/40 space-y-0.5">
+                      {branches.map((b) => (
+                        <label key={b.id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-white cursor-pointer text-sm">
+                          <input
+                            type="checkbox"
+                            checked={collaboratorFacilityIds.includes(b.id)}
+                            onChange={(e) => setCollaboratorFacilityIds(p => e.target.checked ? [...p, b.id] : p.filter(x => x !== b.id))}
+                            className="text-emerald-600 focus:ring-emerald-500"
+                          />
+                          <span className="font-medium text-slate-800">{b.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Field>
+          )}
             <Field label="Ưu tiên">
               <select value={priority} onChange={(e) => setPriority(e.target.value as TaskPriority)} className={inputCls}>
                 <option value="low">Thấp</option>
@@ -689,7 +750,7 @@ export function TaskCreateModal(props: {
         </div>
 
         <div className="px-5 py-3 border-t border-slate-200 flex items-center justify-end gap-2 bg-slate-50/40">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">Huỷ</button>
+          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">Huá»·</button>
           <button
             onClick={submit}
             disabled={saving || creatorBlocked}

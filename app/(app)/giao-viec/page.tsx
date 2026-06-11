@@ -11,7 +11,7 @@ export default async function GiaoViecPage() {
   if (!canAccessRoute(profile.roleCode, 'giao-viec', profile.menuOverrides)) {
     return (
       <>
-        <AppTopBar title="Đề xuất · Nhiệm vụ · Giao việc" icon="task" />
+        <AppTopBar title="Điều phối công việc" icon="task" />
         <div className="flex-1 flex items-center justify-center p-3 md:p-6 bg-slate-50">
           <div className="card text-center py-12 max-w-md">
             <div className="text-5xl mb-4">🔒</div>
@@ -48,8 +48,8 @@ export default async function GiaoViecPage() {
   return (
     <>
       <AppTopBar
-        title="Đề xuất · Nhiệm vụ · Giao việc"
-        subtitle="Workflow 3 cấp với phê duyệt liên khối tự động"
+        title="Điều phối công việc"
+        subtitle="Workflow 3 cấp · Liên khối · Phê duyệt tự động"
         icon="task"
       />
       <div className="flex-1 overflow-y-auto p-3 md:p-6 bg-slate-50">

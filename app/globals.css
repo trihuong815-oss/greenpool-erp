@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -8,23 +10,15 @@
   --brand-teal: #2E8B8B;
 }
 
-/* Font sans chính — chain ưu tiên font đẹp + đủ glyph tiếng Việt trên mọi OS.
-   Inter (Linux/web), SF Pro (mac/iOS), Segoe UI (Win 10+), Roboto (Android).
-   2026-06-11: thêm Inter + Roboto vào chain để text VN đậm/đều trên Linux/Android.
-   `input/select/button` phải áp `font: inherit` vì UA stylesheet KHÔNG inherit
-   font-family — không thì form trông khác text xung quanh. */
 html, body {
-  font-family:
-    -apple-system, BlinkMacSystemFont,
-    'Inter', 'Segoe UI', Roboto,
-    'Helvetica Neue', Arial, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
-input, select, textarea, button {
-  font-family: inherit;
-}
+/* UA stylesheet KHÔNG auto-inherit font cho form element → bắt buộc inherit
+   để input/select/textarea/button không bị Times/Helvetica fallback xấu. */
+input, select, textarea, button { font-family: inherit; }
 
 /* Custom scrollbar */
 ::-webkit-scrollbar { width: 8px; height: 8px; }

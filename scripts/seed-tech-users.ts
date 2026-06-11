@@ -210,7 +210,7 @@ async function main() {
   }
 
   const csvPath = '/tmp/seed-tech-users.csv';
-  writeFileSync(csvPath, '﻿' + csvRows.join('\n'));
+  writeFileSync(csvPath, '' + csvRows.join('\n'));
 
   console.log(`\n✓ Hoàn thành: ${created} tạo mới · ${skipped} đã tồn tại · ${failed} fail`);
   console.log(`📄 CSV: ${csvPath}`);

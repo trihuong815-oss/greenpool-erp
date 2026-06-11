@@ -33,19 +33,23 @@ const MENU_SECTIONS: MenuSection[] = [
     title: 'Tổng quan',
     items: [
       { route: 'dashboard',         label: 'Dashboard',          icon: Home },
-      { route: 'tin-nhan',          label: 'Tin nhắn',           icon: MessageCircle },
-      { route: 'cong-viec-ca-nhan', label: 'Công việc cá nhân', icon: Briefcase },
+      { route: 'cong-viec-ca-nhan', label: 'Công việc cá nhân',  icon: Briefcase },
+    ],
+  },
+  {
+    title: 'Điều hành',
+    items: [
+      { route: 'giao-viec', label: 'Điều phối công việc', icon: ListTodo },
     ],
   },
   {
     title: 'Vận hành',
     items: [
-      { route: 'doanh-so',           label: 'Doanh số (Dashboard)',         icon: BarChart3 },
-      { route: 'doanh-so/nhap',      label: 'Nhập doanh số',                icon: BarChart3 },
-      { route: 'ky-thuat',           label: 'Kỹ thuật vận hành',            icon: Wrench },
-      { route: 'checklist-v2', label: 'Checklist vận hành',          icon: CheckSquare },
-      { route: 'quy-trinh', label: 'Quy trình vận hành phòng ban',   icon: FileText },
-      { route: 'giao-viec', label: 'Nhiệm vụ · Giao việc · Đề xuất', icon: ListTodo },
+      { route: 'doanh-so',      label: 'Doanh số',               icon: BarChart3 },
+      { route: 'doanh-so/nhap', label: 'Nhập doanh số',          icon: BarChart3 },
+      { route: 'ky-thuat',      label: 'Kỹ thuật vận hành',      icon: Wrench },
+      { route: 'checklist-v2',  label: 'Checklist vận hành',     icon: CheckSquare },
+      { route: 'quy-trinh',     label: 'Quy trình vận hành',     icon: FileText },
     ],
   },
   {
@@ -66,10 +70,9 @@ const MENU_SECTIONS: MenuSection[] = [
   {
     title: 'Cài đặt',
     items: [
-      { route: 'bao-mat',            label: 'Bảo mật & Thông báo',  icon: ShieldCheck },
-      { route: 'doanh-so/packages',  label: 'Cài đặt gói dịch vụ',  icon: Settings },
-      // 'Cài đặt Sale' đã gộp vào 'Cài đặt user' (filter cơ sở + phòng ban). Giữ route /quan-ly-sale sống nhưng ẩn khỏi sidebar.
-      { route: 'users',              label: 'Cài đặt user',         icon: UserCog },
+      { route: 'bao-mat',           label: 'Bảo mật & Thông báo', icon: ShieldCheck },
+      { route: 'doanh-so/packages', label: 'Cài đặt gói dịch vụ', icon: Settings },
+      { route: 'users',             label: 'Cài đặt user',        icon: UserCog },
     ],
   },
 ];
@@ -144,7 +147,7 @@ export function Sidebar({ userName, userRole, roleCode, menuOverrides }: Sidebar
       <nav className="flex-1 overflow-y-auto px-3 py-4">
         {visibleSections.map((section) => (
           <div key={section.title} className="mb-5 last:mb-0">
-            <div className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+            <div className="mb-1.5 px-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
               {section.title}
             </div>
             <ul className="space-y-0.5">
@@ -198,7 +201,7 @@ export function Sidebar({ userName, userRole, roleCode, menuOverrides }: Sidebar
           </div>
           <div className="min-w-0 flex-1">
             <div className="truncate text-xs font-bold text-emerald-900 leading-tight">{userName}</div>
-            <div className="truncate text-[10px] font-medium uppercase tracking-wider text-emerald-700 mt-0.5">{userRole}</div>
+            <div className="truncate text-xs font-medium uppercase tracking-wider text-emerald-700 mt-0.5">{userRole}</div>
           </div>
           <Link
             href="/doi-mat-khau"
@@ -240,7 +243,7 @@ function SidebarCommandTrigger() {
       >
         <Search size={14} className="text-slate-400" />
         <span className="flex-1 text-left">Tìm trang…</span>
-        <kbd className="hidden md:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 bg-white border border-slate-200 rounded">
+        <kbd className="hidden md:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-medium text-slate-500 bg-white border border-slate-200 rounded">
           {isMac ? '⌘' : 'Ctrl'} K
         </kbd>
       </button>

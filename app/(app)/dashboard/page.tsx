@@ -216,11 +216,38 @@ async function fetchTaskCounts(uid: string, roleCode: string) {
     console.warn('[dashboard fetchTaskCounts] assigned query failed:', e?.code, e?.message);
   }
 
+  // Checklist v2 hôm nay: số ca đã gửi + số thông báo chưa xem (supervisor)
+  let checklistSent = 0;
+  let checklistUnread = 0;
+  try {
+    const db2 = getFirebaseAdminDb();
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    // Số ca đã nộp hôm nay (chỉ hiện cho nhân viên điều vận)
+    const [clSnap, notiSnap] = await Promise.all([
+      db2.collection(COLLECTIONS.CHECKLIST_RUNS_V2)
+        .where('ownerId', '==', uid)
+        .where('date', '==', today)
+        .where('status', '==', 'submitted')
+        .get(),
+      // Số notification chưa xem trong 24h (chỉ supervisor)
+      db2.collection(COLLECTIONS.CHECKLIST_NOTIFICATIONS_V2)
+        .where('submittedAt', '>=', new Date(Date.now() - 86400000).toISOString())
+        .limit(100)
+        .get(),
+    ]);
+    checklistSent = clSnap.size;
+    checklistUnread = notiSnap.docs.filter(
+      (d) => { const s = d.data().seenBy; return !Array.isArray(s) || !s.includes(uid); }
+    ).length;
+  } catch (_e) { /* ignore */ }
+
   return {
     approvalNeeded: approvalCount,
     myPending: pending,
     myInProgress: inProgress,
     myDone: done,
     myTotal: total,
+    checklistSent,
+    checklistUnread,
   };
 }
