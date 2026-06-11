@@ -63,7 +63,7 @@ const COLLAB_STATUS_COLOR: Record<string, string> = {
   'chua-tiep-nhan': 'bg-slate-100 text-slate-500', 'dang-thuc-hien': 'bg-sky-100 text-sky-700',
   'hoan-thanh': 'bg-emerald-100 text-emerald-700', 'tu-choi': 'bg-rose-100 text-rose-700',
 };
-const PRIORITY_LABEL: Record<string, string> = { high: 'Cao', medium: 'Trung binh', low: 'Thap' };
+const PRIORITY_LABEL: Record<string, string> = { high: 'Cao', normal: 'Trung binh', low: 'Thap' };
 const PRIORITY_COLOR: Record<string, string> = { high: 'text-rose-600 font-bold', medium: 'text-amber-600 font-semibold', low: 'text-slate-400' };
 
 function getTaskStatus(t: Task): string { return (t as any).coordStatus || t.status; }
@@ -148,8 +148,8 @@ export default function TaskDetailModal({
   const ownerName = (() => {
     if (task.assigneeUserIds?.length > 0) {
       return task.assigneeUserIds.slice(0, 2).map(uid => {
-        const u = users.find(u => u.id === uid || u.uid === uid);
-        return u?.name || u?.displayName || uid.slice(0, 4);
+        const u = users.find(u => u.id === uid || u.id === uid);
+        return u?.displayName || uid.slice(0, 4);
       }).join(', ') + (task.assigneeUserIds.length > 2 ? ` +${task.assigneeUserIds.length - 2}` : '');
     }
     if (task.assigneeDeptId) return departments.find(d => d.id === task.assigneeDeptId)?.name || task.assigneeDeptId;
