@@ -33,19 +33,23 @@ const MENU_SECTIONS: MenuSection[] = [
     title: 'Tổng quan',
     items: [
       { route: 'dashboard',         label: 'Dashboard',          icon: Home },
-      { route: 'tin-nhan',          label: 'Tin nhắn',           icon: MessageCircle },
-      { route: 'cong-viec-ca-nhan', label: 'Công việc cá nhân', icon: Briefcase },
+      { route: 'cong-viec-ca-nhan', label: 'Công việc cá nhân',  icon: Briefcase },
+    ],
+  },
+  {
+    title: 'Điều hành',
+    items: [
+      { route: 'giao-viec', label: 'Điều phối công việc', icon: ListTodo },
     ],
   },
   {
     title: 'Vận hành',
     items: [
-      { route: 'doanh-so',           label: 'Doanh số (Dashboard)',         icon: BarChart3 },
-      { route: 'doanh-so/nhap',      label: 'Nhập doanh số',                icon: BarChart3 },
-      { route: 'ky-thuat',           label: 'Kỹ thuật vận hành',            icon: Wrench },
-      { route: 'checklist-v2', label: 'Checklist vận hành',          icon: CheckSquare },
-      { route: 'quy-trinh', label: 'Quy trình vận hành phòng ban',   icon: FileText },
-      { route: 'giao-viec', label: 'Nhiệm vụ · Giao việc · Đề xuất', icon: ListTodo },
+      { route: 'doanh-so',      label: 'Doanh số',               icon: BarChart3 },
+      { route: 'doanh-so/nhap', label: 'Nhập doanh số',          icon: BarChart3 },
+      { route: 'ky-thuat',      label: 'Kỹ thuật vận hành',      icon: Wrench },
+      { route: 'checklist-v2',  label: 'Checklist vận hành',     icon: CheckSquare },
+      { route: 'quy-trinh',     label: 'Quy trình vận hành',     icon: FileText },
     ],
   },
   {
@@ -66,10 +70,9 @@ const MENU_SECTIONS: MenuSection[] = [
   {
     title: 'Cài đặt',
     items: [
-      { route: 'bao-mat',            label: 'Bảo mật & Thông báo',  icon: ShieldCheck },
-      { route: 'doanh-so/packages',  label: 'Cài đặt gói dịch vụ',  icon: Settings },
-      // 'Cài đặt Sale' đã gộp vào 'Cài đặt user' (filter cơ sở + phòng ban). Giữ route /quan-ly-sale sống nhưng ẩn khỏi sidebar.
-      { route: 'users',              label: 'Cài đặt user',         icon: UserCog },
+      { route: 'bao-mat',           label: 'Bảo mật & Thông báo', icon: ShieldCheck },
+      { route: 'doanh-so/packages', label: 'Cài đặt gói dịch vụ', icon: Settings },
+      { route: 'users',             label: 'Cài đặt user',        icon: UserCog },
     ],
   },
 ];
@@ -87,17 +90,17 @@ export function Sidebar({ userName, userRole, roleCode, menuOverrides }: Sidebar
   const { setOpen } = useMobileNav();
   const allowed = effectiveMenu(roleCode, menuOverrides);
 
-  // Filter mỗi section theo quyền, bỏ section rỗng
+  // Filter má»i section theo quyá»n, bá» section rá»ng
   const visibleSections: MenuSection[] = MENU_SECTIONS
     .map(s => ({ ...s, items: s.items.filter(it => allowed.has(it.route)) }))
     .filter(s => s.items.length > 0);
 
   async function handleLogout() {
-    // Phase 13.9.3 (2026-06-05): KHÔNG xoá FCM token khi logout — anh chốt rule
-    // "bật noti là dùng mãi đến khi tắt". User chủ động tắt trong /bao-mat thì token mới bị xoá.
-    // Logout chỉ clear session/auth, giữ token để login sau noti vẫn tới.
-    // 1. SignOut Firebase client SDK (xóa trạng thái LOCAL persistence)
-    //    → ngăn SessionRefresher tự tạo lại cookie
+    // Phase 13.9.3 (2026-06-05): KHÃNG xoÃ¡ FCM token khi logout â anh chá»t rule
+    // "báº­t noti lÃ  dÃ¹ng mÃ£i Äáº¿n khi táº¯t". User chá»§ Äá»ng táº¯t trong /bao-mat thÃ¬ token má»i bá» xoÃ¡.
+    // Logout chá» clear session/auth, giá»¯ token Äá» login sau noti váº«n tá»i.
+    // 1. SignOut Firebase client SDK (xÃ³a tráº¡ng thÃ¡i LOCAL persistence)
+    //    â ngÄn SessionRefresher tá»± táº¡o láº¡i cookie
     try {
       const { getFirebaseClientAuth } = await import('@/lib/firebase/client');
       await getFirebaseClientAuth().signOut();
@@ -115,12 +118,12 @@ export function Sidebar({ userName, userRole, roleCode, menuOverrides }: Sidebar
     <aside className="md:sticky md:top-0 flex h-screen w-[85vw] max-w-[300px] md:w-64 flex-col border-r border-slate-200 bg-white shadow-xl md:shadow-none">
       {/* Brand header */}
       <div className="border-b border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-cyan-50 px-4 py-5 relative">
-        {/* Close button — chỉ hiển thị trên mobile khi sidebar ở drawer mode */}
+        {/* Close button â chá» hiá»n thá» trÃªn mobile khi sidebar á» drawer mode */}
         <button
           type="button"
           onClick={() => setOpen(false)}
           className="md:hidden absolute top-2 right-2 flex h-11 w-11 items-center justify-center rounded-lg text-slate-500 hover:bg-white active:bg-slate-200"
-          aria-label="Đóng menu"
+          aria-label="ÄÃ³ng menu"
         >
           <X size={20} />
         </button>
@@ -137,7 +140,7 @@ export function Sidebar({ userName, userRole, roleCode, menuOverrides }: Sidebar
         </div>
       </div>
 
-      {/* Phase UI-3.1 (2026-06-07): Cmd+K Spotlight trigger — desktop hiển thị shortcut hint, mobile vẫn click được */}
+      {/* Phase UI-3.1 (2026-06-07): Cmd+K Spotlight trigger â desktop hiá»n thá» shortcut hint, mobile váº«n click ÄÆ°á»£c */}
       <SidebarCommandTrigger />
 
       {/* Menu sections */}
@@ -164,7 +167,7 @@ export function Sidebar({ userName, userRole, roleCode, menuOverrides }: Sidebar
                           : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                       }`}
                     >
-                      {/* Active indicator stripe trái */}
+                      {/* Active indicator stripe trÃ¡i */}
                       {isActive && (
                         <span
                           aria-hidden
@@ -190,7 +193,7 @@ export function Sidebar({ userName, userRole, roleCode, menuOverrides }: Sidebar
         ))}
       </nav>
 
-      {/* User footer — emerald brand đồng bộ với Green Pool System */}
+      {/* User footer â emerald brand Äá»ng bá» vá»i Green Pool System */}
       <div className="border-t border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-cyan-50 px-3 py-3 pb-[max(env(safe-area-inset-bottom),0.75rem)]">
         <div className="flex items-center gap-2.5 rounded-lg bg-white p-2 ring-1 ring-emerald-100 shadow-sm">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-emerald-600 to-teal-700 text-xs font-bold text-white shadow-sm">
@@ -202,14 +205,14 @@ export function Sidebar({ userName, userRole, roleCode, menuOverrides }: Sidebar
           </div>
           <Link
             href="/doi-mat-khau"
-            title="Đổi mật khẩu"
+            title="Äá»i máº­t kháº©u"
             className="rounded-md p-1.5 text-emerald-600 transition hover:bg-emerald-100 hover:text-emerald-800"
           >
             <KeyRound className="h-4 w-4" />
           </Link>
           <button
             onClick={handleLogout}
-            title="Đăng xuất"
+            title="ÄÄng xuáº¥t"
             className="rounded-md p-1.5 text-emerald-600 transition hover:bg-rose-50 hover:text-rose-600"
           >
             <LogOut className="h-4 w-4" />
@@ -220,8 +223,8 @@ export function Sidebar({ userName, userRole, roleCode, menuOverrides }: Sidebar
   );
 }
 
-/** Phase UI-3.1: nút mở Cmd+K palette, hint shortcut desktop. Tách function để
- *  dùng useCommandPalette hook không pollute Sidebar render. */
+/** Phase UI-3.1: nÃºt má» Cmd+K palette, hint shortcut desktop. TÃ¡ch function Äá»
+ *  dÃ¹ng useCommandPalette hook khÃ´ng pollute Sidebar render. */
 function SidebarCommandTrigger() {
   const { toggle } = useCommandPalette();
   const [isMac, setIsMac] = useState(false);
@@ -236,12 +239,12 @@ function SidebarCommandTrigger() {
         type="button"
         onClick={toggle}
         className="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-500 bg-slate-50 hover:bg-slate-100 rounded-lg ring-1 ring-slate-200 transition"
-        aria-label="Tìm nhanh — Cmd K"
+        aria-label="TÃ¬m nhanh â Cmd K"
       >
         <Search size={14} className="text-slate-400" />
-        <span className="flex-1 text-left">Tìm trang…</span>
+        <span className="flex-1 text-left">TÃ¬m trangâ¦</span>
         <kbd className="hidden md:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 bg-white border border-slate-200 rounded">
-          {isMac ? '⌘' : 'Ctrl'} K
+          {isMac ? 'â' : 'Ctrl'} K
         </kbd>
       </button>
     </div>
