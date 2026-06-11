@@ -258,7 +258,7 @@ export function GiaoViecClient(props: Props) {
           active={tab === 'received'}
           onClick={() => jumpToTab('received')}
         />
-        <CategoryCard
+        {showAssignmentTab && (
           <CategoryCard
             title="Giao việc"
             subtitle="Theo dõi tiến độ thực hiện"
