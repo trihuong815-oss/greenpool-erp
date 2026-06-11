@@ -256,23 +256,70 @@ export function TaskDetailModal(props: {
                 <div className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-lg p-3">{error}</div>
               )}
 
+              {/* ===== INFO HEADER: Mục tiêu + người tham gia ===== */}
+
+              {/* Goal / Mục tiêu nếu có */}
+              {(task as any).goal && (
+                <div className="rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700 mb-0.5">Mục tiêu</div>
+                  <p className="text-sm text-slate-800 font-medium">{(task as any).goal}</p>
+                </div>
+              )}
+
               {/* Meta grid */}
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <Meta label="Người tạo">{task.createdByName} <span className="text-slate-400">({task.createdByRole})</span></Meta>
-                <Meta label="Khối nhận">{task.assigneeBlock} · {assigneeLabel}</Meta>
+                <Meta label="Người phụ trách">
+                  {task.assigneeDeptId
+                    ? (departments.find(d => d.id === task.assigneeDeptId)?.name ?? task.assigneeDeptId)
+                    : task.assigneeFacilityId
+                      ? (branches.find(b => b.id === task.assigneeFacilityId)?.name ?? task.assigneeFacilityId)
+                      : task.assigneeUserIds.length > 0
+                        ? (
+                          <span className="flex flex-col gap-0.5">
+                            {task.assigneeUserIds.slice(0, 4).map(uid => {
+                              const u = users.find(u => u.id === uid);
+                              return <span key={uid} className="inline-flex items-center gap-1"><span className="h-4 w-4 rounded-full bg-emerald-100 text-emerald-700 text-[9px] font-bold flex items-center justify-center shrink-0">{(u?.name ?? uid).charAt(0)}</span>{u?.name ?? uid}</span>;
+                            })}
+                            {task.assigneeUserIds.length > 4 && <span className="text-slate-400">+{task.assigneeUserIds.length - 4} người khác</span>}
+                          </span>
+                        )
+                        : <span className="text-slate-400">(chưa gán)</span>
+                  }
+                </Meta>
+                <Meta label="Khối chủ trì">{task.assigneeBlock}{task.crossBlock && <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800">LIÊN KHỐI</span>}</Meta>
                 <Meta label="Ưu tiên"><PriorityChip p={task.priority} /></Meta>
                 <Meta label="Hạn chót">
                   {task.dueDate ? (
                     <span className={`inline-flex items-center gap-1 ${overdue ? 'text-rose-700 font-semibold' : ''}`}>
                       <CalendarDays size={12} /> {task.dueDate}
+                      {overdue && <span className="text-[10px] text-rose-500 font-bold">(QH)</span>}
                     </span>
                   ) : <span className="text-slate-400">—</span>}
                 </Meta>
-                <Meta label="Tạo lúc">{fmtDateTime(task.createdAt)}</Meta>
                 <Meta label="Tiến độ">
                   <ProgressBar pct={task.progressPct} />
                 </Meta>
+                <Meta label="Tạo lúc">{fmtDateTime(task.createdAt)}</Meta>
+                <Meta label="Cập nhật">{fmtDateTime(task.updatedAt)}</Meta>
               </div>
+
+              {/* Đơn vị phối hợp */}
+              {((task as any).collaboratorDeptIds?.length > 0 || (task as any).collaboratorFacilityIds?.length > 0) && (
+                <div className="rounded-lg border border-indigo-100 bg-indigo-50/40 p-3">
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-indigo-700 mb-2">Đơn vị phối hợp</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {((task as any).collaboratorDeptIds ?? []).map((id: string) => {
+                      const d = departments.find(dep => dep.id === id);
+                      return <span key={id} className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold">{d?.name ?? id}</span>;
+                    })}
+                    {((task as any).collaboratorFacilityIds ?? []).map((id: string) => {
+                      const b = branches.find(br => br.id === id);
+                      return <span key={id} className="px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 text-xs font-semibold">{b?.name ?? id}</span>;
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Phase 12.5 — Luồng duyệt đề xuất (chain) — entry: "user:UID" | "role:RC" | legacy "RC" */}
               {task.kind === 'proposal' && task.approvalChain && task.approvalChain.length > 0 && (
