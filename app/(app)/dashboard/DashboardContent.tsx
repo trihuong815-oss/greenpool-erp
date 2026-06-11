@@ -224,7 +224,7 @@ export function DashboardContent({
         />
       </>)}
 
-      {/* ===== HÀNG 6: ĐIỀU PHỐI CÔNG VIỆC ===== */
+      {/* ===== HÀNG 6: ĐIỀU PHỐI CÔNG VIỆC ===== */}
       <SectionTitle icon={ListChecks} title="Điều phối công việc" subtitle="Pipeline · Điểm nghẽn · Trạng thái" />
       <WorkflowPipelineSection counts={taskCounts} roleCode={roleCode} />
       <TasksSection counts={taskCounts} roleCode={roleCode} />
