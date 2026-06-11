@@ -47,13 +47,13 @@ interface Props {
   ktVisibleBranchIds?: string[];
 }
 
-// KT-only roles (TP/PP/KT viÃªn cÆ¡ sá») â khÃ´ng tháº¥y module Doanh sá».
+// KT-only roles (TP/PP/KT viÃÂªn cÃÂ¡ sÃ¡Â»Â) Ã¢ÂÂ khÃÂ´ng thÃ¡ÂºÂ¥y module Doanh sÃ¡Â»Â.
 const KT_ONLY_ROLES = new Set(['TP_KT', 'PP_HT', 'PP_XLN']);
 function isKTOnly(role: string): boolean {
   if (KT_ONLY_ROLES.has(role)) return true;
   return /^KT_(HT|XLN)_/.test(role);
 }
-// KT-eligible (xem ÄÆ°á»£c khu KT dashboard).
+// KT-eligible (xem ÃÂÃÂ°Ã¡Â»Â£c khu KT dashboard).
 function isKTViewer(role: string): boolean {
   if (isKTOnly(role)) return true;
   return role === 'ADMIN' || role === 'CEO' || role === 'GD_KD' || role === 'GD_VP';
@@ -71,42 +71,42 @@ export function DashboardContent({
   return (
     <div className="space-y-5">
 
-      {/* ===== HEADER: Tổng quan hôm nay ===== */}
+      {/* ===== HEADER: Tá»ng quan hÃ´m nay ===== */}
       <div className="rounded-xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-cyan-50 px-5 py-4">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-base font-bold text-slate-900">
-              {isAdmin ? 'Toàn cụm 5 cơ sở' : visibleFacilities.length > 0 ? 'Cơ sở của bạn' : 'Phạm vi cá nhân'}
+              {isAdmin ? 'ToÃ n cá»¥m 5 cÆ¡ sá»' : visibleFacilities.length > 0 ? 'CÆ¡ sá» cá»§a báº¡n' : 'Pháº¡m vi cÃ¡ nhÃ¢n'}
             </h2>
-            <p className="text-xs text-slate-500 mt-0.5">{todayLabel} · Vai trò: <strong>{roleCode}</strong></p>
+            <p className="text-xs text-slate-500 mt-0.5">{todayLabel} Â· Vai trÃ²: <strong>{roleCode}</strong></p>
           </div>
           <a href="/giao-viec" className="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700 shadow-sm transition">
-            Điều phối công việc →
+            Äiá»u phá»i cÃ´ng viá»c â
           </a>
         </div>
 
-        {/* 5 KPI cards — theo mockup màn 1 */}
+        {/* 5 KPI cards â theo mockup mÃ n 1 */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          <DashKpiCard label="Đang xử lý" value={taskCounts.myInProgress} accent="sky"
-            sub={taskCounts.myInProgress > 0 ? '+12% so với hôm qua' : undefined} />
-          <DashKpiCard label="Chờ phản hồi" value={taskCounts.approvalNeeded} accent={taskCounts.approvalNeeded > 0 ? 'amber' : 'slate'}
-            sub={taskCounts.approvalNeeded > 0 ? '-5% so với hôm qua' : undefined} />
-          <DashKpiCard label="Chờ duyệt" value={taskCounts.pendingApproval ?? 0} accent={(taskCounts.pendingApproval ?? 0) > 0 ? 'orange' : 'slate'}
-            sub={(taskCounts.pendingApproval ?? 0) > 0 ? '+2% so với hôm qua' : undefined} />
-          <DashKpiCard label="Quá hạn" value={taskCounts.overdue ?? 0} accent={(taskCounts.overdue ?? 0) > 0 ? 'rose' : 'slate'}
-            sub={(taskCounts.overdue ?? 0) > 0 ? '+1% so với hôm qua' : undefined} />
-          <DashKpiCard label="Hoàn thành" value={taskCounts.myDone} accent="emerald"
-            sub={taskCounts.myDone > 0 ? '+10% so với tuần trước' : undefined} />
+          <DashKpiCard label="Äang xá»­ lÃ½" value={taskCounts.myInProgress} accent="sky"
+            sub={taskCounts.myInProgress > 0 ? '+12% so vá»i hÃ´m qua' : undefined} />
+          <DashKpiCard label="Chá» pháº£n há»i" value={taskCounts.approvalNeeded} accent={taskCounts.approvalNeeded > 0 ? 'amber' : 'slate'}
+            sub={taskCounts.approvalNeeded > 0 ? '-5% so vá»i hÃ´m qua' : undefined} />
+          <DashKpiCard label="Chá» duyá»t" value={taskCounts.pendingApproval ?? 0} accent={(taskCounts.pendingApproval ?? 0) > 0 ? 'orange' : 'slate'}
+            sub={(taskCounts.pendingApproval ?? 0) > 0 ? '+2% so vá»i hÃ´m qua' : undefined} />
+          <DashKpiCard label="QuÃ¡ háº¡n" value={taskCounts.overdue ?? 0} accent={(taskCounts.overdue ?? 0) > 0 ? 'rose' : 'slate'}
+            sub={(taskCounts.overdue ?? 0) > 0 ? '+1% so vá»i hÃ´m qua' : undefined} />
+          <DashKpiCard label="HoÃ n thÃ nh" value={taskCounts.myDone} accent="emerald"
+            sub={taskCounts.myDone > 0 ? '+10% so vá»i tuáº§n trÆ°á»c' : undefined} />
         </div>
       </div>
 
-      {/* ===== HÀNG 2: CƠ SỞ ===== */}
-      <SectionTitle icon={Building2} title="Cơ sở" count={visibleFacilities.length} />
+      {/* ===== HÃNG 2: CÆ  Sá» ===== */}
+      <SectionTitle icon={Building2} title="CÆ¡ sá»" count={visibleFacilities.length} />
       <div className="card">
         {(() => {
           const shown = facilities.filter((f) => visibleFacilities.includes(f.id));
           if (shown.length === 0) {
-            return <div className="text-sm text-slate-400 italic py-6 text-center">Bạn chưa được gán cơ sở.</div>;
+            return <div className="text-sm text-slate-400 italic py-6 text-center">Báº¡n chÆ°a ÄÆ°á»£c gÃ¡n cÆ¡ sá».</div>;
           }
           const gridCls =
             shown.length === 1 ? 'grid grid-cols-1 gap-4'
@@ -122,15 +122,15 @@ export function DashboardContent({
         })()}
       </div>
 
-      {/* ===== HÀNG 3: DOANH SỐ ===== */}
+      {/* ===== HÃNG 3: DOANH Sá» ===== */}
       {!hideRevenue && (<>
-        <SectionTitle icon={BarChart3} title="Doanh số" subtitle={`Năm ${revenueSummary.year}`} />
+        <SectionTitle icon={BarChart3} title="Doanh sá»" subtitle={`NÄm ${revenueSummary.year}`} />
         <RevenueSection r={revenueSummary} />
       </>)}
 
-      {/* ===== HÀNG 4: KỸ THUẬT ===== */}
+      {/* ===== HÃNG 4: Ká»¸ THUáº¬T ===== */}
       {showKT && kyThuatSummary && (<>
-        <SectionTitle icon={BarChart3} title="Kỹ thuật vận hành" subtitle={`Năm ${kyThuatSummary.year} · tiêu thụ clo (kg) · công suất máy (h)`} />
+        <SectionTitle icon={BarChart3} title="Ká»¹ thuáº­t váº­n hÃ nh" subtitle={`NÄm ${kyThuatSummary.year} Â· tiÃªu thá»¥ clo (kg) Â· cÃ´ng suáº¥t mÃ¡y (h)`} />
         <KTDashboardSection
           summary={kyThuatSummary}
           visibleBranchIds={ktVisibleBranchIds ?? []}
@@ -138,8 +138,8 @@ export function DashboardContent({
         />
       </>)}
 
-      {/* ===== HÀNG 5: CÔNG VIỆC CHI TIẾT ===== */}
-      <SectionTitle icon={ListChecks} title="Công việc" subtitle="Điều phối · Nhiệm vụ · Giao việc" />
+      {/* ===== HÃNG 5: CÃNG VIá»C CHI TIáº¾T ===== */}
+      <SectionTitle icon={ListChecks} title="CÃ´ng viá»c" subtitle="Äiá»u phá»i Â· Nhiá»m vá»¥ Â· Giao viá»c" />
       <TasksSection counts={taskCounts} roleCode={roleCode} />
 
     </div>
@@ -147,7 +147,7 @@ export function DashboardContent({
 }
 
 // ============================================================================
-// DASH KPI CARD (nhỏ gọn, dùng trên header)
+// DASH KPI CARD (nhá» gá»n, dÃ¹ng trÃªn header)
 // ============================================================================
 function DashKpiCard({ label, value, accent, sub }: { label: string; value: number; accent: string; sub?: string }) {
   const am: Record<string, { bg: string; val: string; border: string }> = {
@@ -162,8 +162,8 @@ function DashKpiCard({ label, value, accent, sub }: { label: string; value: numb
   return (
     <div className={`rounded-lg border ${a.border} ${a.bg} p-3 text-center`}>
       <div className={`text-2xl font-bold tabular-nums leading-none ${a.val}`}>{value}</div>
-      <div className="text-[11px] text-slate-600 font-semibold mt-1">{label}</div>
-      {sub && <div className="text-[10px] text-slate-400 mt-0.5">{sub}</div>}
+      <div className="text-xs text-slate-600 font-semibold mt-1">{label}</div>
+      {sub && <div className="text-xs text-slate-400 mt-0.5">{sub}</div>}
     </div>
   );
 }
@@ -178,24 +178,24 @@ function RevenueSection({ r }: { r: RevenueSummary }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
       <RevenueCard
-        label={`Doanh sá» nÄm ${r.year}`}
+        label={`Doanh sÃ¡Â»Â nÃÂm ${r.year}`}
         actual={r.yearActual}
         target={r.yearTarget}
         rate={yearRate}
-        sub={`${r.branchCount} cÆ¡ sá» Â· lÅ©y káº¿ tá»« Äáº§u nÄm`}
+        sub={`${r.branchCount} cÃÂ¡ sÃ¡Â»Â ÃÂ· lÃÂ©y kÃ¡ÂºÂ¿ tÃ¡Â»Â« ÃÂÃ¡ÂºÂ§u nÃÂm`}
         icon={TrendingUp}
       />
       <RevenueCard
-        label={`Doanh sá» thÃ¡ng ${r.month}/${r.year}`}
+        label={`Doanh sÃ¡Â»Â thÃÂ¡ng ${r.month}/${r.year}`}
         actual={r.monthActual}
         target={r.monthTarget}
         rate={monthRate}
-        sub="ThÃ¡ng hiá»n táº¡i"
+        sub="ThÃÂ¡ng hiÃ¡Â»Ân tÃ¡ÂºÂ¡i"
         icon={Clock}
       />
       <div className="lg:col-span-2 text-right">
         <Link href="/doanh-so" className="text-xs text-emerald-700 hover:underline font-semibold">
-          Xem dashboard doanh sá» chi tiáº¿t â
+          Xem dashboard doanh sÃ¡Â»Â chi tiÃ¡ÂºÂ¿t Ã¢ÂÂ
         </Link>
       </div>
     </div>
@@ -216,10 +216,10 @@ function RevenueCard({ label, actual, target, rate, sub, icon: Icon }: {
     <div className="rounded-xl border border-emerald-200 bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between mb-3">
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{label}</div>
+          <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</div>
           <div className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{formatMoney(actual)}</div>
           <div className="text-xs text-slate-500 mt-0.5">
-            / má»¥c tiÃªu <span className="font-semibold text-slate-700 tabular-nums">{target > 0 ? formatMoney(target) : 'â chÆ°a Äáº·t'}</span>
+            / mÃ¡Â»Â¥c tiÃÂªu <span className="font-semibold text-slate-700 tabular-nums">{target > 0 ? formatMoney(target) : 'Ã¢ÂÂ chÃÂ°a ÃÂÃ¡ÂºÂ·t'}</span>
           </div>
         </div>
         <div className={`flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 ring-1 ${accentClass.ring} text-emerald-700 shrink-0`}>
@@ -257,7 +257,7 @@ function TasksSection({ counts, roleCode }: { counts: TaskCounts; roleCode: stri
   const [list, setList] = useState<TaskListItem[] | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Fetch lazy khi modal má»
+  // Fetch lazy khi modal mÃ¡Â»Â
   useEffect(() => {
     if (!modal) { setList(null); return; }
     let cancelled = false;
@@ -280,50 +280,50 @@ function TasksSection({ counts, roleCode }: { counts: TaskCounts; roleCode: stri
   }, [modal]);
 
   const titles: Record<ModalKind, string> = {
-    approval: 'ð Äá» xuáº¥t / Nhiá»m vá»¥ chá» báº¡n duyá»t',
-    received: 'ð¥ Táº¥t cáº£ nhiá»m vá»¥ báº¡n ÄÆ°á»£c giao',
-    pending: 'â³ Nhiá»m vá»¥ chá» xá»­ lÃ½ (báº¡n chÆ°a báº¯t Äáº§u)',
-    inprogress: 'ð Nhiá»m vá»¥ Äang triá»n khai',
+    approval: 'Ã°ÂÂÂ ÃÂÃ¡Â»Â xuÃ¡ÂºÂ¥t / NhiÃ¡Â»Âm vÃ¡Â»Â¥ chÃ¡Â»Â bÃ¡ÂºÂ¡n duyÃ¡Â»Ât',
+    received: 'Ã°ÂÂÂ¥ TÃ¡ÂºÂ¥t cÃ¡ÂºÂ£ nhiÃ¡Â»Âm vÃ¡Â»Â¥ bÃ¡ÂºÂ¡n ÃÂÃÂ°Ã¡Â»Â£c giao',
+    pending: 'Ã¢ÂÂ³ NhiÃ¡Â»Âm vÃ¡Â»Â¥ chÃ¡Â»Â xÃ¡Â»Â­ lÃÂ½ (bÃ¡ÂºÂ¡n chÃÂ°a bÃ¡ÂºÂ¯t ÃÂÃ¡ÂºÂ§u)',
+    inprogress: 'Ã°ÂÂÂ NhiÃ¡Â»Âm vÃ¡Â»Â¥ ÃÂang triÃ¡Â»Ân khai',
   };
   const subtitles: Record<ModalKind, string> = {
-    approval: 'Click vÃ o nhiá»m vá»¥ Äá» má» chi tiáº¿t + duyá»t/tá»« chá»i',
-    received: 'Click vÃ o nhiá»m vá»¥ Äá» má» chi tiáº¿t',
-    pending: 'Click vÃ o nhiá»m vá»¥ Äá» má» chi tiáº¿t + báº¯t Äáº§u thá»±c hiá»n',
-    inprogress: 'Click vÃ o nhiá»m vá»¥ Äá» cáº­p nháº­t tiáº¿n Äá»',
+    approval: 'Click vÃÂ o nhiÃ¡Â»Âm vÃ¡Â»Â¥ ÃÂÃ¡Â»Â mÃ¡Â»Â chi tiÃ¡ÂºÂ¿t + duyÃ¡Â»Ât/tÃ¡Â»Â« chÃ¡Â»Âi',
+    received: 'Click vÃÂ o nhiÃ¡Â»Âm vÃ¡Â»Â¥ ÃÂÃ¡Â»Â mÃ¡Â»Â chi tiÃ¡ÂºÂ¿t',
+    pending: 'Click vÃÂ o nhiÃ¡Â»Âm vÃ¡Â»Â¥ ÃÂÃ¡Â»Â mÃ¡Â»Â chi tiÃ¡ÂºÂ¿t + bÃ¡ÂºÂ¯t ÃÂÃ¡ÂºÂ§u thÃ¡Â»Â±c hiÃ¡Â»Ân',
+    inprogress: 'Click vÃÂ o nhiÃ¡Â»Âm vÃ¡Â»Â¥ ÃÂÃ¡Â»Â cÃ¡ÂºÂ­p nhÃ¡ÂºÂ­t tiÃ¡ÂºÂ¿n ÃÂÃ¡Â»Â',
   };
 
   return (
     <>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {isApprover && (
-          <TaskTile icon={ShieldCheck} label="Chá» tÃ´i duyá»t" value={counts.approvalNeeded}
+          <TaskTile icon={ShieldCheck} label="ChÃ¡Â»Â tÃÂ´i duyÃ¡Â»Ât" value={counts.approvalNeeded}
             accent={counts.approvalNeeded > 0 ? 'amber' : 'slate'}
             onClick={counts.approvalNeeded > 0 ? () => setModal('approval') : undefined}
             href="/giao-viec?focus=approval"
           />
         )}
-        <TaskTile icon={ListChecks} label="TÃ´i Äang ÄÆ°á»£c giao" value={counts.myTotal}
-          sub={`${counts.myPending} chá» Â· ${counts.myInProgress} lÃ m`} accent="emerald"
+        <TaskTile icon={ListChecks} label="TÃÂ´i ÃÂang ÃÂÃÂ°Ã¡Â»Â£c giao" value={counts.myTotal}
+          sub={`${counts.myPending} chÃ¡Â»Â ÃÂ· ${counts.myInProgress} lÃÂ m`} accent="emerald"
           onClick={counts.myTotal > 0 ? () => setModal('received') : undefined}
           href="/giao-viec?focus=received"
         />
-        <TaskTile icon={Clock} label="Äang triá»n khai" value={counts.myInProgress} accent="sky"
+        <TaskTile icon={Clock} label="ÃÂang triÃ¡Â»Ân khai" value={counts.myInProgress} accent="sky"
           onClick={counts.myInProgress > 0 ? () => setModal('inprogress') : undefined}
           href="/giao-viec?focus=inprogress"
         />
-        <TaskTile icon={AlertTriangle} label="Chá» xá»­ lÃ½" value={counts.myPending}
+        <TaskTile icon={AlertTriangle} label="ChÃ¡Â»Â xÃ¡Â»Â­ lÃÂ½" value={counts.myPending}
           accent={counts.myPending > 0 ? 'amber' : 'slate'}
           onClick={counts.myPending > 0 ? () => setModal('pending') : undefined}
           href="/giao-viec?focus=pending"
         />
         <div className="col-span-2 lg:col-span-4 text-right">
           <Link href="/giao-viec" className="text-xs text-emerald-700 hover:underline font-semibold">
-            Xem chi tiáº¿t cÃ´ng viá»c â
+            Xem chi tiÃ¡ÂºÂ¿t cÃÂ´ng viÃ¡Â»Âc Ã¢ÂÂ
           </Link>
         </div>
       </div>
 
-      {/* Modal hiá»n danh sÃ¡ch task khi click tile cÃ³ value > 0 */}
+      {/* Modal hiÃ¡Â»Ân danh sÃÂ¡ch task khi click tile cÃÂ³ value > 0 */}
       {modal && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setModal(null)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
@@ -341,10 +341,10 @@ function TasksSection({ counts, roleCode }: { counts: TaskCounts; roleCode: stri
             <div className="flex-1 overflow-y-auto px-3 py-2 bg-slate-50/40">
               {loading ? (
                 <div className="flex items-center justify-center py-16 text-slate-400 text-sm">
-                  <Loader2 size={18} className="animate-spin mr-2" /> Äang táº£iâ¦
+                  <Loader2 size={18} className="animate-spin mr-2" /> ÃÂang tÃ¡ÂºÂ£iÃ¢ÂÂ¦
                 </div>
               ) : !list || list.length === 0 ? (
-                <div className="text-center text-slate-400 py-16 text-sm">KhÃ´ng cÃ³ nhiá»m vá»¥ nÃ o.</div>
+                <div className="text-center text-slate-400 py-16 text-sm">KhÃÂ´ng cÃÂ³ nhiÃ¡Â»Âm vÃ¡Â»Â¥ nÃÂ o.</div>
               ) : (
                 <ul className="space-y-1.5">
                   {list.map((t) => (
@@ -356,10 +356,10 @@ function TasksSection({ counts, roleCode }: { counts: TaskCounts; roleCode: stri
                     >
                       <div className="flex-1 min-w-0">
                         <div className="font-medium text-sm text-slate-800 truncate">{t.title}</div>
-                        <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
+                        <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
                           {t.dueDate && <span className="inline-flex items-center gap-1"><CalendarDays size={11} />{t.dueDate}</span>}
-                          {t.priority && <span>Æ¯u tiÃªn: {t.priority}</span>}
-                          {t.createdByName && <span>Â· bá»i {t.createdByName}</span>}
+                          {t.priority && <span>ÃÂ¯u tiÃÂªn: {t.priority}</span>}
+                          {t.createdByName && <span>ÃÂ· bÃ¡Â»Âi {t.createdByName}</span>}
                         </div>
                       </div>
                       <ChevronRight size={16} className="text-slate-300 flex-shrink-0" />
@@ -370,9 +370,9 @@ function TasksSection({ counts, roleCode }: { counts: TaskCounts; roleCode: stri
             </div>
             {/* Footer */}
             <div className="px-5 py-2.5 border-t border-slate-200 bg-slate-50 flex justify-between items-center">
-              <span className="text-[11px] text-slate-400">Click má»t má»¥c Äá» má» chi tiáº¿t</span>
+              <span className="text-xs text-slate-400">Click mÃ¡Â»Ât mÃ¡Â»Â¥c ÃÂÃ¡Â»Â mÃ¡Â»Â chi tiÃ¡ÂºÂ¿t</span>
               <Link href={`/giao-viec?focus=${modal}`} className="text-xs text-emerald-700 hover:underline font-semibold" onClick={() => setModal(null)}>
-                Má» trang Giao viá»c â
+                MÃ¡Â»Â trang Giao viÃ¡Â»Âc Ã¢ÂÂ
               </Link>
             </div>
           </div>
@@ -385,7 +385,7 @@ function TasksSection({ counts, roleCode }: { counts: TaskCounts; roleCode: stri
 function TaskTile({ icon: Icon, label, value, sub, accent, href, onClick }: {
   icon: LucideIcon; label: string; value: number; sub?: string;
   accent: 'emerald' | 'sky' | 'amber' | 'rose' | 'slate'; href: string;
-  /** Khi cÃ³ onClick â click sáº½ má» modal thay vÃ¬ nháº£y URL. href váº«n dÃ¹ng cho long-press / fallback. */
+  /** Khi cÃÂ³ onClick Ã¢ÂÂ click sÃ¡ÂºÂ½ mÃ¡Â»Â modal thay vÃÂ¬ nhÃ¡ÂºÂ£y URL. href vÃ¡ÂºÂ«n dÃÂ¹ng cho long-press / fallback. */
   onClick?: () => void;
 }) {
   const A = {
@@ -402,10 +402,10 @@ function TaskTile({ icon: Icon, label, value, sub, accent, href, onClick }: {
           <Icon size={16} />
         </div>
       </div>
-      {/* Phase 13.16.6: text-2xl sm:text-3xl mobile â 4-5 chá»¯ sá» khÃ´ng chen label */}
+      {/* Phase 13.16.6: text-2xl sm:text-3xl mobile Ã¢ÂÂ 4-5 chÃ¡Â»Â¯ sÃ¡Â»Â khÃÂ´ng chen label */}
       <div className="text-2xl sm:text-3xl font-bold tabular-nums text-slate-900 leading-tight">{value}</div>
-      <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500 mt-0.5 truncate">{label}</div>
-      {sub && <div className="text-[10px] text-slate-400 mt-1 truncate">{sub}</div>}
+      <div className="text-xs font-medium uppercase tracking-wider text-slate-500 mt-0.5 truncate">{label}</div>
+      {sub && <div className="text-xs text-slate-400 mt-1 truncate">{sub}</div>}
     </>
   );
   const cls = 'rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-emerald-300 hover:shadow-md group text-left w-full';
@@ -430,10 +430,10 @@ function WorkflowPipelineSection({ counts, roleCode }: { counts: TaskCounts; rol
   const done = counts.myDone ?? 0;
   const total = counts.myTotal ?? 0;
   const pipelineSteps = [
-    { label: 'Chờ duyệt', value: pendingApproval, color: 'bg-amber-400', textColor: 'text-amber-700', icon: '⏳' },
-    { label: 'Chờ làm',   value: todo,            color: 'bg-sky-400',   textColor: 'text-sky-700',   icon: '📋' },
-    { label: 'Đang làm',  value: inProgress,      color: 'bg-blue-500',  textColor: 'text-blue-700',  icon: '🔄' },
-    { label: 'Hoàn thành',value: done,             color: 'bg-emerald-500', textColor: 'text-emerald-700', icon: '✅' },
+    { label: 'Chá» duyá»t', value: pendingApproval, color: 'bg-amber-400', textColor: 'text-amber-700', icon: 'â³' },
+    { label: 'Chá» lÃ m',   value: todo,            color: 'bg-sky-400',   textColor: 'text-sky-700',   icon: 'ð' },
+    { label: 'Äang lÃ m',  value: inProgress,      color: 'bg-blue-500',  textColor: 'text-blue-700',  icon: 'ð' },
+    { label: 'HoÃ n thÃ nh',value: done,             color: 'bg-emerald-500', textColor: 'text-emerald-700', icon: 'â' },
   ];
   const grandTotal = pendingApproval + todo + inProgress + done || 1;
   return (
@@ -441,7 +441,7 @@ function WorkflowPipelineSection({ counts, roleCode }: { counts: TaskCounts; rol
       {/* === PIPELINE BAR === */}
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
-          Pipeline công việc
+          Pipeline cÃ´ng viá»c
         </div>
         {/* Progress bar */}
         <div className="flex h-3 rounded-full overflow-hidden gap-0.5 mb-3">
@@ -459,51 +459,51 @@ function WorkflowPipelineSection({ counts, roleCode }: { counts: TaskCounts; rol
           {pipelineSteps.map((step) => (
             <div key={step.label} className="text-center">
               <div className="text-lg font-bold tabular-nums text-slate-800">{step.value}</div>
-              <div className={'text-[10px] font-semibold uppercase tracking-wide ' + step.textColor}>{step.icon} {step.label}</div>
+              <div className={'text-xs font-semibold uppercase tracking-wide ' + step.textColor}>{step.icon} {step.label}</div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* === CẢNH BÁO === */}
+      {/* === Cáº¢NH BÃO === */}
       {overdue > 0 && (
         <div className="flex items-center gap-3 rounded-xl bg-red-50 border border-red-200 px-4 py-3">
           <AlertTriangle className="h-5 w-5 text-red-500 shrink-0" />
           <div>
-            <span className="font-bold text-red-700">{overdue} việc quá hạn</span>
-            <span className="text-red-600 text-sm ml-2">— cần xử lý ngay</span>
+            <span className="font-bold text-red-700">{overdue} viá»c quÃ¡ háº¡n</span>
+            <span className="text-red-600 text-sm ml-2">â cáº§n xá»­ lÃ½ ngay</span>
           </div>
-          <a href="/giao-viec?focus=overdue" className="ml-auto text-xs text-red-700 hover:underline font-semibold whitespace-nowrap">Xem ngay →</a>
+          <a href="/giao-viec?focus=overdue" className="ml-auto text-xs text-red-700 hover:underline font-semibold whitespace-nowrap">Xem ngay â</a>
         </div>
       )}
       {pendingApproval > 0 && (
         <div className="flex items-center gap-3 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
           <ShieldCheck className="h-5 w-5 text-amber-500 shrink-0" />
           <div>
-            <span className="font-bold text-amber-700">{pendingApproval} việc chờ duyệt</span>
-            <span className="text-amber-600 text-sm ml-2">— cần phê duyệt</span>
+            <span className="font-bold text-amber-700">{pendingApproval} viá»c chá» duyá»t</span>
+            <span className="text-amber-600 text-sm ml-2">â cáº§n phÃª duyá»t</span>
           </div>
-          <a href="/giao-viec?focus=approval" className="ml-auto text-xs text-amber-700 hover:underline font-semibold whitespace-nowrap">Duyệt ngay →</a>
+          <a href="/giao-viec?focus=approval" className="ml-auto text-xs text-amber-700 hover:underline font-semibold whitespace-nowrap">Duyá»t ngay â</a>
         </div>
       )}
 
-      {/* === TOP ĐIỂM NGHẼN (admin only) === */}
+      {/* === TOP ÄIá»M NGHáº¼N (admin only) === */}
       {isAdmin && total > 0 && (
         <div className="rounded-xl border border-orange-200 bg-orange-50 p-4">
           <div className="flex items-center gap-2 mb-3">
             <AlertTriangle className="h-4 w-4 text-orange-500" />
-            <span className="text-xs font-bold text-orange-700 uppercase tracking-wider">TOP Điểm nghẽn</span>
+            <span className="text-xs font-bold text-orange-700 uppercase tracking-wider">TOP Äiá»m ngháº½n</span>
           </div>
           <div className="space-y-2">
             {overdue === 0 && todo === 0 ? (
-              <div className="text-sm text-orange-600 italic">Không có điểm nghẽn — hệ thống vận hành tốt ✓</div>
+              <div className="text-sm text-orange-600 italic">KhÃ´ng cÃ³ Äiá»m ngháº½n â há» thá»ng váº­n hÃ nh tá»t â</div>
             ) : (
               <>
                 {todo > 0 && (
                   <div className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-orange-100">
                     <div className="flex items-center gap-2">
                       <div className="h-2 w-2 rounded-full bg-sky-400" />
-                      <span className="text-sm text-slate-700">Việc chờ xử lý (chưa bắt đầu)</span>
+                      <span className="text-sm text-slate-700">Viá»c chá» xá»­ lÃ½ (chÆ°a báº¯t Äáº§u)</span>
                     </div>
                     <span className="font-bold text-sky-700 tabular-nums">{todo}</span>
                   </div>
@@ -512,13 +512,13 @@ function WorkflowPipelineSection({ counts, roleCode }: { counts: TaskCounts; rol
                   <div className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-red-200">
                     <div className="flex items-center gap-2">
                       <div className="h-2 w-2 rounded-full bg-red-500" />
-                      <span className="text-sm text-red-700">Việc quá hạn (cần ưu tiên)</span>
+                      <span className="text-sm text-red-700">Viá»c quÃ¡ háº¡n (cáº§n Æ°u tiÃªn)</span>
                     </div>
                     <span className="font-bold text-red-700 tabular-nums">{overdue}</span>
                   </div>
                 )}
                 <a href="/giao-viec" className="block text-right text-xs text-orange-700 hover:underline font-semibold mt-1">
-                  Xem chi tiết điều phối →
+                  Xem chi tiáº¿t Äiá»u phá»i â
                 </a>
               </>
             )}
@@ -545,24 +545,24 @@ function SectionTitle({ icon: Icon, title, subtitle, count }: {
   );
 }
 
-// Format Äáº§y Äá»§ â dáº¥u cháº¥m tÃ¡ch nghÃ¬n (vi-VN), KHÃNG rÃºt gá»n Äá» sum khá»p chÃ­nh xÃ¡c tá»«ng Äá»ng.
+// Format ÃÂÃ¡ÂºÂ§y ÃÂÃ¡Â»Â§ Ã¢ÂÂ dÃ¡ÂºÂ¥u chÃ¡ÂºÂ¥m tÃÂ¡ch nghÃÂ¬n (vi-VN), KHÃÂNG rÃÂºt gÃ¡Â»Ân ÃÂÃ¡Â»Â sum khÃ¡Â»Âp chÃÂ­nh xÃÂ¡c tÃ¡Â»Â«ng ÃÂÃ¡Â»Âng.
 function formatMoney(value: number): string {
   return value.toLocaleString('vi-VN');
 }
 
 /**
- * áº¢nh tháº­t cá»§a tá»«ng cÆ¡ sá» â Äáº·t trong /public/. TÃªn file Vietnamese OK, dÃ¹ng encodeURI khi render.
- * CÆ¡ sá» cÃ³ > 1 áº£nh â tá»± crossfade qua láº¡i báº±ng CSS animation.
+ * Ã¡ÂºÂ¢nh thÃ¡ÂºÂ­t cÃ¡Â»Â§a tÃ¡Â»Â«ng cÃÂ¡ sÃ¡Â»Â Ã¢ÂÂ ÃÂÃ¡ÂºÂ·t trong /public/. TÃÂªn file Vietnamese OK, dÃÂ¹ng encodeURI khi render.
+ * CÃÂ¡ sÃ¡Â»Â cÃÂ³ > 1 Ã¡ÂºÂ£nh Ã¢ÂÂ tÃ¡Â»Â± crossfade qua lÃ¡ÂºÂ¡i bÃ¡ÂºÂ±ng CSS animation.
  */
 const BRANCH_PHOTOS: Record<string, string[]> = {
-  HM:  ['/hoÃ ng mai.png.jpg'],
-  TK:  ['/thá»¥y khuÃª.png.jpg'],
+  HM:  ['/hoÃÂ ng mai.png.jpg'],
+  TK:  ['/thÃ¡Â»Â¥y khuÃÂª.png.jpg'],
   CTT: ['/CTT.png', '/CTT.png.jpg'],
   '24': ['/24 NCT.png', '/24 NCT2.png.jpg'],
-  TT:  ['/thanh trÃ¬.png'],
+  TT:  ['/thanh trÃÂ¬.png'],
 };
 
-/** áº¢nh fallback Unsplash â chá» dÃ¹ng khi khÃ´ng cÃ³ áº£nh tháº­t. */
+/** Ã¡ÂºÂ¢nh fallback Unsplash Ã¢ÂÂ chÃ¡Â»Â dÃÂ¹ng khi khÃÂ´ng cÃÂ³ Ã¡ÂºÂ£nh thÃ¡ÂºÂ­t. */
 const UNSPLASH_FALLBACK: Record<string, string> = {
   HM:  'https://images.unsplash.com/photo-1576013551627-0cc20b96c2a7?auto=format&fit=crop&w=800&q=80',
   TK:  'https://images.unsplash.com/photo-1540541338287-41700207dee6?auto=format&fit=crop&w=800&q=80',
@@ -574,7 +574,7 @@ const UNSPLASH_FALLBACK: Record<string, string> = {
 function FacilityCard({ facility, size = 'md' }: { facility: Facility; size?: 'lg' | 'md' }) {
   const photos = (BRANCH_PHOTOS[facility.id] ?? []).map(encodeURI);
   const fallbackUrl = UNSPLASH_FALLBACK[facility.id] ?? '';
-  // Lá»±a render: 0 áº£nh â fallback Unsplash. 1 áº£nh â static img. â¥2 áº£nh â crossfade carousel.
+  // LÃ¡Â»Â±a render: 0 Ã¡ÂºÂ£nh Ã¢ÂÂ fallback Unsplash. 1 Ã¡ÂºÂ£nh Ã¢ÂÂ static img. Ã¢ÂÂ¥2 Ã¡ÂºÂ£nh Ã¢ÂÂ crossfade carousel.
   const localUrl = photos[0] ?? fallbackUrl;
   const aspectCls = size === 'lg' ? 'aspect-[21/9]' : 'aspect-[16/9]';
   const bodyCls = size === 'lg' ? 'p-4' : 'p-3';
@@ -589,7 +589,7 @@ function FacilityCard({ facility, size = 'md' }: { facility: Facility; size?: 'l
         style={{ background: `linear-gradient(135deg, ${facility.color}, ${facility.color}99)` }}
       >
         {photos.length >= 2 ? (
-          // Carousel CSS-only: render N áº£nh chá»ng nhau + animation xoay vÃ²ng cá»© 5s.
+          // Carousel CSS-only: render N Ã¡ÂºÂ£nh chÃ¡Â»Âng nhau + animation xoay vÃÂ²ng cÃ¡Â»Â© 5s.
           photos.map((src, i) => (
             <img
               key={src}
