@@ -19,6 +19,7 @@ interface RevenueSummary {
   monthTarget: number;
   branchCount: number;
   monthPct?: number;
+  yearPct?: number;
 }
 
 interface TaskCounts {
@@ -150,15 +151,15 @@ export function DashboardContent({
             <div className="space-y-1 text-sm">
               <div className="flex justify-between">
                 <span className="text-slate-600">Clo tiêu thụ</span>
-                <span className="font-semibold">{kyThuatSummary.totalClo ?? 0} kg</span>
+                <span className="font-semibold">{kyThuatSummary.system.cloTotal ?? 0} kg</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-600">CS Lọc</span>
-                <span className="font-semibold">{kyThuatSummary.totalMayLoc ?? 0} h</span>
+                <span className="font-semibold">{kyThuatSummary.system.locCapTotal ?? 0} h</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-600">CS Nhiệt</span>
-                <span className="font-semibold">{kyThuatSummary.totalMayNhiet ?? 0} h</span>
+                <span className="font-semibold">{kyThuatSummary.system.nhietCapTotal ?? 0} h</span>
               </div>
             </div>
           </a>
