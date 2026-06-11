@@ -230,15 +230,17 @@ export function GiaoViecClient(props: Props) {
 
   // Hiệu suất theo phòng/cơ sở — done / total
   const perDeptStats = useMemo(() => {
-    const map: Record<string, { id: string; name: string; total: number; done: number }> = {};
+    const map: Record<string, { id: string; name: string; total: number; done: number; overdue: number }> = {};
     statsTasks.forEach((t) => {
       const key = t.assigneeDeptId ?? (t.assigneeFacilityId ? `branch:${t.assigneeFacilityId}` : 'misc');
       const name = t.assigneeDeptId
         ? (departments.find((d) => d.id === t.assigneeDeptId)?.name ?? t.assigneeDeptId)
         : (t.assigneeFacilityId ? (branches.find((b) => b.id === t.assigneeFacilityId)?.name ?? t.assigneeFacilityId) : 'Cá nhân');
-      map[key] ??= { id: key, name, total: 0, done: 0 };
+      map[key] ??= { id: key, name, total: 0, done: 0, overdue: 0 };
       map[key].total += 1;
       if (t.status === 'done') map[key].done += 1;
+      const today2 = new Date().toISOString().slice(0, 10);
+      if (t.dueDate && t.dueDate < today2 && !['done', 'cancelled', 'rejected'].includes(t.status)) map[key].overdue += 1;
     });
     return Object.values(map).sort((a, b) => b.total - a.total);
   }, [statsTasks, departments, branches]);
@@ -310,6 +312,10 @@ export function GiaoViecClient(props: Props) {
           <StatusDistribution byStatus={stats.byStatus} total={stats.total} />
         </div>
       </section>
+
+      {/* ===== TOP ĐIỂM NGHẼN ===== */
+      <TopBottleneckSection rows={perDeptStats} isAdmin={showAssignmentTab || showApprovalTab} />
+
 
       {/* ===== TABS + TOOLBAR ===== */}
       <section ref={tabSectionRef} className="rounded-xl border border-slate-200 bg-white shadow-sm scroll-mt-20">
@@ -648,6 +654,65 @@ function TabButton({ active, onClick, icon: Icon, label, badge }: {
         </span>
       )}
     </button>
+  );
+}
+
+// ============================================================================
+// TOP ĐIỂM NGHẼN
+// ============================================================================
+function TopBottleneckSection({ rows, isAdmin }: {
+  rows: { id: string; name: string; total: number; done: number; overdue: number }[];
+  isAdmin: boolean;
+}) {
+  if (!isAdmin || rows.length === 0) return null;
+  const withBottleneck = rows
+    .filter((r) => r.overdue > 0 || (r.total > 0 && r.done < r.total))
+    .sort((a, b) => b.overdue - a.overdue || (b.total - b.done) - (a.total - a.done))
+    .slice(0, 5);
+  if (withBottleneck.length === 0) {
+    return (
+      <section className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-center gap-3">
+        <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+        <span className="text-sm text-emerald-700 font-medium">Không có điểm nghẽn — tất cả phòng/cơ sở đang vận hành tốt ✓</span>
+      </section>
+    );
+  }
+  return (
+    <section className="rounded-xl border border-orange-200 bg-white shadow-sm overflow-hidden">
+      <div className="px-4 py-3 bg-orange-50 border-b border-orange-100 flex items-center gap-2">
+        <AlertTriangle className="h-4 w-4 text-orange-500" />
+        <span className="text-xs font-bold text-orange-700 uppercase tracking-wider">TOP Điểm nghẽn</span>
+        <span className="ml-auto text-xs text-orange-500">{withBottleneck.length} đơn vị cần chú ý</span>
+      </div>
+      <div className="divide-y divide-slate-100">
+        {withBottleneck.map((r, i) => {
+          const pending = r.total - r.done;
+          const doneRate = r.total > 0 ? Math.round((r.done / r.total) * 100) : 0;
+          const severity = r.overdue > 0 ? 'rose' : pending > 3 ? 'amber' : 'sky';
+          const severityClass = { rose: 'text-red-700 bg-red-100', amber: 'text-amber-700 bg-amber-100', sky: 'text-sky-700 bg-sky-100' }[severity];
+          const barColor = { rose: 'bg-red-400', amber: 'bg-amber-400', sky: 'bg-sky-400' }[severity];
+          return (
+            <div key={r.id} className="px-4 py-3 flex items-center gap-3">
+              <div className="text-xs font-bold text-slate-400 w-4 shrink-0">#{i + 1}</div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <span className="text-sm font-semibold text-slate-800 truncate">{r.name}</span>
+                  <span className={'text-[11px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ' + severityClass}>
+                    {r.overdue > 0 ? `${r.overdue} quá hạn` : `${pending} chờ`}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div className={barColor + ' h-full rounded-full'} style={{ width: `${doneRate}%` }} />
+                  </div>
+                  <span className="text-[10px] text-slate-500 whitespace-nowrap">{r.done}/{r.total} ({doneRate}%)</span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
