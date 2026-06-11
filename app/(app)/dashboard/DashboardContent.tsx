@@ -18,6 +18,7 @@ interface RevenueSummary {
   monthActual: number;
   monthTarget: number;
   branchCount: number;
+  monthPct?: number;
 }
 
 interface TaskCounts {
@@ -28,6 +29,9 @@ interface TaskCounts {
   myTotal: number;
   checklistSent?: number;
   checklistUnread?: number;
+  todo?: number;
+  pendingApproval?: number;
+  overdue?: number;
 }
 
 interface Props {
@@ -220,8 +224,9 @@ export function DashboardContent({
         />
       </>)}
 
-      {/* ===== HÀNG 6: CÔNG VIỆC CHI TIẾT ===== */}
-      <SectionTitle icon={ListChecks} title="Công việc" subtitle="Đề xuất · Nhiệm vụ · Giao việc" />
+      {/* ===== HÀNG 6: ĐIỀU PHỐI CÔNG VIỆC ===== */
+      <SectionTitle icon={ListChecks} title="Điều phối công việc" subtitle="Pipeline · Điểm nghẽn · Trạng thái" />
+      <WorkflowPipelineSection counts={taskCounts} roleCode={roleCode} />
       <TasksSection counts={taskCounts} roleCode={roleCode} />
 
     </div>
@@ -477,6 +482,117 @@ function TaskTile({ icon: Icon, label, value, sub, accent, href, onClick }: {
 // ============================================================================
 // SHARED HELPERS
 // ============================================================================
+// ============================================================================
+// WORKFLOW PIPELINE SECTION
+// ============================================================================
+function WorkflowPipelineSection({ counts, roleCode }: { counts: TaskCounts; roleCode: string }) {
+  const isAdmin = roleCode === 'ADMIN' || roleCode === 'CEO';
+  const overdue = counts.overdue ?? 0;
+  const pendingApproval = counts.pendingApproval ?? 0;
+  const todo = counts.todo ?? 0;
+  const inProgress = counts.myInProgress ?? 0;
+  const done = counts.myDone ?? 0;
+  const total = counts.myTotal ?? 0;
+  const pipelineSteps = [
+    { label: 'Chờ duyệt', value: pendingApproval, color: 'bg-amber-400', textColor: 'text-amber-700', icon: '⏳' },
+    { label: 'Chờ làm',   value: todo,            color: 'bg-sky-400',   textColor: 'text-sky-700',   icon: '📋' },
+    { label: 'Đang làm',  value: inProgress,      color: 'bg-blue-500',  textColor: 'text-blue-700',  icon: '🔄' },
+    { label: 'Hoàn thành',value: done,             color: 'bg-emerald-500', textColor: 'text-emerald-700', icon: '✅' },
+  ];
+  const grandTotal = pendingApproval + todo + inProgress + done || 1;
+  return (
+    <div className="space-y-3">
+      {/* === PIPELINE BAR === */}
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+          Pipeline công việc
+        </div>
+        {/* Progress bar */}
+        <div className="flex h-3 rounded-full overflow-hidden gap-0.5 mb-3">
+          {pipelineSteps.map((step) => (
+            <div
+              key={step.label}
+              className={step.color + ' transition-all'}
+              style={{ width: `${Math.round((step.value / grandTotal) * 100)}%`, minWidth: step.value > 0 ? '4px' : '0' }}
+              title={`${step.label}: ${step.value}`}
+            />
+          ))}
+        </div>
+        {/* Step counts */}
+        <div className="grid grid-cols-4 gap-2">
+          {pipelineSteps.map((step) => (
+            <div key={step.label} className="text-center">
+              <div className="text-lg font-bold tabular-nums text-slate-800">{step.value}</div>
+              <div className={'text-[10px] font-semibold uppercase tracking-wide ' + step.textColor}>{step.icon} {step.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* === CẢNH BÁO === */}
+      {overdue > 0 && (
+        <div className="flex items-center gap-3 rounded-xl bg-red-50 border border-red-200 px-4 py-3">
+          <AlertTriangle className="h-5 w-5 text-red-500 shrink-0" />
+          <div>
+            <span className="font-bold text-red-700">{overdue} việc quá hạn</span>
+            <span className="text-red-600 text-sm ml-2">— cần xử lý ngay</span>
+          </div>
+          <a href="/giao-viec?focus=overdue" className="ml-auto text-xs text-red-700 hover:underline font-semibold whitespace-nowrap">Xem ngay →</a>
+        </div>
+      )}
+      {pendingApproval > 0 && (
+        <div className="flex items-center gap-3 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
+          <ShieldCheck className="h-5 w-5 text-amber-500 shrink-0" />
+          <div>
+            <span className="font-bold text-amber-700">{pendingApproval} việc chờ duyệt</span>
+            <span className="text-amber-600 text-sm ml-2">— cần phê duyệt</span>
+          </div>
+          <a href="/giao-viec?focus=approval" className="ml-auto text-xs text-amber-700 hover:underline font-semibold whitespace-nowrap">Duyệt ngay →</a>
+        </div>
+      )}
+
+      {/* === TOP ĐIỂM NGHẼN (admin only) === */}
+      {isAdmin && total > 0 && (
+        <div className="rounded-xl border border-orange-200 bg-orange-50 p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle className="h-4 w-4 text-orange-500" />
+            <span className="text-xs font-bold text-orange-700 uppercase tracking-wider">TOP Điểm nghẽn</span>
+          </div>
+          <div className="space-y-2">
+            {overdue === 0 && todo === 0 ? (
+              <div className="text-sm text-orange-600 italic">Không có điểm nghẽn — hệ thống vận hành tốt ✓</div>
+            ) : (
+              <>
+                {todo > 0 && (
+                  <div className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-orange-100">
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-2 rounded-full bg-sky-400" />
+                      <span className="text-sm text-slate-700">Việc chờ xử lý (chưa bắt đầu)</span>
+                    </div>
+                    <span className="font-bold text-sky-700 tabular-nums">{todo}</span>
+                  </div>
+                )}
+                {overdue > 0 && (
+                  <div className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-red-200">
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-2 rounded-full bg-red-500" />
+                      <span className="text-sm text-red-700">Việc quá hạn (cần ưu tiên)</span>
+                    </div>
+                    <span className="font-bold text-red-700 tabular-nums">{overdue}</span>
+                  </div>
+                )}
+                <a href="/giao-viec" className="block text-right text-xs text-orange-700 hover:underline font-semibold mt-1">
+                  Xem chi tiết điều phối →
+                </a>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SectionTitle({ icon: Icon, title, subtitle, count }: {
   icon: LucideIcon; title: string; subtitle?: string; count?: number;
 }) {
