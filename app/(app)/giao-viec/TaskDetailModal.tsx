@@ -16,9 +16,9 @@ interface Branch { id: string; name: string; }
 interface User { id: string; name: string; roleId: string; branchId: string | null; departmentId: string | null; }
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
-  pending_approval: 'Chờ duyệt', pending: 'Chờ làm', in_progress: 'Đang làm',
-  requested_revision: 'Yêu cầu bổ sung',
-  done: 'Hoàn thành', rejected: 'Từ chối', cancelled: 'Huỷ',
+  pending_approval: 'Chá» duyá»t', pending: 'Chá» lÃ m', in_progress: 'Äang lÃ m',
+  requested_revision: 'YÃªu cáº§u bá» sung',
+  done: 'HoÃ n thÃ nh', rejected: 'Tá»« chá»i', cancelled: 'Huá»·',
 };
 const STATUS_BG: Record<TaskStatus, string> = {
   pending_approval: 'bg-amber-50 text-amber-700 ring-amber-200',
@@ -29,7 +29,7 @@ const STATUS_BG: Record<TaskStatus, string> = {
   rejected: 'bg-rose-50 text-rose-700 ring-rose-200',
   cancelled: 'bg-slate-50 text-slate-500 ring-slate-200',
 };
-const PRIORITY_LABEL: Record<string, string> = { low: 'Thấp', normal: 'Bình thường', high: 'Cao', urgent: 'Khẩn' };
+const PRIORITY_LABEL: Record<string, string> = { low: 'Tháº¥p', normal: 'BÃ¬nh thÆ°á»ng', high: 'Cao', urgent: 'Kháº©n' };
 
 const GD_ROLES = new Set(['GD_KD', 'GD_VP']);
 const ADMIN = new Set(['ADMIN', 'CEO', 'GD_KD', 'GD_VP']);
@@ -63,43 +63,43 @@ export function TaskDetailModal(props: {
   const [showReject, setShowReject] = useState(false);
   const [newComment, setNewComment] = useState('');
   const [progressInput, setProgressInput] = useState(initialTask.progressPct);
-  // Phase 12 — recipient actions cho đề xuất v2
+  // Phase 12 â recipient actions cho Äá» xuáº¥t v2
   const [showStartForm, setShowStartForm] = useState(false);
   const [expectedCompletionDate, setExpectedCompletionDate] = useState('');
   const [showRevisionForm, setShowRevisionForm] = useState(false);
   const [revisionMessage, setRevisionMessage] = useState('');
-  // Phase 12.5 — approver action: ghi chú khi Duyệt (optional)
+  // Phase 12.5 â approver action: ghi chÃº khi Duyá»t (optional)
   const [showApprove, setShowApprove] = useState(false);
   const [approveComment, setApproveComment] = useState('');
 
   const isGD = GD_ROLES.has(currentUserRole);
   const isAdmin = ADMIN.has(currentUserRole);
-  // Phase 12.5: currentApprover có thể là "user:UID" | "role:RC" | legacy "RC"
+  // Phase 12.5: currentApprover cÃ³ thá» lÃ  "user:UID" | "role:RC" | legacy "RC"
   const cur = task.currentApprover ?? null;
   const isMyTurnByUid = !!cur && cur.startsWith('user:') && cur.slice(5) === currentUserId;
   const isMyTurnByRole = !!cur && (
     (cur.startsWith('role:') && cur.slice(5) === currentUserRole) ||
     (!cur.startsWith('user:') && !cur.startsWith('role:') && cur === currentUserRole)
   );
-  // Phase B.7 phase 2 (2026-06-07): bỏ legacy fallback approvalRequiredFrom.
-  // Backfill confirmed 0 docs pending_approval còn dùng — currentApprover đủ.
+  // Phase B.7 phase 2 (2026-06-07): bá» legacy fallback approvalRequiredFrom.
+  // Backfill confirmed 0 docs pending_approval cÃ²n dÃ¹ng â currentApprover Äá»§.
   const isMyBlockApprover = isGD && isMyTurnByRole;
 
   const isCreator = task.createdBy === currentUserId;
   const isAssigneeUser = task.assigneeUserIds.includes(currentUserId);
   const isAssigneeDept = task.assigneeDeptId && task.assigneeDeptId === currentDepartmentId;
   const isAssigneeFacility = task.assigneeFacilityId && task.assigneeFacilityId === currentBranchId;
-  // Stability 2026-06-10 v3: PROPOSAL chỉ có 1 case cần update status:
-  //   - creator/admin gửi lại sau khi bổ sung (requested_revision → pending_approval)
-  // → render block để hiện nút "Gửi lại sau bổ sung".
-  // Các trạng thái khác của proposal: KHÔNG có nút status (chỉ approval block).
-  // ASSIGNMENT: giữ logic cũ — assignee user/dept/facility thấy nút thực hiện.
+  // Stability 2026-06-10 v3: PROPOSAL chá» cÃ³ 1 case cáº§n update status:
+  //   - creator/admin gá»­i láº¡i sau khi bá» sung (requested_revision â pending_approval)
+  // â render block Äá» hiá»n nÃºt "Gá»­i láº¡i sau bá» sung".
+  // CÃ¡c tráº¡ng thÃ¡i khÃ¡c cá»§a proposal: KHÃNG cÃ³ nÃºt status (chá» approval block).
+  // ASSIGNMENT: giá»¯ logic cÅ© â assignee user/dept/facility tháº¥y nÃºt thá»±c hiá»n.
   const canUpdateStatus = task.kind === 'proposal'
     ? (task.status === 'requested_revision' && (isCreator || isAdmin))
     : (isAssigneeUser || !!isAssigneeDept || !!isAssigneeFacility);
 
-  // Stability 2026-06-10 v5 (anh chốt): BỎ override — CHỈ chính chủ duyệt.
-  // Chain ai được chỉ định thì người đó duyệt. ADMIN/CEO không jump vào.
+  // Stability 2026-06-10 v5 (anh chá»t): Bá» override â CHá» chÃ­nh chá»§ duyá»t.
+  // Chain ai ÄÆ°á»£c chá» Äá»nh thÃ¬ ngÆ°á»i ÄÃ³ duyá»t. ADMIN/CEO khÃ´ng jump vÃ o.
   const canApprove = task.status === 'pending_approval'
     && !isCreator
     && !isAssigneeUser
@@ -110,7 +110,7 @@ export function TaskDetailModal(props: {
     ? departments.find((d) => d.id === task.assigneeDeptId)?.name ?? task.assigneeDeptId
     : task.assigneeFacilityId
       ? branches.find((b) => b.id === task.assigneeFacilityId)?.name ?? task.assigneeFacilityId
-      : task.assigneeUserIds.length > 0 ? `${task.assigneeUserIds.length} cá nhân` : '(chưa gán)';
+      : task.assigneeUserIds.length > 0 ? `${task.assigneeUserIds.length} cÃ¡ nhÃ¢n` : '(chÆ°a gÃ¡n)';
 
   const today = new Date().toISOString().slice(0, 10);
   const overdue = !!task.dueDate && task.dueDate < today && !['done', 'cancelled', 'rejected'].includes(task.status);
@@ -153,7 +153,7 @@ export function TaskDetailModal(props: {
     } catch (e: any) { setError(e.message); } finally { setBusy(null); }
   }
   async function deleteAttachment(path: string) {
-    if (!confirm('Xoá file này?')) return;
+    if (!confirm('XoÃ¡ file nÃ y?')) return;
     setBusy('upload');
     try { await tasksApi.deleteAttachment(task.id, path); await refresh(); }
     catch (e: any) { setError(e.message); } finally { setBusy(null); }
@@ -169,7 +169,7 @@ export function TaskDetailModal(props: {
     } catch (e: any) { setError(e.message); } finally { setBusy(null); }
   }
   async function reject() {
-    if (!rejectReason.trim()) { setError('Vui lòng nhập lý do từ chối'); return; }
+    if (!rejectReason.trim()) { setError('Vui lÃ²ng nháº­p lÃ½ do tá»« chá»i'); return; }
     setBusy('reject');
     try { await tasksApi.reject(task.id, rejectReason.trim()); await refresh(); setShowReject(false); setRejectReason(''); }
     catch (e: any) { setError(e.message); } finally { setBusy(null); }
@@ -188,15 +188,15 @@ export function TaskDetailModal(props: {
     catch (e: any) { setError(e.message); } finally { setBusy(null); }
   }
   async function del() {
-    if (!confirm('Xoá nhiệm vụ này? Không thể hoàn tác.')) return;
+    if (!confirm('XoÃ¡ nhiá»m vá»¥ nÃ y? KhÃ´ng thá» hoÃ n tÃ¡c.')) return;
     setBusy('delete');
     try { await tasksApi.delete(task.id); onChange(); onClose(); }
     catch (e: any) { setError(e.message); setBusy(null); }
   }
 
-  // Phase 12 — Recipient bắt đầu thực hiện đề xuất (kèm dự kiến hoàn thành)
+  // Phase 12 â Recipient báº¯t Äáº§u thá»±c hiá»n Äá» xuáº¥t (kÃ¨m dá»± kiáº¿n hoÃ n thÃ nh)
   async function startProposal() {
-    if (!expectedCompletionDate) { setError('Phải chọn ngày dự kiến hoàn thành.'); return; }
+    if (!expectedCompletionDate) { setError('Pháº£i chá»n ngÃ y dá»± kiáº¿n hoÃ n thÃ nh.'); return; }
     setBusy('status');
     try {
       await tasksApi.updateStatus(task.id, { status: 'in_progress', expectedCompletionDate });
@@ -205,9 +205,9 @@ export function TaskDetailModal(props: {
       await refresh();
     } catch (e: any) { setError(e.message); } finally { setBusy(null); }
   }
-  // Phase 12 — Recipient yêu cầu creator bổ sung
+  // Phase 12 â Recipient yÃªu cáº§u creator bá» sung
   async function requestRevision() {
-    if (!revisionMessage.trim()) { setError('Phải nhập nội dung yêu cầu bổ sung.'); return; }
+    if (!revisionMessage.trim()) { setError('Pháº£i nháº­p ná»i dung yÃªu cáº§u bá» sung.'); return; }
     setBusy('request-revision');
     try {
       await tasksApi.requestRevision(task.id, revisionMessage.trim());
@@ -226,15 +226,15 @@ export function TaskDetailModal(props: {
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2 mb-1 flex-wrap">
-                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ring-1 ${STATUS_BG[task.status]}`}>
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold ring-1 ${STATUS_BG[task.status]}`}>
                   {STATUS_LABEL[task.status]}
                 </span>
                 {task.crossBlock && (
-                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-900">LIÊN KHỐI</span>
+                  <span className="px-1.5 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-900">LIÃN KHá»I</span>
                 )}
                 {overdue && (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-100 text-rose-900">
-                    <AlertTriangle size={10} /> QUÁ HẠN
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-bold bg-rose-100 text-rose-900">
+                    <AlertTriangle size={12} /> QUÃ Háº N
                   </span>
                 )}
               </div>
@@ -248,7 +248,7 @@ export function TaskDetailModal(props: {
         <div className="flex-1 overflow-auto">
           {loading ? (
             <div className="text-center py-12 text-slate-500">
-              <Loader2 size={20} className="inline animate-spin mr-2" /> Đang tải…
+              <Loader2 size={20} className="inline animate-spin mr-2" /> Äang táº£iâ¦
             </div>
           ) : (
             <div className="p-5 space-y-4">
@@ -256,20 +256,20 @@ export function TaskDetailModal(props: {
                 <div className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-lg p-3">{error}</div>
               )}
 
-              {/* ===== INFO HEADER: Mục tiêu + người tham gia ===== */}
+              {/* ===== INFO HEADER: Má»¥c tiÃªu + ngÆ°á»i tham gia ===== */}
 
-              {/* Goal / Mục tiêu nếu có */}
+              {/* Goal / Má»¥c tiÃªu náº¿u cÃ³ */}
               {(task as any).goal && (
                 <div className="rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-2">
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700 mb-0.5">Mục tiêu</div>
+                  <div className="text-xs font-semibold uppercase tracking-wider text-emerald-700 mb-0.5">Má»¥c tiÃªu</div>
                   <p className="text-sm text-slate-800 font-medium">{(task as any).goal}</p>
                 </div>
               )}
 
               {/* Meta grid */}
               <div className="grid grid-cols-2 gap-3 text-sm">
-                <Meta label="Người tạo">{task.createdByName} <span className="text-slate-400">({task.createdByRole})</span></Meta>
-                <Meta label="Người phụ trách">
+                <Meta label="NgÆ°á»i táº¡o">{task.createdByName} <span className="text-slate-400">({task.createdByRole})</span></Meta>
+                <Meta label="NgÆ°á»i phá»¥ trÃ¡ch">
                   {task.assigneeDeptId
                     ? (departments.find(d => d.id === task.assigneeDeptId)?.name ?? task.assigneeDeptId)
                     : task.assigneeFacilityId
@@ -279,35 +279,35 @@ export function TaskDetailModal(props: {
                           <span className="flex flex-col gap-0.5">
                             {task.assigneeUserIds.slice(0, 4).map(uid => {
                               const u = users.find(u => u.id === uid);
-                              return <span key={uid} className="inline-flex items-center gap-1"><span className="h-4 w-4 rounded-full bg-emerald-100 text-emerald-700 text-[9px] font-bold flex items-center justify-center shrink-0">{(u?.name ?? uid).charAt(0)}</span>{u?.name ?? uid}</span>;
+                              return <span key={uid} className="inline-flex items-center gap-1"><span className="h-4 w-4 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold flex items-center justify-center shrink-0">{(u?.name ?? uid).charAt(0)}</span>{u?.name ?? uid}</span>;
                             })}
-                            {task.assigneeUserIds.length > 4 && <span className="text-slate-400">+{task.assigneeUserIds.length - 4} người khác</span>}
+                            {task.assigneeUserIds.length > 4 && <span className="text-slate-400">+{task.assigneeUserIds.length - 4} ngÆ°á»i khÃ¡c</span>}
                           </span>
                         )
-                        : <span className="text-slate-400">(chưa gán)</span>
+                        : <span className="text-slate-400">(chÆ°a gÃ¡n)</span>
                   }
                 </Meta>
-                <Meta label="Khối chủ trì">{task.assigneeBlock}{task.crossBlock && <span className="ml-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800">LIÊN KHỐI</span>}</Meta>
-                <Meta label="Ưu tiên"><PriorityChip p={task.priority} /></Meta>
-                <Meta label="Hạn chót">
+                <Meta label="Khá»i chá»§ trÃ¬">{task.assigneeBlock}{task.crossBlock && <span className="ml-1.5 px-1.5 py-0.5 rounded text-xs font-bold bg-amber-100 text-amber-800">LIÃN KHá»I</span>}</Meta>
+                <Meta label="Æ¯u tiÃªn"><PriorityChip p={task.priority} /></Meta>
+                <Meta label="Háº¡n chÃ³t">
                   {task.dueDate ? (
                     <span className={`inline-flex items-center gap-1 ${overdue ? 'text-rose-700 font-semibold' : ''}`}>
                       <CalendarDays size={12} /> {task.dueDate}
-                      {overdue && <span className="text-[10px] text-rose-500 font-bold">(QH)</span>}
+                      {overdue && <span className="text-xs text-rose-500 font-bold">(QH)</span>}
                     </span>
-                  ) : <span className="text-slate-400">—</span>}
+                  ) : <span className="text-slate-400">â</span>}
                 </Meta>
-                <Meta label="Tiến độ">
+                <Meta label="Tiáº¿n Äá»">
                   <ProgressBar pct={task.progressPct} />
                 </Meta>
-                <Meta label="Tạo lúc">{fmtDateTime(task.createdAt)}</Meta>
-                <Meta label="Cập nhật">{fmtDateTime(task.updatedAt)}</Meta>
+                <Meta label="Táº¡o lÃºc">{fmtDateTime(task.createdAt)}</Meta>
+                <Meta label="Cáº­p nháº­t">{fmtDateTime(task.updatedAt)}</Meta>
               </div>
 
-              {/* Đơn vị phối hợp */}
+              {/* ÄÆ¡n vá» phá»i há»£p */}
               {((task as any).collaboratorDeptIds?.length > 0 || (task as any).collaboratorFacilityIds?.length > 0) && (
                 <div className="rounded-lg border border-indigo-100 bg-indigo-50/40 p-3">
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-indigo-700 mb-2">Đơn vị phối hợp</div>
+                  <div className="text-xs font-semibold uppercase tracking-wider text-indigo-700 mb-2">ÄÆ¡n vá» phá»i há»£p</div>
                   <div className="flex flex-wrap gap-1.5">
                     {((task as any).collaboratorDeptIds ?? []).map((id: string) => {
                       const d = departments.find(dep => dep.id === id);
@@ -321,10 +321,10 @@ export function TaskDetailModal(props: {
                 </div>
               )}
 
-              {/* Phase 12.5 — Luồng duyệt đề xuất (chain) — entry: "user:UID" | "role:RC" | legacy "RC" */}
+              {/* Phase 12.5 â Luá»ng duyá»t Äá» xuáº¥t (chain) â entry: "user:UID" | "role:RC" | legacy "RC" */}
               {task.kind === 'proposal' && task.approvalChain && task.approvalChain.length > 0 && (
                 <div className="rounded-lg border border-blue-200 bg-blue-50/40 p-3">
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-blue-700 mb-2">Luồng duyệt ({task.approvalChain.length} cấp)</div>
+                  <div className="text-xs font-semibold uppercase tracking-wider text-blue-700 mb-2">Luá»ng duyá»t ({task.approvalChain.length} cáº¥p)</div>
                   <div className="flex items-center gap-2 flex-wrap">
                     {task.approvalChain.map((entry, i) => {
                       // Parse entry: user:UID | role:RC | legacy RC
@@ -332,12 +332,12 @@ export function TaskDetailModal(props: {
                       const isRoleEntry = entry.startsWith('role:');
                       const uid = isUserEntry ? entry.slice(5) : null;
                       const roleCode = isRoleEntry ? entry.slice(5) : (!isUserEntry ? entry : null);
-                      // Tìm display name: nếu user → tên user; nếu role → label role
+                      // TÃ¬m display name: náº¿u user â tÃªn user; náº¿u role â label role
                       const user = uid ? users.find((u) => u.id === uid) : null;
                       const display = user
                         ? `${user.name} (${user.roleId})`
                         : roleCode ? roleLabelVN(roleCode) : entry;
-                      // Match completed: check uid match HOẶC role match (legacy)
+                      // Match completed: check uid match HOáº¶C role match (legacy)
                       const done = (task.approvalsCompleted ?? []).find((s) => {
                         if (uid && s.uid === uid) return true;
                         if (roleCode && s.role === roleCode) return true;
@@ -346,14 +346,14 @@ export function TaskDetailModal(props: {
                       const isCurrent = task.currentApprover === entry && !done;
                       return (
                         <div key={i} className="flex items-center gap-1.5">
-                          <span className="text-[10px] font-bold text-slate-400">{i + 1}.</span>
+                          <span className="text-xs font-bold text-slate-400">{i + 1}.</span>
                           <div className={`px-2.5 py-1 rounded-md text-xs font-semibold ring-1 ${
                             done ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
                             : isCurrent ? 'bg-amber-50 text-amber-700 ring-amber-300 animate-pulse'
                             : 'bg-slate-50 text-slate-500 ring-slate-200'
                           }`}>
-                            {done ? '✓ ' : isCurrent ? '⏳ ' : ''}{display}
-                            {done && done.name && !user && <span className="ml-1 font-normal text-emerald-600">· {done.name}</span>}
+                            {done ? 'â ' : isCurrent ? 'â³ ' : ''}{display}
+                            {done && done.name && !user && <span className="ml-1 font-normal text-emerald-600">Â· {done.name}</span>}
                           </div>
                           {i < task.approvalChain!.length - 1 && <ArrowRight size={12} className="text-slate-400" />}
                         </div>
@@ -363,77 +363,77 @@ export function TaskDetailModal(props: {
                 </div>
               )}
 
-              {/* Phase 12 — Lịch sử yêu cầu bổ sung (nếu có) */}
+              {/* Phase 12 â Lá»ch sá»­ yÃªu cáº§u bá» sung (náº¿u cÃ³) */}
               {task.revisionRequests && task.revisionRequests.length > 0 && (
                 <div className="rounded-lg border border-orange-200 bg-orange-50/40 p-3 space-y-2">
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-orange-700">Yêu cầu bổ sung từ người nhận</div>
+                  <div className="text-xs font-semibold uppercase tracking-wider text-orange-700">YÃªu cáº§u bá» sung tá»« ngÆ°á»i nháº­n</div>
                   {task.revisionRequests.slice(-3).map((r, i) => (
                     <div key={i} className="text-sm text-slate-700 border-l-2 border-orange-300 pl-2">
-                      <div className="font-medium text-orange-800">{r.name} <span className="text-xs text-slate-400 font-normal">· {fmtDateTime(r.requestedAt)}</span></div>
+                      <div className="font-medium text-orange-800">{r.name} <span className="text-xs text-slate-400 font-normal">Â· {fmtDateTime(r.requestedAt)}</span></div>
                       <div className="text-sm whitespace-pre-wrap">{r.message}</div>
                     </div>
                   ))}
                 </div>
               )}
 
-              {/* Phase 12 — Dự kiến hoàn thành (recipient set khi in_progress) */}
+              {/* Phase 12 â Dá»± kiáº¿n hoÃ n thÃ nh (recipient set khi in_progress) */}
               {task.kind === 'proposal' && task.expectedCompletionDate && (
                 <div className="rounded-lg border border-sky-200 bg-sky-50/40 px-3 py-2 text-sm flex items-center gap-2">
                   <CalendarDays size={14} className="text-sky-600" />
-                  <span className="text-slate-600">Dự kiến hoàn thành:</span>
+                  <span className="text-slate-600">Dá»± kiáº¿n hoÃ n thÃ nh:</span>
                   <span className="font-semibold text-sky-800">{task.expectedCompletionDate}</span>
                 </div>
               )}
 
-              {/* Phase 12.9 (2026-06-04): tier (peer/senior) cho doc mới */}
+              {/* Phase 12.9 (2026-06-04): tier (peer/senior) cho doc má»i */}
               {task.kind === 'proposal' && (task as any).recipientTier && (
                 <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-3 flex items-center gap-3 flex-wrap">
                   <div>
-                    <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700 mb-0.5">Đối tượng đề xuất</div>
+                    <div className="text-xs font-semibold uppercase tracking-wider text-emerald-700 mb-0.5">Äá»i tÆ°á»£ng Äá» xuáº¥t</div>
                     <div className="text-sm font-semibold text-slate-800">
-                      {(task as any).recipientTier === 'peer' ? '↔ Ngang cấp' : '↑ Cấp trên'}
+                      {(task as any).recipientTier === 'peer' ? 'â Ngang cáº¥p' : 'â Cáº¥p trÃªn'}
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* LEGACY (Phase 12.8 doc cũ): scope + subtype + recipient */}
+              {/* LEGACY (Phase 12.8 doc cÅ©): scope + subtype + recipient */}
               {task.kind === 'proposal' && !((task as any).recipientTier) && (task as any).proposalScope && (
                 <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-3 flex items-center gap-3 flex-wrap">
                   <div>
-                    <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700 mb-0.5">Loại đề xuất</div>
+                    <div className="text-xs font-semibold uppercase tracking-wider text-emerald-700 mb-0.5">Loáº¡i Äá» xuáº¥t</div>
                     <div className="text-sm font-semibold text-slate-800">
-                      {(task as any).proposalScope === 'in_block' ? '🏠 Trong khối' : '🔀 Liên khối'}
+                      {(task as any).proposalScope === 'in_block' ? 'ð  Trong khá»i' : 'ð LiÃªn khá»i'}
                     </div>
                   </div>
                   {(task as any).proposalScope === 'cross_block' && (task as any).proposalSubtype && (
                     <div>
-                      <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700 mb-0.5">Tính chất</div>
+                      <div className="text-xs font-semibold uppercase tracking-wider text-emerald-700 mb-0.5">TÃ­nh cháº¥t</div>
                       <div className="text-sm font-medium text-slate-700">
-                        {(task as any).proposalSubtype === 'regular' ? 'Thường xuyên' : 'Phát sinh (qua GĐ khối)'}
+                        {(task as any).proposalSubtype === 'regular' ? 'ThÆ°á»ng xuyÃªn' : 'PhÃ¡t sinh (qua GÄ khá»i)'}
                       </div>
                     </div>
                   )}
                 </div>
               )}
 
-              {/* LEGACY (doc cũ trước 2026-06-04): nội dung + nhóm chi + chi phí */}
+              {/* LEGACY (doc cÅ© trÆ°á»c 2026-06-04): ná»i dung + nhÃ³m chi + chi phÃ­ */}
               {task.kind === 'proposal' && task.proposalType && (
                 <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-3 flex items-center gap-3 flex-wrap">
                   <div>
-                    <div className="text-[10px] font-semibold uppercase tracking-wider text-amber-700 mb-0.5">Nội dung đề xuất</div>
+                    <div className="text-xs font-semibold uppercase tracking-wider text-amber-700 mb-0.5">Ná»i dung Äá» xuáº¥t</div>
                     <div className="text-sm font-semibold text-slate-800">{PROPOSAL_TYPE_LABEL[task.proposalType]}</div>
                   </div>
                   {task.proposalType === 'tai_chinh' && task.financialGroup && (
                     <div>
-                      <div className="text-[10px] font-semibold uppercase tracking-wider text-amber-700 mb-0.5">Nhóm chi</div>
+                      <div className="text-xs font-semibold uppercase tracking-wider text-amber-700 mb-0.5">NhÃ³m chi</div>
                       <div className="text-sm font-medium text-slate-700">{FINANCIAL_GROUP_LABEL[task.financialGroup]}</div>
                     </div>
                   )}
                   {task.estimatedCost != null && task.estimatedCost > 0 && (
                     <div className="ml-auto text-right">
-                      <div className="text-[10px] font-semibold uppercase tracking-wider text-amber-700 mb-0.5">Chi phí dự kiến</div>
-                      <div className="text-sm font-bold text-amber-800 tabular-nums">{task.estimatedCost.toLocaleString('vi-VN')}₫</div>
+                      <div className="text-xs font-semibold uppercase tracking-wider text-amber-700 mb-0.5">Chi phÃ­ dá»± kiáº¿n</div>
+                      <div className="text-sm font-bold text-amber-800 tabular-nums">{task.estimatedCost.toLocaleString('vi-VN')}â«</div>
                     </div>
                   )}
                 </div>
@@ -442,7 +442,7 @@ export function TaskDetailModal(props: {
               {/* Description */}
               {task.description && (
                 <div className="rounded-lg border border-slate-200 bg-slate-50/40 p-3">
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Mô tả</div>
+                  <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">MÃ´ táº£</div>
                   <p className="text-sm text-slate-700 whitespace-pre-wrap">{task.description}</p>
                 </div>
               )}
@@ -450,10 +450,10 @@ export function TaskDetailModal(props: {
               {/* Status update controls */}
               {canUpdateStatus && !['rejected', 'cancelled'].includes(task.status) && (
                 <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-3 space-y-2">
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700">Cập nhật trạng thái</div>
+                  <div className="text-xs font-semibold uppercase tracking-wider text-emerald-700">Cáº­p nháº­t tráº¡ng thÃ¡i</div>
                   {task.status === 'in_progress' && (
                     <div className="flex items-center gap-2">
-                      <label className="text-xs font-medium text-slate-600 shrink-0">Tiến độ:</label>
+                      <label className="text-xs font-medium text-slate-600 shrink-0">Tiáº¿n Äá»:</label>
                       <input
                         type="range" min={0} max={100} step={5}
                         value={progressInput}
@@ -465,65 +465,65 @@ export function TaskDetailModal(props: {
                         disabled={busy === 'status'}
                         onClick={() => changeStatus('in_progress', progressInput)}
                         className="px-3 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 rounded"
-                      >Lưu %</button>
+                      >LÆ°u %</button>
                     </div>
                   )}
                   <div className="flex gap-2 flex-wrap">
-                    {/* Đề xuất: bắt đầu phải nhập "dự kiến hoàn thành" → mở form */}
+                    {/* Äá» xuáº¥t: báº¯t Äáº§u pháº£i nháº­p "dá»± kiáº¿n hoÃ n thÃ nh" â má» form */}
                     {task.status === 'pending' && task.kind === 'proposal' && (
                       <button disabled={!!busy} onClick={() => setShowStartForm(true)} className={btnPrimary}>
-                        <Clock size={14} /> Bắt đầu thực hiện
+                        <Clock size={14} /> Báº¯t Äáº§u thá»±c hiá»n
                       </button>
                     )}
-                    {/* Giao việc thường: bắt đầu trực tiếp */}
+                    {/* Giao viá»c thÆ°á»ng: báº¯t Äáº§u trá»±c tiáº¿p */}
                     {task.status === 'pending' && task.kind !== 'proposal' && (
                       <button disabled={!!busy} onClick={() => changeStatus('in_progress', task.progressPct || 10)} className={btnPrimary}>
-                        <Clock size={14} /> Bắt đầu
+                        <Clock size={14} /> Báº¯t Äáº§u
                       </button>
                     )}
-                    {/* Đề xuất: recipient có thể yêu cầu bổ sung */}
+                    {/* Äá» xuáº¥t: recipient cÃ³ thá» yÃªu cáº§u bá» sung */}
                     {(task.status === 'pending' || task.status === 'in_progress') && task.kind === 'proposal' && !isCreator && (
                       <button disabled={!!busy} onClick={() => setShowRevisionForm(true)} className={btnSecondary}>
-                        <AlertTriangle size={14} /> Yêu cầu bổ sung
+                        <AlertTriangle size={14} /> YÃªu cáº§u bá» sung
                       </button>
                     )}
                     {(task.status === 'pending' || task.status === 'in_progress') && (
                       <button disabled={!!busy} onClick={() => changeStatus('done')} className={btnSuccess}>
-                        <CheckCircle2 size={14} /> Hoàn thành
+                        <CheckCircle2 size={14} /> HoÃ n thÃ nh
                       </button>
                     )}
-                    {/* Đề xuất ở requested_revision: creator bổ sung xong gửi lại */}
+                    {/* Äá» xuáº¥t á» requested_revision: creator bá» sung xong gá»­i láº¡i */}
                     {task.status === 'requested_revision' && task.kind === 'proposal' && (isCreator || isAdmin) && (
                       <button disabled={!!busy} onClick={() => changeStatus('pending')} className={btnPrimary}>
-                        <Send size={14} /> Gửi lại sau bổ sung
+                        <Send size={14} /> Gá»­i láº¡i sau bá» sung
                       </button>
                     )}
                     {task.status === 'in_progress' && task.kind !== 'proposal' && (
                       <button disabled={!!busy} onClick={() => changeStatus('pending')} className={btnSecondary}>
-                        Tạm dừng
+                        Táº¡m dá»«ng
                       </button>
                     )}
                     {(task.status === 'pending' || task.status === 'in_progress') && (isCreator || isAdmin) && (
                       <button disabled={!!busy} onClick={() => changeStatus('cancelled')} className={btnDanger}>
-                        Huỷ
+                        Huá»·
                       </button>
                     )}
                     {task.status === 'done' && isAdmin && (
                       <button disabled={!!busy} onClick={() => changeStatus('in_progress', 50)} className={btnSecondary}>
-                        Mở lại
+                        Má» láº¡i
                       </button>
                     )}
                   </div>
                 </div>
               )}
 
-              {/* Phase 12 — Form "Bắt đầu thực hiện" cho recipient (đề xuất) */}
+              {/* Phase 12 â Form "Báº¯t Äáº§u thá»±c hiá»n" cho recipient (Äá» xuáº¥t) */}
               {showStartForm && (
                 <div className="rounded-lg border-2 border-emerald-300 bg-emerald-50/60 p-3 space-y-2">
                   <div className="text-xs font-bold uppercase tracking-wider text-emerald-800 flex items-center gap-1">
-                    <Clock size={12} /> Bắt đầu thực hiện đề xuất
+                    <Clock size={12} /> Báº¯t Äáº§u thá»±c hiá»n Äá» xuáº¥t
                   </div>
-                  <p className="text-xs text-slate-600">Vui lòng nhập ngày dự kiến hoàn thành để người gửi biết.</p>
+                  <p className="text-xs text-slate-600">Vui lÃ²ng nháº­p ngÃ y dá»± kiáº¿n hoÃ n thÃ nh Äá» ngÆ°á»i gá»­i biáº¿t.</p>
                   <input
                     type="date"
                     value={expectedCompletionDate}
@@ -532,102 +532,102 @@ export function TaskDetailModal(props: {
                     className="w-full text-sm border border-emerald-300 rounded-lg px-2 py-1.5 focus:ring-2 focus:ring-emerald-400 outline-none"
                   />
                   <div className="flex gap-2 justify-end">
-                    <button onClick={() => { setShowStartForm(false); setExpectedCompletionDate(''); }} className={btnSecondary}>Hủy</button>
+                    <button onClick={() => { setShowStartForm(false); setExpectedCompletionDate(''); }} className={btnSecondary}>Há»§y</button>
                     <button disabled={busy === 'status' || !expectedCompletionDate} onClick={startProposal} className={btnPrimary}>
                       {busy === 'status' && <Loader2 size={14} className="animate-spin" />}
-                      <Clock size={14} /> Xác nhận bắt đầu
+                      <Clock size={14} /> XÃ¡c nháº­n báº¯t Äáº§u
                     </button>
                   </div>
                 </div>
               )}
 
-              {/* Approval block — chính chủ duyệt (bỏ override theo spec anh 2026-06-10). */}
+              {/* Approval block â chÃ­nh chá»§ duyá»t (bá» override theo spec anh 2026-06-10). */}
               {canApprove && (
                 <div className="rounded-lg border-2 border-amber-300 bg-amber-50/60 p-3 space-y-2">
                   <div className="text-xs font-bold uppercase tracking-wider flex items-center gap-1 text-amber-800">
-                    <AlertTriangle size={12} /> Đến lượt bạn duyệt
+                    <AlertTriangle size={12} /> Äáº¿n lÆ°á»£t báº¡n duyá»t
                   </div>
 
-                  {/* IDLE: 3 nút cho proposal (Duyệt/Bổ sung/Từ chối) hoặc
-                      2 nút cho assignment (Duyệt/Từ chối — không có Bổ sung). */}
+                  {/* IDLE: 3 nÃºt cho proposal (Duyá»t/Bá» sung/Tá»« chá»i) hoáº·c
+                      2 nÃºt cho assignment (Duyá»t/Tá»« chá»i â khÃ´ng cÃ³ Bá» sung). */}
                   {!showApprove && !showReject && !showRevisionForm && (
                     <div className={`grid gap-2 ${task.kind === 'proposal' ? 'grid-cols-3' : 'grid-cols-2'}`}>
                       <button onClick={() => setShowApprove(true)} className={btnSuccess}>
-                        <CheckCircle2 size={14} /> Duyệt
+                        <CheckCircle2 size={14} /> Duyá»t
                       </button>
                       {task.kind === 'proposal' && (
                         <button onClick={() => setShowRevisionForm(true)} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-semibold rounded-lg bg-orange-600 hover:bg-orange-700 text-white shadow-sm">
-                          <AlertTriangle size={14} /> Bổ sung
+                          <AlertTriangle size={14} /> Bá» sung
                         </button>
                       )}
                       <button onClick={() => setShowReject(true)} className={btnDanger}>
-                        <XCircle size={14} /> Từ chối
+                        <XCircle size={14} /> Tá»« chá»i
                       </button>
                     </div>
                   )}
 
-                  {/* DUYỆT — ghi chú optional */}
+                  {/* DUYá»T â ghi chÃº optional */}
                   {showApprove && (
                     <div className="space-y-2">
-                      <div className="text-xs font-semibold text-emerald-800">Ghi chú khi duyệt (tuỳ chọn)</div>
+                      <div className="text-xs font-semibold text-emerald-800">Ghi chÃº khi duyá»t (tuá»³ chá»n)</div>
                       <textarea
                         value={approveComment}
                         onChange={(e) => setApproveComment(e.target.value)}
-                        placeholder="Vd: Đồng ý phương án, lưu ý ... (có thể bỏ trống)"
+                        placeholder="Vd: Äá»ng Ã½ phÆ°Æ¡ng Ã¡n, lÆ°u Ã½ ... (cÃ³ thá» bá» trá»ng)"
                         rows={2}
                         maxLength={1000}
                         className="w-full text-sm border border-emerald-300 rounded-lg p-2 focus:ring-2 focus:ring-emerald-400 outline-none"
                       />
                       <div className="flex gap-2 justify-end">
-                        <button onClick={() => { setShowApprove(false); setApproveComment(''); }} className={btnSecondary}>Huỷ</button>
+                        <button onClick={() => { setShowApprove(false); setApproveComment(''); }} className={btnSecondary}>Huá»·</button>
                         <button disabled={busy === 'approve'} onClick={approve} className={btnSuccess}>
                           {busy === 'approve' && <Loader2 size={14} className="animate-spin" />}
-                          <CheckCircle2 size={14} /> Xác nhận duyệt
+                          <CheckCircle2 size={14} /> XÃ¡c nháº­n duyá»t
                         </button>
                       </div>
                     </div>
                   )}
 
-                  {/* BỔ SUNG — yêu cầu creator chỉnh sửa, gửi lại */}
+                  {/* Bá» SUNG â yÃªu cáº§u creator chá»nh sá»­a, gá»­i láº¡i */}
                   {showRevisionForm && (
                     <div className="space-y-2">
-                      <div className="text-xs font-semibold text-orange-800">Nội dung cần bổ sung (bắt buộc)</div>
-                      <p className="text-[11px] text-slate-600">Đề xuất sẽ chuyển trạng thái "Yêu cầu bổ sung". Người tạo bổ sung rồi gửi lại cho bạn duyệt.</p>
+                      <div className="text-xs font-semibold text-orange-800">Ná»i dung cáº§n bá» sung (báº¯t buá»c)</div>
+                      <p className="text-xs text-slate-600">Äá» xuáº¥t sáº½ chuyá»n tráº¡ng thÃ¡i "YÃªu cáº§u bá» sung". NgÆ°á»i táº¡o bá» sung rá»i gá»­i láº¡i cho báº¡n duyá»t.</p>
                       <textarea
                         value={revisionMessage}
                         onChange={(e) => setRevisionMessage(e.target.value)}
-                        placeholder="Nêu rõ thông tin/chi tiết cần bổ sung..."
+                        placeholder="NÃªu rÃµ thÃ´ng tin/chi tiáº¿t cáº§n bá» sung..."
                         rows={3}
                         maxLength={1000}
                         className="w-full text-sm border border-orange-300 rounded-lg p-2 focus:ring-2 focus:ring-orange-400 outline-none"
                       />
                       <div className="flex gap-2 justify-end">
-                        <button onClick={() => { setShowRevisionForm(false); setRevisionMessage(''); }} className={btnSecondary}>Huỷ</button>
+                        <button onClick={() => { setShowRevisionForm(false); setRevisionMessage(''); }} className={btnSecondary}>Huá»·</button>
                         <button disabled={busy === 'request-revision' || !revisionMessage.trim()} onClick={requestRevision} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold rounded-lg bg-orange-600 hover:bg-orange-700 text-white shadow-sm disabled:opacity-50">
                           {busy === 'request-revision' && <Loader2 size={14} className="animate-spin" />}
-                          <AlertTriangle size={14} /> Gửi yêu cầu
+                          <AlertTriangle size={14} /> Gá»­i yÃªu cáº§u
                         </button>
                       </div>
                     </div>
                   )}
 
-                  {/* TỪ CHỐI — lý do bắt buộc */}
+                  {/* Tá»ª CHá»I â lÃ½ do báº¯t buá»c */}
                   {showReject && (
                     <div className="space-y-2">
-                      <div className="text-xs font-semibold text-rose-800">Lý do từ chối (bắt buộc)</div>
+                      <div className="text-xs font-semibold text-rose-800">LÃ½ do tá»« chá»i (báº¯t buá»c)</div>
                       <textarea
                         value={rejectReason}
                         onChange={(e) => setRejectReason(e.target.value)}
-                        placeholder="Lý do từ chối đề xuất..."
+                        placeholder="LÃ½ do tá»« chá»i Äá» xuáº¥t..."
                         rows={2}
                         maxLength={1000}
                         className="w-full text-sm border border-rose-300 rounded-lg p-2 focus:ring-2 focus:ring-rose-400 outline-none"
                       />
                       <div className="flex gap-2 justify-end">
-                        <button onClick={() => { setShowReject(false); setRejectReason(''); }} className={btnSecondary}>Huỷ</button>
+                        <button onClick={() => { setShowReject(false); setRejectReason(''); }} className={btnSecondary}>Huá»·</button>
                         <button disabled={busy === 'reject' || !rejectReason.trim()} onClick={reject} className={btnDanger}>
                           {busy === 'reject' && <Loader2 size={14} className="animate-spin" />}
-                          <XCircle size={14} /> Xác nhận từ chối
+                          <XCircle size={14} /> XÃ¡c nháº­n tá»« chá»i
                         </button>
                       </div>
                     </div>
@@ -635,26 +635,26 @@ export function TaskDetailModal(props: {
                 </div>
               )}
 
-              {/* Form "Yêu cầu bổ sung" CHO RECIPIENT (đề xuất đã duyệt — recipient yêu cầu creator bổ sung) */}
+              {/* Form "YÃªu cáº§u bá» sung" CHO RECIPIENT (Äá» xuáº¥t ÄÃ£ duyá»t â recipient yÃªu cáº§u creator bá» sung) */}
               {!canApprove && showRevisionForm && (
                 <div className="rounded-lg border-2 border-orange-300 bg-orange-50/60 p-3 space-y-2">
                   <div className="text-xs font-bold uppercase tracking-wider text-orange-800 flex items-center gap-1">
-                    <AlertTriangle size={12} /> Yêu cầu người gửi bổ sung
+                    <AlertTriangle size={12} /> YÃªu cáº§u ngÆ°á»i gá»­i bá» sung
                   </div>
-                  <p className="text-xs text-slate-600">Đề xuất sẽ chuyển về trạng thái "Yêu cầu bổ sung". Người gửi nhận thông báo + bổ sung rồi gửi lại.</p>
+                  <p className="text-xs text-slate-600">Äá» xuáº¥t sáº½ chuyá»n vá» tráº¡ng thÃ¡i "YÃªu cáº§u bá» sung". NgÆ°á»i gá»­i nháº­n thÃ´ng bÃ¡o + bá» sung rá»i gá»­i láº¡i.</p>
                   <textarea
                     value={revisionMessage}
                     onChange={(e) => setRevisionMessage(e.target.value)}
-                    placeholder="Nêu rõ thông tin cần bổ sung..."
+                    placeholder="NÃªu rÃµ thÃ´ng tin cáº§n bá» sung..."
                     rows={3}
                     maxLength={1000}
                     className="w-full text-sm border border-orange-300 rounded-lg p-2 focus:ring-2 focus:ring-orange-400 outline-none"
                   />
                   <div className="flex gap-2 justify-end">
-                    <button onClick={() => { setShowRevisionForm(false); setRevisionMessage(''); }} className={btnSecondary}>Hủy</button>
+                    <button onClick={() => { setShowRevisionForm(false); setRevisionMessage(''); }} className={btnSecondary}>Há»§y</button>
                     <button disabled={busy === 'request-revision' || !revisionMessage.trim()} onClick={requestRevision} className={btnDanger}>
                       {busy === 'request-revision' && <Loader2 size={14} className="animate-spin" />}
-                      <AlertTriangle size={14} /> Gửi yêu cầu
+                      <AlertTriangle size={14} /> Gá»­i yÃªu cáº§u
                     </button>
                   </div>
                 </div>
@@ -662,15 +662,15 @@ export function TaskDetailModal(props: {
 
               {task.status === 'rejected' && task.rejectionReason && (
                 <div className="rounded-lg border border-rose-200 bg-rose-50/60 p-3">
-                  <div className="text-xs font-bold uppercase tracking-wider text-rose-800 mb-1">Lý do từ chối</div>
+                  <div className="text-xs font-bold uppercase tracking-wider text-rose-800 mb-1">LÃ½ do tá»« chá»i</div>
                   <p className="text-sm text-rose-900">{task.rejectionReason}</p>
                 </div>
               )}
 
               {/* Attachments */}
               <div>
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1">
-                  <Paperclip size={11} /> File đính kèm ({attachments.length})
+                <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1">
+                  <Paperclip size={12} /> File ÄÃ­nh kÃ¨m ({attachments.length})
                 </div>
                 {attachments.length > 0 && (
                   <ul className="space-y-1 mb-2">
@@ -685,14 +685,14 @@ export function TaskDetailModal(props: {
                           >
                             {a.fileName}
                           </a>
-                          <span className="text-[10px] text-slate-400 tabular-nums shrink-0">
+                          <span className="text-xs text-slate-400 tabular-nums shrink-0">
                             {(a.size / 1024).toFixed(0)} KB
                           </span>
-                          <span className="text-[10px] text-slate-400 truncate shrink-0 max-w-[100px]">{a.uploadedByName}</span>
+                          <span className="text-xs text-slate-400 truncate shrink-0 max-w-[100px]">{a.uploadedByName}</span>
                           {a.downloadUrl && (
                             <a href={a.downloadUrl} target="_blank" rel="noreferrer"
                               className="p-1 text-slate-400 hover:text-emerald-700"
-                              title="Tải xuống"
+                              title="Táº£i xuá»ng"
                             >
                               <Download size={12} />
                             </a>
@@ -702,7 +702,7 @@ export function TaskDetailModal(props: {
                               onClick={() => deleteAttachment(a.path)}
                               disabled={busy === 'upload'}
                               className="p-1 text-slate-400 hover:text-rose-600"
-                              title="Xoá"
+                              title="XoÃ¡"
                             >
                               <Trash2 size={12} />
                             </button>
@@ -714,7 +714,7 @@ export function TaskDetailModal(props: {
                 )}
                 <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 border border-dashed border-emerald-300 rounded-lg text-xs text-emerald-700 hover:bg-emerald-50">
                   {busy === 'upload' ? <Loader2 size={12} className="animate-spin" /> : <Paperclip size={12} />}
-                  {busy === 'upload' ? 'Đang upload...' : 'Đính kèm file'}
+                  {busy === 'upload' ? 'Äang upload...' : 'ÄÃ­nh kÃ¨m file'}
                   <input
                     type="file" multiple
                     onChange={(e) => { if (e.target.files && e.target.files.length > 0) uploadFiles(e.target.files); e.target.value = ''; }}
@@ -726,24 +726,24 @@ export function TaskDetailModal(props: {
 
               {/* Timeline */}
               <div>
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1">
-                  <MessageSquare size={11} /> Lịch sử & Trao đổi ({comments.length})
+                <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2 flex items-center gap-1">
+                  <MessageSquare size={12} /> Lá»ch sá»­ & Trao Äá»i ({comments.length})
                 </div>
                 <div className="space-y-2 max-h-72 overflow-auto pr-1">
                   {comments.map((c) => (
                     <CommentRow key={c.id} c={c} />
                   ))}
                   {comments.length === 0 && (
-                    <div className="text-xs text-slate-400 text-center py-3">Chưa có hoạt động</div>
+                    <div className="text-xs text-slate-400 text-center py-3">ChÆ°a cÃ³ hoáº¡t Äá»ng</div>
                   )}
                 </div>
-                {/* New comment — textarea multiline để nội dung dài xuống dòng + scroll trong ô */}
+                {/* New comment â textarea multiline Äá» ná»i dung dÃ i xuá»ng dÃ²ng + scroll trong Ã´ */}
                 <div className="mt-3 flex gap-2 items-end">
                   <textarea
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); postComment(); } }}
-                    placeholder="Nhập trao đổi… (Enter để gửi, Shift+Enter xuống dòng)"
+                    placeholder="Nháº­p trao Äá»iâ¦ (Enter Äá» gá»­i, Shift+Enter xuá»ng dÃ²ng)"
                     rows={2}
                     maxLength={2000}
                     className="flex-1 text-sm px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-400 outline-none resize-y min-h-[60px] max-h-48"
@@ -770,11 +770,11 @@ export function TaskDetailModal(props: {
                 onClick={del}
                 className="px-3 py-1.5 text-xs text-rose-600 hover:bg-rose-50 rounded-lg inline-flex items-center gap-1"
               >
-                <Trash2 size={12} /> Xoá nhiệm vụ
+                <Trash2 size={12} /> XoÃ¡ nhiá»m vá»¥
               </button>
             )}
           </div>
-          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">Đóng</button>
+          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">ÄÃ³ng</button>
         </div>
       </div>
     </div>
@@ -793,7 +793,7 @@ const btnSecondary= 'inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 t
 function Meta({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-0.5">{label}</div>
+      <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-0.5">{label}</div>
       <div className="text-sm text-slate-800">{children}</div>
     </div>
   );
@@ -821,11 +821,11 @@ function ProgressBar({ pct }: { pct: number }) {
 }
 
 const COMMENT_KIND_ICON: Record<string, { icon: string; bg: string; text: string }> = {
-  created: { icon: '✨', bg: 'bg-emerald-50', text: 'text-emerald-700' },
-  approval: { icon: '✓', bg: 'bg-emerald-50', text: 'text-emerald-700' },
-  rejection: { icon: '✕', bg: 'bg-rose-50', text: 'text-rose-700' },
-  status_change: { icon: '↻', bg: 'bg-sky-50', text: 'text-sky-700' },
-  comment: { icon: '💬', bg: 'bg-slate-50', text: 'text-slate-700' },
+  created: { icon: 'â¨', bg: 'bg-emerald-50', text: 'text-emerald-700' },
+  approval: { icon: 'â', bg: 'bg-emerald-50', text: 'text-emerald-700' },
+  rejection: { icon: 'â', bg: 'bg-rose-50', text: 'text-rose-700' },
+  status_change: { icon: 'â»', bg: 'bg-sky-50', text: 'text-sky-700' },
+  comment: { icon: 'ð¬', bg: 'bg-slate-50', text: 'text-slate-700' },
 };
 
 function CommentRow({ c }: { c: TaskComment }) {
@@ -835,7 +835,7 @@ function CommentRow({ c }: { c: TaskComment }) {
     <div className={`flex items-start gap-2 p-2 rounded-lg ${isEvent ? k.bg : 'bg-white border border-slate-100'}`}>
       <span className={`text-sm shrink-0 ${k.text}`}>{k.icon}</span>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between gap-2 text-[11px]">
+        <div className="flex items-center justify-between gap-2 text-xs">
           <span className="font-semibold text-slate-800 truncate">{c.authorName}</span>
           <span className="text-slate-400 tabular-nums shrink-0">{fmtDateTime(c.createdAt)}</span>
         </div>
@@ -856,6 +856,6 @@ function fmtDateTime(iso: string): string {
   } catch { return iso; }
 }
 
-// Re-export ArrowRight để avoid unused lint
+// Re-export ArrowRight Äá» avoid unused lint
 export type { Task };
 void ArrowRight;
