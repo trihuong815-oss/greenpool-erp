@@ -12,7 +12,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Plus, Search, Loader2, Inbox, ArrowUpFromLine, ArrowLeftRight, GitBranch, RefreshCw, ChevronRight } from 'lucide-react';
 import { tasksApi, type Task, type TaskStatus, PROPOSAL_TYPE_LABEL } from '@/lib/services/tasks/api-client';
-import { TaskCreateModal } from '../giao-viec/TaskCreateModal';
+import TaskCreateModal from '../giao-viec/TaskCreateModal';
 import TaskDetailModal from '../giao-viec/TaskDetailModal';
 
 interface Department { id: string; name: string; blockId: 'KD' | 'VP' | null; }
@@ -289,7 +289,7 @@ export function DeXuatClient(props: Props) {
           currentDepartmentId={currentDepartmentId}
           departments={departments}
           branches={branches}
-          users={users}
+          users={users as any}
           onClose={() => setShowCreate(false)}
           onCreated={() => { setShowCreate(false); refresh(); }}
         />
@@ -304,7 +304,7 @@ export function DeXuatClient(props: Props) {
           currentBranchId={currentBranchId}
           departments={departments}
           branches={branches}
-          users={users}
+          users={users as any}
           onClose={() => setSelectedTask(null)}
           onChange={refresh}
         />
