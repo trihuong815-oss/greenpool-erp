@@ -8,22 +8,22 @@ import {
 } from '@/lib/services/tasks/api-client';
 import { ROLE_BLOCK } from '@/lib/permissions';
 
-// Phase 12.9 (2026-06-04): Form Đề xuất đơn giản hoá.
-//   - 2 tab: NGANG CẤP / CẤP TRÊN
-//   - Mỗi tab → dropdown user phù hợp
-//   - Server: chain = [recipientUid] (1 cấp duyệt)
-//   - Module /giao-viec chỉ cho TP/QLCS/GD/CEO/ADMIN.
+// Phase 12.9 (2026-06-04): Form Äá» xuáº¥t ÄÆ¡n giáº£n hoÃ¡.
+//   - 2 tab: NGANG Cáº¤P / Cáº¤P TRÃN
+//   - Má»i tab â dropdown user phÃ¹ há»£p
+//   - Server: chain = [recipientUid] (1 cáº¥p duyá»t)
+//   - Module /giao-viec chá» cho TP/QLCS/GD/CEO/ADMIN.
 
-// Phase 12.9: chỉ tầng 3 (theo sơ đồ org).
-// TIBAN_TT đã hạ xuống tầng 4 (thuộc phòng NS) — không nằm trong pool này nữa.
+// Phase 12.9: chá» táº§ng 3 (theo sÆ¡ Äá» org).
+// TIBAN_TT ÄÃ£ háº¡ xuá»ng táº§ng 4 (thuá»c phÃ²ng NS) â khÃ´ng náº±m trong pool nÃ y ná»¯a.
 const PEER_ROLES = new Set([
   'TP_KT', 'TP_DT', 'TP_MKT', 'TP_GS', 'TP_KE', 'TP_NS',
   'QLCS_HM', 'QLCS_TK', 'QLCS_CTT', 'QLCS_24NCT', 'QLCS_TT',
 ]);
 
-// Phase 12.9.6 (2026-06-06): cấu trúc tabs khối cho TP/QLCS.
-//   - Khối KD: phòng ban (TP_KT/DT/MKT) + cơ sở (QLCS_*) + lãnh đạo (GD_KD / ADMIN fallback)
-//   - Khối VP: phòng ban (TP_KE/GS/NS) + lãnh đạo (GD_VP) — VP không có cơ sở
+// Phase 12.9.6 (2026-06-06): cáº¥u trÃºc tabs khá»i cho TP/QLCS.
+//   - Khá»i KD: phÃ²ng ban (TP_KT/DT/MKT) + cÆ¡ sá» (QLCS_*) + lÃ£nh Äáº¡o (GD_KD / ADMIN fallback)
+//   - Khá»i VP: phÃ²ng ban (TP_KE/GS/NS) + lÃ£nh Äáº¡o (GD_VP) â VP khÃ´ng cÃ³ cÆ¡ sá»
 const TP_ROLES_KD = new Set(['TP_KT', 'TP_DT', 'TP_MKT']);
 const TP_ROLES_VP = new Set(['TP_GS', 'TP_KE', 'TP_NS']);
 const QLCS_ROLES = new Set(['QLCS_HM', 'QLCS_TK', 'QLCS_CTT', 'QLCS_24NCT', 'QLCS_TT']);
@@ -51,17 +51,17 @@ export function TaskCreateModal(props: {
     kind, currentUserId, currentUserRole, currentDepartmentId, currentBranchId,
     departments, branches, users, onClose, onCreated,
   } = props;
-  const kindLabel = kind === 'proposal' ? 'đề xuất' : 'giao việc';
+  const kindLabel = kind === 'proposal' ? 'Äá» xuáº¥t' : 'giao viá»c';
 
   const myBlock = ROLE_BLOCK[currentUserRole] ?? 'all';
-  // Phase 12.9.1 (anh chốt 2026-06-05): ADMIN ≠ CEO. ADMIN trong CTY xếp dưới CEO/Chủ tịch
-  // → ADMIN vẫn cần đề xuất (peer GD_KD/GD_VP, senior CEO/Chủ tịch).
-  const isCEO = currentUserRole === 'CEO'; // CHỈ CEO thuần (không ADMIN)
+  // Phase 12.9.1 (anh chá»t 2026-06-05): ADMIN â  CEO. ADMIN trong CTY xáº¿p dÆ°á»i CEO/Chá»§ tá»ch
+  // â ADMIN váº«n cáº§n Äá» xuáº¥t (peer GD_KD/GD_VP, senior CEO/Chá»§ tá»ch).
+  const isCEO = currentUserRole === 'CEO'; // CHá» CEO thuáº§n (khÃ´ng ADMIN)
   const isAdmin = currentUserRole === 'ADMIN';
   const isGD = currentUserRole === 'GD_KD' || currentUserRole === 'GD_VP';
   const isTP = currentUserRole.startsWith('TP_');
   const isQLCS = currentUserRole.startsWith('QLCS_');
-  // Phase 12.9.6: TP/QLCS dùng UI tabs khối (KD/VP) + 3 nhóm.
+  // Phase 12.9.6: TP/QLCS dÃ¹ng UI tabs khá»i (KD/VP) + 3 nhÃ³m.
   const isCreatorTpQlcs = isTP || isQLCS;
 
   const [title, setTitle] = useState('');
@@ -73,7 +73,7 @@ export function TaskCreateModal(props: {
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // ─── ASSIGNMENT state (giao việc — giữ nguyên) ───
+  // âââ ASSIGNMENT state (giao viá»c â giá»¯ nguyÃªn) âââ
   const [assigneeBlock, setAssigneeBlock] = useState<Block>(myBlock === 'VP' ? 'VP' : 'KD');
   const [assigneeKind, setAssigneeKind] = useState<AssigneeKind>('department');
   const [assigneeDeptId, setAssigneeDeptId] = useState<string>('');
@@ -83,37 +83,37 @@ export function TaskCreateModal(props: {
   const [collaboratorDeptIds, setCollaboratorDeptIds] = useState<string[]>([]);
   const [collaboratorFacilityIds, setCollaboratorFacilityIds] = useState<string[]>([]);
 
-  // ─── PROPOSAL state (Phase 12.9 — đơn giản hoá) ───
+  // âââ PROPOSAL state (Phase 12.9 â ÄÆ¡n giáº£n hoÃ¡) âââ
   const [recipientTier, setRecipientTier] = useState<RecipientTier>('peer');
   const [recipientUid, setRecipientUid] = useState<string>('');
-  // Phase 12.9.6: cho TP/QLCS — chọn khối nhận (default = khối creator).
+  // Phase 12.9.6: cho TP/QLCS â chá»n khá»i nháº­n (default = khá»i creator).
   const [recipientBlock, setRecipientBlock] = useState<'KD' | 'VP'>(myBlock === 'VP' ? 'VP' : 'KD');
 
-  // Phase 12.9.4 (anh chốt 2026-06-06): cho phép đề xuất LIÊN KHỐI cho TP/QLCS.
-  // Khi recipient cross-block → server tự chèn GĐ khối creator vào đầu chain (2 cấp duyệt).
-  // Cùng khối → 1 cấp duyệt như cũ.
+  // Phase 12.9.4 (anh chá»t 2026-06-06): cho phÃ©p Äá» xuáº¥t LIÃN KHá»I cho TP/QLCS.
+  // Khi recipient cross-block â server tá»± chÃ¨n GÄ khá»i creator vÃ o Äáº§u chain (2 cáº¥p duyá»t).
+  // CÃ¹ng khá»i â 1 cáº¥p duyá»t nhÆ° cÅ©.
   const peerCandidates = useMemo<User[]>(() => {
     if (kind !== 'proposal') return [];
     if (isCEO) return [];
-    // ADMIN: ngang cấp = GD_KD + GD_VP
+    // ADMIN: ngang cáº¥p = GD_KD + GD_VP
     if (isAdmin) {
       return users
         .filter((u) => u.roleId === 'GD_KD' || u.roleId === 'GD_VP')
         .filter((u) => u.id !== currentUserId)
         .sort((a, b) => a.roleId.localeCompare(b.roleId));
     }
-    // GĐ: ngang cấp = GĐ khối còn lại
+    // GÄ: ngang cáº¥p = GÄ khá»i cÃ²n láº¡i
     if (isGD) {
       const peerGdRole = currentUserRole === 'GD_KD' ? 'GD_VP' : 'GD_KD';
       return users.filter((u) => u.roleId === peerGdRole && u.id !== currentUserId);
     }
-    // TP/QLCS/TIBAN_TT: ngang cấp = TP + QLCS CẢ 2 KHỐI (anh chốt 2026-06-06).
-    // Server tự chèn GĐ khối creator nếu recipient khác khối.
+    // TP/QLCS/TIBAN_TT: ngang cáº¥p = TP + QLCS Cáº¢ 2 KHá»I (anh chá»t 2026-06-06).
+    // Server tá»± chÃ¨n GÄ khá»i creator náº¿u recipient khÃ¡c khá»i.
     return users
       .filter((u) => PEER_ROLES.has(u.roleId))
       .filter((u) => u.id !== currentUserId)
       .sort((a, b) => {
-        // Cùng khối ưu tiên hiển thị trước
+        // CÃ¹ng khá»i Æ°u tiÃªn hiá»n thá» trÆ°á»c
         const blockA = ROLE_BLOCK[a.roleId] ?? 'all';
         const blockB = ROLE_BLOCK[b.roleId] ?? 'all';
         const sameA = blockA === myBlock ? 0 : 1;
@@ -126,33 +126,33 @@ export function TaskCreateModal(props: {
   const seniorCandidates = useMemo<User[]>(() => {
     if (kind !== 'proposal') return [];
     if (isCEO) return [];
-    // ADMIN: cấp trên = CEO
+    // ADMIN: cáº¥p trÃªn = CEO
     if (isAdmin) {
       return users
         .filter((u) => u.roleId === 'CEO')
         .filter((u) => u.id !== currentUserId)
         .sort((a, b) => a.name.localeCompare(b.name, 'vi'));
     }
-    // GĐ: cấp trên = CEO
+    // GÄ: cáº¥p trÃªn = CEO
     if (isGD) {
       return users
         .filter((u) => u.roleId === 'CEO')
         .filter((u) => u.id !== currentUserId)
         .sort((a, b) => a.name.localeCompare(b.name, 'vi'));
     }
-    // TP/QLCS/TIBAN_TT: cấp trên = GĐ KHỐI cả 2 (anh chốt 2026-06-06 cho liên khối).
-    // Phase 12.9.5: nếu slot GD_KD trống → hiển thị ADMIN (anh đảm nhiệm GĐKD thực tế).
-    // Server resolveGdUid cũng fallback ADMIN cho GD_KD → UI & chain đồng bộ.
+    // TP/QLCS/TIBAN_TT: cáº¥p trÃªn = GÄ KHá»I cáº£ 2 (anh chá»t 2026-06-06 cho liÃªn khá»i).
+    // Phase 12.9.5: náº¿u slot GD_KD trá»ng â hiá»n thá» ADMIN (anh Äáº£m nhiá»m GÄKD thá»±c táº¿).
+    // Server resolveGdUid cÅ©ng fallback ADMIN cho GD_KD â UI & chain Äá»ng bá».
     const hasGdKd = users.some((u) => u.roleId === 'GD_KD');
     return users
       .filter((u) =>
         u.roleId === 'GD_KD'
         || u.roleId === 'GD_VP'
-        || (!hasGdKd && u.roleId === 'ADMIN'),  // ADMIN xuất hiện thay GD_KD khi slot trống
+        || (!hasGdKd && u.roleId === 'ADMIN'),  // ADMIN xuáº¥t hiá»n thay GD_KD khi slot trá»ng
       )
       .filter((u) => u.id !== currentUserId)
       .sort((a, b) => {
-        // GĐ cùng khối ưu tiên trước. ADMIN coi như GD_KD (khối KD).
+        // GÄ cÃ¹ng khá»i Æ°u tiÃªn trÆ°á»c. ADMIN coi nhÆ° GD_KD (khá»i KD).
         const aGd = a.roleId === 'ADMIN' ? 'GD_KD' : a.roleId;
         const bGd = b.roleId === 'ADMIN' ? 'GD_KD' : b.roleId;
         const myGd = myBlock === 'KD' ? 'GD_KD' : myBlock === 'VP' ? 'GD_VP' : null;
@@ -162,9 +162,9 @@ export function TaskCreateModal(props: {
       });
   }, [kind, users, isCEO, isAdmin, isGD, currentUserId, myBlock]);
 
-  // Phase 12.9.6: groups theo khối cho TP/QLCS — 3 nhóm: phòng ban / cơ sở / lãnh đạo.
-  //   KD: TP_KT/DT/MKT + 5 QLCS + GD_KD (fallback ADMIN nếu trống)
-  //   VP: TP_KE/GS/NS + GD_VP (VP không có cơ sở)
+  // Phase 12.9.6: groups theo khá»i cho TP/QLCS â 3 nhÃ³m: phÃ²ng ban / cÆ¡ sá» / lÃ£nh Äáº¡o.
+  //   KD: TP_KT/DT/MKT + 5 QLCS + GD_KD (fallback ADMIN náº¿u trá»ng)
+  //   VP: TP_KE/GS/NS + GD_VP (VP khÃ´ng cÃ³ cÆ¡ sá»)
   const blockGroups = useMemo(() => {
     if (!isCreatorTpQlcs || kind !== 'proposal') return null;
     const hasGdKd = users.some((u) => u.roleId === 'GD_KD');
@@ -185,7 +185,7 @@ export function TaskCreateModal(props: {
     } as const;
   }, [isCreatorTpQlcs, kind, users, currentUserId]);
 
-  // Auto chọn người đầu tiên khi đổi tab — cho cả 2 chế độ UI.
+  // Auto chá»n ngÆ°á»i Äáº§u tiÃªn khi Äá»i tab â cho cáº£ 2 cháº¿ Äá» UI.
   useEffect(() => {
     if (kind !== 'proposal') return;
     let list: User[];
@@ -205,7 +205,7 @@ export function TaskCreateModal(props: {
 
   const creatorBlocked = kind === 'proposal' && isCEO;
 
-  // Assignment constraints (giữ nguyên)
+  // Assignment constraints (giá»¯ nguyÃªn)
   const deptsInBlock = useMemo(
     () => departments.filter((d) => d.blockId === assigneeBlock),
     [departments, assigneeBlock],
@@ -226,37 +226,37 @@ export function TaskCreateModal(props: {
      (assigneeKind === 'facility' && assigneeFacilityId && assigneeFacilityId !== currentBranchId));
   const willNeedApproval = (isCrossBlock && !isCEO) || !!isCrossDept;
   const targetGDLabel = isCrossBlock
-    ? (assigneeBlock === 'KD' ? 'GĐ Khối Kinh Doanh' : 'GĐ Khối Văn Phòng')
-    : (myBlock === 'KD' ? 'GĐ Khối Kinh Doanh' : myBlock === 'VP' ? 'GĐ Khối Văn Phòng' : 'GĐ Khối');
+    ? (assigneeBlock === 'KD' ? 'GÄ Khá»i Kinh Doanh' : 'GÄ Khá»i VÄn PhÃ²ng')
+    : (myBlock === 'KD' ? 'GÄ Khá»i Kinh Doanh' : myBlock === 'VP' ? 'GÄ Khá»i VÄn PhÃ²ng' : 'GÄ Khá»i');
 
   async function submit() {
     setError(null);
     if (creatorBlocked) {
-      setError('CEO/Chủ tịch không cần tạo đề xuất — tự ra quyết định trực tiếp.');
+      setError('CEO/Chá»§ tá»ch khÃ´ng cáº§n táº¡o Äá» xuáº¥t â tá»± ra quyáº¿t Äá»nh trá»±c tiáº¿p.');
       return;
     }
-    if (!title.trim()) { setError('Tiêu đề bắt buộc'); return; }
+    if (!title.trim()) { setError('TiÃªu Äá» báº¯t buá»c'); return; }
 
     if (kind === 'proposal') {
       if (!recipientUid) {
         setError(isCreatorTpQlcs
-          ? 'Chưa chọn đối tượng nhận đề xuất.'
-          : (recipientTier === 'peer' ? 'Không có người ngang cấp để gửi đề xuất.' : 'Không có người cấp trên để gửi đề xuất.'));
+          ? 'ChÆ°a chá»n Äá»i tÆ°á»£ng nháº­n Äá» xuáº¥t.'
+          : (recipientTier === 'peer' ? 'KhÃ´ng cÃ³ ngÆ°á»i ngang cáº¥p Äá» gá»­i Äá» xuáº¥t.' : 'KhÃ´ng cÃ³ ngÆ°á»i cáº¥p trÃªn Äá» gá»­i Äá» xuáº¥t.'));
         return;
       }
     } else {
-      if (assigneeKind === 'department' && !assigneeDeptId) { setError('Chọn phòng ban'); return; }
-      if (assigneeKind === 'facility' && !assigneeFacilityId) { setError('Chọn cơ sở'); return; }
-      if (assigneeKind === 'user' && assigneeUserIds.length === 0) { setError('Chọn ít nhất 1 người'); return; }
+      if (assigneeKind === 'department' && !assigneeDeptId) { setError('Chá»n phÃ²ng ban'); return; }
+      if (assigneeKind === 'facility' && !assigneeFacilityId) { setError('Chá»n cÆ¡ sá»'); return; }
+      if (assigneeKind === 'user' && assigneeUserIds.length === 0) { setError('Chá»n Ã­t nháº¥t 1 ngÆ°á»i'); return; }
     }
 
     setSaving(true);
     try {
       let createBody: Parameters<typeof tasksApi.create>[0];
       if (kind === 'proposal') {
-        // Phase 12.9.6: TP/QLCS dùng tab khối → infer tier client-side từ role recipient.
-        //   recipient role = GD_KD/GD_VP/ADMIN  → senior
-        //   recipient role = TP_*/QLCS_*       → peer
+        // Phase 12.9.6: TP/QLCS dÃ¹ng tab khá»i â infer tier client-side tá»« role recipient.
+        //   recipient role = GD_KD/GD_VP/ADMIN  â senior
+        //   recipient role = TP_*/QLCS_*       â peer
         let finalTier: RecipientTier = recipientTier;
         if (isCreatorTpQlcs) {
           const r = users.find((u) => u.id === recipientUid);
@@ -276,7 +276,7 @@ export function TaskCreateModal(props: {
           proposalType: null,
           financialGroup: null,
           estimatedCost: null,
-          // Phase 12.9: server build chain từ recipientUid + tier
+          // Phase 12.9: server build chain tá»« recipientUid + tier
           recipientTier: finalTier,
           recipientUid,
         } as any;
@@ -303,11 +303,11 @@ export function TaskCreateModal(props: {
 
       if (files.length > 0) {
         for (let i = 0; i < files.length; i++) {
-          setUploadProgress(`Đang upload ${i + 1}/${files.length} (${files[i].name})...`);
+          setUploadProgress(`Äang upload ${i + 1}/${files.length} (${files[i].name})...`);
           try {
             await tasksApi.uploadAttachment(id, files[i]);
           } catch (upErr: any) {
-            setError(`Tạo ${kindLabel} OK, nhưng upload file "${files[i].name}" thất bại: ${upErr.message}.`);
+            setError(`Táº¡o ${kindLabel} OK, nhÆ°ng upload file "${files[i].name}" tháº¥t báº¡i: ${upErr.message}.`);
           }
         }
       }
@@ -315,7 +315,7 @@ export function TaskCreateModal(props: {
     } catch (e: any) {
       const msg = e?.message ?? 'unknown';
       if (msg === 'Failed to fetch' || msg.includes('NetworkError')) {
-        setError('Không kết nối được server. Kiểm tra mạng.');
+        setError('KhÃ´ng káº¿t ná»i ÄÆ°á»£c server. Kiá»m tra máº¡ng.');
       } else {
         setError(msg);
       }
@@ -330,13 +330,13 @@ export function TaskCreateModal(props: {
       <div className="bg-white shadow-2xl w-full sm:max-w-2xl h-full sm:h-auto sm:max-h-[90vh] sm:rounded-2xl flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
         <div className="px-5 py-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white flex items-center justify-between">
           <div>
-            <h2 className="text-base font-bold">Tạo {kindLabel} mới</h2>
+            <h2 className="text-base font-bold">Táº¡o {kindLabel} má»i</h2>
             <p className="text-xs text-emerald-50/90 mt-0.5">
               {kind === 'proposal'
-                ? '1 cấp duyệt — người nhận trực tiếp duyệt'
+                ? '1 cáº¥p duyá»t â ngÆ°á»i nháº­n trá»±c tiáº¿p duyá»t'
                 : (willNeedApproval
-                    ? (isCrossBlock ? `Liên khối → ${targetGDLabel} sẽ duyệt` : `Liên phòng/cơ sở → ${targetGDLabel} sẽ duyệt`)
-                    : 'Đi thẳng đến người nhận, không cần duyệt')}
+                    ? (isCrossBlock ? `LiÃªn khá»i â ${targetGDLabel} sáº½ duyá»t` : `LiÃªn phÃ²ng/cÆ¡ sá» â ${targetGDLabel} sáº½ duyá»t`)
+                    : 'Äi tháº³ng Äáº¿n ngÆ°á»i nháº­n, khÃ´ng cáº§n duyá»t')}
             </p>
           </div>
           <button onClick={onClose} className="text-white/80 hover:text-white"><X size={20} /></button>
@@ -348,51 +348,51 @@ export function TaskCreateModal(props: {
           )}
           {creatorBlocked && (
             <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
-              CEO/Chủ tịch không cần tạo đề xuất — tự ra quyết định trực tiếp.
+              CEO/Chá»§ tá»ch khÃ´ng cáº§n táº¡o Äá» xuáº¥t â tá»± ra quyáº¿t Äá»nh trá»±c tiáº¿p.
             </div>
           )}
 
-          <Field label="Tiêu đề *">
+          <Field label="TiÃªu Äá» *">
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               maxLength={200}
-              placeholder="Ngắn gọn, dễ hiểu"
+              placeholder="Ngáº¯n gá»n, dá» hiá»u"
               className={inputCls}
             />
           </Field>
 
           {kind === 'assignment' && (
-            <Field label="Mục tiêu (tuỳ chọn)">
+            <Field label="Má»¥c tiÃªu (tuá»³ chá»n)">
               <input
                 type="text"
                 value={goal}
                 onChange={(e) => setGoal(e.target.value)}
-                placeholder="VD: Mở lớp bơi tại Linh Đàm, đảm bảo kế hoạch..."
+                placeholder="VD: Má» lá»p bÆ¡i táº¡i Linh ÄÃ m, Äáº£m báº£o káº¿ hoáº¡ch..."
                 className={inputCls}
                 maxLength={300}
               />
             </Field>
           )}
-          <Field label="Mô tả">
+          <Field label="MÃ´ táº£">
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
               maxLength={5000}
-              placeholder="Mục tiêu, các bước, kết quả mong muốn..."
+              placeholder="Má»¥c tiÃªu, cÃ¡c bÆ°á»c, káº¿t quáº£ mong muá»n..."
               className={inputCls}
             />
           </Field>
 
-          {/* ═══ FORM ĐỀ XUẤT (Phase 12.9 — đơn giản 2 mục) ═══ */}
+          {/* âââ FORM Äá» XUáº¤T (Phase 12.9 â ÄÆ¡n giáº£n 2 má»¥c) âââ */}
           {kind === 'proposal' && !creatorBlocked && (
-            <Field label="Đối tượng nhận đề xuất *">
-              {/* Phase 12.9.6 (2026-06-06): TP/QLCS dùng tab KHỐI (KD/VP) + 3 nhóm.
-                  GD/ADMIN giữ tab peer/senior cũ (chỉ có vài lựa chọn cố định). */}
+            <Field label="Äá»i tÆ°á»£ng nháº­n Äá» xuáº¥t *">
+              {/* Phase 12.9.6 (2026-06-06): TP/QLCS dÃ¹ng tab KHá»I (KD/VP) + 3 nhÃ³m.
+                  GD/ADMIN giá»¯ tab peer/senior cÅ© (chá» cÃ³ vÃ i lá»±a chá»n cá» Äá»nh). */}
               {isCreatorTpQlcs && blockGroups ? (
                 <>
-                  {/* Tabs 2 khối */}
+                  {/* Tabs 2 khá»i */}
                   <div className="grid grid-cols-2 gap-2 mb-2">
                     {(['KD', 'VP'] as const).map((b) => {
                       const g = blockGroups[b];
@@ -410,29 +410,29 @@ export function TaskCreateModal(props: {
                               : 'bg-white text-slate-600 ring-slate-200 hover:ring-emerald-200'
                           } disabled:opacity-40`}
                         >
-                          <span className="sm:hidden">{b === 'KD' ? '🏭 KD' : '🏢 VP'}</span>
-                          <span className="hidden sm:inline">{b === 'KD' ? '🏭 Khối Kinh Doanh' : '🏢 Khối Văn Phòng'}</span>
-                          <span className="ml-1 text-[10px] opacity-60">
-                            ({total}{isMyBlock ? ' · của bạn' : ''})
+                          <span className="sm:hidden">{b === 'KD' ? 'ð­ KD' : 'ð¢ VP'}</span>
+                          <span className="hidden sm:inline">{b === 'KD' ? 'ð­ Khá»i Kinh Doanh' : 'ð¢ Khá»i VÄn PhÃ²ng'}</span>
+                          <span className="ml-1 text-xs opacity-60">
+                            ({total}{isMyBlock ? ' Â· cá»§a báº¡n' : ''})
                           </span>
                         </button>
                       );
                     })}
                   </div>
-                  {/* Dropdown 3 nhóm cho khối được chọn */}
+                  {/* Dropdown 3 nhÃ³m cho khá»i ÄÆ°á»£c chá»n */}
                   {(() => {
                     const g = blockGroups[recipientBlock];
                     const total = g.dept.length + g.facility.length + g.leadership.length;
                     if (total === 0) {
                       return (
                         <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-2.5">
-                          Khối {recipientBlock === 'KD' ? 'Kinh Doanh' : 'Văn Phòng'} chưa có người nhận hợp lệ.
+                          Khá»i {recipientBlock === 'KD' ? 'Kinh Doanh' : 'VÄn PhÃ²ng'} chÆ°a cÃ³ ngÆ°á»i nháº­n há»£p lá».
                         </div>
                       );
                     }
                     const renderOpt = (u: User) => (
                       <option key={u.id} value={u.id}>
-                        {u.name} · {u.roleId}
+                        {u.name} Â· {u.roleId}
                       </option>
                     );
                     return (
@@ -441,30 +441,30 @@ export function TaskCreateModal(props: {
                         onChange={(e) => setRecipientUid(e.target.value)}
                         className={inputCls}
                       >
-                        <option value="">-- Chọn người nhận --</option>
+                        <option value="">-- Chá»n ngÆ°á»i nháº­n --</option>
                         {g.dept.length > 0 && (
-                          <optgroup label="📋 Phòng ban (Trưởng phòng)">
+                          <optgroup label="ð PhÃ²ng ban (TrÆ°á»ng phÃ²ng)">
                             {g.dept.map(renderOpt)}
                           </optgroup>
                         )}
                         {g.facility.length > 0 && (
-                          <optgroup label="🏊 Cơ sở (Quản lý cơ sở)">
+                          <optgroup label="ð CÆ¡ sá» (Quáº£n lÃ½ cÆ¡ sá»)">
                             {g.facility.map(renderOpt)}
                           </optgroup>
                         )}
                         {g.leadership.length > 0 && (
-                          <optgroup label="👔 Lãnh đạo (Giám đốc Khối)">
+                          <optgroup label="ð LÃ£nh Äáº¡o (GiÃ¡m Äá»c Khá»i)">
                             {g.leadership.map(renderOpt)}
                           </optgroup>
                         )}
                       </select>
                     );
                   })()}
-                  {/* Hint liên khối */}
-                  <p className="mt-1.5 text-[11px] text-slate-500">
+                  {/* Hint liÃªn khá»i */}
+                  <p className="mt-1.5 text-xs text-slate-500">
                     {recipientBlock !== myBlock
-                      ? `⚠ Liên khối → chain 3 cấp: GĐ khối bạn (${myBlock === 'KD' ? 'KD' : 'VP'}) → GĐ khối nhận (${recipientBlock}) → người nhận.`
-                      : 'Trong khối — gửi trực tiếp 1 cấp duyệt (trừ khi chọn GĐ khối → 1 cấp luôn).'}
+                      ? `â  LiÃªn khá»i â chain 3 cáº¥p: GÄ khá»i báº¡n (${myBlock === 'KD' ? 'KD' : 'VP'}) â GÄ khá»i nháº­n (${recipientBlock}) â ngÆ°á»i nháº­n.`
+                      : 'Trong khá»i â gá»­i trá»±c tiáº¿p 1 cáº¥p duyá»t (trá»« khi chá»n GÄ khá»i â 1 cáº¥p luÃ´n).'}
                   </p>
                 </>
               ) : (
@@ -484,8 +484,8 @@ export function TaskCreateModal(props: {
                           : 'bg-white text-slate-600 ring-slate-200 hover:ring-emerald-200'
                       } disabled:opacity-40`}
                     >
-                      {t === 'peer' ? '↔ Ngang cấp' : '↑ Cấp trên'}
-                      <span className="ml-1 text-[10px] opacity-60">({list.length})</span>
+                      {t === 'peer' ? 'â Ngang cáº¥p' : 'â Cáº¥p trÃªn'}
+                      <span className="ml-1 text-xs opacity-60">({list.length})</span>
                     </button>
                   );
                 })}
@@ -495,12 +495,12 @@ export function TaskCreateModal(props: {
                 if (list.length === 0) {
                   return (
                     <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-2.5">
-                      Không có {recipientTier === 'peer' ? 'người ngang cấp' : 'người cấp trên'} để gửi đề xuất.
+                      KhÃ´ng cÃ³ {recipientTier === 'peer' ? 'ngÆ°á»i ngang cáº¥p' : 'ngÆ°á»i cáº¥p trÃªn'} Äá» gá»­i Äá» xuáº¥t.
                     </div>
                   );
                 }
-                // Phase 12.9.5: group dropdown thành "Trong khối" / "Liên khối" (tách rõ cho anh).
-                // ADMIN coi như khối KD (đảm nhiệm GĐKD ảo) — đồng bộ server resolveGdUid.
+                // Phase 12.9.5: group dropdown thÃ nh "Trong khá»i" / "LiÃªn khá»i" (tÃ¡ch rÃµ cho anh).
+                // ADMIN coi nhÆ° khá»i KD (Äáº£m nhiá»m GÄKD áº£o) â Äá»ng bá» server resolveGdUid.
                 const effectiveBlockOf = (roleId: string): 'KD' | 'VP' | 'all' =>
                   roleId === 'ADMIN' ? 'KD' : (ROLE_BLOCK[roleId] ?? 'all');
                 const inBlockList = list.filter((u) => {
@@ -512,12 +512,12 @@ export function TaskCreateModal(props: {
                   return myBlock !== 'all' && b !== 'all' && b !== myBlock;
                 });
                 const blockLabel = (b: 'KD' | 'VP' | 'all') =>
-                  b === 'KD' ? 'Kinh Doanh' : b === 'VP' ? 'Văn Phòng' : 'toàn cty';
+                  b === 'KD' ? 'Kinh Doanh' : b === 'VP' ? 'VÄn PhÃ²ng' : 'toÃ n cty';
                 const renderOpt = (u: User) => {
                   const b = effectiveBlockOf(u.roleId);
                   return (
                     <option key={u.id} value={u.id}>
-                      {u.name} · {u.roleId}{b !== 'all' ? ` (${blockLabel(b)})` : ' (toàn cty)'}
+                      {u.name} Â· {u.roleId}{b !== 'all' ? ` (${blockLabel(b)})` : ' (toÃ n cty)'}
                     </option>
                   );
                 };
@@ -527,36 +527,36 @@ export function TaskCreateModal(props: {
                     onChange={(e) => setRecipientUid(e.target.value)}
                     className={inputCls}
                   >
-                    <option value="">-- Chọn người nhận --</option>
+                    <option value="">-- Chá»n ngÆ°á»i nháº­n --</option>
                     {inBlockList.length > 0 && (
-                      <optgroup label={`▸ Trong khối${myBlock !== 'all' ? ` (${blockLabel(myBlock)})` : ''}`}>
+                      <optgroup label={`â¸ Trong khá»i${myBlock !== 'all' ? ` (${blockLabel(myBlock)})` : ''}`}>
                         {inBlockList.map(renderOpt)}
                       </optgroup>
                     )}
                     {crossBlockList.length > 0 && (
-                      <optgroup label="▸ Liên khối (qua GĐ khối duyệt thêm)">
+                      <optgroup label="â¸ LiÃªn khá»i (qua GÄ khá»i duyá»t thÃªm)">
                         {crossBlockList.map(renderOpt)}
                       </optgroup>
                     )}
                   </select>
                 );
               })()}
-              <p className="mt-1.5 text-[11px] text-slate-500">
+              <p className="mt-1.5 text-xs text-slate-500">
                 {isAdmin
-                  ? 'Ngang cấp = GĐ Kinh Doanh / Văn Phòng. Cấp trên = CEO / Chủ tịch.'
+                  ? 'Ngang cáº¥p = GÄ Kinh Doanh / VÄn PhÃ²ng. Cáº¥p trÃªn = CEO / Chá»§ tá»ch.'
                   : isGD
-                    ? 'Ngang cấp = GĐ khối còn lại. Cấp trên = CEO / Chủ tịch.'
-                    : 'Ngang cấp = các TP + QLCS (cả 2 khối). Cấp trên = GĐ Khối. Liên khối → chain: GĐ khối bạn → GĐ khối nhận → người nhận.'}
+                    ? 'Ngang cáº¥p = GÄ khá»i cÃ²n láº¡i. Cáº¥p trÃªn = CEO / Chá»§ tá»ch.'
+                    : 'Ngang cáº¥p = cÃ¡c TP + QLCS (cáº£ 2 khá»i). Cáº¥p trÃªn = GÄ Khá»i. LiÃªn khá»i â chain: GÄ khá»i báº¡n â GÄ khá»i nháº­n â ngÆ°á»i nháº­n.'}
               </p>
               </>
               )}
             </Field>
           )}
 
-          {/* ═══ FORM GIAO VIỆC (giữ nguyên) ═══ */}
+          {/* âââ FORM GIAO VIá»C (giá»¯ nguyÃªn) âââ */}
           {kind === 'assignment' && (
             <>
-              <Field label="Khối nhận">
+              <Field label="Khá»i nháº­n">
                 <div className="flex gap-2">
                   {(['KD', 'VP'] as const).map((b) => (
                     <button
@@ -573,9 +573,9 @@ export function TaskCreateModal(props: {
                           : 'bg-white text-slate-600 ring-slate-200 hover:ring-emerald-300 hover:text-emerald-700'
                       }`}
                     >
-                      {b === 'KD' ? '💼 Khối Kinh Doanh' : '📑 Khối Văn Phòng'}
+                      {b === 'KD' ? 'ð¼ Khá»i Kinh Doanh' : 'ð Khá»i VÄn PhÃ²ng'}
                       {b !== myBlock && myBlock !== 'all' && (
-                        <span className="ml-1 text-[10px] opacity-75">(liên khối)</span>
+                        <span className="ml-1 text-xs opacity-75">(liÃªn khá»i)</span>
                       )}
                     </button>
                   ))}
@@ -592,7 +592,7 @@ export function TaskCreateModal(props: {
                         assigneeKind === k ? 'bg-white shadow text-emerald-700' : 'text-slate-600 hover:bg-white/50'
                       }`}
                     >
-                      {k === 'department' ? 'Phòng ban' : k === 'facility' ? 'Cơ sở' : 'Cá nhân'}
+                      {k === 'department' ? 'PhÃ²ng ban' : k === 'facility' ? 'CÆ¡ sá»' : 'CÃ¡ nhÃ¢n'}
                     </button>
                   ))}
                 </div>
@@ -603,10 +603,10 @@ export function TaskCreateModal(props: {
                     onChange={(e) => setAssigneeDeptId(e.target.value)}
                     className={inputCls}
                   >
-                    <option value="">-- Chọn phòng --</option>
+                    <option value="">-- Chá»n phÃ²ng --</option>
                     {deptsInBlock.map((d) => (
                       <option key={d.id} value={d.id}>
-                        {d.name}{d.id === currentDepartmentId ? ' (phòng của bạn)' : ''}
+                        {d.name}{d.id === currentDepartmentId ? ' (phÃ²ng cá»§a báº¡n)' : ''}
                       </option>
                     ))}
                   </select>
@@ -617,10 +617,10 @@ export function TaskCreateModal(props: {
                     onChange={(e) => setAssigneeFacilityId(e.target.value)}
                     className={inputCls}
                   >
-                    <option value="">-- Chọn cơ sở --</option>
+                    <option value="">-- Chá»n cÆ¡ sá» --</option>
                     {branches.map((b) => (
                       <option key={b.id} value={b.id}>
-                        {b.id} · {b.name}{b.id === currentBranchId ? ' (cơ sở của bạn)' : ''}
+                        {b.id} Â· {b.name}{b.id === currentBranchId ? ' (cÆ¡ sá» cá»§a báº¡n)' : ''}
                       </option>
                     ))}
                   </select>
@@ -628,7 +628,7 @@ export function TaskCreateModal(props: {
                 {assigneeKind === 'user' && (
                   <div className="max-h-40 overflow-auto border border-slate-200 rounded-lg p-2 bg-slate-50/40 space-y-1">
                     {usersInScope.length === 0 && (
-                      <div className="text-xs text-slate-400 text-center py-3">Không có người nhận phù hợp</div>
+                      <div className="text-xs text-slate-400 text-center py-3">KhÃ´ng cÃ³ ngÆ°á»i nháº­n phÃ¹ há»£p</div>
                     )}
                     {usersInScope.map((u) => {
                       const checked = assigneeUserIds.includes(u.id);
@@ -655,11 +655,11 @@ export function TaskCreateModal(props: {
 
           <div className="grid grid-cols-2 gap-3">
           {kind === 'assignment' && (
-            <Field label="Đơn vị phối hợp (tuỳ chọn)">
+            <Field label="ÄÆ¡n vá» phá»i há»£p (tuá»³ chá»n)">
               <div className="space-y-2">
                 {departments.length > 0 && (
                   <div>
-                    <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Phòng ban</div>
+                    <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">PhÃ²ng ban</div>
                     <div className="max-h-28 overflow-auto border border-slate-200 rounded-lg p-2 bg-slate-50/40 space-y-0.5">
                       {departments.map((d) => (
                         <label key={d.id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-white cursor-pointer text-sm">
@@ -670,7 +670,7 @@ export function TaskCreateModal(props: {
                             className="text-emerald-600 focus:ring-emerald-500"
                           />
                           <span className="font-medium text-slate-800">{d.name}</span>
-                          {d.blockId && <span className="text-[10px] text-slate-400">{d.blockId}</span>}
+                          {d.blockId && <span className="text-xs text-slate-400">{d.blockId}</span>}
                         </label>
                       ))}
                     </div>
@@ -678,7 +678,7 @@ export function TaskCreateModal(props: {
                 )}
                 {branches.length > 0 && (
                   <div>
-                    <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Cơ sở</div>
+                    <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">CÆ¡ sá»</div>
                     <div className="max-h-24 overflow-auto border border-slate-200 rounded-lg p-2 bg-slate-50/40 space-y-0.5">
                       {branches.map((b) => (
                         <label key={b.id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-white cursor-pointer text-sm">
@@ -697,23 +697,23 @@ export function TaskCreateModal(props: {
               </div>
             </Field>
           )}
-            <Field label="Ưu tiên">
+            <Field label="Æ¯u tiÃªn">
               <select value={priority} onChange={(e) => setPriority(e.target.value as TaskPriority)} className={inputCls}>
-                <option value="low">Thấp</option>
-                <option value="normal">Bình thường</option>
+                <option value="low">Tháº¥p</option>
+                <option value="normal">BÃ¬nh thÆ°á»ng</option>
                 <option value="high">Cao</option>
-                <option value="urgent">Khẩn</option>
+                <option value="urgent">Kháº©n</option>
               </select>
             </Field>
-            <Field label="Hạn chót">
+            <Field label="Háº¡n chÃ³t">
               <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={inputCls} />
             </Field>
           </div>
 
-          <Field label="File đính kèm (tuỳ chọn)">
+          <Field label="File ÄÃ­nh kÃ¨m (tuá»³ chá»n)">
             <label className="cursor-pointer inline-flex items-center gap-2 px-3 py-2 border border-dashed border-emerald-300 rounded-lg text-sm text-emerald-700 hover:bg-emerald-50">
               <Paperclip size={14} />
-              Chọn file (ảnh, PDF, Office, ZIP — tối đa 20MB/file)
+              Chá»n file (áº£nh, PDF, Office, ZIP â tá»i Äa 20MB/file)
               <input
                 type="file"
                 multiple
@@ -750,14 +750,14 @@ export function TaskCreateModal(props: {
         </div>
 
         <div className="px-5 py-3 border-t border-slate-200 flex items-center justify-end gap-2 bg-slate-50/40">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">Huỷ</button>
+          <button onClick={onClose} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">Huá»·</button>
           <button
             onClick={submit}
             disabled={saving || creatorBlocked}
             className="px-5 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-50 shadow-sm inline-flex items-center gap-2"
           >
             {saving && <Loader2 size={14} className="animate-spin" />}
-            {kind === 'proposal' ? 'Gửi để duyệt' : (willNeedApproval ? 'Gửi để duyệt' : `Tạo ${kindLabel}`)}
+            {kind === 'proposal' ? 'Gá»­i Äá» duyá»t' : (willNeedApproval ? 'Gá»­i Äá» duyá»t' : `Táº¡o ${kindLabel}`)}
           </button>
         </div>
       </div>
