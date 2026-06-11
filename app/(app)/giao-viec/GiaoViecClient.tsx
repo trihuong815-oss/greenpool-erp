@@ -1,95 +1,136 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
-  Plus, Search, X, ListChecks, Inbox, Send, ShieldCheck,
-  Loader2, ArrowRight, CalendarDays, AlertTriangle, CheckCircle2,
-  Clock, LayoutGrid, GitBranch, List as ListIcon, TrendingUp, Users2,
-  ChevronRight, Filter, RefreshCw, Building2, User2,
-  type LucideIcon,
+  AlertTriangle, Building2, CalendarDays, CheckCircle2, Clock,
+  Filter, Inbox, ListChecks, Loader2, Plus, RefreshCw,
+  Search, Send, ShieldCheck, Users, X, ChevronDown,
+  ArrowRight, TrendingUp, Zap, Eye, BarChart3, MessageSquare,
 } from 'lucide-react';
-import { tasksApi, type Task, type TaskListMode, type TaskStatus, type TaskKind } from '@/lib/services/tasks/api-client';
-import { TaskCreateModal } from './TaskCreateModal';
-import { TaskDetailModal } from './TaskDetailModal';
+import type {
+  Task, TaskStatus, Block,
+  CoordType, CoordScope, CoordStatus, CollabUnit, WaitingFor,
+} from '@/lib/services/tasks/api-client';
+import { tasksApi } from '@/lib/services/tasks/api-client';
+import type { UserPublic } from '@/lib/types';
+import type { LucideIcon } from 'lucide-react';
+import TaskCreateModal from './TaskCreateModal';
+import TaskDetailModal from './TaskDetailModal';
 
-interface Department { id: string; name: string; blockId: 'KD' | 'VP' | null; }
-interface Branch { id: string; name: string; }
-interface User { id: string; name: string; roleId: string; branchId: string | null; departmentId: string | null; }
+// ============= CONSTANTS =============
+type TabKey = 'all' | 'mine' | 'assigned-by-me' | 'cross-block' | 'pending-response' | 'pending-approval' | 'overdue' | 'bottleneck';
 
-interface Props {
-  currentUserId: string;
-  currentUserName: string;
-  currentUserRole: string;
-  currentBranchId: string | null;
-  currentDepartmentId: string | null;
-  departments: Department[];
-  branches: Branch[];
-  users: User[];
-}
-
-type TabKey = 'my-tasks' | 'assigned-by-me' | 'cross-block' | 'pending-response' | 'overdue';
-type ViewMode = 'table' | 'kanban';
-
-const STATUS_LABEL: Record<TaskStatus, string> = {
-  pending_approval: 'Chờ duyệt',
-  pending: 'Chờ làm',
-  in_progress: 'Đang làm',
-  requested_revision: 'Yêu cầu bổ sung',
-  done: 'Hoàn thành',
-  rejected: 'Từ chối',
-  cancelled: 'Huỷ',
+const COORD_TYPE_LABEL: Record<string, string> = {
+  'dieu-phoi': 'Dieu phoi', 'ho-tro': 'Ho tro',
+  'de-xuat': 'De xuat', 'phe-duyet': 'Phe duyet', 'canh-bao': 'Canh bao',
+  'proposal': 'De xuat', 'assignment': 'Dieu phoi',
 };
-const STATUS_BG: Record<TaskStatus, string> = {
-  pending_approval: 'bg-amber-50 text-amber-700 ring-amber-200',
+const COORD_TYPE_COLOR: Record<string, string> = {
+  'dieu-phoi': 'bg-sky-100 text-sky-700', 'ho-tro': 'bg-indigo-100 text-indigo-700',
+  'de-xuat': 'bg-violet-100 text-violet-700', 'phe-duyet': 'bg-orange-100 text-orange-700',
+  'canh-bao': 'bg-rose-100 text-rose-700',
+  'proposal': 'bg-violet-100 text-violet-700', 'assignment': 'bg-sky-100 text-sky-700',
+};
+
+const STATUS_LABEL: Record<string, string> = {
+  'khoi-tao': 'Khoi tao', 'tiep-nhan': 'Tiep nhan', 'dang-xu-ly': 'Dang xu ly',
+  'dang-phoi-hop': 'Dang phoi hop', 'cho-phan-hoi': 'Cho phan hoi',
+  'cho-phe-duyet': 'Cho phe duyet', 'hoan-thanh': 'Hoan thanh', 'dong-ho-so': 'Dong ho so',
+  // Legacy
+  pending_approval: 'Cho duyet', pending: 'Cho lam', in_progress: 'Dang lam',
+  requested_revision: 'Yeu cau bo sung', done: 'Hoan thanh', rejected: 'Tu choi', cancelled: 'Huy',
+};
+const STATUS_COLOR: Record<string, string> = {
+  'khoi-tao': 'bg-slate-100 text-slate-600 ring-slate-200',
+  'tiep-nhan': 'bg-blue-100 text-blue-700 ring-blue-200',
+  'dang-xu-ly': 'bg-sky-100 text-sky-700 ring-sky-200',
+  'dang-phoi-hop': 'bg-indigo-100 text-indigo-700 ring-indigo-200',
+  'cho-phan-hoi': 'bg-amber-100 text-amber-700 ring-amber-200',
+  'cho-phe-duyet': 'bg-orange-100 text-orange-700 ring-orange-200',
+  'hoan-thanh': 'bg-emerald-100 text-emerald-700 ring-emerald-200',
+  'dong-ho-so': 'bg-slate-100 text-slate-500 ring-slate-200',
+  pending_approval: 'bg-orange-100 text-orange-700 ring-orange-200',
   pending: 'bg-slate-100 text-slate-600 ring-slate-200',
-  in_progress: 'bg-sky-50 text-sky-700 ring-sky-200',
-  requested_revision: 'bg-orange-50 text-orange-700 ring-orange-200',
-  done: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-  rejected: 'bg-rose-50 text-rose-700 ring-rose-200',
-  cancelled: 'bg-slate-50 text-slate-400 ring-slate-200',
-};
-const PRIORITY_LABEL: Record<string, string> = {
-  low: 'Thấp', normal: 'Bình thường', high: 'Cao', urgent: 'Khẩn',
+  in_progress: 'bg-sky-100 text-sky-700 ring-sky-200',
+  requested_revision: 'bg-amber-100 text-amber-700 ring-amber-200',
+  done: 'bg-emerald-100 text-emerald-700 ring-emerald-200',
+  rejected: 'bg-rose-100 text-rose-700 ring-rose-200',
+  cancelled: 'bg-slate-100 text-slate-400 ring-slate-200',
 };
 const PRIORITY_DOT: Record<string, string> = {
-  low: 'bg-slate-300', normal: 'bg-sky-400', high: 'bg-amber-400', urgent: 'bg-rose-500',
+  high: 'bg-rose-500', medium: 'bg-amber-400', low: 'bg-slate-300',
 };
+const PRIORITY_LABEL: Record<string, string> = { high: 'Cao', medium: 'Trung binh', low: 'Thap' };
 const BLOCK_LABEL: Record<string, { label: string; bg: string }> = {
-  KD: { label: 'KD', bg: 'bg-blue-100 text-blue-700' },
-  VP: { label: 'VP', bg: 'bg-violet-100 text-violet-700' },
-  all: { label: 'Toàn công ty', bg: 'bg-slate-100 text-slate-700' },
+  KD: { label: 'KD', bg: 'bg-emerald-100 text-emerald-700' },
+  VP: { label: 'VP', bg: 'bg-indigo-100 text-indigo-700' },
+  all: { label: 'Toan cum', bg: 'bg-slate-100 text-slate-600' },
 };
-const GD_ROLES = new Set(['GD_KD', 'GD_VP', 'CEO', 'ADMIN']);
 
-function formatDate(d: string | null | undefined) {
+function getTaskStatus(t: Task): string {
+  return (t as any).coordStatus || t.status;
+}
+function getDaysWaiting(since: string): number {
+  return Math.floor((Date.now() - new Date(since).getTime()) / 86400000);
+}
+function formatDate(d: string | null | undefined): string {
   if (!d) return '—';
-  const [y, m, day] = d.split('-');
-  return `${day}/${m}/${y}`;
+  const dt = new Date(d);
+  return dt.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+function isOverdue(t: Task): boolean {
+  if (!t.dueDate) return false;
+  if (['done','hoan-thanh','cancelled','dong-ho-so','rejected'].includes(getTaskStatus(t))) return false;
+  return new Date(t.dueDate) < new Date();
 }
 
-// ============================================================================
-// MAIN COMPONENT
-// ============================================================================
-export function GiaoViecClient(props: Props) {
-  const {
-    currentUserId, currentUserName, currentUserRole,
-    currentBranchId, currentDepartmentId,
-    departments, branches, users,
-  } = props;
+// ============= PROPS =============
+interface Props {
+  userId: string; userName: string; userRole: string; roleCode: string;
+  departments: { id: string; name: string }[];
+  branches: { id: string; name: string }[];
+  users: UserPublic[];
+  isAdmin: boolean; isCEO: boolean;
+  canCreateAssignment: boolean; canCreateProposal: boolean;
+}
 
-  const isGD = GD_ROLES.has(currentUserRole);
-  const isCEO = currentUserRole === 'CEO';
-  const isAdmin = currentUserRole === 'ADMIN';
-  const showApprovalTab = isGD || isCEO || isAdmin;
-  const canCreateAssignment = isGD || isCEO || isAdmin;
-  const canCreateProposal = !isCEO;
-  const showLienKhoiTab = isCEO || isAdmin;
-  const showAssignmentTab = isGD || isCEO || isAdmin;
-
-  const [tab, setTab] = useState<TabKey>('my-tasks');
-  const tabSectionRef = useRef<HTMLElement | null>(null);
+// ============= MAIN COMPONENT =============
+export default function GiaoViecClient({
+  userId, userName, userRole, roleCode,
+  departments, branches, users,
+  isAdmin, isCEO, canCreateAssignment, canCreateProposal,
+}: Props) {
   const searchParams = useSearchParams();
+  const tabSectionRef = useRef<HTMLDivElement>(null);
+
+  const [tab, setTab] = useState<TabKey>('all');
+  const [allTasks, setAllTasks] = useState<Task[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [keyword, setKeyword] = useState('');
+  const [filterType, setFilterType] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterScope, setFilterScope] = useState<string>('all');
+  const [showCreate, setShowCreate] = useState<'assignment' | 'proposal' | null>(null);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+
+  const showAllTab = isAdmin || isCEO;
+  const showCrossBlock = isAdmin || isCEO;
+
+  async function loadTasks() {
+    setLoading(true);
+    try {
+      const mode = (tab === 'mine' || tab === 'overdue') ? 'assigned' : 'created';
+      const tasks = await tasksApi.list({ mode });
+      setAllTasks(tasks);
+    } catch { setAllTasks([]); }
+    finally { setLoading(false); }
+  }
+
+  useEffect(() => { loadTasks(); }, [tab]);
+
+  function refresh() { loadTasks(); }
 
   function jumpToTab(t: TabKey) {
     setTab(t);
@@ -98,323 +139,271 @@ export function GiaoViecClient(props: Props) {
     });
   }
 
-  const [view, setView] = useState<ViewMode>('table');
-  const [statusFilter, setStatusFilter] = useState<TaskStatus | 'all'>('all');
-  const [keyword, setKeyword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [approvalCount, setApprovalCount] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  const [showCreate, setShowCreate] = useState<null | TaskKind>(null);
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [refreshKey, setRefreshKey] = useState(0);
-  function refresh() { setRefreshKey((k) => k + 1); }
-
-  // Map tab → API mode
-  const mode: TaskListMode =
-    tab === 'my-tasks' ? 'assigned'
-    : tab === 'assigned-by-me' ? 'created'
-    : tab === 'cross-block' ? 'created'
-    : tab === 'pending-response' ? 'created'
-    : tab === 'overdue' ? 'assigned'
-    : 'assigned';
-
-  useEffect(() => {
-    const focus = searchParams.get('focus');
-    const taskIdParam = searchParams.get('taskId');
-    if (focus === 'approval' && showApprovalTab) { setTab('my-tasks'); setStatusFilter('pending_approval'); }
-    else if (focus === 'received')   { setTab('my-tasks'); setStatusFilter('all'); }
-    else if (focus === 'pending')    { setTab('my-tasks'); setStatusFilter('pending'); }
-    else if (focus === 'inprogress') { setTab('my-tasks'); setStatusFilter('in_progress'); }
-    else if (focus === 'overdue')    { setTab('overdue'); setStatusFilter('all'); }
-    if (focus) {
-      requestAnimationFrame(() => {
-        tabSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // ---- FILTERED TASKS ----
+  const filteredTasks = useMemo(() => {
+    let tasks = allTasks;
+    if (tab === 'mine') tasks = tasks.filter(t => t.assigneeUserIds?.includes(userId) || t.assigneeDeptId === roleCode || t.assigneeFacilityId);
+    if (tab === 'assigned-by-me') tasks = tasks.filter(t => t.createdBy === userId);
+    if (tab === 'cross-block') tasks = tasks.filter(t => t.crossBlock);
+    if (tab === 'pending-response') tasks = tasks.filter(t => ['cho-phan-hoi','pending_approval','requested_revision'].includes(getTaskStatus(t)));
+    if (tab === 'pending-approval') tasks = tasks.filter(t => ['cho-phe-duyet','pending_approval'].includes(getTaskStatus(t)));
+    if (tab === 'overdue') tasks = tasks.filter(isOverdue);
+    if (tab === 'bottleneck') {
+      tasks = tasks.filter(t => (t as any).waitingFor);
+      tasks = [...tasks].sort((a, b) => {
+        const da = getDaysWaiting((a as any).waitingFor?.since || a.createdAt);
+        const db = getDaysWaiting((b as any).waitingFor?.since || b.createdAt);
+        return db - da;
       });
     }
-    if (taskIdParam) {
-      tasksApi.get(taskIdParam)
-        .then((t) => setSelectedTask(t))
-        .catch((e) => console.warn('[deep-link taskId] fetch fail:', e?.message));
+    if (keyword) {
+      const kw = keyword.toLowerCase();
+      tasks = tasks.filter(t => t.title.toLowerCase().includes(kw) || (t.description||'').toLowerCase().includes(kw));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+    if (filterType !== 'all') tasks = tasks.filter(t => ((t as any).coordType || t.kind) === filterType);
+    if (filterStatus !== 'all') tasks = tasks.filter(t => getTaskStatus(t) === filterStatus);
+    if (filterScope !== 'all') {
+      if (filterScope === 'lien-khoi') tasks = tasks.filter(t => t.crossBlock);
+      else tasks = tasks.filter(t => ((t as any).coordScope) === filterScope);
+    }
+    return tasks;
+  }, [allTasks, tab, keyword, filterType, filterStatus, filterScope, userId, roleCode]);
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    const extraStatus = tab === 'overdue' ? undefined : (statusFilter === 'all' ? undefined : statusFilter);
-    const extraCross = tab === 'cross-block' ? true : undefined;
-    tasksApi.list({
-      mode,
-      status: extraStatus,
-      q: keyword || undefined,
-    })
-      .then((rows) => {
-        if (cancelled) return;
-        let filtered = rows;
-        if (tab === 'overdue') {
-          const today = new Date().toISOString().slice(0, 10);
-          filtered = rows.filter(t => t.dueDate && t.dueDate < today && !['done','cancelled','rejected'].includes(t.status));
-        } else if (tab === 'cross-block') {
-          filtered = rows.filter(t => t.crossBlock);
-        } else if (tab === 'pending-response') {
-          filtered = rows.filter(t => t.status === 'pending_approval' || t.status === 'requested_revision');
-        } else if (tab === 'assigned-by-me') {
-          filtered = rows.filter(t => t.createdBy === currentUserId);
-        }
-        setTasks(filtered);
-      })
-      .catch((e) => { if (!cancelled) setError(e.message); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [mode, tab, statusFilter, keyword, refreshKey, currentUserId]);
-
-  useEffect(() => {
-    if (!showApprovalTab) return;
-    let cancelled = false;
-    tasksApi.list({ mode: 'pending_approval' })
-      .then((rows) => { if (!cancelled) setApprovalCount(rows.length); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [showApprovalTab, refreshKey]);
-
-  // All tasks for stats (used in header KPI cards)
-  const [allTasks, setAllTasks] = useState<Task[]>([]);
-  useEffect(() => {
-    let cancelled = false;
-    tasksApi.list({ mode: 'assigned' })
-      .then((rows) => { if (!cancelled) setAllTasks(rows); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [refreshKey]);
-
-  const today = new Date().toISOString().slice(0, 10);
+  // ---- KPI ----
   const kpi = useMemo(() => {
-    const inProgress = allTasks.filter(t => t.status === 'in_progress').length;
-    const pendingApproval = allTasks.filter(t => t.status === 'pending_approval').length;
-    const pendingDone = allTasks.filter(t => t.status === 'pending').length;
-    const overdue = allTasks.filter(t => t.dueDate && t.dueDate < today && !['done','cancelled','rejected'].includes(t.status)).length;
-    const done = allTasks.filter(t => t.status === 'done').length;
-    return { inProgress, pendingApproval, pendingDone, overdue, done };
+    const all = allTasks;
+    return {
+      total: all.length,
+      needAction: all.filter(t => ['cho-phan-hoi','cho-phe-duyet','pending_approval','requested_revision'].includes(getTaskStatus(t))).length,
+      inProgress: all.filter(t => ['dang-xu-ly','dang-phoi-hop','in_progress'].includes(getTaskStatus(t))).length,
+      overdue: all.filter(isOverdue).length,
+      done: all.filter(t => ['hoan-thanh','dong-ho-so','done'].includes(getTaskStatus(t))).length,
+      bottleneck: all.filter(t => (t as any).waitingFor).length,
+      crossBlock: all.filter(t => t.crossBlock).length,
+      pendingApproval: all.filter(t => ['cho-phe-duyet','pending_approval'].includes(getTaskStatus(t))).length,
+    };
   }, [allTasks, today]);
 
-  // Per-block stats — Donut "Theo khối" mock frame 1 (Kinh doanh / Văn phòng / Liên khối)
-  const blockStats = useMemo(() => {
-    let kd = 0, vp = 0, cross = 0;
-    for (const t of allTasks) {
-      if (t.crossBlock) { cross++; continue; }
-      if (t.assigneeBlock === 'KD') kd++;
-      else if (t.assigneeBlock === 'VP') vp++;
-    }
-    const total = kd + vp + cross;
-    return { kd, vp, cross, total };
-  }, [allTasks]);
-
-  // Per-dept stats for "Công việc theo khối"
+  // ---- PER-DEPT STATS ----
   const perDeptStats = useMemo(() => {
     const map: Record<string, { id: string; name: string; total: number; done: number; inProgress: number; overdue: number }> = {};
-    allTasks.forEach((t) => {
-      const key = t.assigneeDeptId ?? (t.assigneeFacilityId ? `branch:${t.assigneeFacilityId}` : 'misc');
-      const name = t.assigneeDeptId
-        ? (departments.find((d) => d.id === t.assigneeDeptId)?.name ?? t.assigneeDeptId)
-        : (t.assigneeFacilityId ? (branches.find((b) => b.id === t.assigneeFacilityId)?.name ?? t.assigneeFacilityId) : 'Cá nhân');
-      map[key] ??= { id: key, name, total: 0, done: 0, inProgress: 0, overdue: 0 };
-      map[key].total += 1;
-      if (t.status === 'done') map[key].done += 1;
-      if (t.status === 'in_progress') map[key].inProgress += 1;
-      if (t.dueDate && t.dueDate < today && !['done','cancelled','rejected'].includes(t.status)) map[key].overdue += 1;
+    allTasks.forEach(t => {
+      const deptId = t.assigneeDeptId || t.assigneeFacilityId || t.assigneeBlock || 'unknown';
+      const deptName = departments.find(d => d.id === deptId)?.name || branches.find(b => b.id === deptId)?.name || deptId;
+      if (!map[deptId]) map[deptId] = { id: deptId, name: deptName, total: 0, done: 0, inProgress: 0, overdue: 0 };
+      map[deptId].total++;
+      if (['done','hoan-thanh'].includes(getTaskStatus(t))) map[deptId].done++;
+      if (['in_progress','dang-xu-ly','dang-phoi-hop'].includes(getTaskStatus(t))) map[deptId].inProgress++;
+      if (isOverdue(t)) map[deptId].overdue++;
     });
     return Object.values(map).sort((a, b) => b.total - a.total);
-  }, [allTasks, departments, branches, today]);
+  }, [allTasks, departments, branches]);
 
-  const todayLabel = new Date().toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'numeric', day: 'numeric' });
+  // ---- WAITING-FOR TOP LIST ----
+  const waitingList = useMemo(() => {
+    return allTasks
+      .filter(t => (t as any).waitingFor)
+      .map(t => ({
+        task: t,
+        wf: (t as any).waitingFor as WaitingFor,
+        days: getDaysWaiting(((t as any).waitingFor as WaitingFor).since),
+      }))
+      .sort((a, b) => b.days - a.days)
+      .slice(0, 5);
+  }, [allTasks]);
+
+  // ---- BOTTLENECK: who holds the most ----
+  const bottleneckByPerson = useMemo(() => {
+    const map: Record<string, { name: string; count: number }> = {};
+    allTasks.filter(t => (t as any).waitingFor).forEach(t => {
+      const wf = (t as any).waitingFor as WaitingFor;
+      if (!map[wf.unitId]) map[wf.unitId] = { name: wf.unitName, count: 0 };
+      map[wf.unitId].count++;
+    });
+    return Object.values(map).sort((a, b) => b.count - a.count).slice(0, 5);
+  }, [allTasks]);
 
   const tabDef: { key: TabKey; label: string; badge?: number }[] = [
-    { key: 'my-tasks', label: 'Tôi phụ trách' },
-    { key: 'assigned-by-me', label: 'Tôi giao' },
-    ...(showLienKhoiTab ? [{ key: 'cross-block' as TabKey, label: 'Liên khối' }] : []),
-    { key: 'pending-response', label: 'Chờ phản hồi', badge: approvalCount || undefined },
-    { key: 'overdue', label: 'Quá hạn', badge: kpi.overdue || undefined },
+    { key: 'all', label: 'Tat ca', badge: allTasks.length || undefined },
+    { key: 'mine', label: 'Toi phu trach' },
+    { key: 'assigned-by-me', label: 'Toi giao' },
+    ...(showCrossBlock ? [{ key: 'cross-block' as TabKey, label: 'Lien khoi', badge: kpi.crossBlock || undefined }] : []),
+    { key: 'pending-response', label: 'Cho phan hoi', badge: kpi.needAction || undefined },
+    { key: 'pending-approval', label: 'Cho duyet', badge: kpi.pendingApproval || undefined },
+    { key: 'overdue', label: 'Qua han', badge: kpi.overdue || undefined },
+    { key: 'bottleneck', label: 'Diem nghen', badge: kpi.bottleneck || undefined },
   ];
+
+  const approvalCount = kpi.pendingApproval;
+
   return (
     <div className="max-w-7xl mx-auto space-y-5">
 
-      {/* ===== HEADER: Tổng quan hôm nay ===== */}
+      {/* ===== DASHBOARD: 5 KHOI DIEU HANH ===== */}
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-5">
           <div>
-            <h2 className="text-base font-bold text-slate-900">Tổng quan hôm nay</h2>
-            <p className="text-xs text-slate-500 mt-0.5">{todayLabel}</p>
+            <h2 className="text-base font-bold text-slate-900">Dieu phoi cong viec</h2>
+            <p className="text-xs text-slate-500 mt-0.5">{new Date().toLocaleDateString('vi-VN', { weekday:'long', day:'2-digit', month:'2-digit', year:'numeric' })}</p>
           </div>
           <div className="flex items-center gap-2">
+            <button onClick={refresh} className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition" title="Lam moi">
+              <RefreshCw size={14} />
+            </button>
             {(canCreateAssignment || canCreateProposal) && (
               <button
                 onClick={() => setShowCreate(canCreateAssignment ? 'assignment' : 'proposal')}
                 className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 shadow-sm transition"
               >
-                <Plus size={15} /> Tạo điều phối
+                <Plus size={14} /> Tao dieu phoi
               </button>
             )}
-            <button onClick={refresh} className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition" title="Làm mới">
-              <RefreshCw size={15} />
-            </button>
           </div>
         </div>
 
-        {/* KPI cards — 5 ô theo mockup */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          <KpiCard label="Đang xử lý" value={kpi.inProgress} icon={Clock} accent="sky" sub={kpi.inProgress > 0 ? `+${Math.round(kpi.inProgress/Math.max(allTasks.length,1)*100)}% tổng` : undefined} />
-          <KpiCard label="Chờ phản hồi" value={kpi.pendingApproval} icon={ShieldCheck} accent={kpi.pendingApproval > 0 ? 'amber' : 'slate'} />
-          <KpiCard label="Chờ duyệt" value={kpi.pendingDone} icon={AlertTriangle} accent={kpi.pendingDone > 0 ? 'orange' : 'slate'} />
-          <KpiCard label="Quá hạn" value={kpi.overdue} icon={AlertTriangle} accent={kpi.overdue > 0 ? 'rose' : 'slate'} />
-          <KpiCard label="Hoàn thành" value={kpi.done} icon={CheckCircle2} accent="emerald" sub={allTasks.length > 0 ? `+${Math.round(kpi.done/allTasks.length*100)}% tổng` : undefined} />
+        {/* 5 KPI CARDS */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
+          <KpiCard label="Can toi xu ly" value={kpi.needAction} icon={Inbox} accent={kpi.needAction > 0 ? 'rose' : 'slate'} onClick={() => jumpToTab('pending-response')} />
+          <KpiCard label="Dang xu ly" value={kpi.inProgress} icon={Clock} accent="sky" onClick={() => jumpToTab('mine')} />
+          <KpiCard label="Lien khoi" value={kpi.crossBlock} icon={ArrowRight} accent={kpi.crossBlock > 0 ? 'indigo' : 'slate'} onClick={() => jumpToTab('cross-block')} />
+          <KpiCard label="Qua han" value={kpi.overdue} icon={AlertTriangle} accent={kpi.overdue > 0 ? 'rose' : 'slate'} onClick={() => jumpToTab('overdue')} />
+          <KpiCard label="Hoan thanh" value={kpi.done} icon={CheckCircle2} accent="emerald" />
         </div>
-      </section>
 
-      {/* ===== HÀNG 2: Công việc theo khối + Tắc nghẽn + Quá hạn ===== */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* KHOI 1–3: Can xu ly / Tinh hinh / Diem nghen */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
 
-        {/* Công việc theo khối — Mock frame 1: donut 3 segment (KD/VP/Liên khối) + list phòng ban */}
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
-            <Building2 size={14} className="text-emerald-600" /> Công việc theo khối
-          </h3>
-
-          {/* Donut SVG 3 segment — tổng việc giữa, % mỗi khối bên dưới */}
-          {blockStats.total > 0 ? (
-            <div className="flex items-center gap-3 mb-3">
-              {(() => {
-                const R = 36, C = 2 * Math.PI * R;
-                const t = blockStats.total;
-                const segKd  = (blockStats.kd    / t) * C;
-                const segVp  = (blockStats.vp    / t) * C;
-                const segCs  = (blockStats.cross / t) * C;
-                let offset = 0;
-                const seg = (len: number, color: string, key: string) => {
-                  const el = (
-                    <circle key={key} r={R} cx="50" cy="50" fill="transparent"
-                      stroke={color} strokeWidth="14"
-                      strokeDasharray={`${len} ${C - len}`}
-                      strokeDashoffset={-offset} />
-                  );
-                  offset += len;
-                  return el;
-                };
-                return (
-                  <svg viewBox="0 0 100 100" className="w-24 h-24 -rotate-90 shrink-0">
-                    {seg(segKd, '#10b981', 'kd')}{/* emerald-500 */}
-                    {seg(segVp, '#8b5cf6', 'vp')}{/* violet-500 */}
-                    {seg(segCs, '#f59e0b', 'cs')}{/* amber-500 */}
-                    <text x="50" y="50" textAnchor="middle" dominantBaseline="central"
-                      className="rotate-90" transform="rotate(90 50 50)"
-                      fontSize="18" fontWeight="700" fill="#0f172a">{blockStats.total}</text>
-                  </svg>
-                );
-              })()}
-              <div className="space-y-1 text-xs flex-1">
+          {/* KHOI 1: CAN TOI XU LY */}
+          <div className="rounded-xl border border-rose-100 bg-rose-50/40 p-4">
+            <h3 className="text-sm font-bold text-rose-800 mb-3 flex items-center gap-2">
+              <Inbox size={14} className="text-rose-500" /> Can toi xu ly
+            </h3>
+            {kpi.needAction === 0 ? (
+              <p className="text-xs text-emerald-600 text-center py-4 font-medium">Khong co viec can xu ly</p>
+            ) : (
+              <div className="space-y-2">
                 {[
-                  { name: 'Khối Kinh doanh', count: blockStats.kd,    color: 'bg-emerald-500' },
-                  { name: 'Khối Văn phòng',  count: blockStats.vp,    color: 'bg-violet-500'  },
-                  { name: 'Liên khối',       count: blockStats.cross, color: 'bg-amber-500'   },
-                ].map((row) => {
-                  const pct = blockStats.total > 0 ? Math.round(row.count / blockStats.total * 100) : 0;
-                  return (
-                    <div key={row.name} className="flex items-center gap-1.5">
-                      <span className={`h-2.5 w-2.5 rounded-sm ${row.color}`} />
-                      <span className="text-slate-700 flex-1 truncate">{row.name}</span>
-                      <span className="font-semibold text-slate-800 tabular-nums">{row.count}</span>
-                      <span className="text-slate-400 tabular-nums w-9 text-right">({pct}%)</span>
-                    </div>
-                  );
-                })}
+                  { label: 'Cho duyet', count: kpi.pendingApproval, color: 'text-orange-600', tab: 'pending-approval' as TabKey },
+                  { label: 'Cho phan hoi', count: kpi.needAction - kpi.pendingApproval, color: 'text-amber-600', tab: 'pending-response' as TabKey },
+                  { label: 'Qua han', count: kpi.overdue, color: 'text-rose-600', tab: 'overdue' as TabKey },
+                  { label: 'Lien khoi', count: kpi.crossBlock, color: 'text-indigo-600', tab: 'cross-block' as TabKey },
+                ].filter(r => r.count > 0).map(r => (
+                  <button key={r.label} onClick={() => jumpToTab(r.tab)}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-white border border-slate-100 hover:border-rose-200 hover:bg-rose-50 transition text-left">
+                    <span className="text-xs font-medium text-slate-700">{r.label}</span>
+                    <span className={`text-sm font-bold tabular-nums ${r.color}`}>{r.count}</span>
+                  </button>
+                ))}
               </div>
-            </div>
-          ) : (
-            <div className="text-xs text-slate-400 text-center py-4">Chưa có dữ liệu</div>
-          )}
+            )}
+          </div>
 
-          {/* List phòng ban top 5 — chi tiết hơn donut */}
-          {perDeptStats.length > 0 && (
-            <div className="pt-3 border-t border-slate-100 space-y-2">
-              <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Phòng ban / Cơ sở</div>
-              {perDeptStats.slice(0, 5).map((d) => {
+          {/* KHOI 2: TINH HINH DIEU PHOI */}
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
+              <BarChart3 size={14} className="text-sky-600" /> Tinh hinh dieu phoi
+            </h3>
+            <div className="space-y-2">
+              {perDeptStats.slice(0, 5).map(d => {
                 const pct = d.total > 0 ? Math.round(d.done / d.total * 100) : 0;
                 return (
                   <div key={d.id}>
-                    <div className="flex items-center justify-between text-xs mb-1">
+                    <div className="flex items-center justify-between text-xs mb-0.5">
                       <span className="font-medium text-slate-700 truncate max-w-[120px]">{d.name}</span>
-                      <span className="text-slate-500 tabular-nums">{d.total} ({pct}%)</span>
+                      <span className="text-slate-500 tabular-nums">{d.done}/{d.total}</span>
                     </div>
-                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden flex">
-                      <div className="bg-emerald-500 h-full" style={{ width: `${pct}%` }} title={`Hoàn thành: ${d.done}`} />
-                      <div className="bg-sky-400 h-full" style={{ width: `${d.total > 0 ? d.inProgress/d.total*100 : 0}%` }} title={`Đang làm: ${d.inProgress}`} />
+                    <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-emerald-400 to-teal-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
                     </div>
                   </div>
                 );
               })}
+              {perDeptStats.length === 0 && <p className="text-xs text-slate-400 text-center py-3">Chua co du lieu</p>}
             </div>
-          )}
+          </div>
+
+          {/* KHOI 3: DIEM NGHEN */}
+          <div className="rounded-xl border border-amber-100 bg-amber-50/40 p-4">
+            <h3 className="text-sm font-bold text-amber-800 mb-3 flex items-center gap-2">
+              <Zap size={14} className="text-amber-500" /> Diem nghen — Dang giu viec
+            </h3>
+            {bottleneckByPerson.length === 0 ? (
+              <p className="text-xs text-emerald-600 text-center py-4 font-medium">Khong co diem nghen</p>
+            ) : (
+              <div className="space-y-2">
+                {bottleneckByPerson.map((b, i) => (
+                  <div key={b.name} className="flex items-center gap-2 text-xs">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-100 text-amber-700 font-bold text-xs shrink-0">{i+1}</span>
+                    <span className="font-medium text-slate-700 flex-1 truncate">{b.name}</span>
+                    <span className="text-rose-600 font-semibold tabular-nums">{b.count} viec</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Tắc nghẽn hiện tại */}
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
-            <AlertTriangle size={14} className="text-amber-500" /> Tắc nghẽn hiện tại
-          </h3>
-          {perDeptStats.filter(d => d.overdue > 0).length === 0 ? (
-            <div className="text-xs text-emerald-600 text-center py-6 font-medium">✓ Không có tắc nghẽn</div>
-          ) : (
-            <div className="space-y-2">
-              {perDeptStats.filter(d => d.overdue > 0).slice(0, 5).map((d, i) => (
-                <div key={d.id} className="flex items-center gap-2 text-xs">
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-100 text-amber-700 font-bold text-xs shrink-0">{i + 1}</span>
-                  <span className="font-medium text-slate-700 flex-1 truncate">{d.name}</span>
-                  <span className="text-rose-600 font-semibold tabular-nums">{d.overdue} việc</span>
+        {/* KHOI 4-5: LIEN KHOI + TOP VIEC CAN QUAN TAM */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+          {/* KHOI 4: LIEN KHOI KD <-> VP */}
+          <div className="rounded-xl border border-indigo-100 bg-indigo-50/30 p-4">
+            <h3 className="text-sm font-bold text-indigo-800 mb-3 flex items-center gap-2">
+              <ArrowRight size={14} className="text-indigo-500" /> Lien khoi KD {String.fromCharCode(8596)} VP
+            </h3>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { label: 'Tong viec', val: kpi.crossBlock, color: 'text-indigo-700' },
+                { label: 'Dang xu ly', val: allTasks.filter(t => t.crossBlock && ['dang-xu-ly','dang-phoi-hop','in_progress'].includes(getTaskStatus(t))).length, color: 'text-sky-700' },
+                { label: 'Cho phan hoi', val: allTasks.filter(t => t.crossBlock && ['cho-phan-hoi','pending_approval','requested_revision'].includes(getTaskStatus(t))).length, color: 'text-amber-700' },
+                { label: 'Qua han', val: allTasks.filter(t => t.crossBlock && isOverdue(t)).length, color: 'text-rose-700' },
+              ].map(item => (
+                <div key={item.label} className="bg-white rounded-lg border border-indigo-100 px-3 py-2 text-center">
+                  <div className={`text-xl font-bold tabular-nums ${item.color}`}>{item.val}</div>
+                  <div className="text-xs text-slate-500 mt-0.5">{item.label}</div>
                 </div>
               ))}
             </div>
-          )}
-        </div>
+          </div>
 
-        {/* Công việc quá hạn */}
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
-            <Clock size={14} className="text-rose-500" /> Công việc quá hạn
-          </h3>
-          {allTasks.filter(t => t.dueDate && t.dueDate < today && !['done','cancelled','rejected'].includes(t.status)).length === 0 ? (
-            <div className="text-xs text-emerald-600 text-center py-6 font-medium">✓ Không có việc quá hạn</div>
-          ) : (
-            <div className="space-y-2">
-              {allTasks.filter(t => t.dueDate && t.dueDate < today && !['done','cancelled','rejected'].includes(t.status)).slice(0, 4).map(t => (
-                <button key={t.id} onClick={() => setSelectedTask(t)} className="w-full text-left rounded-lg border border-rose-100 bg-rose-50/50 p-2 hover:bg-rose-50 transition">
-                  <div className="text-xs font-semibold text-slate-800 truncate">{t.title}</div>
-                  <div className="flex items-center gap-2 mt-1 text-xs text-rose-600 font-medium">
-                    <CalendarDays size={12} /> {formatDate(t.dueDate)}
-                    <span className="text-slate-400 font-normal">· {t.createdByName}</span>
-                  </div>
-                </button>
-              ))}
-              {allTasks.filter(t => t.dueDate && t.dueDate < today && !['done','cancelled','rejected'].includes(t.status)).length > 4 && (
-                <button onClick={() => jumpToTab('overdue')} className="text-xs text-emerald-700 font-semibold hover:underline">
-                  Xem tất cả →
-                </button>
-              )}
-            </div>
-          )}
+          {/* KHOI 5: TOP VIEC CAN QUAN TAM — WAITING-FOR ENGINE */}
+          <div className="rounded-xl border border-rose-100 bg-white p-4">
+            <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
+              <Eye size={14} className="text-rose-500" /> Top viec can quan tam
+              <span className="ml-auto text-xs text-slate-400 font-normal">Da cho / Noi dung</span>
+            </h3>
+            {waitingList.length === 0 ? (
+              <p className="text-xs text-slate-400 text-center py-3">Khong co viec dang cho</p>
+            ) : (
+              <div className="space-y-2">
+                {waitingList.map(({ task: t, wf, days }) => (
+                  <button key={t.id} onClick={() => setSelectedTask(t)}
+                    className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg border border-slate-100 hover:border-rose-200 hover:bg-rose-50/50 transition">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-semibold text-slate-800 truncate">{t.title}</div>
+                      <div className="text-xs text-slate-500 truncate">{wf.unitName} — {wf.content}</div>
+                    </div>
+                    <span className={`text-xs font-bold tabular-nums shrink-0 ${days >= 3 ? 'text-rose-600' : days >= 1 ? 'text-amber-600' : 'text-slate-500'}`}>
+                      {days === 0 ? 'Hom nay' : `${days} ngay`}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      </section>
 
-      {/* ===== DANH SÁCH ĐIỀU PHỐI ===== */}
+      {/* ===== TABS + DANH SACH ===== */}
       <section ref={tabSectionRef} className="rounded-xl border border-slate-200 bg-white shadow-sm scroll-mt-20">
-        {/* Tab header */}
+
+        {/* TAB HEADER */}
         <div className="flex items-center border-b border-slate-200 px-1 overflow-x-auto">
-          {tabDef.map((t) => (
+          {tabDef.map(t => (
             <button
               key={t.key}
               onClick={() => jumpToTab(t.key)}
-              className={`flex items-center gap-1.5 px-4 py-3 text-sm font-semibold whitespace-nowrap border-b-2 transition ${
+              className={`flex items-center gap-1.5 px-3 py-3 text-sm font-semibold whitespace-nowrap border-b-2 transition ${
                 tab === t.key
                   ? 'border-emerald-600 text-emerald-700'
                   : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
@@ -428,284 +417,233 @@ export function GiaoViecClient(props: Props) {
               ) : null}
             </button>
           ))}
-          <div className="flex-1" />
         </div>
 
-        {/* Filter bar */}
+        {/* FILTER BAR */}
         <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 border-b border-slate-100 bg-slate-50/50">
           {/* Search */}
           <div className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-600 flex-1 min-w-[160px] max-w-xs">
             <Search size={12} className="text-slate-400 shrink-0" />
             <input
               type="text"
-              placeholder="Tìm kiếm công việc..."
+              placeholder="Tim kiem cong viec..."
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
-              className="bg-transparent outline-none flex-1 placeholder:text-slate-400"
+              className="bg-transparent outline-none flex-1 placeholder:text-slate-400 text-sm"
             />
-            {keyword && (
-              <button onClick={() => setKeyword('')} className="text-slate-400 hover:text-slate-700">
-                <X size={12} />
-              </button>
-            )}
+            {keyword && <button onClick={() => setKeyword('')} className="text-slate-400 hover:text-slate-700"><X size={12} /></button>}
           </div>
 
-          {/* Status pills */}
-          {tab !== 'overdue' && (
-            <div className="flex items-center gap-1 overflow-x-auto">
-              {(['all', 'pending_approval', 'pending', 'in_progress', 'done'] as const).map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setStatusFilter(s)}
-                  className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-semibold ring-1 transition ${
-                    statusFilter === s
-                      ? 'bg-emerald-600 text-white ring-emerald-600'
-                      : 'bg-white text-slate-600 ring-slate-200 hover:ring-emerald-300 hover:text-emerald-700'
-                  }`}
-                >
-                  {s === 'all' ? 'Tất cả' : STATUS_LABEL[s]}
-                </button>
-              ))}
-            </div>
-          )}
+          {/* Filter: Loai */}
+          <select value={filterType} onChange={e => setFilterType(e.target.value)}
+            className="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white text-slate-600 outline-none cursor-pointer">
+            <option value="all">Tat ca loai</option>
+            <option value="dieu-phoi">Dieu phoi</option>
+            <option value="ho-tro">Ho tro</option>
+            <option value="de-xuat">De xuat</option>
+            <option value="phe-duyet">Phe duyet</option>
+            <option value="canh-bao">Canh bao</option>
+          </select>
 
-          {/* View toggle */}
-          <div className="ml-auto flex items-center gap-1">
-            <button onClick={() => setView('table')} className={`p-1.5 rounded-lg transition ${view === 'table' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-400 hover:bg-slate-100'}`} title="Bảng">
-              <ListIcon size={14} />
-            </button>
-            <button onClick={() => setView('kanban')} className={`p-1.5 rounded-lg transition ${view === 'kanban' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-400 hover:bg-slate-100'}`} title="Kanban">
-              <LayoutGrid size={14} />
-            </button>
-          </div>
+          {/* Filter: Trang thai */}
+          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+            className="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white text-slate-600 outline-none cursor-pointer">
+            <option value="all">Tat ca trang thai</option>
+            <option value="khoi-tao">Khoi tao</option>
+            <option value="tiep-nhan">Tiep nhan</option>
+            <option value="dang-xu-ly">Dang xu ly</option>
+            <option value="dang-phoi-hop">Dang phoi hop</option>
+            <option value="cho-phan-hoi">Cho phan hoi</option>
+            <option value="cho-phe-duyet">Cho phe duyet</option>
+            <option value="hoan-thanh">Hoan thanh</option>
+          </select>
+
+          {/* Filter: Pham vi */}
+          <select value={filterScope} onChange={e => setFilterScope(e.target.value)}
+            className="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white text-slate-600 outline-none cursor-pointer">
+            <option value="all">Tat ca pham vi</option>
+            <option value="noi-bo-phong">Noi bo phong</option>
+            <option value="noi-bo-khoi">Noi bo khoi</option>
+            <option value="lien-khoi">Lien khoi</option>
+            <option value="lien-co-so">Lien co so</option>
+            <option value="du-an">Du an</option>
+          </select>
+
+          <div className="flex-1" />
+          <span className="text-xs text-slate-400">{filteredTasks.length} ket qua</span>
         </div>
 
-        {/* Content */}
-        <div className="p-4">
-          {loading ? (
-            <div className="text-center py-12 text-slate-500">
-              <Loader2 size={20} className="inline animate-spin mr-2" /> Đang tải…
-            </div>
-          ) : error ? (
-            <div className="text-sm text-rose-700 bg-rose-50 p-3 rounded-lg border border-rose-200">{error}</div>
-          ) : tasks.length === 0 ? (
-            <EmptyState tab={tab} />
-          ) : view === 'kanban' ? (
-            <KanbanView
-              tasks={tasks}
-              departments={departments}
-              branches={branches}
-              users={users}
-              onSelect={setSelectedTask}
-              currentUserId={currentUserId}
-            />
-          ) : (
-            <TableView
-              tasks={tasks}
-              departments={departments}
-              branches={branches}
-              users={users}
-              onSelect={setSelectedTask}
-            />
-          )}
-        </div>
-
-        {/* Pagination hint */}
-        {tasks.length >= 20 && (
-          <div className="px-4 py-3 border-t border-slate-100 text-xs text-slate-500 flex items-center justify-between">
-            <span>Hiện thị 1–{tasks.length} trong {tasks.length} công việc</span>
+        {/* TABLE */}
+        {loading ? (
+          <div className="flex items-center justify-center py-16 gap-2 text-slate-500">
+            <Loader2 size={16} className="animate-spin" /> Dang tai...
           </div>
+        ) : filteredTasks.length === 0 ? (
+          <div className="text-center py-16 text-slate-400">
+            <ListChecks size={32} className="mx-auto mb-2 opacity-40" />
+            <p className="text-sm">Khong co cong viec nao</p>
+          </div>
+        ) : (
+          <CoordTable
+            tasks={filteredTasks}
+            departments={departments}
+            branches={branches}
+            users={users}
+            onSelect={setSelectedTask}
+            today={today}
+          />
         )}
       </section>
-      {/* Liên khối section */}
-      {tab === 'cross-block' && showLienKhoiTab && (
-        <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex items-center gap-2 mb-4">
-            <Users2 size={18} className="text-indigo-600" />
-            <h3 className="font-semibold text-slate-800 text-sm">Tổng quan liên khối</h3>
-            <span className="ml-auto text-xs text-slate-400">Theo dõi nhiệm vụ giao/nhận giữa các khối</span>
-          </div>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-            {[
-              { label: 'Tổng liên khối', value: allTasks.filter(t => t.crossBlock).length, color: 'text-slate-800' },
-              { label: 'Đang xử lý', value: allTasks.filter(t => t.crossBlock && t.status === 'in_progress').length, color: 'text-sky-700' },
-              { label: 'Chờ phản hồi', value: allTasks.filter(t => t.crossBlock && t.status === 'pending_approval').length, color: 'text-amber-700' },
-              { label: 'Quá hạn', value: allTasks.filter(t => t.crossBlock && t.dueDate && t.dueDate < today && !['done','cancelled','rejected'].includes(t.status)).length, color: 'text-rose-700' },
-            ].map(c => (
-              <div key={c.label} className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-center">
-                <div className={`text-2xl font-bold tabular-nums ${c.color}`}>{c.value}</div>
-                <div className="text-xs text-slate-500 mt-1">{c.label}</div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
 
-      {/* Create modal */}
+      {/* MODALS */}
       {showCreate && (
         <TaskCreateModal
           kind={showCreate}
-          currentUserId={currentUserId}
-          currentUserRole={currentUserRole}
-          currentDepartmentId={currentDepartmentId}
-          currentBranchId={currentBranchId}
           departments={departments}
           branches={branches}
           users={users}
+          roleCode={roleCode}
+          userRole={userRole}
+          userId={userId}
+          userName={userName}
           onClose={() => setShowCreate(null)}
-          onCreated={() => { setShowCreate(null); refresh(); }}
+          onChange={() => { setShowCreate(null); loadTasks(); }}
         />
       )}
-
-      {/* Detail modal */}
       {selectedTask && (
         <TaskDetailModal
           task={selectedTask}
-          currentUserId={currentUserId}
-          currentUserName={currentUserName}
-          currentUserRole={currentUserRole}
-          currentDepartmentId={currentDepartmentId}
-          currentBranchId={currentBranchId}
           departments={departments}
           branches={branches}
           users={users}
+          roleCode={roleCode}
+          userRole={userRole}
+          userId={userId}
+          userName={userName}
           onClose={() => setSelectedTask(null)}
-          onChange={refresh}
+          onChange={() => { setSelectedTask(null); loadTasks(); }}
         />
       )}
     </div>
   );
 }
 
-// ============================================================================
-// TABLE VIEW — chính theo mockup
-// ============================================================================
-function TableView({ tasks, departments, branches, users, onSelect }: {
-  tasks: Task[];
-  departments: Department[];
-  branches: Branch[];
-  users: User[];
-  onSelect: (t: Task) => void;
+// ============= SUB-COMPONENTS =============
+
+// CoordTable — bang hien dai 8 cot
+function CoordTable({ tasks, departments, branches, users, onSelect, today }: {
+  tasks: Task[]; departments: { id: string; name: string }[]; branches: { id: string; name: string }[];
+  users: UserPublic[]; onSelect: (t: Task) => void; today: string;
 }) {
-  const today = new Date().toISOString().slice(0, 10);
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-xs">
+      <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-slate-200">
-            {['#', 'Công việc', 'Loại', 'Khối chủ trì', 'Phối hợp', 'Trạng thái', 'Tiến độ', 'Đang chờ', 'Deadline'].map(h => (
-              <th key={h} className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide pb-2 pr-3 whitespace-nowrap">{h}</th>
+          <tr className="border-b border-slate-200 bg-slate-50/80">
+            {['#', 'Cong viec', 'Loai', 'Chu tri', 'Phoi hop', 'Dang cho', 'Deadline', 'Trang thai', 'UU tien'].map(h => (
+              <th key={h} className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide py-2.5 px-3 whitespace-nowrap first:pl-4 last:pr-4">{h}</th>
             ))}
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
           {tasks.map((t, idx) => {
-            const overdue = t.dueDate && t.dueDate < today && !['done','cancelled','rejected'].includes(t.status);
+            const status = getTaskStatus(t);
+            const overdue = isOverdue(t);
+            const coordType = (t as any).coordType || t.kind;
             const deptName = t.assigneeDeptId
               ? departments.find(d => d.id === t.assigneeDeptId)?.name ?? t.assigneeDeptId
               : t.assigneeFacilityId
                 ? branches.find(b => b.id === t.assigneeFacilityId)?.name ?? t.assigneeFacilityId
                 : '—';
-            const block = BLOCK_LABEL[t.assigneeBlock] ?? { label: t.assigneeBlock, bg: 'bg-slate-100 text-slate-700' };
-            const pct = Math.max(0, Math.min(100, t.progressPct ?? 0));
-
-
-            // Phối hợp: ưu tiên collaboratorDeptIds/FacilityIds, fallback về assigneeUserIds
-            const collabDepts = ((t as any).collaboratorDeptIds ?? []).map((id: string) => departments.find(d => d.id === id)?.name ?? id);
-            const collabFacilities = ((t as any).collaboratorFacilityIds ?? []).map((id: string) => branches.find(b => b.id === id)?.name ?? id);
-            const allCollabNames = [...collabDepts, ...collabFacilities];
-            const collabUsers = allCollabNames.length === 0
-              ? (t.assigneeUserIds ?? []).slice(0, 3).map(uid => {
-                  const u = users.find(u => u.id === uid);
-                  return u ? u.name.split(' ').pop() ?? u.name : uid.slice(0, 4);
-                })
-              : [];
-
-
-            const waitingOn =
-              t.status === 'pending_approval' ? (t.currentApprover ?? 'Người duyệt')
-              : t.status === 'requested_revision' ? t.createdByName
-              : '—';
+            const block = BLOCK_LABEL[t.assigneeBlock] || BLOCK_LABEL['all'];
+            const collabUnits: CollabUnit[] = (t as any).collabUnits || [];
+            const wf = (t as any).waitingFor as WaitingFor | undefined;
+            const days = wf ? getDaysWaiting(wf.since) : null;
 
             return (
-              <tr
-                key={t.id}
-                onClick={() => onSelect(t)}
-                className="hover:bg-emerald-50/40 cursor-pointer transition group"
-              >
-                <td className="py-2.5 pr-3 text-slate-400 tabular-nums">{idx + 1}</td>
-                <td className="py-2.5 pr-3 min-w-[200px] max-w-[280px]">
+              <tr key={t.id} onClick={() => onSelect(t)}
+                className="hover:bg-emerald-50/40 cursor-pointer transition group">
+                {/* # */}
+                <td className="py-3 px-3 pl-4 text-xs text-slate-400 tabular-nums">{idx+1}</td>
+
+                {/* Cong viec */}
+                <td className="py-3 px-3 min-w-[220px] max-w-[300px]">
                   <div className="flex items-start gap-2">
-                    <span className={`mt-0.5 h-1.5 w-1.5 rounded-full shrink-0 ${PRIORITY_DOT[t.priority] ?? 'bg-slate-300'}`} title={`Ưu tiên: ${PRIORITY_LABEL[t.priority] ?? t.priority}`} />
+                    <span className={`mt-0.5 h-1.5 w-1.5 rounded-full shrink-0 ${PRIORITY_DOT[t.priority] ?? 'bg-slate-300'}`}
+                      title={`Uu tien: ${PRIORITY_LABEL[t.priority] ?? t.priority}`} />
                     <div className="min-w-0">
                       <div className="font-semibold text-slate-800 truncate group-hover:text-emerald-700 leading-tight">{t.title}</div>
-                      <div className="text-xs text-slate-400 mt-0.5 truncate">#{t.id.slice(-6).toUpperCase()} · {t.createdByName}</div>
+                      <div className="text-xs text-slate-400 mt-0.5">#{t.id.slice(-6).toUpperCase()} · {t.createdByName}</div>
                     </div>
                   </div>
                 </td>
-                <td className="py-2.5 pr-3">
-                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold ${
-                    t.kind === 'proposal' ? 'bg-violet-100 text-violet-700' : 'bg-sky-100 text-sky-700'
-                  }`}>
-                    {t.kind === 'proposal' ? 'Đề xuất' : 'Điều phối'}
+
+                {/* Loai */}
+                <td className="py-3 px-3">
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${COORD_TYPE_COLOR[coordType] || 'bg-slate-100 text-slate-600'}`}>
+                    {COORD_TYPE_LABEL[coordType] || coordType}
                   </span>
                 </td>
-                <td className="py-2.5 pr-3">
-                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold ${block.bg}`}>
-                    {block.label}
-                  </span>
+
+                {/* Chu tri */}
+                <td className="py-3 px-3">
+                  <div>
+                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold ${block.bg}`}>{block.label}</span>
+                    <div className="text-xs text-slate-500 mt-0.5 truncate max-w-[100px]">{deptName}</div>
+                  </div>
                 </td>
-                <td className="py-2.5 pr-3 min-w-[100px] max-w-[160px]">
-                  {allCollabNames.length > 0 ? (
+
+                {/* Phoi hop */}
+                <td className="py-3 px-3 min-w-[100px] max-w-[160px]">
+                  {collabUnits.length > 0 ? (
                     <div className="flex flex-wrap gap-1">
-                      {allCollabNames.slice(0, 2).map((n, i) => (
-                        <span key={i} className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 text-xs font-semibold truncate max-w-[70px]" title={n}>{n}</span>
+                      {collabUnits.slice(0, 2).map((cu, i) => (
+                        <span key={i} className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 text-xs font-medium truncate max-w-[70px]" title={cu.unitName}>{cu.unitName}</span>
                       ))}
-                      {allCollabNames.length > 2 && <span className="text-xs text-slate-400">+{allCollabNames.length - 2}</span>}
-                    </div>
-                  ) : collabUsers.length > 0 ? (
-                    <div className="flex -space-x-1">
-                      {collabUsers.map((n, i) => (
-                        <div key={i} className="h-5 w-5 rounded-full bg-emerald-100 border border-white flex items-center justify-center text-xs font-bold text-emerald-700" title={n}>
-                          {n.charAt(0)}
-                        </div>
-                      ))}
-                      {(t.assigneeUserIds?.length ?? 0) > 3 && (
-                        <div className="h-5 w-5 rounded-full bg-slate-200 border border-white flex items-center justify-center text-xs font-bold text-slate-600">
-                          +{(t.assigneeUserIds?.length ?? 0) - 3}
-                        </div>
-                      )}
+                      {collabUnits.length > 2 && <span className="text-xs text-slate-400">+{collabUnits.length - 2}</span>}
                     </div>
                   ) : (
-                    <span className="text-slate-400">—</span>
+                    <span className="text-slate-300 text-xs">—</span>
                   )}
                 </td>
-                <td className="py-2.5 pr-3">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ring-1 ${STATUS_BG[t.status]}`}>
-                    {STATUS_LABEL[t.status]}
+
+                {/* Dang cho — WAITING-FOR ENGINE */}
+                <td className="py-3 px-3 min-w-[140px]">
+                  {wf ? (
+                    <div>
+                      <div className="text-xs font-semibold text-slate-700 truncate max-w-[130px]">{wf.unitName}</div>
+                      <div className="text-xs text-slate-400 truncate max-w-[130px]">{wf.content}</div>
+                      <div className={`text-xs font-bold tabular-nums ${days! >= 3 ? 'text-rose-600' : days! >= 1 ? 'text-amber-600' : 'text-slate-500'}`}>
+                        {days === 0 ? 'Hom nay' : `${days} ngay`}
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="text-slate-300 text-xs">—</span>
+                  )}
+                </td>
+
+                {/* Deadline */}
+                <td className="py-3 px-3 whitespace-nowrap">
+                  {t.dueDate ? (
+                    <span className={`text-xs font-medium ${overdue ? 'text-rose-600 font-bold' : t.dueDate === today ? 'text-amber-600 font-bold' : 'text-slate-600'}`}>
+                      {formatDate(t.dueDate)}
+                      {overdue && <span className="ml-1 text-rose-500">(!)</span>}
+                    </span>
+                  ) : <span className="text-slate-300 text-xs">—</span>}
+                </td>
+
+                {/* Trang thai */}
+                <td className="py-3 px-3">
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ring-1 ${STATUS_COLOR[status] || 'bg-slate-100 text-slate-500 ring-slate-200'}`}>
+                    {STATUS_LABEL[status] || status}
                   </span>
                 </td>
-                <td className="py-2.5 pr-3 min-w-[80px]">
-                  <div className="flex items-center gap-1.5">
-                    <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden min-w-[48px]">
-                      <div
-                        className={`h-full rounded-full ${pct >= 80 ? 'bg-emerald-500' : pct >= 40 ? 'bg-sky-400' : 'bg-slate-400'}`}
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                    <span className="tabular-nums text-xs text-slate-600 font-medium">{pct}%</span>
-                  </div>
-                </td>
-                <td className="py-2.5 pr-3 text-slate-600 truncate max-w-[120px]">{waitingOn}</td>
-                <td className="py-2.5 text-right">
-                  {t.dueDate ? (
-                    <span className={`tabular-nums font-medium ${overdue ? 'text-rose-600 font-semibold' : 'text-slate-600'}`}>
-                      {formatDate(t.dueDate)}
-                      {overdue && <span className="ml-1 text-xs text-rose-500 font-bold">QH</span>}
-                    </span>
-                  ) : (
-                    <span className="text-slate-400">—</span>
-                  )}
+
+                {/* Uu tien */}
+                <td className="py-3 px-3 pr-4">
+                  <span className={`text-xs font-semibold ${t.priority === 'high' ? 'text-rose-600' : t.priority === 'medium' ? 'text-amber-600' : 'text-slate-400'}`}>
+                    {PRIORITY_LABEL[t.priority] || t.priority}
+                  </span>
                 </td>
               </tr>
             );
@@ -715,112 +653,33 @@ function TableView({ tasks, departments, branches, users, onSelect }: {
     </div>
   );
 }
-// ============================================================================
-// KPI CARD
-// ============================================================================
-function KpiCard({ label, value, icon: Icon, accent, sub }: {
-  label: string; value: number; icon: LucideIcon; accent: string; sub?: string;
+
+// KpiCard
+function KpiCard({ label, value, icon: Icon, accent, onClick, sub }: {
+  label: string; value: number; icon: LucideIcon; accent: string; onClick?: () => void; sub?: string;
 }) {
-  const accentMap: Record<string, { bg: string; text: string; iconBg: string }> = {
-    sky:    { bg: 'bg-sky-50',     text: 'text-sky-700',    iconBg: 'bg-sky-100' },
-    amber:  { bg: 'bg-amber-50',   text: 'text-amber-700',  iconBg: 'bg-amber-100' },
-    orange: { bg: 'bg-orange-50',  text: 'text-orange-700', iconBg: 'bg-orange-100' },
-    rose:   { bg: 'bg-rose-50',    text: 'text-rose-700',   iconBg: 'bg-rose-100' },
-    emerald:{ bg: 'bg-emerald-50', text: 'text-emerald-700',iconBg: 'bg-emerald-100' },
-    slate:  { bg: 'bg-slate-50',   text: 'text-slate-600',  iconBg: 'bg-slate-100' },
+  const a: Record<string, { bg: string; text: string; iconBg: string; hover: string }> = {
+    sky:     { bg: 'bg-sky-50',     text: 'text-sky-700',    iconBg: 'bg-sky-100',    hover: 'hover:border-sky-200 hover:bg-sky-50' },
+    amber:   { bg: 'bg-amber-50',   text: 'text-amber-700',  iconBg: 'bg-amber-100',  hover: 'hover:border-amber-200' },
+    orange:  { bg: 'bg-orange-50',  text: 'text-orange-700', iconBg: 'bg-orange-100', hover: 'hover:border-orange-200' },
+    rose:    { bg: 'bg-rose-50',    text: 'text-rose-600',   iconBg: 'bg-rose-100',   hover: 'hover:border-rose-200 hover:bg-rose-50' },
+    emerald: { bg: 'bg-emerald-50', text: 'text-emerald-700',iconBg: 'bg-emerald-100',hover: 'hover:border-emerald-200' },
+    indigo:  { bg: 'bg-indigo-50',  text: 'text-indigo-700', iconBg: 'bg-indigo-100', hover: 'hover:border-indigo-200' },
+    slate:   { bg: 'bg-white',      text: 'text-slate-700',  iconBg: 'bg-slate-100',  hover: '' },
   };
-  const a = accentMap[accent] ?? accentMap.slate;
+  const s = a[accent] || a.slate;
+  const Tag = onClick ? 'button' : 'div';
   return (
-    <div className={`rounded-xl border border-slate-200 p-3.5 ${a.bg}`}>
+    <Tag onClick={onClick}
+      className={`rounded-xl border border-slate-200 p-3.5 ${s.bg} ${onClick ? 'cursor-pointer transition ' + s.hover : ''} text-left w-full`}>
       <div className="flex items-center gap-2 mb-2">
-        <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${a.iconBg}`}>
-          <Icon size={13} className={a.text} />
+        <div className={`flex h-7 w-7 items-center justify-center rounded-lg ${s.iconBg}`}>
+          <Icon size={14} className={s.text} />
         </div>
         <span className="text-xs font-semibold text-slate-500 truncate">{label}</span>
       </div>
-      <div className={`text-2xl font-bold tabular-nums ${a.text}`}>{value}</div>
-      {sub && <div className="text-xs text-slate-500 mt-1">{sub}</div>}
-    </div>
-  );
-}
-
-// ============================================================================
-// EMPTY STATE
-// ============================================================================
-function EmptyState({ tab }: { tab: TabKey }) {
-  const msg =
-    tab === 'my-tasks' ? 'Chưa có nhiệm vụ nào được giao cho bạn'
-    : tab === 'assigned-by-me' ? 'Bạn chưa giao việc nào'
-    : tab === 'cross-block' ? 'Không có việc liên khối'
-    : tab === 'pending-response' ? 'Không có việc chờ phản hồi'
-    : 'Không có việc quá hạn';
-  return (
-    <div className="rounded-xl border-2 border-dashed border-slate-200 py-16 text-center">
-      <Inbox size={32} className="mx-auto text-slate-300 mb-3" />
-      <p className="text-sm text-slate-500">{msg}</p>
-    </div>
-  );
-}
-
-// ============================================================================
-// KANBAN VIEW (giữ nguyên từ phiên bản cũ)
-// ============================================================================
-const KANBAN_COLS: { key: TaskStatus; label: string; bg: string; dot: string }[] = [
-  { key: 'pending_approval', label: 'Chờ duyệt',   bg: 'bg-amber-50',   dot: 'bg-amber-400' },
-  { key: 'pending',          label: 'Chờ làm',     bg: 'bg-slate-50',   dot: 'bg-slate-400' },
-  { key: 'in_progress',      label: 'Đang làm',    bg: 'bg-sky-50',     dot: 'bg-sky-500' },
-  { key: 'done',             label: 'Hoàn thành',  bg: 'bg-emerald-50', dot: 'bg-emerald-500' },
-];
-
-function KanbanView({ tasks, departments, branches, users, onSelect, currentUserId }: {
-  tasks: Task[]; departments: Department[]; branches: Branch[]; users: User[]; onSelect: (t: Task | null) => void; currentUserId: string;
-}) {
-  const today = new Date().toISOString().slice(0, 10);
-  return (
-    <div className="flex gap-3 overflow-x-auto pb-2">
-      {KANBAN_COLS.map((col) => {
-        const colTasks = tasks.filter(t => t.status === col.key);
-        return (
-          <div key={col.key} className={`flex-shrink-0 w-60 rounded-xl ${col.bg} p-3`}>
-            <div className="flex items-center gap-2 mb-3">
-              <span className={`h-2 w-2 rounded-full ${col.dot}`} />
-              <h4 className="font-semibold text-slate-700 text-xs">{col.label}</h4>
-              <span className="ml-auto text-xs text-slate-500 font-medium">{colTasks.length}</span>
-            </div>
-            <div className="space-y-2">
-              {colTasks.map((t) => {
-                const overdue = t.dueDate && t.dueDate < today && !['done','cancelled','rejected'].includes(t.status);
-                return (
-                  <button
-                    key={t.id}
-                    onClick={() => onSelect(t)}
-                    className="w-full text-left rounded-lg border border-white bg-white p-2.5 shadow-sm hover:shadow-md transition"
-                  >
-                    <div className="flex items-start gap-1.5 mb-1.5">
-                      <span className={`mt-1 h-1.5 w-1.5 rounded-full shrink-0 ${PRIORITY_DOT[t.priority] ?? 'bg-slate-300'}`} />
-                      <h5 className="text-xs font-semibold text-slate-800 line-clamp-2 leading-snug">{t.title}</h5>
-                    </div>
-                    {t.dueDate && (
-                      <div className={`flex items-center gap-1 text-xs ${overdue ? 'text-rose-600 font-semibold' : 'text-slate-400'}`}>
-                        <CalendarDays size={12} /> {formatDate(t.dueDate)}
-                      </div>
-                    )}
-                    <div className="mt-1.5 flex items-center gap-1.5">
-                      <span className="text-xs text-slate-500 truncate flex-1">{t.createdByName}</span>
-                      {t.progressPct > 0 && (
-                        <span className="text-xs font-semibold text-sky-700">{t.progressPct}%</span>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-              {colTasks.length === 0 && (
-                <div className="text-xs text-slate-400 text-center py-4">Không có</div>
-              )}
-            </div>
-          </div>
-        );
-      })}
-    </div>
+      <div className={`text-2xl font-bold tabular-nums ${s.text}`}>{value}</div>
+      {sub && <div className="text-xs text-slate-400 mt-0.5">{sub}</div>}
+    </Tag>
   );
 }
