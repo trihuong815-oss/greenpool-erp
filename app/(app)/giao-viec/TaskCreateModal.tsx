@@ -79,6 +79,9 @@ export function TaskCreateModal(props: {
   const [assigneeDeptId, setAssigneeDeptId] = useState<string>('');
   const [assigneeFacilityId, setAssigneeFacilityId] = useState<string>('');
   const [assigneeUserIds, setAssigneeUserIds] = useState<string[]>([]);
+  const [goal, setGoal] = useState<string>('');
+  const [collaboratorDeptIds, setCollaboratorDeptIds] = useState<string[]>([]);
+  const [collaboratorFacilityIds, setCollaboratorFacilityIds] = useState<string[]>([]);
 
   // ─── PROPOSAL state (Phase 12.9 — đơn giản hoá) ───
   const [recipientTier, setRecipientTier] = useState<RecipientTier>('peer');
@@ -291,6 +294,9 @@ export function TaskCreateModal(props: {
           proposalType: null,
           financialGroup: null,
           estimatedCost: null,
+          goal: goal.trim() || null,
+          collaboratorDeptIds,
+          collaboratorFacilityIds,
         };
       }
       const { id } = await tasksApi.create(createBody);
@@ -356,6 +362,18 @@ export function TaskCreateModal(props: {
             />
           </Field>
 
+          {kind === 'assignment' && (
+            <Field label="Mục tiêu (tuỳ chọn)">
+              <input
+                type="text"
+                value={goal}
+                onChange={(e) => setGoal(e.target.value)}
+                placeholder="VD: Mở lớp bơi tại Linh Đàm, đảm bảo kế hoạch..."
+                className={inputCls}
+                maxLength={300}
+              />
+            </Field>
+          )}
           <Field label="Mô tả">
             <textarea
               value={description}
@@ -636,6 +654,49 @@ export function TaskCreateModal(props: {
           )}
 
           <div className="grid grid-cols-2 gap-3">
+          {kind === 'assignment' && (
+            <Field label="Đơn vị phối hợp (tuỳ chọn)">
+              <div className="space-y-2">
+                {departments.length > 0 && (
+                  <div>
+                    <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Phòng ban</div>
+                    <div className="max-h-28 overflow-auto border border-slate-200 rounded-lg p-2 bg-slate-50/40 space-y-0.5">
+                      {departments.map((d) => (
+                        <label key={d.id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-white cursor-pointer text-sm">
+                          <input
+                            type="checkbox"
+                            checked={collaboratorDeptIds.includes(d.id)}
+                            onChange={(e) => setCollaboratorDeptIds(p => e.target.checked ? [...p, d.id] : p.filter(x => x !== d.id))}
+                            className="text-emerald-600 focus:ring-emerald-500"
+                          />
+                          <span className="font-medium text-slate-800">{d.name}</span>
+                          {d.blockId && <span className="text-[10px] text-slate-400">{d.blockId}</span>}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {branches.length > 0 && (
+                  <div>
+                    <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">Cơ sở</div>
+                    <div className="max-h-24 overflow-auto border border-slate-200 rounded-lg p-2 bg-slate-50/40 space-y-0.5">
+                      {branches.map((b) => (
+                        <label key={b.id} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-white cursor-pointer text-sm">
+                          <input
+                            type="checkbox"
+                            checked={collaboratorFacilityIds.includes(b.id)}
+                            onChange={(e) => setCollaboratorFacilityIds(p => e.target.checked ? [...p, b.id] : p.filter(x => x !== b.id))}
+                            className="text-emerald-600 focus:ring-emerald-500"
+                          />
+                          <span className="font-medium text-slate-800">{b.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Field>
+          )}
             <Field label="Ưu tiên">
               <select value={priority} onChange={(e) => setPriority(e.target.value as TaskPriority)} className={inputCls}>
                 <option value="low">Thấp</option>
