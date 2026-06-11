@@ -230,15 +230,16 @@ export function GiaoViecClient(props: Props) {
 
   // Hiệu suất theo phòng/cơ sở — done / total
   const perDeptStats = useMemo(() => {
-    const map: Record<string, { id: string; name: string; total: number; done: number; overdue: number }> = {};
+    const map: Record<string, { id: string; name: string; total: number; done: number; overdue: number; inProgress: number }> = {};
     statsTasks.forEach((t) => {
       const key = t.assigneeDeptId ?? (t.assigneeFacilityId ? `branch:${t.assigneeFacilityId}` : 'misc');
       const name = t.assigneeDeptId
         ? (departments.find((d) => d.id === t.assigneeDeptId)?.name ?? t.assigneeDeptId)
         : (t.assigneeFacilityId ? (branches.find((b) => b.id === t.assigneeFacilityId)?.name ?? t.assigneeFacilityId) : 'Cá nhân');
-      map[key] ??= { id: key, name, total: 0, done: 0, overdue: 0 };
+      map[key] ??= { id: key, name, total: 0, done: 0, overdue: 0, inProgress: 0 };
       map[key].total += 1;
       if (t.status === 'done') map[key].done += 1;
+      if (t.status === 'in_progress') map[key].inProgress += 1;
       const today2 = new Date().toISOString().slice(0, 10);
       if (t.dueDate && t.dueDate < today2 && !['done', 'cancelled', 'rejected'].includes(t.status)) map[key].overdue += 1;
     });
@@ -469,8 +470,8 @@ export function GiaoViecClient(props: Props) {
             ) : (
               <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
                 {perDeptStats.map((d) => (
-                  <div key={d.deptId} className="rounded-lg border border-slate-100 bg-slate-50 p-3">
-                    <p className="font-medium text-slate-700 text-sm truncate">{d.deptName}</p>
+                  <div key={d.id} className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                    <p className="font-medium text-slate-700 text-sm truncate">{d.name}</p>
                     <p className="text-xs text-slate-500 mt-1">
                       {d.total} việc · <span className="text-sky-600">{d.inProgress} đang làm</span> · <span className="text-emerald-600">{d.done} xong</span>
                     </p>
