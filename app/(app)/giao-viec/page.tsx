@@ -11,11 +11,11 @@ export default async function GiaoViecPage() {
   if (!canAccessRoute(profile.roleCode, 'giao-viec', profile.menuOverrides)) {
     return (
       <>
-        <AppTopBar title="Äiá»u phá»i cÃ´ng viá»c" icon="task" />
+        <AppTopBar title="ÃÂiÃ¡Â»Âu phÃ¡Â»Âi cÃÂ´ng viÃ¡Â»Âc" icon="task" />
         <div className="flex-1 flex items-center justify-center p-3 md:p-6 bg-slate-50">
           <div className="card text-center py-12 max-w-md">
-            <div className="text-5xl mb-4">ð</div>
-            <div className="font-bold text-slate-800 text-lg mb-2">KhÃ´ng cÃ³ quyá»n truy cáº­p</div>
+            <div className="text-5xl mb-4">Ã°ÂÂÂ</div>
+            <div className="font-bold text-slate-800 text-lg mb-2">KhÃÂ´ng cÃÂ³ quyÃ¡Â»Ân truy cÃ¡ÂºÂ­p</div>
           </div>
         </div>
       </>
@@ -38,18 +38,20 @@ export default async function GiaoViecPage() {
     const x = d.data();
     return {
       id: d.id,
-      name: x.displayName ?? '(unknown)',
+      displayName: x.displayName ?? '(unknown)',
+      email: x.email ?? '',
       roleId: x.roleId ?? '',
       branchId: x.branchId ?? null,
       departmentId: x.departmentId ?? null,
+      status: (x.status === 'inactive' ? 'inactive' : 'active') as 'active' | 'inactive',
     };
   });
 
   return (
     <>
       <AppTopBar
-        title="Äiá»u phá»i cÃ´ng viá»c"
-        subtitle="Workflow 3 cáº¥p Â· LiÃªn khá»i Â· PhÃª duyá»t tá»± Äá»ng"
+        title="ÃÂiÃ¡Â»Âu phÃ¡Â»Âi cÃÂ´ng viÃ¡Â»Âc"
+        subtitle="Workflow 3 cÃ¡ÂºÂ¥p ÃÂ· LiÃÂªn khÃ¡Â»Âi ÃÂ· PhÃÂª duyÃ¡Â»Ât tÃ¡Â»Â± ÃÂÃ¡Â»Âng"
         icon="task"
       />
       <div className="flex-1 overflow-y-auto p-3 md:p-6 bg-slate-50">
