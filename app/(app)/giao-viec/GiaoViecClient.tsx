@@ -313,7 +313,7 @@ export function GiaoViecClient(props: Props) {
         </div>
       </section>
 
-      {/* ===== TOP ĐIỂM NGHẼN ===== */
+      {/* ===== TOP ĐIỂM NGHẼN ===== */}
       <TopBottleneckSection rows={perDeptStats} isAdmin={showAssignmentTab || showApprovalTab} />
 
 
