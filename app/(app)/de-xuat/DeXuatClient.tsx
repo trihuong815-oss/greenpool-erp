@@ -1,19 +1,21 @@
 'use client';
 
-// Phase Mock-Frame-5 (2026-06-12): trang Äá» xuáº¥t tÃ¡ch riÃªng khá»i /giao-viec.
-// Lá»c kind='proposal' qua API + 4 tab phÃ¢n loáº¡i theo tier:
-//   - Táº¥t cáº£
-//   - Äá» xuáº¥t lÃªn trÃªn: recipient role cÃ³ tier "cao hÆ¡n" creator
-//   - Ngang cáº¥p: cÃ¹ng tier
-//   - LiÃªn khá»i: crossBlock=true
+// Phase Mock-Frame-5 (2026-06-12): trang ÃÂÃ¡Â»Â xuÃ¡ÂºÂ¥t tÃÂ¡ch riÃÂªng khÃ¡Â»Âi /giao-viec.
+// LÃ¡Â»Âc kind='proposal' qua API + 4 tab phÃÂ¢n loÃ¡ÂºÂ¡i theo tier:
+//   - TÃ¡ÂºÂ¥t cÃ¡ÂºÂ£
+//   - ÃÂÃ¡Â»Â xuÃ¡ÂºÂ¥t lÃÂªn trÃÂªn: recipient role cÃÂ³ tier "cao hÃÂ¡n" creator
+//   - Ngang cÃ¡ÂºÂ¥p: cÃÂ¹ng tier
+//   - LiÃÂªn khÃ¡Â»Âi: crossBlock=true
 // Reuse TaskCreateModal (force kind='proposal') + TaskDetailModal.
 
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Plus, Search, Loader2, Inbox, ArrowUpFromLine, ArrowLeftRight, GitBranch, RefreshCw, ChevronRight } from 'lucide-react';
 import { tasksApi, type Task, type TaskStatus, PROPOSAL_TYPE_LABEL } from '@/lib/services/tasks/api-client';
-import TaskCreateModal from '../giao-viec/TaskCreateModal';
-import TaskDetailModal from '../giao-viec/TaskDetailModal';
+import TaskCreateModalBase from '../giao-viec/TaskCreateModal';
+const TaskCreateModal = TaskCreateModalBase as any;
+import TaskDetailModalBase from '../giao-viec/TaskDetailModal';
+const TaskDetailModal = TaskDetailModalBase as any;
 
 interface Department { id: string; name: string; blockId: 'KD' | 'VP' | null; }
 interface Branch { id: string; name: string; }
@@ -33,13 +35,13 @@ interface Props {
 type TabKey = 'all' | 'up' | 'peer' | 'cross';
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
-  pending_approval: 'Chá» duyá»t',
-  pending: 'Chá» lÃ m',
-  in_progress: 'Äang lÃ m',
-  requested_revision: 'YÃªu cáº§u bá» sung',
-  done: 'HoÃ n thÃ nh',
-  rejected: 'Tá»« chá»i',
-  cancelled: 'Huá»·',
+  pending_approval: 'ChÃ¡Â»Â duyÃ¡Â»Ât',
+  pending: 'ChÃ¡Â»Â lÃÂ m',
+  in_progress: 'ÃÂang lÃÂ m',
+  requested_revision: 'YÃÂªu cÃ¡ÂºÂ§u bÃ¡Â»Â sung',
+  done: 'HoÃÂ n thÃÂ nh',
+  rejected: 'TÃ¡Â»Â« chÃ¡Â»Âi',
+  cancelled: 'HuÃ¡Â»Â·',
 };
 const STATUS_BG: Record<TaskStatus, string> = {
   pending_approval: 'bg-amber-50 text-amber-700 ring-amber-200',
@@ -51,7 +53,7 @@ const STATUS_BG: Record<TaskStatus, string> = {
   cancelled: 'bg-slate-50 text-slate-500 ring-slate-200',
 };
 
-/** Role tier â nhá» = cao. DÃ¹ng phÃ¢n loáº¡i "Äá» xuáº¥t lÃªn trÃªn" vs "Ngang cáº¥p". */
+/** Role tier Ã¢ÂÂ nhÃ¡Â»Â = cao. DÃÂ¹ng phÃÂ¢n loÃ¡ÂºÂ¡i "ÃÂÃ¡Â»Â xuÃ¡ÂºÂ¥t lÃÂªn trÃÂªn" vs "Ngang cÃ¡ÂºÂ¥p". */
 const ROLE_TIER: Record<string, number> = {
   CEO: 1, ADMIN: 1,
   GD_KD: 2, GD_VP: 2,
@@ -91,12 +93,12 @@ export function DeXuatClient(props: Props) {
     setLoading(true); setError(null);
     tasksApi.list({ mode: 'all', kind: 'proposal', q: keyword || undefined, status: statusFilter === 'all' ? undefined : statusFilter })
       .then((rows) => { if (!cancelled) setTasks(rows); })
-      .catch((e) => { if (!cancelled) setError(e?.message ?? 'Lá»i táº£i Äá» xuáº¥t'); })
+      .catch((e) => { if (!cancelled) setError(e?.message ?? 'LÃ¡Â»Âi tÃ¡ÂºÂ£i ÃÂÃ¡Â»Â xuÃ¡ÂºÂ¥t'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [keyword, statusFilter, refreshKey]);
 
-  // Lookup role cá»§a recipient (assigneeUserIds[0]) Äá» classify tier
+  // Lookup role cÃ¡Â»Â§a recipient (assigneeUserIds[0]) ÃÂÃ¡Â»Â classify tier
   function recipientRole(t: Task): string {
     const uid = t.assigneeUserIds?.[0];
     if (!uid) return '';
@@ -130,18 +132,18 @@ export function DeXuatClient(props: Props) {
   }, [tasks, users]);
 
   const TABS: { key: TabKey; label: string; icon: any }[] = [
-    { key: 'all',   label: 'Táº¥t cáº£',          icon: Inbox },
-    { key: 'up',    label: 'Äá» xuáº¥t lÃªn trÃªn', icon: ArrowUpFromLine },
-    { key: 'peer',  label: 'Ngang cáº¥p',        icon: ArrowLeftRight },
-    { key: 'cross', label: 'LiÃªn khá»i',        icon: GitBranch },
+    { key: 'all',   label: 'TÃ¡ÂºÂ¥t cÃ¡ÂºÂ£',          icon: Inbox },
+    { key: 'up',    label: 'ÃÂÃ¡Â»Â xuÃ¡ÂºÂ¥t lÃÂªn trÃÂªn', icon: ArrowUpFromLine },
+    { key: 'peer',  label: 'Ngang cÃ¡ÂºÂ¥p',        icon: ArrowLeftRight },
+    { key: 'cross', label: 'LiÃÂªn khÃ¡Â»Âi',        icon: GitBranch },
   ];
 
   function recipientLabel(t: Task): string {
     const uid = t.assigneeUserIds?.[0];
-    if (uid) return users.find((u) => u.id === uid)?.name ?? 'â';
+    if (uid) return users.find((u) => u.id === uid)?.name ?? 'Ã¢ÂÂ';
     if (t.assigneeDeptId) return departments.find((d) => d.id === t.assigneeDeptId)?.name ?? t.assigneeDeptId;
     if (t.assigneeFacilityId) return branches.find((b) => b.id === t.assigneeFacilityId)?.name ?? t.assigneeFacilityId;
-    return 'â';
+    return 'Ã¢ÂÂ';
   }
 
   return (
@@ -149,18 +151,18 @@ export function DeXuatClient(props: Props) {
       {/* Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h2 className="text-base font-bold text-slate-900">Äá» xuáº¥t</h2>
-          <p className="text-xs text-slate-500 mt-0.5">Tá»ng {tasks.length} Äá» xuáº¥t Â· {counts.up} lÃªn trÃªn Â· {counts.peer} ngang cáº¥p Â· {counts.cross} liÃªn khá»i</p>
+          <h2 className="text-base font-bold text-slate-900">ÃÂÃ¡Â»Â xuÃ¡ÂºÂ¥t</h2>
+          <p className="text-xs text-slate-500 mt-0.5">TÃ¡Â»Âng {tasks.length} ÃÂÃ¡Â»Â xuÃ¡ÂºÂ¥t ÃÂ· {counts.up} lÃÂªn trÃÂªn ÃÂ· {counts.peer} ngang cÃ¡ÂºÂ¥p ÃÂ· {counts.cross} liÃÂªn khÃ¡Â»Âi</p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={refresh} className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100" title="LÃ m má»i">
+          <button onClick={refresh} className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100" title="LÃÂ m mÃ¡Â»Âi">
             <RefreshCw size={15} />
           </button>
           <button
             onClick={() => setShowCreate(true)}
             className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 shadow-sm"
           >
-            <Plus size={15} /> Táº¡o Äá» xuáº¥t
+            <Plus size={15} /> TÃ¡ÂºÂ¡o ÃÂÃ¡Â»Â xuÃ¡ÂºÂ¥t
           </button>
         </div>
       </div>
@@ -197,7 +199,7 @@ export function DeXuatClient(props: Props) {
             type="text"
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
-            placeholder="TÃ¬m kiáº¿mâ¦"
+            placeholder="TÃÂ¬m kiÃ¡ÂºÂ¿mÃ¢ÂÂ¦"
             className="w-full pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500 bg-white"
           />
         </div>
@@ -206,7 +208,7 @@ export function DeXuatClient(props: Props) {
           onChange={(e) => setStatusFilter(e.target.value as any)}
           className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-500 bg-white"
         >
-          <option value="all">Táº¥t cáº£ tráº¡ng thÃ¡i</option>
+          <option value="all">TÃ¡ÂºÂ¥t cÃ¡ÂºÂ£ trÃ¡ÂºÂ¡ng thÃÂ¡i</option>
           {(Object.keys(STATUS_LABEL) as TaskStatus[]).map((s) => (
             <option key={s} value={s}>{STATUS_LABEL[s]}</option>
           ))}
@@ -217,33 +219,33 @@ export function DeXuatClient(props: Props) {
       <section className="rounded-xl bg-white border border-slate-200 overflow-hidden">
         {loading ? (
           <div className="py-12 flex items-center justify-center text-slate-400">
-            <Loader2 size={20} className="animate-spin mr-2" /> Äang táº£iâ¦
+            <Loader2 size={20} className="animate-spin mr-2" /> ÃÂang tÃ¡ÂºÂ£iÃ¢ÂÂ¦
           </div>
         ) : error ? (
           <div className="py-12 text-center text-sm text-rose-600">{error}</div>
         ) : filtered.length === 0 ? (
           <div className="py-12 text-center">
-            <div className="text-4xl mb-2">ð­</div>
-            <p className="text-sm text-slate-500">ChÆ°a cÃ³ Äá» xuáº¥t nÃ o.</p>
+            <div className="text-4xl mb-2">Ã°ÂÂÂ­</div>
+            <p className="text-sm text-slate-500">ChÃÂ°a cÃÂ³ ÃÂÃ¡Â»Â xuÃ¡ÂºÂ¥t nÃÂ o.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-slate-50">
                 <tr className="text-left border-b border-slate-200 text-[11px] font-semibold text-slate-600 uppercase tracking-wider">
-                  <th className="px-3 py-2.5">Äá» xuáº¥t</th>
-                  <th className="px-3 py-2.5">NgÆ°á»i gá»­i</th>
-                  <th className="px-3 py-2.5">Loáº¡i</th>
-                  <th className="px-3 py-2.5">NgÆ°á»i nháº­n</th>
-                  <th className="px-3 py-2.5">Tráº¡ng thÃ¡i</th>
-                  <th className="px-3 py-2.5 text-right">NgÃ y táº¡o</th>
+                  <th className="px-3 py-2.5">ÃÂÃ¡Â»Â xuÃ¡ÂºÂ¥t</th>
+                  <th className="px-3 py-2.5">NgÃÂ°Ã¡Â»Âi gÃ¡Â»Â­i</th>
+                  <th className="px-3 py-2.5">LoÃ¡ÂºÂ¡i</th>
+                  <th className="px-3 py-2.5">NgÃÂ°Ã¡Â»Âi nhÃ¡ÂºÂ­n</th>
+                  <th className="px-3 py-2.5">TrÃ¡ÂºÂ¡ng thÃÂ¡i</th>
+                  <th className="px-3 py-2.5 text-right">NgÃÂ y tÃ¡ÂºÂ¡o</th>
                   <th className="px-1 py-2.5" />
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((t) => {
-                  const typeLabel = t.proposalType ? PROPOSAL_TYPE_LABEL[t.proposalType] : (t.crossBlock ? 'LiÃªn khá»i' : 'â');
-                  const dateStr = t.createdAt ? new Date(t.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'â';
+                  const typeLabel = t.proposalType ? PROPOSAL_TYPE_LABEL[t.proposalType] : (t.crossBlock ? 'LiÃÂªn khÃ¡Â»Âi' : 'Ã¢ÂÂ');
+                  const dateStr = t.createdAt ? new Date(t.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'Ã¢ÂÂ';
                   return (
                     <tr
                       key={t.id}
