@@ -59,9 +59,9 @@ const STATUS_COLOR: Record<string, string> = {
   cancelled: 'bg-slate-100 text-slate-400 ring-slate-200',
 };
 const PRIORITY_DOT: Record<string, string> = {
-  high: 'bg-rose-500', medium: 'bg-amber-400', low: 'bg-slate-300',
+  high: 'bg-rose-500', normal: 'bg-amber-400', low: 'bg-slate-300',
 };
-const PRIORITY_LABEL: Record<string, string> = { high: 'Cao', medium: 'Trung binh', low: 'Thap' };
+const PRIORITY_LABEL: Record<string, string> = { high: 'Cao', normal: 'Trung binh', low: 'Thap' };
 const BLOCK_LABEL: Record<string, { label: string; bg: string }> = {
   KD: { label: 'KD', bg: 'bg-emerald-100 text-emerald-700' },
   VP: { label: 'VP', bg: 'bg-indigo-100 text-indigo-700' },
@@ -641,7 +641,7 @@ function CoordTable({ tasks, departments, branches, users, onSelect, today }: {
 
                 {/* Uu tien */}
                 <td className="py-3 px-3 pr-4">
-                  <span className={`text-xs font-semibold ${t.priority === 'high' ? 'text-rose-600' : t.priority === 'medium' ? 'text-amber-600' : 'text-slate-400'}`}>
+                  <span className={`text-xs font-semibold ${t.priority === 'high' ? 'text-rose-600' : t.priority === 'normal' ? 'text-amber-600' : 'text-slate-400'}`}>
                     {PRIORITY_LABEL[t.priority] || t.priority}
                   </span>
                 </td>
