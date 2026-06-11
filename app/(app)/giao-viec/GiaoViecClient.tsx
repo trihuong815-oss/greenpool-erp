@@ -885,7 +885,7 @@ function FlowConnector({ state }: { state: 'done' | 'active' | 'pending' }) {
 
 function FlowTaskCard({ task, users, departments, branches, onSelect }: {
   task: Task;
-  users: { id: string; name: string; roleId: string }[];
+  users: User[];
   departments: Department[];
   branches: Branch[];
   onSelect: () => void;
@@ -975,12 +975,13 @@ function FlowTaskCard({ task, users, departments, branches, onSelect }: {
   );
 }
 
-function FlowView({ tasks, departments, branches, users, onSelect }: {
+function FlowView({ tasks, departments, branches, users, onSelect, currentUserId }: {
   tasks: Task[];
   departments: Department[];
   branches: Branch[];
-  users: { id: string; name: string; roleId: string; branchId: string | null; departmentId: string | null }[];
-  onSelect: (task: Task) => void;
+  users: User[];
+  onSelect: (task: Task | null) => void;
+  currentUserId: string;
 }) {
   const active = tasks.filter(t => ['pending_approval', 'pending', 'in_progress'].includes(t.status));
   const done = tasks.filter(t => t.status === 'done');
