@@ -230,10 +230,10 @@ export function TaskDetailModal(props: {
                   {STATUS_LABEL[task.status]}
                 </span>
                 {task.crossBlock && (
-                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-900">LIÊN KHỐI</span>
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900">LIÊN KHỐI</span>
                 )}
                 {overdue && (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-100 text-rose-900">
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-900">
                     <AlertTriangle size={10} /> QUÁ HẠN
                   </span>
                 )}

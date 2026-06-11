@@ -829,7 +829,7 @@ function TaskRow({ task, departments, branches, onClick, compact }: {
               <span className="font-medium text-emerald-700">{task.assigneeBlock} · {assigneeLabel}</span>
             </span>
             {task.crossBlock && (
-              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800">LIÊN KHỐI</span>
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">LIÊN KHỐI</span>
             )}
             {task.dueDate && (
               <span className={`inline-flex items-center gap-1 tabular-nums ${overdue ? 'text-rose-600 font-semibold' : ''}`}>

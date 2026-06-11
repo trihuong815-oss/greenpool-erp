@@ -123,15 +123,15 @@ export function SaleRevenueTable({ sales, title, branchFilter, highlightSaleId, 
                     </td>
                     <td className="px-3 py-2.5 text-slate-600">{s.branchName}</td>
                     <td className="px-3 py-2.5 text-right">
-                      <div className="font-bold text-slate-900">{formatCurrencyShort(s.revenue)}</div>
-                      <div className="text-[10px] text-slate-400">{formatCurrency(s.revenue)}</div>
+                      <div className="font-bold text-slate-900 tabular-nums">{formatCurrencyShort(s.revenue)}</div>
+                      <div className="text-[11px] text-slate-400 tabular-nums">{formatCurrency(s.revenue)}</div>
                     </td>
-                    <td className="px-3 py-2.5 text-right text-slate-600">{formatCurrencyShort(s.target)}</td>
+                    <td className="px-3 py-2.5 text-right text-slate-600 tabular-nums">{formatCurrencyShort(s.target)}</td>
                     <td className="px-3 py-2.5">
                       <RevenueProgressBar percent={pct} size="sm" showLabel={false} />
-                      <div className="text-right text-xs font-mono mt-1 text-slate-600">{formatPercent(pct)}</div>
+                      <div className="text-right text-xs tabular-nums mt-1 text-slate-600">{formatPercent(pct)}</div>
                     </td>
-                    <td className="px-3 py-2.5 text-right font-mono">{s.deals}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">{s.deals}</td>
                     <td className="px-3 py-2.5 text-right">
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${status.cls}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`} />

@@ -48,7 +48,7 @@ export function RevenueProgressBar({
       </div>
       {showLabel && (
         <div className={`mt-1 flex items-center justify-between ${sizeCls.text} ${labelCls}`}>
-          <span className="font-mono font-semibold">{formatPercent(percent)}</span>
+          <span className="tabular-nums font-semibold">{formatPercent(percent)}</span>
           {percent >= 100 && (
             <span className={onDark ? 'text-emerald-200 font-semibold' : 'text-emerald-700 font-semibold'}>
               ✓ Đạt mục tiêu

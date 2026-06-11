@@ -19,6 +19,21 @@ const config: Config = {
           950: "#0B1830",
         },
       },
+      // 2026-06-11: override font-mono — bỏ Consolas/Courier New (thiếu glyph
+      // tiếng Việt trên Windows/Android → chữ vỡ). Chain ưu tiên modern mono
+      // fonts có VN support; cuối là ui-monospace (system default).
+      fontFamily: {
+        mono: [
+          "ui-monospace",
+          "SFMono-Regular",
+          '"SF Mono"',
+          "Menlo",
+          '"Cascadia Code"',
+          '"JetBrains Mono"',
+          '"Noto Sans Mono"',
+          "monospace",
+        ],
+      },
     },
   },
   plugins: [],

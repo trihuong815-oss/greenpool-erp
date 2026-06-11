@@ -344,7 +344,7 @@ function RoleDetailModal({ role, branch, profiles, onClose }: ModalProps) {
           {role.parent_role && (
             <div className="mb-4">
               <div className="text-xs font-semibold text-slate-600 mb-1">Báo cáo cho</div>
-              <div className="text-sm text-slate-700 font-mono">{role.parent_role}</div>
+              <div className="text-sm text-slate-700">{role.parent_role}</div>
             </div>
           )}
 

@@ -517,8 +517,8 @@ export function SecurityClient({ email, displayName, roleCode, mfaRequired }: Pr
                               <>
                                 <div className="text-sm font-semibold text-slate-800 flex items-center gap-1.5 flex-wrap">
                                   <span className={d.enabled ? '' : 'line-through text-slate-400'}>{d.label}</span>
-                                  {isCurrent && <span className="text-[9px] px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded font-bold">THIẾT BỊ NÀY</span>}
-                                  {!d.enabled && <span className="text-[9px] px-1.5 py-0.5 bg-slate-200 text-slate-600 rounded font-bold">TẠM TẮT</span>}
+                                  {isCurrent && <span className="text-[10px] px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded font-bold">THIẾT BỊ NÀY</span>}
+                                  {!d.enabled && <span className="text-[10px] px-1.5 py-0.5 bg-slate-200 text-slate-600 rounded font-bold">TẠM TẮT</span>}
                                   <button
                                     type="button"
                                     onClick={() => startEditLabel(d)}

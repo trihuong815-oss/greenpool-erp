@@ -401,8 +401,8 @@ function SystemProgressCard({
           </div>
         </div>
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 min-w-0">
-          {/* Phase 13.16.7: bỏ break-all (xuống dòng giữa số xấu) → whitespace-nowrap + font nhỏ vừa đủ */}
-          <div className="text-sm sm:text-lg md:text-3xl font-bold tabular-nums leading-tight text-slate-900 whitespace-nowrap overflow-hidden">
+          {/* 2026-06-11: smoother size jump — base→xl→2xl thay vì sm→lg→3xl (nhảy 3 step gây hỗn loạn) */}
+          <div className="text-base sm:text-xl md:text-2xl font-bold tabular-nums leading-tight text-slate-900 whitespace-nowrap overflow-hidden">
             {formatMoney(remaining)}
           </div>
           <div className="mt-0.5 text-[11px] font-medium uppercase tracking-wider text-slate-500">
@@ -613,11 +613,11 @@ function BranchCard({
         <StatusChip rate={yearRate} />
       </header>
 
-      {/* Big number — Phase 13.16.7: whitespace-nowrap giữ số nguyên dòng, font nhỏ vừa fit mobile */}
+      {/* Big number — 2026-06-11: bump mobile lên text-lg để đọc rõ; target text-[11px] đồng nhất khoá nhỏ */}
       <div className="mb-3 min-w-0">
-        <div className="text-sm sm:text-lg md:text-2xl font-bold tabular-nums text-slate-900 whitespace-nowrap overflow-hidden">
+        <div className="text-lg sm:text-xl md:text-2xl font-bold tabular-nums text-slate-900 whitespace-nowrap overflow-hidden">
           <span>{formatMoney(yearActual)}</span>
-          <span className="ml-1.5 text-[10px] sm:text-xs md:text-sm font-normal text-slate-500">
+          <span className="ml-1.5 text-[11px] sm:text-xs md:text-sm font-normal text-slate-500 tabular-nums">
             / {formatMoney(yearTarget)}
           </span>
         </div>
@@ -750,7 +750,7 @@ function SaleHorizontalBarChart({
                 </div>
                 <span className="w-28 shrink-0 text-right text-[11px] font-semibold tabular-nums text-slate-700">
                   {formatValue(d.value)}{unit ? ` ${unit}` : ''}
-                  {d.sub && <span className="ml-1 block text-[9px] font-normal text-slate-400">{d.sub}</span>}
+                  {d.sub && <span className="ml-1 block text-[10px] font-normal text-slate-400">{d.sub}</span>}
                 </span>
               </li>
             );
@@ -1391,8 +1391,8 @@ function SaleMonthlyRevenueSection({ branch, canEditTarget, onEditTarget }: {
                             <span className="text-slate-300">—</span>
                           ) : (
                             <div className="leading-tight">
-                              <div className="font-bold text-emerald-700">{actual.toLocaleString('vi-VN')}</div>
-                              <div className="text-[9px] text-slate-500">
+                              <div className="font-bold text-emerald-700 tabular-nums">{actual.toLocaleString('vi-VN')}</div>
+                              <div className="text-[10px] text-slate-500 tabular-nums">
                                 MT: {target > 0 ? target.toLocaleString('vi-VN') : '—'}
                                 {target > 0 && <span className={` ml-1 font-semibold ${rate >= 90 ? 'text-emerald-700' : rate >= 60 ? 'text-amber-700' : 'text-rose-700'}`}>{rate}%</span>}
                               </div>
@@ -1402,8 +1402,8 @@ function SaleMonthlyRevenueSection({ branch, canEditTarget, onEditTarget }: {
                       );
                     })}
                     <td className="px-2 py-1.5 text-right bg-emerald-50/60 font-bold whitespace-nowrap">
-                      <div className="text-emerald-800">{r.yearActual.toLocaleString('vi-VN')}</div>
-                      <div className="text-[9px] text-slate-500 font-normal">
+                      <div className="text-emerald-800 tabular-nums">{r.yearActual.toLocaleString('vi-VN')}</div>
+                      <div className="text-[10px] text-slate-500 font-normal tabular-nums">
                         MT: {r.yearTarget > 0 ? r.yearTarget.toLocaleString('vi-VN') : '—'}
                         {r.yearTarget > 0 && <span className={`ml-1 font-semibold ${yearRate >= 90 ? 'text-emerald-700' : yearRate >= 60 ? 'text-amber-700' : 'text-rose-700'}`}>{yearRate}%</span>}
                       </div>
@@ -1420,9 +1420,9 @@ function SaleMonthlyRevenueSection({ branch, canEditTarget, onEditTarget }: {
                   const rate = tgt > 0 ? Math.round((v / tgt) * 100) : 0;
                   return (
                     <td key={m} className="px-2 py-2 text-right whitespace-nowrap">
-                      <div>{v > 0 ? v.toLocaleString('vi-VN') : '—'}</div>
+                      <div className="tabular-nums">{v > 0 ? v.toLocaleString('vi-VN') : '—'}</div>
                       {tgt > 0 && (
-                        <div className="text-[9px] font-normal opacity-80">
+                        <div className="text-[10px] font-normal opacity-80 tabular-nums">
                           MT {tgt.toLocaleString('vi-VN')} <span className={rate >= 90 ? 'text-emerald-800' : rate >= 60 ? 'text-amber-800' : 'text-rose-700'}>· {rate}%</span>
                         </div>
                       )}
@@ -1430,8 +1430,8 @@ function SaleMonthlyRevenueSection({ branch, canEditTarget, onEditTarget }: {
                   );
                 })}
                 <td className="px-2 py-2 text-right bg-emerald-200/60 whitespace-nowrap">
-                  <div className="text-sm">{totalActualYear.toLocaleString('vi-VN')}</div>
-                  <div className="text-[9px] font-normal opacity-80">
+                  <div className="text-sm tabular-nums">{totalActualYear.toLocaleString('vi-VN')}</div>
+                  <div className="text-[10px] font-normal opacity-80 tabular-nums">
                     MT {totalTargetYear > 0 ? totalTargetYear.toLocaleString('vi-VN') : '—'}
                   </div>
                 </td>
