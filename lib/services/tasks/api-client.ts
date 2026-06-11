@@ -28,6 +28,12 @@ export interface Task {
   assigneeDeptId: string | null;
   assigneeFacilityId: string | null;
   assigneeUserIds: string[];
+  /** Đơn vị phối hợp — phòng ban tham gia thực hiện (không phải người chịu trách nhiệm chính) */
+  collaboratorDeptIds?: string[];
+  /** Đơn vị phối hợp — cơ sở tham gia thực hiện */
+  collaboratorFacilityIds?: string[];
+  /** Tiêu đề/Mục tiêu công việc (bổ sung cho description ngắn) */
+  goal?: string | null;
   crossBlock: boolean;
   status: TaskStatus;
   approvalRequiredFrom: string | null;
@@ -115,6 +121,9 @@ export interface TaskCreate {
   assigneeDeptId?: string | null;
   assigneeFacilityId?: string | null;
   assigneeUserIds?: string[];
+  collaboratorDeptIds?: string[];
+  collaboratorFacilityIds?: string[];
+  goal?: string | null;
   priority: TaskPriority;
   dueDate?: string | null;
   // Đề xuất v2 (kind='proposal'): bắt buộc proposalType.
