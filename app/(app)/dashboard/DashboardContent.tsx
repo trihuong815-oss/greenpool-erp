@@ -226,30 +226,6 @@ export function DashboardContent({
 
     </div>
   );
-        })()}
-      </div>
-
-      {/* ===== 2. DOANH Sá» ===== (áº©n cho TP_KT / PP_HT / PP_XLN / KT viÃªn cÆ¡ sá») */}
-      {!hideRevenue && (<>
-        <SectionTitle icon={BarChart3} title="Doanh sá»" subtitle={`NÄm ${revenueSummary.year}`} />
-        <RevenueSection r={revenueSummary} />
-      </>)}
-
-      {/* ===== Ká»¸ THUáº¬T Váº¬N HÃNH ===== â TP_KT / PP / KT viÃªn + ADMIN/CEO/GD */}
-      {showKT && kyThuatSummary && (<>
-        <SectionTitle icon={BarChart3} title="Ká»¹ thuáº­t váº­n hÃ nh" subtitle={`NÄm ${kyThuatSummary.year} Â· clo Â· axit Â· cÃ´ng suáº¥t mÃ¡y`} />
-        <KTDashboardSection
-          summary={kyThuatSummary}
-          visibleBranchIds={ktVisibleBranchIds ?? []}
-          myRoleCode={roleCode}
-        />
-      </>)}
-
-      {/* ===== 3. CÃNG VIá»C ===== */}
-      <SectionTitle icon={ListChecks} title="CÃ´ng viá»c" subtitle="Äá» xuáº¥t Â· Nhiá»m vá»¥ Â· Giao viá»c" />
-      <TasksSection counts={taskCounts} roleCode={roleCode} />
-    </div>
-  );
 }
 
 // ============================================================================
