@@ -40,13 +40,13 @@ interface Props {
   ktVisibleBranchIds?: string[];
 }
 
-// KT-only roles (TP/PP/KT viên cơ sở) — không thấy module Doanh số.
+// KT-only roles (TP/PP/KT viÃªn cÆ¡ sá») â khÃ´ng tháº¥y module Doanh sá».
 const KT_ONLY_ROLES = new Set(['TP_KT', 'PP_HT', 'PP_XLN']);
 function isKTOnly(role: string): boolean {
   if (KT_ONLY_ROLES.has(role)) return true;
   return /^KT_(HT|XLN)_/.test(role);
 }
-// KT-eligible (xem được khu KT dashboard).
+// KT-eligible (xem ÄÆ°á»£c khu KT dashboard).
 function isKTViewer(role: string): boolean {
   if (isKTOnly(role)) return true;
   return role === 'ADMIN' || role === 'CEO' || role === 'GD_KD' || role === 'GD_VP';
@@ -62,21 +62,125 @@ export function DashboardContent({
 
   return (
     <div className="space-y-5">
-      {/* Brief banner */}
+
+      {/* === BRIEF BANNER === */}
       <div className="rounded-xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-cyan-50 px-4 py-3">
         <div className="font-semibold text-slate-800">
           {isAdmin
             ? 'Toàn cụm 5 cơ sở'
             : visibleFacilities.length > 0
-              ? 'Cơ sở của bạn'
-              : 'Phạm vi cá nhân'}
+            ? 'Cơ sở của bạn'
+            : 'Phạm vi cá nhân'}
         </div>
         <div className="text-xs text-slate-600 mt-0.5">
           Vai trò: <strong>{roleCode}</strong> · {visibleFacilities.length} cơ sở trong phạm vi
         </div>
       </div>
 
-      {/* ===== 1. ẢNH CƠ SỞ ===== */}
+      {/* ===== HÀNG 1: 4 KPI CARDS — above the fold ===== */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+
+        {/* Card Doanh số */}
+        {!hideRevenue && (
+          <a href="/doanh-so" className="card p-4 hover:shadow-md transition-shadow block">
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+              Doanh số T{new Date().getMonth() + 1}
+            </div>
+            <div className="text-2xl font-bold text-slate-800">
+              {revenueSummary.monthPct ?? 0}%
+            </div>
+            <div className="text-xs text-slate-500 mt-1">
+              Năm: {revenueSummary.yearPct ?? 0}%
+            </div>
+            <div className="mt-2 h-1.5 rounded-full bg-slate-100">
+              <div
+                className="h-1.5 rounded-full bg-emerald-500"
+                style={{ width: `${Math.min(revenueSummary.monthPct ?? 0, 100)}%` }}
+              />
+            </div>
+          </a>
+        )}
+
+        {/* Card Điều phối công việc */}
+        <a href="/giao-viec" className={`card p-4 hover:shadow-md transition-shadow block ${
+          (taskCounts.overdue ?? 0) > 0
+            ? 'ring-1 ring-red-200 bg-red-50'
+            : (taskCounts.pendingApproval ?? 0) > 0
+            ? 'ring-1 ring-amber-200 bg-amber-50'
+            : ''
+        }`}>
+          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+            Điều phối
+          </div>
+          <div className="space-y-1 text-sm">
+            {(taskCounts.pendingApproval ?? 0) > 0 && (
+              <div className="flex justify-between">
+                <span className="text-amber-700">Chờ duyệt</span>
+                <span className="font-bold text-amber-700">{taskCounts.pendingApproval}</span>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span className="text-slate-600">Chờ làm</span>
+              <span className="font-semibold">{taskCounts.todo ?? 0}</span>
+            </div>
+            {(taskCounts.overdue ?? 0) > 0 && (
+              <div className="flex justify-between">
+                <span className="text-red-700">Quá hạn</span>
+                <span className="font-bold text-red-700">{taskCounts.overdue}</span>
+              </div>
+            )}
+            {(taskCounts.pendingApproval ?? 0) === 0 && (taskCounts.overdue ?? 0) === 0 && (
+              <div className="text-xs text-slate-400 italic">Không có việc tồn đọng</div>
+            )}
+          </div>
+        </a>
+
+        {/* Card Kỹ thuật — tiêu thụ Clo + Công suất máy */}
+        {showKT && kyThuatSummary && (
+          <a href="/ky-thuat" className="card p-4 hover:shadow-md transition-shadow block">
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+              Kỹ thuật T{new Date().getMonth() + 1}
+            </div>
+            <div className="space-y-1 text-sm">
+              <div className="flex justify-between">
+                <span className="text-slate-600">Clo tiêu thụ</span>
+                <span className="font-semibold">{kyThuatSummary.totalClo ?? 0} kg</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600">CS Lọc</span>
+                <span className="font-semibold">{kyThuatSummary.totalMayLoc ?? 0} h</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-600">CS Nhiệt</span>
+                <span className="font-semibold">{kyThuatSummary.totalMayNhiet ?? 0} h</span>
+              </div>
+            </div>
+          </a>
+        )}
+
+        {/* Card Checklist hôm nay */}
+        <a href="/checklist-v2" className="card p-4 hover:shadow-md transition-shadow block">
+          <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+            Checklist hôm nay
+          </div>
+          <div className="space-y-1 text-sm">
+            <div className="flex justify-between">
+              <span className="text-slate-600">Đã gửi</span>
+              <span className="font-semibold text-emerald-600">{taskCounts.checklistSent ?? 0}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-600">Chưa xem</span>
+              <span className="font-semibold text-amber-600">{taskCounts.checklistUnread ?? 0}</span>
+            </div>
+          </div>
+        </a>
+
+      </div>
+
+      {/* ===== HÀNG 2: CẢNH BÁO doanh số chênh lệch ===== */}
+      {/* (rendered bởi RevenueSection nếu có lỗi) */}
+
+      {/* ===== HÀNG 3: MINI CARD CƠ SỞ (gọn) ===== */}
       <SectionTitle icon={Building2} title="Cơ sở" count={visibleFacilities.length} />
       <div className="card">
         {(() => {
@@ -98,15 +202,15 @@ export function DashboardContent({
         })()}
       </div>
 
-      {/* ===== 2. DOANH SỐ ===== (ẩn cho TP_KT / PP_HT / PP_XLN / KT viên cơ sở) */}
+      {/* ===== HÀNG 4: DOANH SỐ CHI TIẾT ===== */}
       {!hideRevenue && (<>
         <SectionTitle icon={BarChart3} title="Doanh số" subtitle={`Năm ${revenueSummary.year}`} />
         <RevenueSection r={revenueSummary} />
       </>)}
 
-      {/* ===== KỸ THUẬT VẬN HÀNH ===== — TP_KT / PP / KT viên + ADMIN/CEO/GD */}
+      {/* ===== HÀNG 5: KỸ THUẬT VẬN HÀNH — tiêu thụ theo cơ sở ===== */}
       {showKT && kyThuatSummary && (<>
-        <SectionTitle icon={BarChart3} title="Kỹ thuật vận hành" subtitle={`Năm ${kyThuatSummary.year} · clo · axit · công suất máy`} />
+        <SectionTitle icon={BarChart3} title="Kỹ thuật vận hành" subtitle={`Năm ${kyThuatSummary.year} · clo · công suất máy`} />
         <KTDashboardSection
           summary={kyThuatSummary}
           visibleBranchIds={ktVisibleBranchIds ?? []}
@@ -114,8 +218,33 @@ export function DashboardContent({
         />
       </>)}
 
-      {/* ===== 3. CÔNG VIỆC ===== */}
+      {/* ===== HÀNG 6: CÔNG VIỆC CHI TIẾT ===== */}
       <SectionTitle icon={ListChecks} title="Công việc" subtitle="Đề xuất · Nhiệm vụ · Giao việc" />
+      <TasksSection counts={taskCounts} roleCode={roleCode} />
+
+    </div>
+  );
+        })()}
+      </div>
+
+      {/* ===== 2. DOANH Sá» ===== (áº©n cho TP_KT / PP_HT / PP_XLN / KT viÃªn cÆ¡ sá») */}
+      {!hideRevenue && (<>
+        <SectionTitle icon={BarChart3} title="Doanh sá»" subtitle={`NÄm ${revenueSummary.year}`} />
+        <RevenueSection r={revenueSummary} />
+      </>)}
+
+      {/* ===== Ká»¸ THUáº¬T Váº¬N HÃNH ===== â TP_KT / PP / KT viÃªn + ADMIN/CEO/GD */}
+      {showKT && kyThuatSummary && (<>
+        <SectionTitle icon={BarChart3} title="Ká»¹ thuáº­t váº­n hÃ nh" subtitle={`NÄm ${kyThuatSummary.year} Â· clo Â· axit Â· cÃ´ng suáº¥t mÃ¡y`} />
+        <KTDashboardSection
+          summary={kyThuatSummary}
+          visibleBranchIds={ktVisibleBranchIds ?? []}
+          myRoleCode={roleCode}
+        />
+      </>)}
+
+      {/* ===== 3. CÃNG VIá»C ===== */}
+      <SectionTitle icon={ListChecks} title="CÃ´ng viá»c" subtitle="Äá» xuáº¥t Â· Nhiá»m vá»¥ Â· Giao viá»c" />
       <TasksSection counts={taskCounts} roleCode={roleCode} />
     </div>
   );
@@ -130,24 +259,24 @@ function RevenueSection({ r }: { r: RevenueSummary }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
       <RevenueCard
-        label={`Doanh số năm ${r.year}`}
+        label={`Doanh sá» nÄm ${r.year}`}
         actual={r.yearActual}
         target={r.yearTarget}
         rate={yearRate}
-        sub={`${r.branchCount} cơ sở · lũy kế từ đầu năm`}
+        sub={`${r.branchCount} cÆ¡ sá» Â· lÅ©y káº¿ tá»« Äáº§u nÄm`}
         icon={TrendingUp}
       />
       <RevenueCard
-        label={`Doanh số tháng ${r.month}/${r.year}`}
+        label={`Doanh sá» thÃ¡ng ${r.month}/${r.year}`}
         actual={r.monthActual}
         target={r.monthTarget}
         rate={monthRate}
-        sub="Tháng hiện tại"
+        sub="ThÃ¡ng hiá»n táº¡i"
         icon={Clock}
       />
       <div className="lg:col-span-2 text-right">
         <Link href="/doanh-so" className="text-xs text-emerald-700 hover:underline font-semibold">
-          Xem dashboard doanh số chi tiết →
+          Xem dashboard doanh sá» chi tiáº¿t â
         </Link>
       </div>
     </div>
@@ -171,7 +300,7 @@ function RevenueCard({ label, actual, target, rate, sub, icon: Icon }: {
           <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">{label}</div>
           <div className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{formatMoney(actual)}</div>
           <div className="text-xs text-slate-500 mt-0.5">
-            / mục tiêu <span className="font-semibold text-slate-700 tabular-nums">{target > 0 ? formatMoney(target) : '— chưa đặt'}</span>
+            / má»¥c tiÃªu <span className="font-semibold text-slate-700 tabular-nums">{target > 0 ? formatMoney(target) : 'â chÆ°a Äáº·t'}</span>
           </div>
         </div>
         <div className={`flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 ring-1 ${accentClass.ring} text-emerald-700 shrink-0`}>
@@ -209,7 +338,7 @@ function TasksSection({ counts, roleCode }: { counts: TaskCounts; roleCode: stri
   const [list, setList] = useState<TaskListItem[] | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Fetch lazy khi modal mở
+  // Fetch lazy khi modal má»
   useEffect(() => {
     if (!modal) { setList(null); return; }
     let cancelled = false;
@@ -232,50 +361,50 @@ function TasksSection({ counts, roleCode }: { counts: TaskCounts; roleCode: stri
   }, [modal]);
 
   const titles: Record<ModalKind, string> = {
-    approval: '📋 Đề xuất / Nhiệm vụ chờ bạn duyệt',
-    received: '📥 Tất cả nhiệm vụ bạn được giao',
-    pending: '⏳ Nhiệm vụ chờ xử lý (bạn chưa bắt đầu)',
-    inprogress: '🔄 Nhiệm vụ đang triển khai',
+    approval: 'ð Äá» xuáº¥t / Nhiá»m vá»¥ chá» báº¡n duyá»t',
+    received: 'ð¥ Táº¥t cáº£ nhiá»m vá»¥ báº¡n ÄÆ°á»£c giao',
+    pending: 'â³ Nhiá»m vá»¥ chá» xá»­ lÃ½ (báº¡n chÆ°a báº¯t Äáº§u)',
+    inprogress: 'ð Nhiá»m vá»¥ Äang triá»n khai',
   };
   const subtitles: Record<ModalKind, string> = {
-    approval: 'Click vào nhiệm vụ để mở chi tiết + duyệt/từ chối',
-    received: 'Click vào nhiệm vụ để mở chi tiết',
-    pending: 'Click vào nhiệm vụ để mở chi tiết + bắt đầu thực hiện',
-    inprogress: 'Click vào nhiệm vụ để cập nhật tiến độ',
+    approval: 'Click vÃ o nhiá»m vá»¥ Äá» má» chi tiáº¿t + duyá»t/tá»« chá»i',
+    received: 'Click vÃ o nhiá»m vá»¥ Äá» má» chi tiáº¿t',
+    pending: 'Click vÃ o nhiá»m vá»¥ Äá» má» chi tiáº¿t + báº¯t Äáº§u thá»±c hiá»n',
+    inprogress: 'Click vÃ o nhiá»m vá»¥ Äá» cáº­p nháº­t tiáº¿n Äá»',
   };
 
   return (
     <>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {isApprover && (
-          <TaskTile icon={ShieldCheck} label="Chờ tôi duyệt" value={counts.approvalNeeded}
+          <TaskTile icon={ShieldCheck} label="Chá» tÃ´i duyá»t" value={counts.approvalNeeded}
             accent={counts.approvalNeeded > 0 ? 'amber' : 'slate'}
             onClick={counts.approvalNeeded > 0 ? () => setModal('approval') : undefined}
             href="/giao-viec?focus=approval"
           />
         )}
-        <TaskTile icon={ListChecks} label="Tôi đang được giao" value={counts.myTotal}
-          sub={`${counts.myPending} chờ · ${counts.myInProgress} làm`} accent="emerald"
+        <TaskTile icon={ListChecks} label="TÃ´i Äang ÄÆ°á»£c giao" value={counts.myTotal}
+          sub={`${counts.myPending} chá» Â· ${counts.myInProgress} lÃ m`} accent="emerald"
           onClick={counts.myTotal > 0 ? () => setModal('received') : undefined}
           href="/giao-viec?focus=received"
         />
-        <TaskTile icon={Clock} label="Đang triển khai" value={counts.myInProgress} accent="sky"
+        <TaskTile icon={Clock} label="Äang triá»n khai" value={counts.myInProgress} accent="sky"
           onClick={counts.myInProgress > 0 ? () => setModal('inprogress') : undefined}
           href="/giao-viec?focus=inprogress"
         />
-        <TaskTile icon={AlertTriangle} label="Chờ xử lý" value={counts.myPending}
+        <TaskTile icon={AlertTriangle} label="Chá» xá»­ lÃ½" value={counts.myPending}
           accent={counts.myPending > 0 ? 'amber' : 'slate'}
           onClick={counts.myPending > 0 ? () => setModal('pending') : undefined}
           href="/giao-viec?focus=pending"
         />
         <div className="col-span-2 lg:col-span-4 text-right">
           <Link href="/giao-viec" className="text-xs text-emerald-700 hover:underline font-semibold">
-            Xem chi tiết công việc →
+            Xem chi tiáº¿t cÃ´ng viá»c â
           </Link>
         </div>
       </div>
 
-      {/* Modal hiện danh sách task khi click tile có value > 0 */}
+      {/* Modal hiá»n danh sÃ¡ch task khi click tile cÃ³ value > 0 */}
       {modal && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setModal(null)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
@@ -293,10 +422,10 @@ function TasksSection({ counts, roleCode }: { counts: TaskCounts; roleCode: stri
             <div className="flex-1 overflow-y-auto px-3 py-2 bg-slate-50/40">
               {loading ? (
                 <div className="flex items-center justify-center py-16 text-slate-400 text-sm">
-                  <Loader2 size={18} className="animate-spin mr-2" /> Đang tải…
+                  <Loader2 size={18} className="animate-spin mr-2" /> Äang táº£iâ¦
                 </div>
               ) : !list || list.length === 0 ? (
-                <div className="text-center text-slate-400 py-16 text-sm">Không có nhiệm vụ nào.</div>
+                <div className="text-center text-slate-400 py-16 text-sm">KhÃ´ng cÃ³ nhiá»m vá»¥ nÃ o.</div>
               ) : (
                 <ul className="space-y-1.5">
                   {list.map((t) => (
@@ -310,8 +439,8 @@ function TasksSection({ counts, roleCode }: { counts: TaskCounts; roleCode: stri
                         <div className="font-medium text-sm text-slate-800 truncate">{t.title}</div>
                         <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
                           {t.dueDate && <span className="inline-flex items-center gap-1"><CalendarDays size={11} />{t.dueDate}</span>}
-                          {t.priority && <span>Ưu tiên: {t.priority}</span>}
-                          {t.createdByName && <span>· bởi {t.createdByName}</span>}
+                          {t.priority && <span>Æ¯u tiÃªn: {t.priority}</span>}
+                          {t.createdByName && <span>Â· bá»i {t.createdByName}</span>}
                         </div>
                       </div>
                       <ChevronRight size={16} className="text-slate-300 flex-shrink-0" />
@@ -322,9 +451,9 @@ function TasksSection({ counts, roleCode }: { counts: TaskCounts; roleCode: stri
             </div>
             {/* Footer */}
             <div className="px-5 py-2.5 border-t border-slate-200 bg-slate-50 flex justify-between items-center">
-              <span className="text-[11px] text-slate-400">Click một mục để mở chi tiết</span>
+              <span className="text-[11px] text-slate-400">Click má»t má»¥c Äá» má» chi tiáº¿t</span>
               <Link href={`/giao-viec?focus=${modal}`} className="text-xs text-emerald-700 hover:underline font-semibold" onClick={() => setModal(null)}>
-                Mở trang Giao việc →
+                Má» trang Giao viá»c â
               </Link>
             </div>
           </div>
@@ -337,7 +466,7 @@ function TasksSection({ counts, roleCode }: { counts: TaskCounts; roleCode: stri
 function TaskTile({ icon: Icon, label, value, sub, accent, href, onClick }: {
   icon: LucideIcon; label: string; value: number; sub?: string;
   accent: 'emerald' | 'sky' | 'amber' | 'rose' | 'slate'; href: string;
-  /** Khi có onClick → click sẽ mở modal thay vì nhảy URL. href vẫn dùng cho long-press / fallback. */
+  /** Khi cÃ³ onClick â click sáº½ má» modal thay vÃ¬ nháº£y URL. href váº«n dÃ¹ng cho long-press / fallback. */
   onClick?: () => void;
 }) {
   const A = {
@@ -354,7 +483,7 @@ function TaskTile({ icon: Icon, label, value, sub, accent, href, onClick }: {
           <Icon size={16} />
         </div>
       </div>
-      {/* Phase 13.16.6: text-2xl sm:text-3xl mobile — 4-5 chữ số không chen label */}
+      {/* Phase 13.16.6: text-2xl sm:text-3xl mobile â 4-5 chá»¯ sá» khÃ´ng chen label */}
       <div className="text-2xl sm:text-3xl font-bold tabular-nums text-slate-900 leading-tight">{value}</div>
       <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500 mt-0.5 truncate">{label}</div>
       {sub && <div className="text-[10px] text-slate-400 mt-1 truncate">{sub}</div>}
@@ -386,24 +515,24 @@ function SectionTitle({ icon: Icon, title, subtitle, count }: {
   );
 }
 
-// Format đầy đủ — dấu chấm tách nghìn (vi-VN), KHÔNG rút gọn để sum khớp chính xác từng đồng.
+// Format Äáº§y Äá»§ â dáº¥u cháº¥m tÃ¡ch nghÃ¬n (vi-VN), KHÃNG rÃºt gá»n Äá» sum khá»p chÃ­nh xÃ¡c tá»«ng Äá»ng.
 function formatMoney(value: number): string {
   return value.toLocaleString('vi-VN');
 }
 
 /**
- * Ảnh thật của từng cơ sở — đặt trong /public/. Tên file Vietnamese OK, dùng encodeURI khi render.
- * Cơ sở có > 1 ảnh → tự crossfade qua lại bằng CSS animation.
+ * áº¢nh tháº­t cá»§a tá»«ng cÆ¡ sá» â Äáº·t trong /public/. TÃªn file Vietnamese OK, dÃ¹ng encodeURI khi render.
+ * CÆ¡ sá» cÃ³ > 1 áº£nh â tá»± crossfade qua láº¡i báº±ng CSS animation.
  */
 const BRANCH_PHOTOS: Record<string, string[]> = {
-  HM:  ['/hoàng mai.png.jpg'],
-  TK:  ['/thụy khuê.png.jpg'],
+  HM:  ['/hoÃ ng mai.png.jpg'],
+  TK:  ['/thá»¥y khuÃª.png.jpg'],
   CTT: ['/CTT.png', '/CTT.png.jpg'],
   '24': ['/24 NCT.png', '/24 NCT2.png.jpg'],
-  TT:  ['/thanh trì.png'],
+  TT:  ['/thanh trÃ¬.png'],
 };
 
-/** Ảnh fallback Unsplash — chỉ dùng khi không có ảnh thật. */
+/** áº¢nh fallback Unsplash â chá» dÃ¹ng khi khÃ´ng cÃ³ áº£nh tháº­t. */
 const UNSPLASH_FALLBACK: Record<string, string> = {
   HM:  'https://images.unsplash.com/photo-1576013551627-0cc20b96c2a7?auto=format&fit=crop&w=800&q=80',
   TK:  'https://images.unsplash.com/photo-1540541338287-41700207dee6?auto=format&fit=crop&w=800&q=80',
@@ -415,7 +544,7 @@ const UNSPLASH_FALLBACK: Record<string, string> = {
 function FacilityCard({ facility, size = 'md' }: { facility: Facility; size?: 'lg' | 'md' }) {
   const photos = (BRANCH_PHOTOS[facility.id] ?? []).map(encodeURI);
   const fallbackUrl = UNSPLASH_FALLBACK[facility.id] ?? '';
-  // Lựa render: 0 ảnh → fallback Unsplash. 1 ảnh → static img. ≥2 ảnh → crossfade carousel.
+  // Lá»±a render: 0 áº£nh â fallback Unsplash. 1 áº£nh â static img. â¥2 áº£nh â crossfade carousel.
   const localUrl = photos[0] ?? fallbackUrl;
   const aspectCls = size === 'lg' ? 'aspect-[21/9]' : 'aspect-[16/9]';
   const bodyCls = size === 'lg' ? 'p-4' : 'p-3';
@@ -430,7 +559,7 @@ function FacilityCard({ facility, size = 'md' }: { facility: Facility; size?: 'l
         style={{ background: `linear-gradient(135deg, ${facility.color}, ${facility.color}99)` }}
       >
         {photos.length >= 2 ? (
-          // Carousel CSS-only: render N ảnh chồng nhau + animation xoay vòng cứ 5s.
+          // Carousel CSS-only: render N áº£nh chá»ng nhau + animation xoay vÃ²ng cá»© 5s.
           photos.map((src, i) => (
             <img
               key={src}
