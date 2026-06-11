@@ -38,7 +38,7 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
   requested_revision: 'Yêu cầu bổ sung',
   done: 'Hoàn thành',
   rejected: 'Từ chối',
-  cancelled: 'Huá»·',
+  cancelled: 'Huỷ',
 };
 const STATUS_BG: Record<TaskStatus, string> = {
   pending_approval: 'bg-amber-50 text-amber-700 ring-amber-200',
@@ -200,6 +200,18 @@ export function GiaoViecClient(props: Props) {
     return { inProgress, pendingApproval, pendingDone, overdue, done };
   }, [allTasks, today]);
 
+  // Per-block stats — Donut "Theo khối" mock frame 1 (Kinh doanh / Văn phòng / Liên khối)
+  const blockStats = useMemo(() => {
+    let kd = 0, vp = 0, cross = 0;
+    for (const t of allTasks) {
+      if (t.crossBlock) { cross++; continue; }
+      if (t.assigneeBlock === 'KD') kd++;
+      else if (t.assigneeBlock === 'VP') vp++;
+    }
+    const total = kd + vp + cross;
+    return { kd, vp, cross, total };
+  }, [allTasks]);
+
   // Per-dept stats for "Công việc theo khối"
   const perDeptStats = useMemo(() => {
     const map: Record<string, { id: string; name: string; total: number; done: number; inProgress: number; overdue: number }> = {};
@@ -264,15 +276,69 @@ export function GiaoViecClient(props: Props) {
       {/* ===== HÀNG 2: Công việc theo khối + Tắc nghẽn + Quá hạn ===== */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
-        {/* Công việc theo khối */}
+        {/* Công việc theo khối — Mock frame 1: donut 3 segment (KD/VP/Liên khối) + list phòng ban */}
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
             <Building2 size={14} className="text-emerald-600" /> Công việc theo khối
           </h3>
-          {perDeptStats.length === 0 ? (
-            <div className="text-xs text-slate-400 text-center py-6">Chưa có dữ liệu</div>
+
+          {/* Donut SVG 3 segment — tổng việc giữa, % mỗi khối bên dưới */}
+          {blockStats.total > 0 ? (
+            <div className="flex items-center gap-3 mb-3">
+              {(() => {
+                const R = 36, C = 2 * Math.PI * R;
+                const t = blockStats.total;
+                const segKd  = (blockStats.kd    / t) * C;
+                const segVp  = (blockStats.vp    / t) * C;
+                const segCs  = (blockStats.cross / t) * C;
+                let offset = 0;
+                const seg = (len: number, color: string, key: string) => {
+                  const el = (
+                    <circle key={key} r={R} cx="50" cy="50" fill="transparent"
+                      stroke={color} strokeWidth="14"
+                      strokeDasharray={`${len} ${C - len}`}
+                      strokeDashoffset={-offset} />
+                  );
+                  offset += len;
+                  return el;
+                };
+                return (
+                  <svg viewBox="0 0 100 100" className="w-24 h-24 -rotate-90 shrink-0">
+                    {seg(segKd, '#10b981', 'kd')}{/* emerald-500 */}
+                    {seg(segVp, '#8b5cf6', 'vp')}{/* violet-500 */}
+                    {seg(segCs, '#f59e0b', 'cs')}{/* amber-500 */}
+                    <text x="50" y="50" textAnchor="middle" dominantBaseline="central"
+                      className="rotate-90" transform="rotate(90 50 50)"
+                      fontSize="18" fontWeight="700" fill="#0f172a">{blockStats.total}</text>
+                  </svg>
+                );
+              })()}
+              <div className="space-y-1 text-xs flex-1">
+                {[
+                  { name: 'Khối Kinh doanh', count: blockStats.kd,    color: 'bg-emerald-500' },
+                  { name: 'Khối Văn phòng',  count: blockStats.vp,    color: 'bg-violet-500'  },
+                  { name: 'Liên khối',       count: blockStats.cross, color: 'bg-amber-500'   },
+                ].map((row) => {
+                  const pct = blockStats.total > 0 ? Math.round(row.count / blockStats.total * 100) : 0;
+                  return (
+                    <div key={row.name} className="flex items-center gap-1.5">
+                      <span className={`h-2.5 w-2.5 rounded-sm ${row.color}`} />
+                      <span className="text-slate-700 flex-1 truncate">{row.name}</span>
+                      <span className="font-semibold text-slate-800 tabular-nums">{row.count}</span>
+                      <span className="text-slate-400 tabular-nums w-9 text-right">({pct}%)</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           ) : (
-            <div className="space-y-2">
+            <div className="text-xs text-slate-400 text-center py-4">Chưa có dữ liệu</div>
+          )}
+
+          {/* List phòng ban top 5 — chi tiết hơn donut */}
+          {perDeptStats.length > 0 && (
+            <div className="pt-3 border-t border-slate-100 space-y-2">
+              <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Phòng ban / Cơ sở</div>
               {perDeptStats.slice(0, 5).map((d) => {
                 const pct = d.total > 0 ? Math.round(d.done / d.total * 100) : 0;
                 return (

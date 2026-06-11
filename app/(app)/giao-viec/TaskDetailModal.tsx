@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import {
   X, CheckCircle2, XCircle, Loader2, Send, MessageSquare,
   Clock, ArrowRight, CalendarDays, AlertTriangle, Trash2,
-  Paperclip, Download,
+  Paperclip, Download, Bell,
 } from 'lucide-react';
 import {
   tasksApi, type Task, type TaskComment, type TaskStatus, type TaskAttachment,
@@ -58,7 +58,7 @@ export function TaskDetailModal(props: {
   const [attachments, setAttachments] = useState<TaskAttachment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<null | 'approve' | 'reject' | 'status' | 'comment' | 'delete' | 'upload' | 'request-revision'>(null);
+  const [busy, setBusy] = useState<null | 'approve' | 'reject' | 'status' | 'comment' | 'delete' | 'upload' | 'request-revision' | 'nudge'>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [showReject, setShowReject] = useState(false);
   const [newComment, setNewComment] = useState('');
@@ -71,6 +71,9 @@ export function TaskDetailModal(props: {
   // Phase 12.5 — approver action: ghi chú khi Duyệt (optional)
   const [showApprove, setShowApprove] = useState(false);
   const [approveComment, setApproveComment] = useState('');
+  // Phase Mock-Frame-3 (2026-06-12): Nhắc việc
+  const [showNudgeForm, setShowNudgeForm] = useState(false);
+  const [nudgeMessage, setNudgeMessage] = useState('');
 
   const isGD = GD_ROLES.has(currentUserRole);
   const isAdmin = ADMIN.has(currentUserRole);
@@ -178,6 +181,15 @@ export function TaskDetailModal(props: {
     setBusy('status');
     try {
       await tasksApi.updateStatus(task.id, { status: next, progressPct: withProgress });
+      await refresh();
+    } catch (e: any) { setError(e.message); } finally { setBusy(null); }
+  }
+  async function nudge() {
+    setBusy('nudge'); setError(null);
+    try {
+      await tasksApi.nudge(task.id, nudgeMessage.trim() || undefined);
+      setShowNudgeForm(false);
+      setNudgeMessage('');
       await refresh();
     } catch (e: any) { setError(e.message); } finally { setBusy(null); }
   }
@@ -304,22 +316,179 @@ export function TaskDetailModal(props: {
                 <Meta label="Cập nhật">{fmtDateTime(task.updatedAt)}</Meta>
               </div>
 
-              {/* Đơn vị phối hợp */}
+              {/* Đơn vị phối hợp + mô tả nhiệm vụ riêng (Mock-Frame-7 2026-06-12) */}
               {((task as any).collaboratorDeptIds?.length > 0 || (task as any).collaboratorFacilityIds?.length > 0) && (
                 <div className="rounded-lg border border-indigo-100 bg-indigo-50/40 p-3">
                   <div className="text-xs font-semibold uppercase tracking-wider text-indigo-700 mb-2">Đơn vị phối hợp</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {((task as any).collaboratorDeptIds ?? []).map((id: string) => {
-                      const d = departments.find(dep => dep.id === id);
-                      return <span key={id} className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold">{d?.name ?? id}</span>;
-                    })}
-                    {((task as any).collaboratorFacilityIds ?? []).map((id: string) => {
-                      const b = branches.find(br => br.id === id);
-                      return <span key={id} className="px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 text-xs font-semibold">{b?.name ?? id}</span>;
-                    })}
-                  </div>
+                  {(() => {
+                    const roles = (task.collaboratorRoles ?? {}) as Record<string, string>;
+                    const hasAnyRole = Object.values(roles).some((v) => v?.trim());
+                    if (!hasAnyRole) {
+                      return (
+                        <div className="flex flex-wrap gap-1.5">
+                          {((task as any).collaboratorDeptIds ?? []).map((id: string) => {
+                            const d = departments.find(dep => dep.id === id);
+                            return <span key={id} className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 text-xs font-semibold">{d?.name ?? id}</span>;
+                          })}
+                          {((task as any).collaboratorFacilityIds ?? []).map((id: string) => {
+                            const b = branches.find(br => br.id === id);
+                            return <span key={id} className="px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 text-xs font-semibold">{b?.name ?? id}</span>;
+                          })}
+                        </div>
+                      );
+                    }
+                    // Có mô tả nhiệm vụ → render list: tên đơn vị + việc làm
+                    return (
+                      <ul className="space-y-1.5 text-sm">
+                        {((task as any).collaboratorDeptIds ?? []).map((id: string) => {
+                          const d = departments.find(dep => dep.id === id);
+                          const role = roles[`dept:${id}`];
+                          return (
+                            <li key={`dept:${id}`} className="flex items-start gap-2">
+                              <span className="px-2 py-0.5 rounded bg-indigo-100 text-indigo-700 text-xs font-semibold shrink-0 mt-0.5">{d?.name ?? id}</span>
+                              <span className="text-slate-700">{role ? role : <span className="text-slate-400 italic">(chưa ghi nhiệm vụ)</span>}</span>
+                            </li>
+                          );
+                        })}
+                        {((task as any).collaboratorFacilityIds ?? []).map((id: string) => {
+                          const b = branches.find(br => br.id === id);
+                          const role = roles[`facility:${id}`];
+                          return (
+                            <li key={`facility:${id}`} className="flex items-start gap-2">
+                              <span className="px-2 py-0.5 rounded bg-sky-100 text-sky-700 text-xs font-semibold shrink-0 mt-0.5">{b?.name ?? id}</span>
+                              <span className="text-slate-700">{role ? role : <span className="text-slate-400 italic">(chưa ghi nhiệm vụ)</span>}</span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    );
+                  })()}
                 </div>
               )}
+
+              {/* Kết quả bàn giao dự kiến (Mock-Frame-7) */}
+              {task.expectedDeliverable && (
+                <div className="rounded-lg border border-emerald-100 bg-emerald-50/40 px-3 py-2">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-emerald-700 mb-1">Kết quả bàn giao dự kiến</div>
+                  <div className="text-sm text-slate-700 whitespace-pre-wrap">{task.expectedDeliverable}</div>
+                </div>
+              )}
+
+              {/* Phase Mock-Frame-3 (2026-06-12): ĐANG TẮC TẠI — hiện nếu task
+                  đang ở trạng thái tắc (pending_approval/pending/in_progress/requested_revision)
+                  và đã chờ ≥24h kể từ updatedAt. Nút "Nhắc việc" gửi noti tới người tắc.
+                  Quyền nhắc: creator hoặc ADMIN/CEO/GĐ. Cooldown 4h. */}
+              {(() => {
+                const stuckStatuses = ['pending_approval','pending','in_progress','requested_revision'];
+                if (!stuckStatuses.includes(task.status)) return null;
+                const updatedMs = task.updatedAt ? new Date(task.updatedAt).getTime() : Date.now();
+                const stuckMs = Date.now() - updatedMs;
+                const stuckHours = Math.floor(stuckMs / 3600000);
+                if (stuckHours < 24 && !isAdmin) return null; // chỉ hiện nếu ≥24h (admin/GĐ thấy luôn)
+
+                // Xác định ai đang tắc
+                let stuckWho = '';
+                let stuckRoleLabel = '';
+                if (task.status === 'pending_approval' && task.currentApprover) {
+                  const cur = task.currentApprover;
+                  if (cur.startsWith('user:')) {
+                    const u = users.find(x => x.id === cur.slice(5));
+                    stuckWho = u?.name ?? cur.slice(5);
+                    stuckRoleLabel = u ? roleLabelVN(u.roleId) : '';
+                  } else if (cur.startsWith('role:')) {
+                    stuckRoleLabel = roleLabelVN(cur.slice(5));
+                    stuckWho = stuckRoleLabel;
+                  } else {
+                    stuckRoleLabel = roleLabelVN(cur);
+                    stuckWho = stuckRoleLabel;
+                  }
+                } else if (task.status === 'requested_revision') {
+                  stuckWho = task.createdByName;
+                  stuckRoleLabel = 'cần bổ sung';
+                } else {
+                  // pending / in_progress → assignee
+                  if (task.assigneeUserIds.length > 0) {
+                    const u = users.find(x => x.id === task.assigneeUserIds[0]);
+                    stuckWho = u?.name ?? task.assigneeUserIds[0];
+                    if (task.assigneeUserIds.length > 1) stuckWho += ` +${task.assigneeUserIds.length - 1}`;
+                  } else if (task.assigneeDeptId) {
+                    stuckWho = departments.find(d => d.id === task.assigneeDeptId)?.name ?? task.assigneeDeptId;
+                  } else if (task.assigneeFacilityId) {
+                    stuckWho = branches.find(b => b.id === task.assigneeFacilityId)?.name ?? task.assigneeFacilityId;
+                  }
+                  stuckRoleLabel = 'người thực hiện';
+                }
+
+                const canNudge = (isCreator || isAdmin) && task.createdBy !== task.assigneeUserIds[0];
+                const lastNudgeMs = task.lastNudgeAt ? new Date(task.lastNudgeAt).getTime() : 0;
+                const cooldownMs = 4 * 3600000;
+                const inCooldown = lastNudgeMs > 0 && (Date.now() - lastNudgeMs) < cooldownMs;
+                const cooldownMinsLeft = inCooldown ? Math.ceil((cooldownMs - (Date.now() - lastNudgeMs)) / 60000) : 0;
+
+                const stuckLabel = stuckHours < 24
+                  ? `${stuckHours} giờ`
+                  : `${Math.floor(stuckHours / 24)} ngày${stuckHours % 24 > 0 ? ` ${stuckHours % 24}h` : ''}`;
+
+                return (
+                  <div className="rounded-lg border-2 border-amber-300 bg-amber-50/60 p-3">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-amber-800 mb-2 flex items-center gap-1.5">
+                      <AlertTriangle size={12} /> Đang tắc tại
+                    </div>
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div className="flex-1 min-w-[180px]">
+                        <div className="text-sm font-semibold text-slate-800">{stuckWho || '—'}</div>
+                        {stuckRoleLabel && <div className="text-xs text-slate-500 mt-0.5">{stuckRoleLabel}</div>}
+                        <div className="text-xs text-amber-700 mt-1 inline-flex items-center gap-1">
+                          <Clock size={11} /> Đã chờ {stuckLabel}
+                          {(task.nudgeCount ?? 0) > 0 && (
+                            <span className="ml-2 text-slate-500">· Đã nhắc {task.nudgeCount} lần</span>
+                          )}
+                        </div>
+                      </div>
+                      {canNudge && !showNudgeForm && (
+                        <button
+                          onClick={() => setShowNudgeForm(true)}
+                          disabled={inCooldown || busy === 'nudge'}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-amber-600 text-white hover:bg-amber-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed transition shrink-0"
+                          title={inCooldown ? `Đợi ${cooldownMinsLeft} phút nữa` : 'Gửi noti nhắc người đang tắc'}
+                        >
+                          <Bell size={12} />
+                          {inCooldown ? `Đợi ${cooldownMinsLeft}p` : 'Nhắc việc'}
+                        </button>
+                      )}
+                    </div>
+
+                    {showNudgeForm && (
+                      <div className="mt-2 space-y-2">
+                        <textarea
+                          value={nudgeMessage}
+                          onChange={(e) => setNudgeMessage(e.target.value)}
+                          placeholder="Ghi chú nhắc (tuỳ chọn) — vd: 'Khách đang chờ, vui lòng xử lý sớm'"
+                          rows={2}
+                          maxLength={300}
+                          className="w-full text-sm rounded-md border border-amber-200 px-2 py-1.5 focus:outline-none focus:border-amber-500 bg-white"
+                        />
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => { setShowNudgeForm(false); setNudgeMessage(''); }}
+                            className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-md"
+                          >
+                            Huỷ
+                          </button>
+                          <button
+                            onClick={nudge}
+                            disabled={busy === 'nudge'}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-amber-600 text-white hover:bg-amber-700 disabled:bg-slate-300"
+                          >
+                            {busy === 'nudge' ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                            Gửi nhắc
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Phase 12.5 — Luồng duyệt đề xuất (chain) — entry: "user:UID" | "role:RC" | legacy "RC" */}
               {task.kind === 'proposal' && task.approvalChain && task.approvalChain.length > 0 && (

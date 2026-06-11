@@ -370,6 +370,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'dueDate phải định dạng YYYY-MM-DD hoặc null' }, { status: 400 });
     }
 
+    // Mock-Frame-7 (2026-06-12): các field mới
+    // - goal: Mục tiêu / Kết quả cần đạt
+    // - expectedDeliverable: Kết quả bàn giao dự kiến (khác mục tiêu — output)
+    // - collaboratorRoles: { "dept:KE": "lập dự toán", "facility:HM": "bố trí phòng" }
+    const goal: string | null = typeof body?.goal === 'string' && body.goal.trim() ? body.goal.trim().slice(0, 500) : null;
+    const expectedDeliverable: string | null = typeof body?.expectedDeliverable === 'string' && body.expectedDeliverable.trim()
+      ? body.expectedDeliverable.trim().slice(0, 500) : null;
+    const collaboratorDeptIds: string[] = Array.isArray(body?.collaboratorDeptIds)
+      ? body.collaboratorDeptIds.filter((x: any) => typeof x === 'string') : [];
+    const collaboratorFacilityIds: string[] = Array.isArray(body?.collaboratorFacilityIds)
+      ? body.collaboratorFacilityIds.filter((x: any) => typeof x === 'string') : [];
+    let collaboratorRoles: Record<string, string> = {};
+    if (body?.collaboratorRoles && typeof body.collaboratorRoles === 'object') {
+      for (const [k, v] of Object.entries(body.collaboratorRoles)) {
+        if (typeof k !== 'string' || typeof v !== 'string') continue;
+        // Key format: "dept:<id>" hoặc "facility:<id>"; validate id thuộc list collaborator đã chọn
+        const m = k.match(/^(dept|facility):(.+)$/);
+        if (!m) continue;
+        const idValid = m[1] === 'dept' ? collaboratorDeptIds.includes(m[2]) : collaboratorFacilityIds.includes(m[2]);
+        if (!idValid) continue;
+        const trimmed = v.trim().slice(0, 300);
+        if (trimmed) collaboratorRoles[k] = trimmed;
+      }
+    }
+
     // Phase 12.6 (2026-06-03): BỎ phân biệt loại + nhóm chi + cost. Chỉ giữ field null cho mọi proposal mới.
     // Backward compat: nếu client cũ gửi 3 field này thì validate nhẹ rồi lưu (không reject).
     const VALID_PROPOSAL_TYPE = new Set(['tai_chinh', 'van_hanh']);
@@ -596,6 +621,12 @@ export async function POST(req: NextRequest) {
       recipientTier,
       recipientUid: recipientUidResolved,
       expectedCompletionDate: null,
+      // Mock-Frame-7 (2026-06-12)
+      goal,
+      expectedDeliverable,
+      collaboratorDeptIds,
+      collaboratorFacilityIds,
+      collaboratorRoles,
       approvalChain,
       approvalsCompleted: [],
       currentApprover,

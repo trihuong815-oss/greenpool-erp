@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { effectiveMenu } from '@/lib/permissions';
 import {
-  Home, BarChart3, CheckSquare, FileText, ListTodo, MessageCircle,
+  Home, BarChart3, CheckSquare, FileText, ListTodo, MessageCircle, Inbox,
   Users, DollarSign, FileBarChart, GraduationCap, Megaphone, Settings, LogOut, UserCog, Wrench, KeyRound, X, Briefcase, ShieldCheck, Search,
   type LucideIcon,
 } from 'lucide-react';
@@ -40,6 +40,7 @@ const MENU_SECTIONS: MenuSection[] = [
     title: 'Điều hành',
     items: [
       { route: 'giao-viec', label: 'Điều phối công việc', icon: ListTodo },
+      { route: 'de-xuat',   label: 'Đề xuất',              icon: Inbox },
     ],
   },
   {

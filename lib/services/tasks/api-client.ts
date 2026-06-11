@@ -64,6 +64,19 @@ export interface Task {
   revisionRequests?: RevisionRequest[];
   /** Role label tiếng Việt — UI dùng để render chain (vd "Giám đốc Khối KD") */
   approvalChainLabels?: Record<string, string>;
+  // ── Nhắc việc (Phase Mock-Frame-3 2026-06-12) ────────────────────────
+  /** ISO string khi creator/admin bấm "Nhắc việc" gần nhất */
+  lastNudgeAt?: string | null;
+  lastNudgeBy?: string | null;
+  lastNudgeByName?: string | null;
+  /** Đếm tổng lần đã nhắc trên task này */
+  nudgeCount?: number;
+  // ── Mock-Frame-7 (2026-06-12) — bàn giao + nhiệm vụ phối hợp ──
+  /** Kết quả bàn giao dự kiến (output cụ thể, khác `goal` = mục tiêu/intent) */
+  expectedDeliverable?: string | null;
+  /** Mô tả nhiệm vụ riêng cho mỗi đơn vị phối hợp.
+   *  Key format: "dept:<id>" hoặc "facility:<id>". */
+  collaboratorRoles?: Record<string, string>;
 }
 
 /** Map role → label tiếng Việt cho UI chain. */
@@ -134,6 +147,9 @@ export interface TaskCreate {
   // Phase 12.5 (2026-06-03): chuỗi UID người duyệt theo thứ tự (chỉ dùng cho kind='proposal').
   // Empty/undefined = không cần duyệt → đi thẳng pending. Server force assignee=creator.
   approverUserIds?: string[];
+  // Mock-Frame-7 (2026-06-12): output cụ thể bàn giao + nhiệm vụ riêng cho mỗi collaborator
+  expectedDeliverable?: string | null;
+  collaboratorRoles?: Record<string, string>;
 }
 
 export interface TaskUpdate {
@@ -254,6 +270,18 @@ export const tasksApi = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message }),
+      }),
+    );
+  },
+
+  /** Nhắc việc người đang tắc. Cooldown 4h + threshold 24h (admin/GĐ bypass).
+   *  Backend tự xác định target theo status (currentApprover hoặc assignee). */
+  async nudge(id: string, message?: string): Promise<{ ok: true; stuckHours: number }> {
+    return jsonOrThrow<{ ok: true; stuckHours: number }>(
+      await fetch(`/api/tasks/${id}/nudge`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: message ?? '' }),
       }),
     );
   },

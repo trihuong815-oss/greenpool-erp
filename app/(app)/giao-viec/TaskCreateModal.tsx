@@ -82,6 +82,11 @@ export function TaskCreateModal(props: {
   const [goal, setGoal] = useState<string>('');
   const [collaboratorDeptIds, setCollaboratorDeptIds] = useState<string[]>([]);
   const [collaboratorFacilityIds, setCollaboratorFacilityIds] = useState<string[]>([]);
+  // Mock-Frame-7 (2026-06-12): mô tả nhiệm vụ riêng cho mỗi đơn vị phối hợp.
+  // key = `dept:<id>` hoặc `facility:<id>`. Đánh dấu rõ ai hỗ trợ làm gì.
+  const [collaboratorRoles, setCollaboratorRoles] = useState<Record<string, string>>({});
+  // "Kết quả bàn giao dự kiến" — khác `goal` (mục tiêu). Output cụ thể bàn giao.
+  const [expectedDeliverable, setExpectedDeliverable] = useState<string>('');
 
   // ─── PROPOSAL state (Phase 12.9 — đơn giản hoá) ───
   const [recipientTier, setRecipientTier] = useState<RecipientTier>('peer');
@@ -297,7 +302,14 @@ export function TaskCreateModal(props: {
           goal: goal.trim() || null,
           collaboratorDeptIds,
           collaboratorFacilityIds,
-        };
+          // Mock-Frame-7 (2026-06-12): mô tả nhiệm vụ riêng + kết quả bàn giao
+          collaboratorRoles: Object.fromEntries(
+            Object.entries(collaboratorRoles)
+              .map(([k, v]) => [k, (v ?? '').trim()])
+              .filter(([, v]) => v),
+          ),
+          expectedDeliverable: expectedDeliverable.trim() || null,
+        } as any;
       }
       const { id } = await tasksApi.create(createBody);
 
@@ -363,16 +375,31 @@ export function TaskCreateModal(props: {
           </Field>
 
           {kind === 'assignment' && (
-            <Field label="Mục tiêu (tuỳ chọn)">
-              <input
-                type="text"
-                value={goal}
-                onChange={(e) => setGoal(e.target.value)}
-                placeholder="VD: Mở lớp bơi tại Linh Đàm, đảm bảo kế hoạch..."
-                className={inputCls}
-                maxLength={300}
-              />
-            </Field>
+            <>
+              <Field label="Mục tiêu / Kết quả cần đạt">
+                <input
+                  type="text"
+                  value={goal}
+                  onChange={(e) => setGoal(e.target.value)}
+                  placeholder="VD: Mở lớp bơi tại Linh Đàm, đảm bảo kế hoạch..."
+                  className={inputCls}
+                  maxLength={300}
+                />
+              </Field>
+              {/* Mock-Frame-7 (2026-06-12): Kết quả bàn giao dự kiến — output cụ thể
+                  khác với mục tiêu (intent). VD mục tiêu = "Mở lớp bơi",
+                  bàn giao = "Hợp đồng + danh sách HV + lịch lớp tuần đầu". */}
+              <Field label="Kết quả bàn giao dự kiến (tuỳ chọn)">
+                <input
+                  type="text"
+                  value={expectedDeliverable}
+                  onChange={(e) => setExpectedDeliverable(e.target.value)}
+                  placeholder="VD: Bàn giao hợp đồng + danh sách HV + lịch lớp tuần đầu"
+                  className={inputCls}
+                  maxLength={300}
+                />
+              </Field>
+            </>
           )}
           <Field label="Mô tả">
             <textarea
@@ -694,16 +721,77 @@ export function TaskCreateModal(props: {
                     </div>
                   </div>
                 )}
+
+                {/* Mock-Frame-7 (2026-06-12): mô tả nhiệm vụ riêng cho từng đơn vị đã tick.
+                    Anh chốt — để biết ai phối hợp hỗ trợ làm gì. */}
+                {(collaboratorDeptIds.length > 0 || collaboratorFacilityIds.length > 0) && (
+                  <div className="mt-2 pt-2 border-t border-slate-200">
+                    <div className="text-xs font-semibold text-slate-600 mb-1.5">Nhiệm vụ của mỗi đơn vị phối hợp</div>
+                    <div className="space-y-1.5">
+                      {collaboratorDeptIds.map((id) => {
+                        const d = departments.find((x) => x.id === id);
+                        const key = `dept:${id}`;
+                        return (
+                          <div key={key} className="flex items-center gap-2">
+                            <span className="text-xs font-medium text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded shrink-0 min-w-[88px]">{d?.name ?? id}</span>
+                            <input
+                              type="text"
+                              value={collaboratorRoles[key] ?? ''}
+                              onChange={(e) => setCollaboratorRoles((p) => ({ ...p, [key]: e.target.value }))}
+                              placeholder="vd. Thiết kế poster, gửi MKT trước 15/06"
+                              maxLength={200}
+                              className="flex-1 text-sm border border-slate-200 rounded-md px-2 py-1 focus:outline-none focus:border-emerald-500"
+                            />
+                          </div>
+                        );
+                      })}
+                      {collaboratorFacilityIds.map((id) => {
+                        const b = branches.find((x) => x.id === id);
+                        const key = `facility:${id}`;
+                        return (
+                          <div key={key} className="flex items-center gap-2">
+                            <span className="text-xs font-medium text-sky-700 bg-sky-50 px-1.5 py-0.5 rounded shrink-0 min-w-[88px]">{b?.name ?? id}</span>
+                            <input
+                              type="text"
+                              value={collaboratorRoles[key] ?? ''}
+                              onChange={(e) => setCollaboratorRoles((p) => ({ ...p, [key]: e.target.value }))}
+                              placeholder="vd. Bố trí phòng, hỗ trợ tiếp đón"
+                              maxLength={200}
+                              className="flex-1 text-sm border border-slate-200 rounded-md px-2 py-1 focus:outline-none focus:border-emerald-500"
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             </Field>
           )}
-            <Field label="Ưu tiên">
-              <select value={priority} onChange={(e) => setPriority(e.target.value as TaskPriority)} className={inputCls}>
-                <option value="low">Thấp</option>
-                <option value="normal">Bình thường</option>
-                <option value="high">Cao</option>
-                <option value="urgent">Khẩn</option>
-              </select>
+            <Field label="Mức độ ưu tiên">
+              {/* Mock-Frame-7 (2026-06-12): 3 chip thay dropdown — Thấp / Trung bình / Cao.
+                  "urgent" giữ trong type cho API/CEO override, không expose UI tạo. */}
+              <div className="grid grid-cols-3 gap-1.5">
+                {([
+                  { v: 'low',    label: 'Thấp',       active: 'bg-slate-200 text-slate-800 ring-slate-400' },
+                  { v: 'normal', label: 'Trung bình', active: 'bg-sky-100 text-sky-800 ring-sky-400' },
+                  { v: 'high',   label: 'Cao',        active: 'bg-rose-100 text-rose-800 ring-rose-400' },
+                ] as const).map(({ v, label, active }) => {
+                  const isOn = priority === v;
+                  return (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setPriority(v)}
+                      className={`px-3 py-2 rounded-lg text-sm font-semibold ring-1 transition ${
+                        isOn ? active : 'bg-white text-slate-500 ring-slate-200 hover:ring-slate-300'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
             </Field>
             <Field label="Hạn chót">
               <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className={inputCls} />
