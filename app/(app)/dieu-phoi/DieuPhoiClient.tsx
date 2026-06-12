@@ -133,6 +133,9 @@ export default function DieuPhoiClient({
         const collaboratorDeptIds: string[] = [];
         const collaboratorFacilityIds: string[] = [];
         const collaboratorRoles: Record<string, string> = {};
+        // V6.2 fix: lưu deadline RIÊNG cho mỗi collab (anh chốt — user nhập 13/6 cho
+        // Kỹ thuật, deadline tổng 20/6 → adapter cần đọc riêng).
+        const collaboratorDeadlines: Record<string, string> = {};
         for (const c of payload.collaborators) {
           if (!c.unitId) continue;
           const [prefix, rawId] = c.unitId.split(':');
@@ -140,9 +143,11 @@ export default function DieuPhoiClient({
           if (prefix === 'DEPT') {
             collaboratorDeptIds.push(rawId);
             collaboratorRoles[`dept:${rawId}`] = c.supportContent;
+            if (c.deadline) collaboratorDeadlines[`dept:${rawId}`] = c.deadline;
           } else if (prefix === 'BRANCH') {
             collaboratorFacilityIds.push(rawId);
             collaboratorRoles[`facility:${rawId}`] = c.supportContent;
+            if (c.deadline) collaboratorDeadlines[`facility:${rawId}`] = c.deadline;
           }
         }
 
@@ -176,6 +181,13 @@ export default function DieuPhoiClient({
           collaboratorDeptIds,
           collaboratorFacilityIds,
           collaboratorRoles,
+          // V6.2 fix: lưu thêm Owner + deadline riêng cho mỗi collab.
+          ...(({
+            ownerUid: payload.ownerUid,
+            ownerName: payload.ownerName,
+            ownerBlock: payload.ownerBlock,
+            collaboratorDeadlines,
+          } as any)),
         };
 
         const created = await tasksApi.create(body);
@@ -248,6 +260,7 @@ export default function DieuPhoiClient({
         const collaboratorDeptIds: string[] = [];
         const collaboratorFacilityIds: string[] = [];
         const collaboratorRoles: Record<string, string> = {};
+        const collaboratorDeadlines: Record<string, string> = {};
         for (const c of payload.collaborators) {
           if (!c.unitId) continue;
           const [prefix, rawId] = c.unitId.split(':');
@@ -255,9 +268,11 @@ export default function DieuPhoiClient({
           if (prefix === 'DEPT' || prefix === 'dept') {
             collaboratorDeptIds.push(rawId);
             collaboratorRoles[`dept:${rawId}`] = c.supportContent;
+            if (c.deadline) collaboratorDeadlines[`dept:${rawId}`] = c.deadline;
           } else if (prefix === 'BRANCH' || prefix === 'facility') {
             collaboratorFacilityIds.push(rawId);
             collaboratorRoles[`facility:${rawId}`] = c.supportContent;
+            if (c.deadline) collaboratorDeadlines[`facility:${rawId}`] = c.deadline;
           }
         }
         const description = [
@@ -286,7 +301,9 @@ export default function DieuPhoiClient({
           collaboratorRoles,
           goal: payload.objective || '',
           expectedDeliverable: payload.finalDeliverable || '',
-        });
+          // V6.2 fix: lưu deadline riêng cho từng collab (qua meta backward compat)
+          meta: { collaboratorDeadlines },
+        } as any);
         setShowCreate(false);
         setEditingTask(null);
         reload();

@@ -395,6 +395,21 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // V6.2 (2026-06-12): deadline RIÊNG cho mỗi collab. Key 'dept:KE'/'facility:HM',
+    // value YYYY-MM-DD. Validate id thuộc list collab, format date hợp lệ.
+    let collaboratorDeadlines: Record<string, string> = {};
+    if (body?.collaboratorDeadlines && typeof body.collaboratorDeadlines === 'object') {
+      for (const [k, v] of Object.entries(body.collaboratorDeadlines)) {
+        if (typeof k !== 'string' || typeof v !== 'string') continue;
+        const m = k.match(/^(dept|facility):(.+)$/);
+        if (!m) continue;
+        const idValid = m[1] === 'dept' ? collaboratorDeptIds.includes(m[2]) : collaboratorFacilityIds.includes(m[2]);
+        if (!idValid) continue;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) continue;
+        collaboratorDeadlines[k] = v;
+      }
+    }
+
     // Phase 12.6 (2026-06-03): BỎ phân biệt loại + nhóm chi + cost. Chỉ giữ field null cho mọi proposal mới.
     // Backward compat: nếu client cũ gửi 3 field này thì validate nhẹ rồi lưu (không reject).
     const VALID_PROPOSAL_TYPE = new Set(['tai_chinh', 'van_hanh']);
@@ -627,6 +642,11 @@ export async function POST(req: NextRequest) {
       collaboratorDeptIds,
       collaboratorFacilityIds,
       collaboratorRoles,
+      // V6.2 (2026-06-12): deadline RIÊNG per collab + Owner field tách biệt
+      collaboratorDeadlines,
+      ownerUid: typeof body?.ownerUid === 'string' ? body.ownerUid : null,
+      ownerName: typeof body?.ownerName === 'string' ? body.ownerName : null,
+      ownerBlock: ['KD', 'VP'].includes(body?.ownerBlock) ? body.ownerBlock : null,
       approvalChain,
       approvalsCompleted: [],
       currentApprover,

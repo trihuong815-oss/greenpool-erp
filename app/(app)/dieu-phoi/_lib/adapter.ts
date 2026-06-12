@@ -150,6 +150,9 @@ function roleBlock(role: string | undefined, fallback: Block): Block {
 function buildCollaborators(t: Task): Collaborator[] {
   const out: Collaborator[] = [];
   const roles = (t.collaboratorRoles as Record<string, string> | undefined) ?? {};
+  // V6.2: server lưu deadline riêng cho mỗi collab trong collaboratorDeadlines
+  // (key 'dept:KT' / 'facility:HM'). Nếu thiếu → fallback dueDate tổng.
+  const deadlines = ((t as any).collaboratorDeadlines as Record<string, string> | undefined) ?? {};
   const deadlineDefault = t.dueDate ?? '';
   const statusDefault: CollabStatus = 'chua_tiep_nhan';
 
@@ -160,7 +163,7 @@ function buildCollaborators(t: Task): Collaborator[] {
       unitName: label,
       supportContent: roles[`dept:${deptId}`] ?? '',
       deliverable: '',
-      deadline: deadlineDefault,
+      deadline: deadlines[`dept:${deptId}`] || deadlineDefault,
       status: statusDefault,
       responsibleUid: '',
       responsibleName: label,
@@ -175,7 +178,7 @@ function buildCollaborators(t: Task): Collaborator[] {
       unitName: label,
       supportContent: roles[`facility:${facilityId}`] ?? '',
       deliverable: '',
-      deadline: deadlineDefault,
+      deadline: deadlines[`facility:${facilityId}`] || deadlineDefault,
       status: statusDefault,
       responsibleUid: '',
       responsibleName: label,
@@ -248,9 +251,10 @@ export function adaptTask(t: Task): CoordTaskV4 {
     scope,
     status,
     priority,
-    // OWNER — V3 MVP: lấy người tạo. Owner picker sẽ wire ở UI form V4.
-    ownerUid: t.createdBy,
-    ownerName: t.createdByName ?? '',
+    // V4 OWNER — ưu tiên field 'ownerUid'/'ownerName' lưu khi tạo (form V4 đã wire).
+    // Fallback createdBy/createdByName cho docs cũ chưa có Owner picker.
+    ownerUid: (t as any).ownerUid || t.assigneeUserIds?.[0] || t.createdBy,
+    ownerName: (t as any).ownerName || t.createdByName || '',
     ownerDeptId: undefined,
     ownerBlock,
     branch,

@@ -91,6 +91,17 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ taskId: s
     if (body.collaboratorRoles && typeof body.collaboratorRoles === 'object') {
       patch.collaboratorRoles = body.collaboratorRoles;
     }
+    // V6.2: deadline RIÊNG per collab (validate format YYYY-MM-DD)
+    if (body.collaboratorDeadlines && typeof body.collaboratorDeadlines === 'object') {
+      const cleanDeadlines: Record<string, string> = {};
+      for (const [k, v] of Object.entries(body.collaboratorDeadlines)) {
+        if (typeof k !== 'string' || typeof v !== 'string') continue;
+        if (!/^(dept|facility):.+/.test(k)) continue;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) continue;
+        cleanDeadlines[k] = v;
+      }
+      patch.collaboratorDeadlines = cleanDeadlines;
+    }
     if (typeof body.goal === 'string') patch.goal = body.goal.trim().slice(0, 500);
     if (typeof body.expectedDeliverable === 'string') patch.expectedDeliverable = body.expectedDeliverable.trim().slice(0, 500);
     if (body.meta && typeof body.meta === 'object' && !Array.isArray(body.meta)) {

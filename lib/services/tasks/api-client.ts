@@ -253,6 +253,8 @@ export interface TaskUpdate {
   collaboratorDeptIds?: string[];
   collaboratorFacilityIds?: string[];
   collaboratorRoles?: Record<string, string>;
+  /** V6.2: deadline RIÊNG per collab. Key 'dept:KE'/'facility:HM', value YYYY-MM-DD. */
+  collaboratorDeadlines?: Record<string, string>;
   goal?: string;
   expectedDeliverable?: string;
   meta?: Record<string, any>;
