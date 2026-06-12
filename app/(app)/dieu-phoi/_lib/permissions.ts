@@ -34,3 +34,16 @@ export function canBeOwner(role: string): boolean {
 export function canApproveProposal(role: string): boolean {
   return ['CEO', 'ADMIN', 'GD_KD', 'GD_VP', 'TP_KT', 'TP_DT', 'TP_MKT', 'TP_NS', 'TP_KE', 'TP_GS'].includes(role);
 }
+
+// Check người dùng có phải là người duyệt cho bước cụ thể không.
+// step có thể là 'user:UID' / 'role:CODE' / uid trần / roleCode trần.
+export function canApproveAtStep(
+  step: string | undefined | null,
+  currentUid: string,
+  currentRole: string,
+): boolean {
+  if (!step) return false;
+  if (step.startsWith('user:')) return step.slice(5) === currentUid;
+  if (step.startsWith('role:')) return step.slice(5) === currentRole;
+  return step === currentUid || step === currentRole;
+}
