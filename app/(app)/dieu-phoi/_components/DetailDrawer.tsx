@@ -298,6 +298,8 @@ interface Props {
   onResultApprove?: (taskId: string) => void;
   onResultReject?: (taskId: string, reason: string) => void;
   onCloseDossier?: (taskId: string) => void;
+  /** V6.2: mở modal sửa với pre-fill từ task. Hiển thị khi người tạo / admin / CEO. */
+  onEdit?: (taskId: string) => void;
 }
 
 // ============================================================
@@ -319,6 +321,7 @@ export default function DetailDrawer({
   onResultApprove,
   onResultReject,
   onCloseDossier,
+  onEdit,
 }: Props) {
   // State cục bộ cho form Gửi hoàn thành (mở per-collab)
   const [submitOpenFor, setSubmitOpenFor] = useState<string | null>(null);
@@ -354,6 +357,17 @@ export default function DetailDrawer({
   const canOwnerConfirmOverall = canOwnerActOnCollab;
   const canResultApprove = isApprover;
   const canCloseDossier = isOwner || OWNER_UPDATE_ROLES.has(currentUserRole);
+  // V6.2: quyền SỬA điều phối
+  //  - Creator hoặc Owner: cho phép khi status='khoi_tao' (chưa ai tiếp nhận)
+  //    hoặc 'dang_xu_ly' (Owner đã nhận nhưng collab chưa làm)
+  //  - ADMIN/CEO: cho phép mọi lúc TRỪ 'dong_ho_so'
+  const isAdminOrCEO = currentUserRole === 'ADMIN' || currentUserRole === 'CEO';
+  const isCreator = !!task && task.createdByUid === currentUserUid;
+  const canEdit =
+    !!task && task.status !== 'dong_ho_so' && (
+      isAdminOrCEO ||
+      ((isCreator || isOwner) && ['khoi_tao', 'dang_xu_ly'].includes(task.status))
+    );
 
   if (!task) return null;
 
@@ -1042,6 +1056,15 @@ export default function DetailDrawer({
             >
               Đóng
             </button>
+            {canEdit && onEdit && (
+              <button
+                type="button"
+                onClick={() => onEdit(task.id)}
+                className="flex-1 rounded-lg border border-sky-300 bg-white px-4 py-2 text-sm font-medium text-sky-700 hover:bg-sky-50"
+              >
+                ✎ Sửa
+              </button>
+            )}
             {task.status === ST_HOAN_THANH && canCloseDossier && onCloseDossier && (
               <button
                 type="button"

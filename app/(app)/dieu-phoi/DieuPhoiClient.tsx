@@ -85,6 +85,8 @@ export default function DieuPhoiClient({
 }: DieuPhoiClientProps) {
   const canCreate = canCreateCoord(currentUserRole);
   const [showCreate, setShowCreate] = useState(false);
+  /** V6.2: task đang được sửa (null = chế độ tạo mới). */
+  const [editingTask, setEditingTask] = useState<CoordTask | null>(null);
   const [selected, setSelected] = useState<CoordTask | null>(null);
   const [tasks, setTasks] = useState<CoordTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -221,6 +223,79 @@ export default function DieuPhoiClient({
       }
     },
     [reload, currentUserUid, currentUserName],
+  );
+
+  // ============================================================
+  // 1b. handleEdit / handleUpdate (V6.2) — sửa điều phối sau khi tạo
+  // ============================================================
+  const handleEdit = useCallback(
+    (taskId: string) => {
+      const t = tasks.find((x) => x.id === taskId);
+      if (!t) return;
+      setSelected(null); // đóng drawer
+      setEditingTask(t);
+      setShowCreate(true); // mở modal mode=edit
+    },
+    [tasks],
+  );
+
+  const handleUpdate = useCallback(
+    async (taskId: string, payload: CreatePayload) => {
+      try {
+        const FACILITY_IDS = ['HM', 'NCT24', 'LD', 'TT', 'TK', 'CG'];
+        const ownerIsFacility =
+          payload.ownerBlock === 'KD' && FACILITY_IDS.includes(payload.ownerUnitId);
+        const collaboratorDeptIds: string[] = [];
+        const collaboratorFacilityIds: string[] = [];
+        const collaboratorRoles: Record<string, string> = {};
+        for (const c of payload.collaborators) {
+          if (!c.unitId) continue;
+          const [prefix, rawId] = c.unitId.split(':');
+          if (!prefix || !rawId) continue;
+          if (prefix === 'DEPT' || prefix === 'dept') {
+            collaboratorDeptIds.push(rawId);
+            collaboratorRoles[`dept:${rawId}`] = c.supportContent;
+          } else if (prefix === 'BRANCH' || prefix === 'facility') {
+            collaboratorFacilityIds.push(rawId);
+            collaboratorRoles[`facility:${rawId}`] = c.supportContent;
+          }
+        }
+        const description = [
+          payload.description,
+          payload.objective ? `\n— Mục tiêu: ${payload.objective}` : '',
+          payload.finalDeliverable ? `\n— Kết quả bàn giao: ${payload.finalDeliverable}` : '',
+        ].filter(Boolean).join('');
+        const priority: TaskPriority =
+          payload.severity === 'khan_cap' ? 'high'
+          : payload.level === 'trong_diem' ? 'high' : 'normal';
+
+        await tasksApi.update(taskId, {
+          title: payload.title,
+          description,
+          priority,
+          dueDate: payload.dueDate || null,
+          severity: payload.severity,
+          coordType: payload.type,
+          ownerUid: payload.ownerUid,
+          ownerName: payload.ownerName,
+          ownerBlock: payload.ownerBlock || 'KD',
+          ownerDeptId: ownerIsFacility ? undefined : payload.ownerUnitId,
+          assigneeUserIds: payload.ownerUid ? [payload.ownerUid] : [],
+          collaboratorDeptIds,
+          collaboratorFacilityIds,
+          collaboratorRoles,
+          goal: payload.objective || '',
+          expectedDeliverable: payload.finalDeliverable || '',
+        });
+        setShowCreate(false);
+        setEditingTask(null);
+        reload();
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'lỗi không xác định';
+        alert(`Lưu thay đổi thất bại: ${msg}`);
+      }
+    },
+    [reload],
   );
 
   // ============================================================
@@ -613,8 +688,10 @@ export default function DieuPhoiClient({
       {showCreate && (
         <CreateModal
           open
-          onClose={() => setShowCreate(false)}
+          onClose={() => { setShowCreate(false); setEditingTask(null); }}
           onCreate={handleCreate}
+          initialTask={editingTask}
+          onUpdate={handleUpdate}
           currentUserUid={currentUserUid}
           currentUserName={currentUserName}
           currentUserRole={currentUserRole}
@@ -634,6 +711,7 @@ export default function DieuPhoiClient({
         onResultApprove={handleResultApprove}
         onResultReject={handleResultReject}
         onCloseDossier={handleCloseDossier}
+        onEdit={handleEdit}
       />
     </div>
   );

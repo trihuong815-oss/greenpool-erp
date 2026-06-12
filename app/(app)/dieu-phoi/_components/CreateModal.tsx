@@ -13,7 +13,7 @@
 // Tiếng Việt CÓ DẤU đầy đủ — không mojibake.
 // ============================================================
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   X,
   Plus,
@@ -230,6 +230,10 @@ interface CreateModalProps {
   open: boolean;
   onClose: () => void;
   onCreate?: (input: CreatePayloadV4) => void;
+  /** V6.2: nếu set → modal vào CHẾ ĐỘ SỬA — pre-fill từ task này, submit gọi onUpdate. */
+  initialTask?: any | null;
+  /** V6.2 callback khi cập nhật (mode='edit'). */
+  onUpdate?: (taskId: string, input: CreatePayloadV4) => void;
   currentUserUid?: string;
   currentUserName?: string;
   currentUserRole?: string;
@@ -240,10 +244,13 @@ export default function CreateModal({
   open,
   onClose,
   onCreate,
+  initialTask,
+  onUpdate,
   currentUserUid = '',
   currentUserName = '',
   currentUserBlock,
 }: CreateModalProps) {
+  const isEditMode = !!initialTask;
   // ── Khối 1 — Thông tin chung
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -296,6 +303,52 @@ export default function CreateModal({
       ),
     [selectedOwner, collaborators],
   );
+
+  // V6.2: pre-fill state khi mở mode 'edit'.
+  // Reset khi open && có initialTask khác id trước → tránh dirty state khi mở
+  // detail nhiều task khác nhau liên tiếp.
+  useEffect(() => {
+    if (!open || !initialTask) return;
+    const t = initialTask;
+    setTitle(t.title ?? '');
+    setDescription(t.description ?? t.reason ?? '');
+    setType((t.type as CoordTypeV4) || (t.coordType as CoordTypeV4) || '');
+    setSeverity((t.severity as SeverityV4) || 'binh_thuong');
+    setDueDate(t.dueDate ?? '');
+    // Owner
+    if (t.ownerUid || t.assigneeUserIds?.[0]) {
+      const uid = t.ownerUid ?? t.assigneeUserIds[0];
+      setOwnerUid(uid);
+    }
+    if (t.ownerBlock) setOwnerBlock(t.ownerBlock as Block);
+    // Collaborators (tái tạo từ collaboratorDeptIds/FacilityIds + roles)
+    const draft: CollaboratorDraft[] = [];
+    const roles = t.collaboratorRoles ?? {};
+    let idx = 0;
+    for (const d of (t.collaboratorDeptIds ?? [])) {
+      draft.push({
+        id: `prefill-d-${idx++}`,
+        unitId: `dept:${d}`,
+        responsibleName: '',
+        supportContent: roles[`dept:${d}`] ?? '',
+        deadline: t.dueDate ?? '',
+      } as CollaboratorDraft);
+    }
+    for (const f of (t.collaboratorFacilityIds ?? [])) {
+      draft.push({
+        id: `prefill-f-${idx++}`,
+        unitId: `facility:${f}`,
+        responsibleName: '',
+        supportContent: roles[`facility:${f}`] ?? '',
+        deadline: t.dueDate ?? '',
+      } as CollaboratorDraft);
+    }
+    setCollaborators(draft);
+    // Kết quả
+    setObjective(t.objective ?? t.goal ?? '');
+    setFinalDeliverable(t.finalDeliverable ?? t.expectedDeliverable ?? '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialTask?.id]);
 
   if (!open) return null;
 
@@ -478,7 +531,11 @@ export default function CreateModal({
           createdByUid: currentUserUid,
           createdByName: currentUserName,
         }) as CreatePayloadV4;
-    onCreate?.(draftPayload);
+    if (isEditMode && initialTask?.id) {
+      onUpdate?.(initialTask.id, draftPayload);
+    } else {
+      onCreate?.(draftPayload);
+    }
     resetForm();
     onClose();
   }
@@ -492,7 +549,11 @@ export default function CreateModal({
     }
     const payload = buildPayload('khoi_tao');
     if (!payload) return;
-    onCreate?.(payload);
+    if (isEditMode && initialTask?.id) {
+      onUpdate?.(initialTask.id, payload);
+    } else {
+      onCreate?.(payload);
+    }
     resetForm();
     onClose();
   }
@@ -525,9 +586,13 @@ export default function CreateModal({
         {/* Header */}
         <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white rounded-t-xl z-10">
           <div>
-            <h2 className="text-base font-bold text-slate-800">Tạo điều phối mới</h2>
+            <h2 className="text-base font-bold text-slate-800">
+              {isEditMode ? 'Sửa điều phối' : 'Tạo điều phối mới'}
+            </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Form 5 khối · Owner duy nhất chịu KPI cuối cùng · scope tự xác định
+              {isEditMode
+                ? `Đang sửa: ${initialTask?.code ?? ''} · ${initialTask?.title ?? ''}`
+                : 'Form 5 khối · Owner duy nhất chịu KPI cuối cùng · scope tự xác định'}
             </p>
           </div>
           <button
@@ -1171,7 +1236,7 @@ export default function CreateModal({
             onClick={submit}
             className="px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700"
           >
-            Tạo điều phối
+            {isEditMode ? 'Lưu thay đổi' : 'Tạo điều phối'}
           </button>
         </div>
       </div>

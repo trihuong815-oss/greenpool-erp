@@ -210,6 +210,8 @@ interface ProposalDetailDrawerProps {
   onConvertToCoord?: (proposalId: string) => void;
   onOpenLinkedCoord?: (coordTaskId: string) => void;
   onCloseDossier?: (proposalId: string) => void;
+  /** V6.2: mở modal sửa đề xuất với pre-fill */
+  onEdit?: (proposalId: string) => void;
   /** V3 alias — không dùng ở V6 */
   onAgreeInPrinciple?: (proposalId: string, note: string) => void;
 }
@@ -325,6 +327,7 @@ export default function ProposalDetailDrawer({
   onConvertToCoord,
   onOpenLinkedCoord,
   onCloseDossier,
+  onEdit,
   onAgreeInPrinciple: _onAgreeInPrinciple,
 }: ProposalDetailDrawerProps) {
   void _currentUserRole;
@@ -369,6 +372,15 @@ export default function ProposalDetailDrawer({
       proposal.status === 'tu_choi' ||
       proposal.status === 'chuyen_dieu_phoi') &&
     proposal.status !== ('dong_ho_so' as ProposalStatus);
+
+  // V6.2: quyền SỬA đề xuất
+  //  - Creator: cho phép khi status='nhap' (chưa gửi) hoặc 'yeu_cau_bo_sung' (cần bổ sung)
+  //  - ADMIN/CEO: cho phép mọi lúc TRỪ 'dong_ho_so'
+  const isAdminOrCEO = _currentUserRole === 'ADMIN' || _currentUserRole === 'CEO';
+  const isCreator = proposal.creatorUid === currentUserUid;
+  const canEdit = !!onEdit && proposal.status !== ('dong_ho_so' as ProposalStatus) && (
+    isAdminOrCEO || (isCreator && ['nhap', 'yeu_cau_bo_sung'].includes(proposal.status))
+  );
 
   // ── Action handlers ──
   function handleApproveDirect() {
@@ -925,6 +937,15 @@ export default function ProposalDetailDrawer({
         {/* ── Footer ────────────────────────────────────────────── */}
         <div className="px-5 py-3 border-t border-slate-200 bg-slate-50">
           <div className="flex items-center justify-end gap-2 flex-wrap">
+            {canEdit && onEdit && (
+              <button
+                type="button"
+                onClick={() => onEdit(proposal.id)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-sky-700 bg-white border border-sky-300 hover:bg-sky-50 rounded-lg"
+              >
+                ✎ Sửa đề xuất
+              </button>
+            )}
             {canCloseDossier && (
               <button
                 type="button"

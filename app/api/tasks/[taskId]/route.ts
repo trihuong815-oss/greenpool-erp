@@ -73,6 +73,30 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ taskId: s
       }
       patch.dueDate = body.dueDate;
     }
+    // V4 Điều phối — thêm field metadata khi sửa
+    if (typeof body.severity === 'string' && ['binh_thuong', 'khan_cap'].includes(body.severity)) {
+      patch.severity = body.severity;
+    }
+    if (typeof body.coordType === 'string') patch.coordType = body.coordType;
+    if (typeof body.ownerUid === 'string') patch.ownerUid = body.ownerUid;
+    if (typeof body.ownerName === 'string') patch.ownerName = body.ownerName;
+    if (typeof body.ownerBlock === 'string' && ['KD', 'VP'].includes(body.ownerBlock)) {
+      patch.ownerBlock = body.ownerBlock;
+      patch.assigneeBlock = body.ownerBlock; // sync legacy field
+    }
+    if (typeof body.ownerDeptId === 'string') patch.assigneeDeptId = body.ownerDeptId;
+    if (Array.isArray(body.assigneeUserIds)) patch.assigneeUserIds = body.assigneeUserIds.filter((x: any) => typeof x === 'string');
+    if (Array.isArray(body.collaboratorDeptIds)) patch.collaboratorDeptIds = body.collaboratorDeptIds.filter((x: any) => typeof x === 'string');
+    if (Array.isArray(body.collaboratorFacilityIds)) patch.collaboratorFacilityIds = body.collaboratorFacilityIds.filter((x: any) => typeof x === 'string');
+    if (body.collaboratorRoles && typeof body.collaboratorRoles === 'object') {
+      patch.collaboratorRoles = body.collaboratorRoles;
+    }
+    if (typeof body.goal === 'string') patch.goal = body.goal.trim().slice(0, 500);
+    if (typeof body.expectedDeliverable === 'string') patch.expectedDeliverable = body.expectedDeliverable.trim().slice(0, 500);
+    if (body.meta && typeof body.meta === 'object' && !Array.isArray(body.meta)) {
+      // Merge meta thay vì overwrite (giữ field cũ như linkedCoordId, fromProposalId…)
+      patch.meta = { ...(data.meta ?? {}), ...body.meta };
+    }
     if (Object.keys(patch).length === 0) {
       return NextResponse.json({ error: 'Không có field nào để cập nhật' }, { status: 400 });
     }

@@ -29,7 +29,7 @@
 //   - Thêm type mới `CreateProposalPayloadV6` đúng theo SPEC để tương lai có thể
 //     migrate dần DeXuatClient sang V6.
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   X,
   Coins,
@@ -241,6 +241,10 @@ interface CreateProposalModalProps {
   onSubmit?: (payload: CreateProposalPayloadV3) => void;
   /** V2 callback — DeXuatClient cũ hơn nữa. */
   onCreate?: (payload: CreateProposalPayload) => void;
+  /** V6.2: nếu set → modal vào CHẾ ĐỘ SỬA — pre-fill từ proposal, submit gọi onUpdate. */
+  initialProposal?: any | null;
+  /** V6.2: callback khi cập nhật. */
+  onUpdate?: (proposalId: string, payload: CreateProposalPayloadV6) => void;
   users?: UserOption[];
   currentUserRole?: string;
   currentUserName?: string;
@@ -386,10 +390,13 @@ export default function CreateProposalModal({
   onSubmitV5,
   onSubmit,
   onCreate,
+  initialProposal,
+  onUpdate,
   currentUserRole,
   currentUserName,
   currentUserBlock = 'KD',
 }: CreateProposalModalProps) {
+  const isEditMode = !!initialProposal;
   // 5 trường nhập V6 + V6+ relatedUnits
   const [title, setTitle] = useState('');
   const [kind, setKind] = useState<ProposalKindV5 | ''>('');
@@ -398,6 +405,21 @@ export default function CreateProposalModal({
   const [attachments, setAttachments] = useState<ProposalAttachmentDraftV6[]>([]);
   // V6+ Đơn vị liên quan multi-select
   const [relatedUnitIds, setRelatedUnitIds] = useState<string[]>([]);
+
+  // V6.2: pre-fill state khi mở mode edit
+  useEffect(() => {
+    if (!open || !initialProposal) return;
+    const p = initialProposal;
+    setTitle(p.title ?? '');
+    setKind((p.kind as ProposalKindV5) || '');
+    setReason(p.reason ?? p.problemStatement ?? p.description ?? '');
+    setEstimatedCostStr(typeof p.estimatedCost === 'number' && p.estimatedCost > 0 ? String(p.estimatedCost) : '');
+    setAttachments(Array.isArray(p.attachments) ? p.attachments : []);
+    setRelatedUnitIds(
+      Array.isArray(p.relatedUnits) ? p.relatedUnits.map((u: any) => u.id) : [],
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialProposal?.id]);
 
   // ── derived ─────────────────────────────────────────────────────────────
   const estimatedCostNum = useMemo(() => {
@@ -489,6 +511,11 @@ export default function CreateProposalModal({
   }
 
   function emit(v6: CreateProposalPayloadV6) {
+    // V6.2: nếu mode='edit' → gọi onUpdate thay onSubmitV6
+    if (isEditMode && initialProposal?.id && onUpdate) {
+      onUpdate(initialProposal.id, v6);
+      return;
+    }
     // V6 trước
     onSubmitV6?.(v6);
 
@@ -563,7 +590,9 @@ export default function CreateProposalModal({
         {/* Header */}
         <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white rounded-t-xl z-10">
           <div>
-            <h2 className="text-base font-bold text-slate-800">Tạo đề xuất mới</h2>
+            <h2 className="text-base font-bold text-slate-800">
+              {isEditMode ? `Sửa đề xuất ${initialProposal?.code ?? ''}` : 'Tạo đề xuất mới'}
+            </h2>
             <p className="text-xs text-slate-500 mt-0.5">
               Điền tối thiểu thông tin — hệ thống sẽ tự gợi ý luồng duyệt.
               {currentUserName && (
@@ -864,7 +893,7 @@ export default function CreateProposalModal({
             onClick={handleSubmit}
             className="px-4 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm"
           >
-            Gửi đề xuất
+            {isEditMode ? 'Lưu thay đổi' : 'Gửi đề xuất'}
           </button>
         </div>
       </div>

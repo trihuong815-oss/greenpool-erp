@@ -242,6 +242,20 @@ export interface TaskUpdate {
   description?: string;
   priority?: TaskPriority;
   dueDate?: string | null;
+  // V4+ Điều phối/Đề xuất — cho phép sửa metadata sau khi tạo
+  severity?: 'binh_thuong' | 'khan_cap';
+  coordType?: string;
+  ownerUid?: string;
+  ownerName?: string;
+  ownerBlock?: 'KD' | 'VP';
+  ownerDeptId?: string;
+  assigneeUserIds?: string[];
+  collaboratorDeptIds?: string[];
+  collaboratorFacilityIds?: string[];
+  collaboratorRoles?: Record<string, string>;
+  goal?: string;
+  expectedDeliverable?: string;
+  meta?: Record<string, any>;
 }
 
 export interface TaskAttachment {

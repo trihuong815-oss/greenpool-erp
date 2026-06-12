@@ -355,6 +355,8 @@ export function DeXuatClient(props: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  /** V6.2: proposal đang sửa (null = chế độ tạo mới). */
+  const [editingProposal, setEditingProposal] = useState<ProposalV6 | null>(null);
   const [selected, setSelected] = useState<ProposalV6 | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const refresh = useCallback(() => setReloadKey((k) => k + 1), []);
@@ -443,6 +445,43 @@ export function DeXuatClient(props: Props) {
       alert(`Tạo đề xuất thất bại: ${e?.message ?? 'lỗi không xác định'}`);
     }
   }, [currentUserId, currentUserBlock, refresh]);
+
+  /** V6.2: mở modal sửa với pre-fill từ proposal hiện tại. */
+  const handleEdit = useCallback((id: string) => {
+    const p = proposals.find((x) => x.id === id);
+    if (!p) return;
+    setSelected(null);
+    setEditingProposal(p);
+    setShowCreate(true);
+  }, [proposals]);
+
+  /** V6.2: PATCH đề xuất sau khi sửa. */
+  const handleUpdate = useCallback(
+    async (proposalId: string, payload: CreateProposalPayloadV6) => {
+      try {
+        const isInvestment = payload.kind === 'dau_tu';
+        await tasksApi.update(proposalId, {
+          title: payload.title,
+          description: payload.reason ?? '',
+          // estimatedCost / proposalType chỉ map nếu API hỗ trợ — V1 lưu qua meta
+          meta: {
+            proposalKindV6: payload.kind,
+            reason: payload.reason,
+            resolvedApproverChain: payload.resolvedApproverChain,
+            relatedUnits: payload.relatedUnits ?? [],
+            unitsScope: payload.unitsScope,
+            estimatedCost: isInvestment ? (payload.estimatedCost ?? null) : null,
+          },
+        });
+        setShowCreate(false);
+        setEditingProposal(null);
+        refresh();
+      } catch (e: any) {
+        alert(`Lưu thay đổi thất bại: ${e?.message ?? 'lỗi không xác định'}`);
+      }
+    },
+    [refresh],
+  );
 
   const handleApprove = useCallback(async (id: string, note?: string) => {
     try {
@@ -669,12 +708,14 @@ export function DeXuatClient(props: Props) {
         </>
       )}
 
-      {/* Create modal V6 — 5 trường nhập */}
+      {/* Create modal V6 — 5 trường nhập (hoặc Sửa khi editingProposal) */}
       {showCreate && (
         <CreateProposalModal
           open
-          onClose={() => setShowCreate(false)}
+          onClose={() => { setShowCreate(false); setEditingProposal(null); }}
           onSubmitV6={handleCreate}
+          initialProposal={editingProposal}
+          onUpdate={handleUpdate}
           users={users.map((u) => ({ id: u.id, name: u.name, roleId: u.roleId }))}
           currentUserRole={currentUserRole}
           currentUserName={currentUserName}
@@ -682,7 +723,7 @@ export function DeXuatClient(props: Props) {
         />
       )}
 
-      {/* Detail drawer V6 — 5 section + 4 nút duyệt */}
+      {/* Detail drawer V6 — 5 section + 4 nút duyệt + nút Sửa */}
       {selected && (
         <ProposalDetailDrawer
           proposal={adaptProposalToDrawer(selected)}
@@ -694,6 +735,7 @@ export function DeXuatClient(props: Props) {
           onRequestRevision={handleRequestRevision}
           onApproveAndCreateCoord={handleApproveAndCreateCoord}
           onCloseDossier={handleCloseDossier}
+          onEdit={handleEdit}
         />
       )}
     </div>
