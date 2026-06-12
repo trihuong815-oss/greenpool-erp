@@ -1,16 +1,22 @@
 'use client';
 
-// Drawer chi tiết đề xuất V3 — theo SPEC anh chốt 2026-05-31 (mở rộng từ V2):
-//   - Drawer slide phải, rộng 720px (V2 là 640px)
-//   - 9 trạng thái (thêm dong_y_nguyen_tac, dong_ho_so)
-//   - 5 loại V3 (van_hanh, nhan_su, mkt_kd, tai_chinh, chien_luoc)
-//   - 6 SECTION đầy đủ:
-//       S1 Tóm tắt · S2 Hiện trạng/Vấn đề · S3 Nội dung · S4 Tác động ·
-//       S5 Luồng duyệt (timeline + 4 nút) · S6 Sau duyệt (createCoordAfter)
-//   - 4 nút quyết định: Duyệt · Đồng ý nguyên tắc · Yêu cầu bổ sung · Từ chối
-//   - Footer: Tạo điều phối (nếu da_phe_duyet + createCoordAfter), Đóng hồ sơ
-//   - Giữ tương thích export V2 (ProposalV2, ProposalApproverV2, ApproverStepStatus)
-//     bằng cách MỞ RỘNG interface với field optional V3.
+// Drawer chi tiết đề xuất V5 — theo SPEC anh chốt 2026-06-12:
+//   - Drawer slide phải, rộng 720px
+//   - 8 trạng thái V5 (BỎ dong_y_nguyen_tac so với V3)
+//   - 5 loại mới: van_hanh · cai_tien · dau_tu · chien_luoc · khan_cap
+//     (giữ backward-compat alias V3: nhan_su / mkt_kd / tai_chinh)
+//   - 3 priority V5: binh_thuong · quan_trong · khan_cap
+//     (giữ alias V3: low / normal / high / urgent)
+//   - 7 SECTION đầy đủ:
+//       S1 Tóm tắt
+//       S2 Hiện trạng & Vấn đề
+//       S3 Giải pháp đề xuất (multi-select phạm vi + auto khối liên quan)
+//       S4 Hiệu quả kỳ vọng (textarea, KHÔNG dùng KPI)
+//       S5 Luồng duyệt timeline (3 nút: Duyệt / YCBS / Từ chối)
+//       S6 Lịch sử xử lý
+//       S7 Liên kết điều phối (post-approve popup: Chỉ phê duyệt / Tạo điều phối ngay)
+//   - Footer: Đóng hồ sơ (nếu đủ quyền) · Đóng
+//   - Tương thích ngược với props/types V3 (alias, optional fields).
 
 import { useState } from 'react';
 import {
@@ -25,10 +31,8 @@ import {
   Paperclip,
   ArrowRightCircle,
   ExternalLink,
-  Equal,
   Archive,
   AlertTriangle,
-  Users,
   Target,
   Lightbulb,
   ShieldAlert,
@@ -36,19 +40,26 @@ import {
   Building2,
   History,
   FileText,
+  Layers,
+  Sparkles,
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Types V3 (mở rộng V2 — giữ tương thích)
+// Types V5 (giữ alias V3/V2 để không vỡ caller cũ)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type ProposalKind =
-  | 'tai_chinh'
-  | 'nhan_su'
+  // V5
   | 'van_hanh'
-  | 'mkt_kd'
+  | 'cai_tien'
+  | 'dau_tu'
   | 'chien_luoc'
-  // Giữ alias V2 để không vỡ caller cũ
+  | 'khan_cap'
+  // Alias V3 (giữ tương thích)
+  | 'nhan_su'
+  | 'mkt_kd'
+  | 'tai_chinh'
+  // Alias V2
   | 'co_so'
   | 'khac';
 
@@ -57,21 +68,37 @@ export type ProposalStatus =
   | 'da_gui'
   | 'dang_xem_xet'
   | 'yeu_cau_bo_sung'
-  | 'dong_y_nguyen_tac'   // ← MỚI V3
   | 'da_phe_duyet'
   | 'tu_choi'
   | 'chuyen_dieu_phoi'
-  | 'dong_ho_so';         // ← MỚI V3
+  | 'dong_ho_so'
+  // Alias V3 — đã BỎ ở V5, nhưng giữ literal để compile không vỡ:
+  | 'dong_y_nguyen_tac';
 
 export type ApproverStepStatus =
   | 'cho_tiep'
   | 'dang_xem_xet'
   | 'da_duyet'
-  | 'dong_y_nguyen_tac'   // ← MỚI V3
   | 'tu_choi'
-  | 'yeu_cau_bo_sung';
+  | 'yeu_cau_bo_sung'
+  // Alias V3 (giữ tương thích — V5 không sinh mới)
+  | 'dong_y_nguyen_tac';
 
-export type ProposalPriority = 'thap' | 'thuong' | 'cao' | 'khan' | 'rat_khan';
+export type ProposalPriority =
+  // V5
+  | 'binh_thuong'
+  | 'quan_trong'
+  | 'khan_cap'
+  // Alias V3
+  | 'thap'
+  | 'thuong'
+  | 'cao'
+  | 'khan'
+  | 'rat_khan'
+  | 'low'
+  | 'normal'
+  | 'high'
+  | 'urgent';
 
 export interface ProposalApproverV2 {
   id: string;
@@ -81,6 +108,10 @@ export interface ProposalApproverV2 {
   status: ApproverStepStatus;
   decidedAt?: string;
   note?: string;
+  // V5: lý do gán bước này (theo rule auto)
+  reason?: string;
+  // V5: thời gian xử lý dự kiến / SLA (giờ)
+  slaHours?: number;
 }
 
 export interface ProposalAttachment {
@@ -94,6 +125,14 @@ export interface ProposalHistoryEntry {
   actorName: string;
   action: string;                  // "Tạo", "Gửi", "Mở xem", "Duyệt", ...
   note?: string;
+}
+
+// V5: phạm vi ảnh hưởng = multi-select (TP / QLCS / cơ sở / khối)
+export type ProposalScopeKind = 'TP' | 'QLCS' | 'co_so' | 'khoi';
+export interface ProposalScopeItem {
+  kind: ProposalScopeKind;
+  id: string;        // 'TP_MKT' | 'QLCS' | 'HM' | 'KD' | ...
+  label: string;     // hiển thị tiếng Việt
 }
 
 export interface ProposalV2 {
@@ -114,40 +153,45 @@ export interface ProposalV2 {
   linkedCoordTaskId?: string;
   linkedCoordTaskCode?: string;
 
-  // ── Mở rộng V3 (tất cả optional để giữ tương thích V2) ──
+  // ── Mở rộng V3 ──
   priority?: ProposalPriority;
   relatedBlock?: 'KD' | 'VP' | 'lien_khoi';
   relatedDept?: string;
   relatedBranch?: string;
-  // S2 Hiện trạng / Vấn đề
   currentSituation?: string;
   problemStatement?: string;
   evidence?: string;
-  // S3 Nội dung đề xuất
   proposedSolution?: string;
   scope?: string;
   expectedStartDate?: string;
   involvedUnits?: string[];
-  // S4 Tác động dự kiến
   expectedBenefit?: string;
   riskIfNot?: string;
   riskIfDo?: string;
-  neededHeadcount?: number;
-  // S6 Sau duyệt
+  neededHeadcount?: number | string;
   createCoordAfter?: boolean;
   expectedOwner?: string;
   expectedCollaborators?: string[];
   expectedDeadline?: string;
   expectedDeliverable?: string;
-  // SLA
   slaDeadline?: string;
   isOverdue?: boolean;
-  // History
   history?: ProposalHistoryEntry[];
+
+  // ── Mở rộng V5 ──
+  // S3: phạm vi ảnh hưởng multi-select + auto khối
+  scopeItems?: ProposalScopeItem[];
+  autoRelatedBlocks?: ('KD' | 'VP')[];  // hệ thống suy luận
+  isCrossBlock?: boolean;               // true nếu liên khối
+  decisionNeeded?: string;              // quyết định cần xin (highlight)
+  // S4: hiệu quả kỳ vọng = TEXTAREA (không phải KPI)
+  expectedResult?: string;
+  // Source
+  source?: 'phat_sinh' | 'kpi' | 'hop' | 'ceo_giao' | 'khach_hang_phan_anh' | 'khac';
 }
 
 interface ProposalDetailDrawerProps {
-  proposal: ProposalV2;
+  proposal: ProposalV2 | null;
   currentUserUid: string;
   currentUserRole: string;
   onClose: () => void;
@@ -156,13 +200,13 @@ interface ProposalDetailDrawerProps {
   onRequestRevision: (proposalId: string, reason: string) => void;
   onConvertToCoord: (proposalId: string) => void;
   onOpenLinkedCoord?: (coordTaskId: string) => void;
-  // ── Mở rộng V3 (optional) ──
-  onAgreeInPrinciple?: (proposalId: string, note: string) => void;
   onCloseDossier?: (proposalId: string) => void;
+  // V3 backward-compat: optional, V5 không dùng
+  onAgreeInPrinciple?: (proposalId: string, note: string) => void;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Labels & colors V3
+// Labels & colors V5
 // ─────────────────────────────────────────────────────────────────────────────
 
 const STATUS_LABEL: Record<ProposalStatus, string> = {
@@ -170,11 +214,11 @@ const STATUS_LABEL: Record<ProposalStatus, string> = {
   da_gui: 'Đã gửi',
   dang_xem_xet: 'Đang xem xét',
   yeu_cau_bo_sung: 'Yêu cầu bổ sung',
-  dong_y_nguyen_tac: 'Đồng ý nguyên tắc',
   da_phe_duyet: 'Đã phê duyệt',
   tu_choi: 'Từ chối',
-  chuyen_dieu_phoi: 'Chuyển điều phối',
+  chuyen_dieu_phoi: 'Đã chuyển điều phối',
   dong_ho_so: 'Đóng hồ sơ',
+  dong_y_nguyen_tac: 'Đồng ý nguyên tắc',
 };
 
 const STATUS_COLOR: Record<ProposalStatus, string> = {
@@ -182,53 +226,83 @@ const STATUS_COLOR: Record<ProposalStatus, string> = {
   da_gui: 'bg-amber-50 text-amber-700 ring-amber-200',
   dang_xem_xet: 'bg-sky-50 text-sky-700 ring-sky-200',
   yeu_cau_bo_sung: 'bg-orange-50 text-orange-700 ring-orange-200',
-  dong_y_nguyen_tac: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
   da_phe_duyet: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
   tu_choi: 'bg-rose-50 text-rose-700 ring-rose-200',
   chuyen_dieu_phoi: 'bg-violet-50 text-violet-700 ring-violet-200',
   dong_ho_so: 'bg-slate-100 text-slate-600 ring-slate-200',
+  dong_y_nguyen_tac: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
 };
 
 const KIND_LABEL: Record<ProposalKind, string> = {
-  tai_chinh: 'Đề xuất tài chính/mua sắm',
-  nhan_su: 'Đề xuất nhân sự',
-  van_hanh: 'Đề xuất vận hành',
-  mkt_kd: 'Đề xuất Marketing/Kinh doanh',
-  chien_luoc: 'Đề xuất chiến lược',
-  co_so: 'Đề xuất Marketing/Kinh doanh',
-  khac: 'Đề xuất chiến lược',
+  van_hanh: 'Vận hành',
+  cai_tien: 'Cải tiến',
+  dau_tu: 'Đầu tư',
+  chien_luoc: 'Chiến lược',
+  khan_cap: 'Khẩn cấp',
+  // alias V3
+  nhan_su: 'Nhân sự',
+  mkt_kd: 'Marketing/Kinh doanh',
+  tai_chinh: 'Tài chính/Mua sắm',
+  // alias V2
+  co_so: 'Cơ sở',
+  khac: 'Khác',
 };
 
 const KIND_COLOR: Record<ProposalKind, string> = {
-  tai_chinh: 'bg-amber-50 text-amber-700 ring-amber-200',
-  nhan_su: 'bg-violet-50 text-violet-700 ring-violet-200',
   van_hanh: 'bg-sky-50 text-sky-700 ring-sky-200',
+  cai_tien: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+  dau_tu: 'bg-amber-50 text-amber-700 ring-amber-200',
+  chien_luoc: 'bg-violet-50 text-violet-700 ring-violet-200',
+  khan_cap: 'bg-rose-50 text-rose-700 ring-rose-200',
+  nhan_su: 'bg-violet-50 text-violet-700 ring-violet-200',
   mkt_kd: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-  chien_luoc: 'bg-rose-50 text-rose-700 ring-rose-200',
+  tai_chinh: 'bg-amber-50 text-amber-700 ring-amber-200',
   co_so: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-  khac: 'bg-rose-50 text-rose-700 ring-rose-200',
+  khac: 'bg-slate-50 text-slate-700 ring-slate-200',
 };
 
 const PRIORITY_LABEL: Record<ProposalPriority, string> = {
-  thap: 'Thấp',
-  thuong: 'Thường',
-  cao: 'Cao',
-  khan: 'Khẩn',
-  rat_khan: 'Rất khẩn',
+  binh_thuong: 'Bình thường',
+  quan_trong: 'Quan trọng',
+  khan_cap: 'Khẩn cấp',
+  // alias
+  thap: 'Bình thường',
+  thuong: 'Bình thường',
+  cao: 'Quan trọng',
+  khan: 'Khẩn cấp',
+  rat_khan: 'Khẩn cấp',
+  low: 'Bình thường',
+  normal: 'Bình thường',
+  high: 'Quan trọng',
+  urgent: 'Khẩn cấp',
 };
 
 const PRIORITY_COLOR: Record<ProposalPriority, string> = {
+  binh_thuong: 'bg-slate-100 text-slate-700 ring-slate-200',
+  quan_trong: 'bg-amber-50 text-amber-700 ring-amber-200',
+  khan_cap: 'bg-rose-100 text-rose-800 ring-rose-300',
   thap: 'bg-slate-100 text-slate-700 ring-slate-200',
-  thuong: 'bg-sky-50 text-sky-700 ring-sky-200',
+  thuong: 'bg-slate-100 text-slate-700 ring-slate-200',
   cao: 'bg-amber-50 text-amber-700 ring-amber-200',
   khan: 'bg-rose-50 text-rose-700 ring-rose-200',
   rat_khan: 'bg-rose-100 text-rose-800 ring-rose-300',
+  low: 'bg-slate-100 text-slate-700 ring-slate-200',
+  normal: 'bg-slate-100 text-slate-700 ring-slate-200',
+  high: 'bg-amber-50 text-amber-700 ring-amber-200',
+  urgent: 'bg-rose-100 text-rose-800 ring-rose-300',
 };
 
 const BLOCK_LABEL: Record<'KD' | 'VP' | 'lien_khoi', string> = {
   KD: 'Khối Kinh doanh',
   VP: 'Khối Văn phòng',
   lien_khoi: 'Liên khối',
+};
+
+const SCOPE_KIND_LABEL: Record<ProposalScopeKind, string> = {
+  TP: 'Trưởng phòng',
+  QLCS: 'Quản lý cơ sở',
+  co_so: 'Cơ sở',
+  khoi: 'Khối',
 };
 
 const ROLE_LABEL: Record<string, string> = {
@@ -260,19 +334,6 @@ function formatVnDate(iso?: string): string {
   }
 }
 
-function formatVnDateShort(yyyymmdd?: string): string {
-  if (!yyyymmdd) return '—';
-  try {
-    return new Date(yyyymmdd).toLocaleDateString('vi-VN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    });
-  } catch {
-    return yyyymmdd;
-  }
-}
-
 function formatVnd(n?: number | null): string {
   if (n == null || !Number.isFinite(n)) return '—';
   return n.toLocaleString('vi-VN') + ' đ';
@@ -292,15 +353,21 @@ export default function ProposalDetailDrawer({
   onRequestRevision,
   onConvertToCoord,
   onOpenLinkedCoord,
-  onAgreeInPrinciple,
   onCloseDossier,
+  onAgreeInPrinciple: _onAgreeInPrinciple,
 }: ProposalDetailDrawerProps) {
   void _currentUserRole;
+  void _onAgreeInPrinciple;
 
-  // 'idle' | 'approve' | 'in_principle' | 'revision' | 'reject'
+  // 'idle' | 'approve' | 'revision' | 'reject' (V5: BỎ in_principle)
   const [decisionMode, setDecisionMode] =
-    useState<'idle' | 'approve' | 'in_principle' | 'revision' | 'reject'>('idle');
+    useState<'idle' | 'approve' | 'revision' | 'reject'>('idle');
   const [decisionNote, setDecisionNote] = useState('');
+
+  // S7: post-approve popup
+  const [showConvertPopup, setShowConvertPopup] = useState(true);
+
+  if (!proposal) return null;
 
   // ── Helpers ──────────────────────────────────────────────────────────────
   function isCurrentApprover(step: ProposalApproverV2): boolean {
@@ -312,11 +379,6 @@ export default function ProposalDetailDrawer({
 
   const isApproved = proposal.status === 'da_phe_duyet';
   const isLinkedToCoord = !!proposal.linkedCoordTaskId;
-  const userIsCreator = proposal.creatorUid === currentUserUid;
-
-  const createCoordAfter = proposal.createCoordAfter !== false; // default true để giữ V2
-  const canConvertToCoord =
-    isApproved && !isLinkedToCoord && userIsCreator && createCoordAfter;
 
   const canCloseDossier =
     !!onCloseDossier &&
@@ -327,7 +389,7 @@ export default function ProposalDetailDrawer({
 
   // ── Action handlers ──────────────────────────────────────────────────────
   function handleApproveDirect() {
-    onApprove(proposal.id, decisionNote.trim() || undefined);
+    onApprove(proposal!.id, decisionNote.trim() || undefined);
     setDecisionMode('idle');
     setDecisionNote('');
   }
@@ -339,26 +401,15 @@ export default function ProposalDetailDrawer({
         alert('Vui lòng nhập lý do từ chối.');
         return;
       }
-      onReject(proposal.id, trimmed);
+      onReject(proposal!.id, trimmed);
     } else if (decisionMode === 'revision') {
       if (!trimmed) {
         alert('Vui lòng nhập nội dung yêu cầu bổ sung.');
         return;
       }
-      onRequestRevision(proposal.id, trimmed);
-    } else if (decisionMode === 'in_principle') {
-      if (!trimmed) {
-        alert('Vui lòng nhập kế hoạch bổ sung kèm đồng ý nguyên tắc.');
-        return;
-      }
-      if (onAgreeInPrinciple) {
-        onAgreeInPrinciple(proposal.id, trimmed);
-      } else {
-        // Fallback: ghi note vào nhánh approve (caller cũ chưa có handler)
-        onApprove(proposal.id, `[Đồng ý nguyên tắc] ${trimmed}`);
-      }
+      onRequestRevision(proposal!.id, trimmed);
     } else if (decisionMode === 'approve') {
-      onApprove(proposal.id, trimmed || undefined);
+      onApprove(proposal!.id, trimmed || undefined);
     }
     setDecisionMode('idle');
     setDecisionNote('');
@@ -371,20 +422,21 @@ export default function ProposalDetailDrawer({
 
   // ── Step icon & label ────────────────────────────────────────────────────
   function StepIcon({ status }: { status: ApproverStepStatus }) {
-    if (status === 'da_duyet') return <CheckCircle2 size={18} className="text-emerald-600" />;
-    if (status === 'dong_y_nguyen_tac') return <Equal size={18} className="text-emerald-600" />;
+    if (status === 'da_duyet' || status === 'dong_y_nguyen_tac')
+      return <CheckCircle2 size={18} className="text-emerald-600" />;
     if (status === 'dang_xem_xet') return <Clock size={18} className="text-amber-600" />;
     if (status === 'tu_choi') return <XCircle size={18} className="text-rose-600" />;
-    if (status === 'yeu_cau_bo_sung') return <RotateCcw size={18} className="text-orange-600" />;
+    if (status === 'yeu_cau_bo_sung')
+      return <RotateCcw size={18} className="text-orange-600" />;
     return <CircleDashed size={18} className="text-slate-400" />;
   }
 
   function stepStatusLabel(status: ApproverStepStatus): string {
     switch (status) {
-      case 'da_duyet': return '✓ Đã duyệt';
-      case 'dong_y_nguyen_tac': return '≈ Đồng ý nguyên tắc';
+      case 'da_duyet': return 'Đã duyệt';
+      case 'dong_y_nguyen_tac': return 'Đã duyệt';
       case 'dang_xem_xet': return 'Đang xem xét';
-      case 'tu_choi': return '✗ Từ chối';
+      case 'tu_choi': return 'Từ chối';
       case 'yeu_cau_bo_sung': return 'Yêu cầu bổ sung';
       case 'cho_tiep': return 'Chờ tiếp';
     }
@@ -392,8 +444,9 @@ export default function ProposalDetailDrawer({
 
   function stepStatusChip(status: ApproverStepStatus): string {
     switch (status) {
-      case 'da_duyet': return 'bg-emerald-50 text-emerald-700 ring-emerald-200';
-      case 'dong_y_nguyen_tac': return 'bg-emerald-50 text-emerald-700 ring-emerald-300';
+      case 'da_duyet':
+      case 'dong_y_nguyen_tac':
+        return 'bg-emerald-50 text-emerald-700 ring-emerald-200';
       case 'dang_xem_xet': return 'bg-amber-50 text-amber-700 ring-amber-200';
       case 'tu_choi': return 'bg-rose-50 text-rose-700 ring-rose-200';
       case 'yeu_cau_bo_sung': return 'bg-orange-50 text-orange-700 ring-orange-200';
@@ -438,7 +491,9 @@ export default function ProposalDetailDrawer({
     const v = value == null || value === '' ? placeholder : value;
     return (
       <div className="min-w-0">
-        <p className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold">{label}</p>
+        <p className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold">
+          {label}
+        </p>
         <p className="text-sm text-slate-800 break-words">{v}</p>
       </div>
     );
@@ -496,13 +551,20 @@ export default function ProposalDetailDrawer({
                   <Flag size={10} /> {PRIORITY_LABEL[proposal.priority]}
                 </span>
               )}
+              {proposal.isCrossBlock && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold ring-1 bg-violet-50 text-violet-700 ring-violet-200">
+                  <Layers size={10} /> Liên khối
+                </span>
+              )}
               {proposal.isOverdue && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold ring-1 bg-rose-50 text-rose-700 ring-rose-200">
-                  <AlertTriangle size={10} /> Quá hạn
+                  <AlertTriangle size={10} /> Quá SLA
                 </span>
               )}
             </div>
-            <h2 className="text-base font-bold text-slate-900 leading-snug">{proposal.title}</h2>
+            <h2 className="text-base font-bold text-slate-900 leading-snug">
+              {proposal.title}
+            </h2>
             <p className="text-[11px] text-slate-500 mt-1">
               Người tạo:{' '}
               <span className="font-medium text-slate-700">{proposal.creatorName}</span>
@@ -530,50 +592,38 @@ export default function ProposalDetailDrawer({
           <section>
             <SectionTitle icon={FileText} title="S1 · Tóm tắt" sub="Thông tin chung của đề xuất" />
             <div className="rounded-xl border border-slate-200 bg-slate-50/40 p-4 grid grid-cols-2 gap-4">
+              <Field label="Tiêu đề" value={proposal.title} />
               <Field label="Loại đề xuất" value={KIND_LABEL[proposal.kind]} />
-              <Field
-                label="Mức ưu tiên"
-                value={proposal.priority ? PRIORITY_LABEL[proposal.priority] : '—'}
-              />
               <Field label="Người tạo" value={proposal.creatorName} />
-              <Field
-                label="Vai trò"
-                value={
-                  proposal.creatorRole
-                    ? ROLE_LABEL[proposal.creatorRole] ?? proposal.creatorRole
-                    : '—'
-                }
-              />
-              <Field
-                label="Khối liên quan"
-                value={proposal.relatedBlock ? BLOCK_LABEL[proposal.relatedBlock] : '—'}
-              />
-              <Field label="Phòng / Cơ sở" value={proposal.relatedBranch ?? proposal.relatedDept ?? '—'} />
-              <Field label="Chi phí dự kiến" value={formatVnd(proposal.estimatedCost)} />
-              <Field label="Ngày tạo" value={formatVnDate(proposal.createdAt)} />
               <Field label="Trạng thái" value={STATUS_LABEL[proposal.status]} />
               <Field
-                label="Deadline / SLA"
-                value={proposal.slaDeadline ? formatVnDate(proposal.slaDeadline) : formatVnDateShort(proposal.deadline)}
+                label="Mức độ ưu tiên"
+                value={proposal.priority ? PRIORITY_LABEL[proposal.priority] : '—'}
               />
+              <Field label="Giá trị dự kiến" value={formatVnd(proposal.estimatedCost)} />
             </div>
           </section>
 
-          {/* ═══ S2 — Hiện trạng / Vấn đề ═══ */}
+          {/* ═══ S2 — Hiện trạng & Vấn đề ═══ */}
           <section>
             <SectionTitle
               icon={AlertTriangle}
-              title="S2 · Hiện trạng / Vấn đề"
-              sub="Mô tả tình hình hiện tại và vấn đề cần xử lý"
+              title="S2 · Hiện trạng & Vấn đề"
+              sub="Mô tả tình hình hiện tại, vấn đề cần xử lý và bằng chứng"
             />
             <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
               <Para label="Mô tả hiện trạng" value={proposal.currentSituation} />
-              <Para label="Vấn đề cần giải quyết" value={proposal.problemStatement ?? proposal.description} />
+              <Para
+                label="Vấn đề cần giải quyết"
+                value={proposal.problemStatement ?? proposal.description}
+              />
               <Para label="Bằng chứng / Dữ liệu tham chiếu" value={proposal.evidence} />
 
               {proposal.attachments && proposal.attachments.length > 0 && (
                 <div className="pt-2 border-t border-slate-100">
-                  <p className="text-[11px] font-semibold text-slate-600 mb-1.5">File đính kèm</p>
+                  <p className="text-[11px] font-semibold text-slate-600 mb-1.5">
+                    File đính kèm
+                  </p>
                   <ul className="space-y-1">
                     {proposal.attachments.map((f) => (
                       <li
@@ -601,118 +651,153 @@ export default function ProposalDetailDrawer({
             </div>
           </section>
 
-          {/* ═══ S3 — Nội dung đề xuất ═══ */}
+          {/* ═══ S3 — Giải pháp đề xuất ═══ */}
           <section>
             <SectionTitle
               icon={Lightbulb}
-              title="S3 · Nội dung đề xuất"
-              sub="Giải pháp · phạm vi · thời gian · đơn vị liên quan"
+              title="S3 · Giải pháp đề xuất"
+              sub="Nội dung giải pháp · Phạm vi ảnh hưởng · Quyết định cần xin"
             />
-            <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-              <Para label="Giải pháp đề xuất" value={proposal.proposedSolution ?? proposal.description} />
-              <Para label="Phạm vi áp dụng" value={proposal.scope} />
-              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100">
+            <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-4">
+              <Para
+                label="Nội dung đề xuất"
+                value={proposal.proposedSolution ?? proposal.description}
+              />
+
+              {/* Phạm vi ảnh hưởng — multi-select chip */}
+              <div>
+                <p className="text-[11px] font-semibold text-slate-600 mb-1.5">
+                  Phạm vi ảnh hưởng
+                </p>
+                {proposal.scopeItems && proposal.scopeItems.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {proposal.scopeItems.map((s, i) => (
+                      <span
+                        key={`${s.kind}-${s.id}-${i}`}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-100 text-[11px] text-slate-700 ring-1 ring-slate-200"
+                      >
+                        <Building2 size={9} />
+                        <span className="text-[9px] uppercase font-bold text-slate-500">
+                          {SCOPE_KIND_LABEL[s.kind]}
+                        </span>
+                        · {s.label}
+                      </span>
+                    ))}
+                  </div>
+                ) : proposal.scope ? (
+                  <p className="text-sm text-slate-700">{proposal.scope}</p>
+                ) : (
+                  <p className="text-xs italic text-slate-400">Chưa cập nhật.</p>
+                )}
+              </div>
+
+              {/* Tag auto: Khối liên quan + Liên khối */}
+              {(proposal.autoRelatedBlocks && proposal.autoRelatedBlocks.length > 0) ||
+              proposal.isCrossBlock ||
+              proposal.relatedBlock ? (
                 <div>
-                  <p className="text-[11px] font-semibold text-slate-600 mb-1">
-                    Thời gian triển khai mong muốn
+                  <p className="text-[11px] font-semibold text-slate-600 mb-1.5">
+                    <Sparkles size={10} className="inline -mt-0.5 text-emerald-600" />{' '}
+                    Khối liên quan (hệ thống suy luận)
                   </p>
-                  <p className="text-sm text-slate-800">
-                    {proposal.expectedStartDate
-                      ? formatVnDateShort(proposal.expectedStartDate)
-                      : formatVnDateShort(proposal.deadline)}
+                  <div className="flex flex-wrap gap-1.5">
+                    {proposal.autoRelatedBlocks && proposal.autoRelatedBlocks.length > 0
+                      ? proposal.autoRelatedBlocks.map((b) => (
+                          <span
+                            key={b}
+                            className="inline-flex items-center px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[11px] ring-1 ring-emerald-200"
+                          >
+                            {BLOCK_LABEL[b]}
+                          </span>
+                        ))
+                      : proposal.relatedBlock && proposal.relatedBlock !== 'lien_khoi' && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[11px] ring-1 ring-emerald-200">
+                            {BLOCK_LABEL[proposal.relatedBlock]}
+                          </span>
+                        )}
+                    {(proposal.isCrossBlock || proposal.relatedBlock === 'lien_khoi') && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-violet-50 text-violet-700 text-[11px] ring-1 ring-violet-200">
+                        <Layers size={9} /> Liên khối
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Quyết định cần xin — highlight border-left emerald */}
+              {proposal.decisionNeeded && (
+                <div className="pl-3 border-l-4 border-emerald-500 bg-emerald-50/40 py-2 pr-3 rounded-r">
+                  <p className="text-[11px] font-bold text-emerald-700 mb-0.5 uppercase tracking-wide">
+                    Quyết định cần xin
+                  </p>
+                  <p className="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed font-medium">
+                    {proposal.decisionNeeded}
                   </p>
                 </div>
-                <div>
-                  <p className="text-[11px] font-semibold text-slate-600 mb-1">Đơn vị liên quan</p>
-                  <p className="text-sm text-slate-800">
-                    {proposal.involvedUnits && proposal.involvedUnits.length > 0 ? (
-                      <span className="flex flex-wrap gap-1">
-                        {proposal.involvedUnits.map((u, i) => (
-                          <span
-                            key={i}
-                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-slate-100 text-[11px] text-slate-700"
-                          >
-                            <Building2 size={9} /> {u}
-                          </span>
-                        ))}
-                      </span>
-                    ) : (
-                      <span className="italic text-slate-400 text-xs">—</span>
+              )}
+            </div>
+          </section>
+
+          {/* ═══ S4 — Hiệu quả kỳ vọng ═══ */}
+          <section>
+            <SectionTitle
+              icon={Target}
+              title="S4 · Hiệu quả kỳ vọng"
+              sub="Lợi ích · Rủi ro nếu không làm · Kết quả kỳ vọng"
+            />
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3">
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 mb-1.5">
+                    <Lightbulb size={12} /> Lợi ích
+                  </div>
+                  <p className="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">
+                    {proposal.expectedBenefit?.trim() || (
+                      <span className="italic text-slate-400">Chưa cập nhật.</span>
+                    )}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-rose-200 bg-rose-50/40 p-3">
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-rose-700 mb-1.5">
+                    <ShieldAlert size={12} /> Rủi ro nếu không làm
+                  </div>
+                  <p className="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">
+                    {proposal.riskIfNot?.trim() || (
+                      <span className="italic text-slate-400">Chưa cập nhật.</span>
                     )}
                   </p>
                 </div>
               </div>
-            </div>
-          </section>
-
-          {/* ═══ S4 — Tác động dự kiến ═══ */}
-          <section>
-            <SectionTitle
-              icon={Target}
-              title="S4 · Tác động dự kiến"
-              sub="Lợi ích · rủi ro · chi phí · nhân sự"
-            />
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-3">
-                <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 mb-1.5">
-                  <Lightbulb size={12} /> Lợi ích kỳ vọng
+              {/* Full row: Kết quả kỳ vọng */}
+              <div className="rounded-xl border border-sky-200 bg-sky-50/40 p-3">
+                <div className="flex items-center gap-1.5 text-[11px] font-semibold text-sky-700 mb-1.5">
+                  <Target size={12} /> Kết quả kỳ vọng
                 </div>
                 <p className="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">
-                  {proposal.expectedBenefit?.trim() || (
-                    <span className="italic text-slate-400">Chưa cập nhật.</span>
-                  )}
+                  {proposal.expectedResult?.trim() ||
+                    proposal.expectedDeliverable?.trim() || (
+                      <span className="italic text-slate-400">Chưa cập nhật.</span>
+                    )}
                 </p>
               </div>
-              <div className="rounded-xl border border-rose-200 bg-rose-50/40 p-3">
-                <div className="flex items-center gap-1.5 text-[11px] font-semibold text-rose-700 mb-1.5">
-                  <ShieldAlert size={12} /> Rủi ro nếu không làm
-                </div>
-                <p className="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">
-                  {proposal.riskIfNot?.trim() || (
-                    <span className="italic text-slate-400">Chưa cập nhật.</span>
-                  )}
-                </p>
-              </div>
-              <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-3">
-                <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-700 mb-1.5">
-                  <AlertTriangle size={12} /> Rủi ro khi thực hiện
-                </div>
-                <p className="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">
-                  {proposal.riskIfDo?.trim() || (
-                    <span className="italic text-slate-400">Chưa cập nhật.</span>
-                  )}
-                </p>
-              </div>
-              <div className="rounded-xl border border-sky-200 bg-sky-50/40 p-3 space-y-2">
-                <div className="flex items-center gap-1.5 text-[11px] font-semibold text-sky-700 mb-1">
-                  <Coins size={12} /> Chi phí + Nhân sự
-                </div>
-                <div className="flex items-center gap-1.5 text-xs">
-                  <Coins size={12} className="text-slate-400" />
-                  <span className="text-slate-500">Chi phí:</span>
+              {proposal.estimatedCost != null && (
+                <div className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg bg-amber-50 border border-amber-200">
+                  <Coins size={12} className="text-amber-600" />
+                  <span className="text-slate-600">Giá trị dự kiến:</span>
                   <span className="font-semibold text-slate-800 tabular-nums">
                     {formatVnd(proposal.estimatedCost)}
                   </span>
                 </div>
-                <div className="flex items-center gap-1.5 text-xs">
-                  <Users size={12} className="text-slate-400" />
-                  <span className="text-slate-500">Nhân sự cần:</span>
-                  <span className="font-semibold text-slate-800 tabular-nums">
-                    {proposal.neededHeadcount != null
-                      ? `${proposal.neededHeadcount} người`
-                      : '—'}
-                  </span>
-                </div>
-              </div>
+              )}
             </div>
           </section>
 
-          {/* ═══ S5 — Luồng duyệt (timeline + 4 nút) ═══ */}
+          {/* ═══ S5 — Luồng duyệt timeline (3 nút V5) ═══ */}
           <section>
             <SectionTitle
               icon={CheckCircle2}
               title="S5 · Luồng duyệt"
-              sub="Chuỗi người duyệt và quyết định"
+              sub="Chuỗi người duyệt (hệ thống tự tạo theo rule)"
             />
             {proposal.approverChain.length === 0 ? (
               <div className="text-xs text-slate-500 italic px-3 py-3 bg-slate-50 rounded-lg border border-dashed border-slate-200 text-center">
@@ -745,11 +830,18 @@ export default function ProposalDetailDrawer({
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm font-semibold text-slate-800">{step.name}</span>
+                            <span className="text-sm font-semibold text-slate-800">
+                              {step.name}
+                            </span>
                             <span className="text-[11px] text-slate-500">
                               {ROLE_LABEL[step.role] ?? step.role}
                             </span>
                           </div>
+                          {step.reason && (
+                            <p className="text-[11px] text-slate-500 italic mt-0.5">
+                              Lý do: {step.reason}
+                            </p>
+                          )}
                           <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                             <StepIcon status={step.status} />
                             <span
@@ -762,6 +854,11 @@ export default function ProposalDetailDrawer({
                                 · {formatVnDate(step.decidedAt)}
                               </span>
                             )}
+                            {step.slaHours != null && step.status === 'dang_xem_xet' && (
+                              <span className="text-[11px] text-amber-600">
+                                · SLA {step.slaHours}h
+                              </span>
+                            )}
                           </div>
                           {step.note && (
                             <div className="mt-2 px-2.5 py-1.5 rounded bg-white border border-slate-200 text-[12px] text-slate-700 italic">
@@ -769,7 +866,7 @@ export default function ProposalDetailDrawer({
                             </div>
                           )}
 
-                          {/* Nếu currentUser là approver TẠI bước này → 4 nút action V3 */}
+                          {/* V5: 3 nút duyệt (BỎ Đồng ý nguyên tắc) */}
                           {active && (
                             <div className="mt-3 pt-3 border-t border-amber-200/60">
                               {decisionMode === 'idle' ? (
@@ -780,13 +877,6 @@ export default function ProposalDetailDrawer({
                                     className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm"
                                   >
                                     <Check size={13} /> Duyệt
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setDecisionMode('in_principle')}
-                                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-white hover:bg-emerald-50 border border-emerald-300 rounded-lg"
-                                  >
-                                    <Equal size={13} /> Đồng ý nguyên tắc
                                   </button>
                                   <button
                                     type="button"
@@ -810,12 +900,9 @@ export default function ProposalDetailDrawer({
                                       ? 'Lý do từ chối'
                                       : decisionMode === 'revision'
                                         ? 'Nội dung yêu cầu bổ sung'
-                                        : decisionMode === 'in_principle'
-                                          ? 'Kế hoạch / điều kiện bổ sung'
-                                          : 'Ghi chú (tuỳ chọn)'}
+                                        : 'Ghi chú (tuỳ chọn)'}
                                     {(decisionMode === 'reject' ||
-                                      decisionMode === 'revision' ||
-                                      decisionMode === 'in_principle') && (
+                                      decisionMode === 'revision') && (
                                       <span className="text-rose-500"> *</span>
                                     )}
                                   </label>
@@ -828,9 +915,7 @@ export default function ProposalDetailDrawer({
                                         ? 'VD: Chi phí vượt ngân sách quý, cần xem xét lại phương án...'
                                         : decisionMode === 'revision'
                                           ? 'VD: Bổ sung báo giá so sánh 3 nhà cung cấp...'
-                                          : decisionMode === 'in_principle'
-                                            ? 'VD: Đồng ý chủ trương, đề nghị bổ sung kế hoạch nhân sự chi tiết trước 30/06...'
-                                            : 'Ghi chú thêm (nếu có)'
+                                          : 'Ghi chú thêm (nếu có)'
                                     }
                                     className="w-full px-2.5 py-2 text-xs rounded-lg border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none resize-none"
                                   />
@@ -871,19 +956,20 @@ export default function ProposalDetailDrawer({
             {!userIsActiveApprover && activeStep && (
               <p className="text-[11px] text-slate-500 italic mt-2">
                 Đang chờ{' '}
-                <span className="font-medium text-slate-700">{activeStep.name}</span> ra quyết định.
+                <span className="font-medium text-slate-700">{activeStep.name}</span> ra
+                quyết định.
               </p>
             )}
           </section>
 
-          {/* ═══ S5b — Lịch sử xử lý ═══ */}
-          {proposal.history && proposal.history.length > 0 && (
-            <section>
-              <SectionTitle
-                icon={History}
-                title="Lịch sử xử lý"
-                sub="Toàn bộ thao tác trên đề xuất"
-              />
+          {/* ═══ S6 — Lịch sử xử lý (timeline đầy đủ) ═══ */}
+          <section>
+            <SectionTitle
+              icon={History}
+              title="S6 · Lịch sử xử lý"
+              sub="Toàn bộ thao tác trên đề xuất"
+            />
+            {proposal.history && proposal.history.length > 0 ? (
               <ol className="space-y-1.5">
                 {proposal.history.map((h, i) => (
                   <li
@@ -897,62 +983,35 @@ export default function ProposalDetailDrawer({
                       <span className="font-semibold">{h.actorName}</span>{' '}
                       <span className="text-slate-500">→</span>{' '}
                       <span className="font-medium">{h.action}</span>
-                      {h.note && <span className="italic text-slate-600"> · "{h.note}"</span>}
+                      {h.note && (
+                        <span className="italic text-slate-600"> · &quot;{h.note}&quot;</span>
+                      )}
                     </span>
                   </li>
                 ))}
               </ol>
-            </section>
-          )}
-
-          {/* ═══ S6 — Sau duyệt ═══ */}
-          {proposal.createCoordAfter && (
-            <section>
-              <SectionTitle
-                icon={ArrowRightCircle}
-                title="S6 · Sau duyệt"
-                sub="Kế hoạch chuyển sang điều phối"
-              />
-              <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 grid grid-cols-2 gap-4">
-                <Field label="Owner dự kiến" value={proposal.expectedOwner ?? '—'} />
-                <Field
-                  label="Deadline dự kiến"
-                  value={formatVnDateShort(proposal.expectedDeadline)}
-                />
-                <div className="col-span-2">
-                  <p className="text-[10px] uppercase tracking-wide text-slate-500 font-semibold">
-                    Đơn vị phối hợp
-                  </p>
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {proposal.expectedCollaborators && proposal.expectedCollaborators.length > 0 ? (
-                      proposal.expectedCollaborators.map((c, i) => (
-                        <span
-                          key={i}
-                          className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded bg-white border border-emerald-200 text-[11px] text-emerald-700"
-                        >
-                          <Users size={9} /> {c}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="text-xs italic text-slate-400">—</span>
-                    )}
-                  </div>
-                </div>
-                <div className="col-span-2">
-                  <Para label="Kết quả bàn giao" value={proposal.expectedDeliverable} />
-                </div>
+            ) : (
+              <div className="text-xs text-slate-500 italic px-3 py-3 bg-slate-50 rounded-lg border border-dashed border-slate-200 text-center">
+                Chưa có lịch sử ghi nhận.
               </div>
-            </section>
-          )}
+            )}
+          </section>
 
-          {/* ═══ Block — Đã chuyển điều phối ═══ */}
-          {isLinkedToCoord && (
-            <section>
+          {/* ═══ S7 — Liên kết điều phối ═══ */}
+          <section>
+            <SectionTitle
+              icon={ArrowRightCircle}
+              title="S7 · Liên kết điều phối"
+              sub="Kết nối với module Điều phối"
+            />
+
+            {/* Đã có liên kết */}
+            {isLinkedToCoord && (
               <div className="rounded-lg border border-violet-200 bg-violet-50/60 p-3 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-sm text-violet-800">
                   <ArrowRightCircle size={16} className="flex-shrink-0" />
                   <span>
-                    → Xem điều phối liên quan{' '}
+                    → Đã chuyển thành điều phối{' '}
                     <span className="font-semibold">
                       #{proposal.linkedCoordTaskCode ?? proposal.linkedCoordTaskId}
                     </span>
@@ -964,71 +1023,74 @@ export default function ProposalDetailDrawer({
                     onClick={() => onOpenLinkedCoord(proposal.linkedCoordTaskId!)}
                     className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-violet-700 bg-white border border-violet-200 hover:bg-violet-100 rounded-lg"
                   >
-                    <ExternalLink size={12} /> Xem điều phối
+                    <ExternalLink size={12} /> Xem
                   </button>
                 )}
               </div>
-            </section>
-          )}
+            )}
+
+            {/* Post-approve popup */}
+            {isApproved && !isLinkedToCoord && showConvertPopup && (
+              <div className="rounded-xl border-2 border-emerald-300 bg-emerald-50/70 p-4">
+                <div className="flex items-start gap-2 mb-3">
+                  <CheckCircle2 size={18} className="text-emerald-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-semibold text-emerald-900">
+                      Đề xuất đã được phê duyệt
+                    </p>
+                    <p className="text-xs text-emerald-700 mt-0.5">
+                      Bạn có muốn tạo điều phối từ đề xuất này không?
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-end gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setShowConvertPopup(false)}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-100 rounded-lg"
+                  >
+                    Chỉ phê duyệt, chưa tạo điều phối
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onConvertToCoord(proposal.id)}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm"
+                  >
+                    <ArrowRightCircle size={13} /> Tạo điều phối ngay
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Không có gì để show */}
+            {!isLinkedToCoord && !(isApproved && showConvertPopup) && (
+              <div className="text-xs text-slate-500 italic px-3 py-3 bg-slate-50 rounded-lg border border-dashed border-slate-200 text-center">
+                Chưa có điều phối liên quan.
+              </div>
+            )}
+          </section>
         </div>
 
         {/* ── Footer sticky ─────────────────────────────────────────── */}
         <div className="px-5 py-3 border-t border-slate-200 bg-slate-50 rounded-b-xl">
-          {canConvertToCoord ? (
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
-              <p className="text-sm font-semibold text-emerald-800 mb-1">
-                🚀 Đề xuất đã duyệt — bấm Tạo điều phối để mở module Điều phối
-              </p>
-              <p className="text-xs text-emerald-700 mb-2.5">
-                Điều phối mới sẽ tự động lấy tiêu đề, owner dự kiến, đơn vị phối hợp và
-                deadline từ đề xuất này.
-              </p>
-              <div className="flex items-center justify-end gap-2 flex-wrap">
-                {canCloseDossier && (
-                  <button
-                    type="button"
-                    onClick={() => onCloseDossier && onCloseDossier(proposal.id)}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-100 rounded-lg"
-                  >
-                    <Archive size={13} /> Đóng hồ sơ
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="px-3 py-2 text-sm font-medium text-slate-700 hover:bg-white rounded-lg"
-                >
-                  Để sau
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onConvertToCoord(proposal.id)}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm"
-                >
-                  <ArrowRightCircle size={14} /> Tạo điều phối từ đề xuất
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-center justify-end gap-2 flex-wrap">
-              {canCloseDossier && (
-                <button
-                  type="button"
-                  onClick={() => onCloseDossier && onCloseDossier(proposal.id)}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-100 rounded-lg"
-                >
-                  <Archive size={13} /> Đóng hồ sơ
-                </button>
-              )}
+          <div className="flex items-center justify-end gap-2 flex-wrap">
+            {canCloseDossier && (
               <button
                 type="button"
-                onClick={onClose}
-                className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-white rounded-lg"
+                onClick={() => onCloseDossier && onCloseDossier(proposal.id)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-100 rounded-lg"
               >
-                Đóng
+                <Archive size={13} /> Đóng hồ sơ
               </button>
-            </div>
-          )}
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-white rounded-lg"
+            >
+              Đóng
+            </button>
+          </div>
         </div>
       </div>
     </div>

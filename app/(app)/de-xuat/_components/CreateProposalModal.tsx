@@ -1,17 +1,18 @@
 'use client';
 
-// Modal tạo đề xuất V3 — theo SPEC anh chốt 2026-06-12:
-//   - 5 loại CHỐT V3: van_hanh · nhan_su · mkt_kd · tai_chinh · chien_luoc
-//   - 9 trạng thái CHỐT V3 (modal chỉ phát: 'nhap' | 'da_gui')
-//   - 6 SECTION:
-//       S1 Thông tin chung (tiêu đề · loại · ưu tiên · khối · phòng ban · cơ sở)
-//       S2 Hiện trạng / Vấn đề (hiện trạng · vấn đề · bằng chứng · attachments)
-//       S3 Nội dung đề xuất (giải pháp · phạm vi · thời gian · đơn vị liên quan)
-//       S4 Tác động dự kiến (lợi ích · rủi ro nếu không / nếu có · chi phí · nhân sự)
-//       S5 Luồng duyệt (auto-suggest theo loại + khối + chi phí — có thể chỉnh)
-//       S6 Sau duyệt (checkbox: cần tạo điều phối → owner + collab + deadline + deliverable)
-//   - Footer: "Lưu nháp" (nhap) · "Gửi duyệt" (da_gui)
-//   - Backward-compat prop `onCreate` + alias `onSubmit` cho callsite cũ.
+// Modal tạo đề xuất V5 — theo SPEC anh chốt 2026-06-12.
+// 5 BLOCK + 5 câu hỏi guide ở top:
+//   B1 Thông tin đề xuất (tiêu đề · 5 loại · 3 ưu tiên · 6 nguồn · giá trị dự kiến)
+//   B2 Hiện trạng & Vấn đề (hiện trạng · vấn đề · bằng chứng · attachments)
+//   B3 Giải pháp đề xuất (nội dung · phạm vi MULTI-SELECT · quyết định cần xin)
+//   B4 Hiệu quả kỳ vọng (lợi ích · rủi ro nếu không · kết quả kỳ vọng textarea)
+//   B5 Sau khi duyệt (accordion: chỉ phê duyệt / đề nghị tạo điều phối)
+// Luồng duyệt hiển thị READ-ONLY ngay sau Block 1, auto theo loại+ưu tiên+giá trị+phạm vi.
+// Footer: Huỷ / Lưu nháp / Gửi đề xuất.
+//
+// Backward-compat: GIỮ NGUYÊN tất cả type V3 cũ (CreateProposalPayloadV3,
+// CreateProposalPayload, ProposalKindV3...) để DeXuatClient cũ vẫn build được.
+// Modal mới phát V5; emit() vẫn map về V3 + V2 nếu callsite cần.
 
 import { useMemo, useState } from 'react';
 import {
@@ -27,10 +28,91 @@ import {
   Paperclip,
   Workflow,
   CheckSquare,
+  AlertTriangle,
+  Lightbulb,
+  TrendingUp,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Types
+// Types V5 (mới)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ProposalKindV5 =
+  | 'van_hanh'
+  | 'cai_tien'
+  | 'dau_tu'
+  | 'chien_luoc'
+  | 'khan_cap';
+
+export type ProposalPriorityV5 = 'binh_thuong' | 'quan_trong' | 'khan_cap';
+
+export type ProposalSourceV5 =
+  | 'phat_sinh'
+  | 'kpi'
+  | 'hop'
+  | 'ceo_giao'
+  | 'khach_hang_phan_anh'
+  | 'khac';
+
+// Phạm vi ảnh hưởng (multi-select). 4 nhóm: tp · qlcs · co_so · khoi
+export type ScopeTargetKind = 'tp' | 'qlcs' | 'co_so' | 'khoi';
+
+export interface ScopeTarget {
+  id: string;        // 'tp:TP_MKT' | 'qlcs:QLCS_HM' | 'co_so:HM' | 'khoi:KD'
+  kind: ScopeTargetKind;
+  label: string;     // "TP Marketing"
+  blockHint?: 'KD' | 'VP'; // dùng cho auto-suy luận khối
+}
+
+export interface ResolvedStep {
+  roleCode: string;
+  label: string;
+  reason: string;
+}
+
+export interface CreateProposalPayloadV5 {
+  status: 'nhap' | 'da_gui';
+
+  // BLOCK 1 — Thông tin đề xuất
+  title: string;
+  kind: ProposalKindV5;
+  priority: ProposalPriorityV5;
+  source: ProposalSourceV5;
+  estimatedCost?: number;
+
+  // BLOCK 2 — Hiện trạng & Vấn đề (câu hỏi 1)
+  currentSituation: string;
+  problemStatement: string;
+  evidence?: string;
+  attachments: string[];
+
+  // BLOCK 3 — Giải pháp đề xuất (câu hỏi 2, 3, 4)
+  proposedSolution: string;
+  scopeTargets: ScopeTarget[];
+  decisionRequested: string;
+
+  // BLOCK 4 — Hiệu quả kỳ vọng (câu hỏi 5)
+  expectedBenefit: string;
+  riskIfNot: string;
+  expectedResult: string;
+
+  // BLOCK 5 — Sau khi duyệt
+  afterApproval: 'chi_phe_duyet' | 'de_nghi_tao_dieu_phoi';
+  suggestedOwnerUid?: string;
+  suggestedOwnerName?: string;
+  suggestedDeadline?: string;     // YYYY-MM-DD
+  deploymentNote?: string;
+
+  // Auto-computed (read-only, đính kèm khi gửi)
+  resolvedApproverChain?: ResolvedStep[];
+  resolvedBlock?: 'KD' | 'VP' | 'cross';
+  isCrossBlock?: boolean;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Types V3 — GIỮ NGUYÊN cho backward-compat (DeXuatClient cũ vẫn import)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type ProposalKindV3 =
@@ -46,62 +128,53 @@ export type ProposalBlockV3 = 'KD' | 'VP' | 'lien_khoi';
 
 export interface ApproverDraftV3 {
   id: string;
-  uid: string;       // user id (rỗng nếu chưa chọn)
-  name: string;      // tên hiển thị
-  roleCode: string;  // mã vai trò (TP_NS, GD_VP, CEO...)
-  reason: string;    // lý do bước duyệt (auto-suggest điền giúp)
-  slaHours: number;  // SLA cho bước này
+  uid: string;
+  name: string;
+  roleCode: string;
+  reason: string;
+  slaHours: number;
 }
 
 export interface CollaboratorDraftV3 {
   id: string;
-  unit: string;     // tên đơn vị / phòng ban / cá nhân
-  support: string;  // nội dung hỗ trợ ngắn
+  unit: string;
+  support: string;
 }
 
 export interface CreateProposalPayloadV3 {
   status: 'nhap' | 'da_gui';
-  // S1 — Thông tin chung
   title: string;
   kind: ProposalKindV3;
   priority: ProposalPriorityV3;
   relatedBlock: ProposalBlockV3;
   relatedDeptId?: string;
   relatedBranchId?: string;
-  // S2 — Hiện trạng / Vấn đề
   currentSituation: string;
   problemStatement: string;
   evidence?: string;
   attachments: string[];
-  // S3 — Nội dung đề xuất
   proposedSolution: string;
   scope: string;
-  expectedStartDate?: string;     // YYYY-MM-DD
+  expectedStartDate?: string;
   involvedUnits: string;
-  // S4 — Tác động dự kiến
   expectedBenefit: string;
   riskIfNot: string;
   riskIfDo: string;
   estimatedCost: number | null;
   neededHeadcount?: number | null;
-  // S5 — Luồng duyệt
   approverChain: ApproverDraftV3[];
-  // S6 — Sau duyệt
   createCoordAfter: boolean;
   expectedOwnerName?: string;
   expectedCollaborators?: CollaboratorDraftV3[];
-  expectedDeadline?: string;       // YYYY-MM-DD
+  expectedDeadline?: string;
   expectedDeliverable?: string;
 }
 
-// Backward-compat alias — V2 callsite (DeXuatClient) đang dùng tên này.
 export type CreateProposalPayload = CreateProposalPayloadV3 & {
-  // Các field V2 cũ mà DeXuatClient đọc trực tiếp:
   description: string;
   deadline: string;
 };
 
-// Backward-compat alias kind (V2 tên cũ giữ tương thích import)
 export type ProposalKind = ProposalKindV3;
 export type ProposalStatus =
   | 'nhap'
@@ -123,41 +196,78 @@ interface UserOption {
 interface CreateProposalModalProps {
   open: boolean;
   onClose: () => void;
-  /** V3 callback. Sẽ dùng nếu callsite truyền cờ này. */
+  /** V5 callback — ưu tiên dùng. */
+  onSubmitV5?: (payload: CreateProposalPayloadV5) => void;
+  /** V3 callback — giữ lại để callsite V3 không vỡ. Sẽ nhận payload V3 đã map. */
   onSubmit?: (payload: CreateProposalPayloadV3) => void;
   /** V2 backward-compat — DeXuatClient hiện hành dùng tên này. */
   onCreate?: (payload: CreateProposalPayload) => void;
   users?: UserOption[];
   currentUserRole?: string;
   currentUserName?: string;
-  /** Optional list phòng ban / cơ sở để render select */
+  /** Khối của người tạo — dùng cho auto-suy luận chuỗi duyệt. */
+  currentUserBlock?: 'KD' | 'VP';
+  /** Optional — không còn dùng trong V5 nhưng giữ prop để callsite cũ không vỡ. */
   departments?: { id: string; name: string }[];
   branches?: { id: string; name: string }[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Labels & helpers
+// Labels V5
 // ─────────────────────────────────────────────────────────────────────────────
 
-const KIND_OPTIONS: { key: ProposalKindV3; label: string; icon: any }[] = [
-  { key: 'van_hanh',   label: 'Vận hành',              icon: Sparkles },
-  { key: 'nhan_su',    label: 'Nhân sự',               icon: Users },
-  { key: 'mkt_kd',     label: 'Marketing / Kinh doanh', icon: Megaphone },
-  { key: 'tai_chinh',  label: 'Tài chính / Mua sắm',   icon: Coins },
-  { key: 'chien_luoc', label: 'Chiến lược',            icon: Target },
+const KIND_V5_OPTIONS: { key: ProposalKindV5; label: string; icon: any; tone: string }[] = [
+  { key: 'van_hanh',   label: 'Vận hành',  icon: Sparkles, tone: 'bg-sky-50 text-sky-700 border-sky-300' },
+  { key: 'cai_tien',   label: 'Cải tiến',  icon: Lightbulb, tone: 'bg-emerald-50 text-emerald-700 border-emerald-300' },
+  { key: 'dau_tu',     label: 'Đầu tư',    icon: Coins, tone: 'bg-amber-50 text-amber-700 border-amber-300' },
+  { key: 'chien_luoc', label: 'Chiến lược', icon: Target, tone: 'bg-violet-50 text-violet-700 border-violet-300' },
+  { key: 'khan_cap',   label: 'Khẩn cấp',  icon: AlertTriangle, tone: 'bg-rose-50 text-rose-700 border-rose-300' },
 ];
 
-const PRIORITY_OPTIONS: { key: ProposalPriorityV3; label: string; tone: string }[] = [
-  { key: 'thap',    label: 'Thấp',       tone: 'bg-slate-100 text-slate-700 border-slate-300' },
-  { key: 'thuong',  label: 'Bình thường', tone: 'bg-sky-50 text-sky-700 border-sky-300' },
-  { key: 'cao',     label: 'Cao',         tone: 'bg-amber-50 text-amber-800 border-amber-300' },
-  { key: 'khan',    label: 'Khẩn',        tone: 'bg-rose-50 text-rose-700 border-rose-300' },
+const PRIORITY_V5_OPTIONS: { key: ProposalPriorityV5; label: string; tone: string }[] = [
+  { key: 'binh_thuong', label: 'Bình thường', tone: 'bg-slate-100 text-slate-700 border-slate-300' },
+  { key: 'quan_trong',  label: 'Quan trọng',  tone: 'bg-amber-50 text-amber-800 border-amber-300' },
+  { key: 'khan_cap',    label: 'Khẩn cấp',    tone: 'bg-rose-50 text-rose-700 border-rose-300' },
 ];
 
-const BLOCK_OPTIONS: { key: ProposalBlockV3; label: string }[] = [
-  { key: 'KD',         label: 'Khối Kinh doanh' },
-  { key: 'VP',         label: 'Khối Văn phòng' },
-  { key: 'lien_khoi',  label: 'Liên khối' },
+const SOURCE_V5_OPTIONS: { key: ProposalSourceV5; label: string }[] = [
+  { key: 'phat_sinh',            label: 'Phát sinh thực tế' },
+  { key: 'kpi',                  label: 'Từ KPI' },
+  { key: 'hop',                  label: 'Từ cuộc họp' },
+  { key: 'ceo_giao',             label: 'CEO giao' },
+  { key: 'khach_hang_phan_anh',  label: 'Khách hàng phản ánh' },
+  { key: 'khac',                 label: 'Khác' },
+];
+
+// Danh sách phạm vi ảnh hưởng (multi-select)
+const SCOPE_TARGETS_TP: ScopeTarget[] = [
+  { id: 'tp:TP_MKT', kind: 'tp', label: 'TP Marketing', blockHint: 'KD' },
+  { id: 'tp:TP_DT',  kind: 'tp', label: 'TP Đào tạo',   blockHint: 'KD' },
+  { id: 'tp:TP_KT',  kind: 'tp', label: 'TP Kỹ thuật',  blockHint: 'VP' },
+  { id: 'tp:TP_NS',  kind: 'tp', label: 'TP Nhân sự',   blockHint: 'VP' },
+  { id: 'tp:TP_KE',  kind: 'tp', label: 'TP Kế toán',   blockHint: 'VP' },
+  { id: 'tp:TP_GS',  kind: 'tp', label: 'TP Giám sát',  blockHint: 'KD' },
+];
+
+const SCOPE_TARGETS_QLCS: ScopeTarget[] = [
+  { id: 'qlcs:QLCS_HM',  kind: 'qlcs', label: 'QLCS Hoàng Mai',     blockHint: 'KD' },
+  { id: 'qlcs:QLCS_TK',  kind: 'qlcs', label: 'QLCS Thái Kim',       blockHint: 'KD' },
+  { id: 'qlcs:QLCS_CTT', kind: 'qlcs', label: 'QLCS Cổ Tân Trào',    blockHint: 'KD' },
+  { id: 'qlcs:QLCS_24',  kind: 'qlcs', label: 'QLCS 24 NCT',         blockHint: 'KD' },
+  { id: 'qlcs:QLCS_TT',  kind: 'qlcs', label: 'QLCS Tân Triều',      blockHint: 'KD' },
+];
+
+const SCOPE_TARGETS_CO_SO: ScopeTarget[] = [
+  { id: 'co_so:HM',  kind: 'co_so', label: 'Cơ sở Hoàng Mai',  blockHint: 'KD' },
+  { id: 'co_so:TK',  kind: 'co_so', label: 'Cơ sở Thái Kim',   blockHint: 'KD' },
+  { id: 'co_so:CTT', kind: 'co_so', label: 'Cơ sở Cổ Tân Trào', blockHint: 'KD' },
+  { id: 'co_so:24',  kind: 'co_so', label: 'Cơ sở 24 NCT',      blockHint: 'KD' },
+  { id: 'co_so:TT',  kind: 'co_so', label: 'Cơ sở Tân Triều',   blockHint: 'KD' },
+];
+
+const SCOPE_TARGETS_KHOI: ScopeTarget[] = [
+  { id: 'khoi:KD', kind: 'khoi', label: 'GĐ Kinh doanh',  blockHint: 'KD' },
+  { id: 'khoi:VP', kind: 'khoi', label: 'GĐ Văn phòng',   blockHint: 'VP' },
 ];
 
 const ROLE_LABEL: Record<string, string> = {
@@ -174,89 +284,193 @@ const ROLE_LABEL: Record<string, string> = {
   QLCS: 'Quản lý cơ sở',
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// suggestApproverChain — preset engine theo SPEC V3
-// Input: (kind + creatorBlock + estimatedCost) → output chuỗi duyệt gợi ý.
-// Hạn mức ngân sách CHỐT (VND): < 10tr · 10–50tr · > 50tr.
-// ─────────────────────────────────────────────────────────────────────────────
-
+// Ngưỡng tài chính V5 — cấu hình tại đây, KHÔNG hard-code rải rác.
 const COST_TIER_SMALL = 10_000_000;
 const COST_TIER_MID = 50_000_000;
 
-interface SuggestInput {
-  kind: ProposalKindV3 | '';
-  creatorBlock?: ProposalBlockV3;
-  estimatedCost: number | null;
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// Auto-suy luận khối liên quan + chuỗi duyệt V5
+// ─────────────────────────────────────────────────────────────────────────────
 
-interface SuggestStep {
-  roleCode: string;
-  reason: string;
-  slaHours: number;
-}
-
-function suggestApproverChain(input: SuggestInput): SuggestStep[] {
-  const { kind, creatorBlock, estimatedCost } = input;
-  const cost = estimatedCost ?? 0;
-  if (!kind) return [];
-
-  switch (kind) {
-    case 'van_hanh': {
-      // Owner nghiệp vụ liên quan — VD: QLCS → TP Đào tạo (mở lớp) / TP Giám sát hoặc GĐ VP (SOP cơ sở)
-      const steps: SuggestStep[] = [
-        { roleCode: 'TP_DT', reason: 'Phụ trách nghiệp vụ liên quan', slaHours: 48 },
-      ];
-      if (cost > COST_TIER_SMALL) steps.push({ roleCode: 'GD_VP', reason: 'Phê duyệt khối Văn phòng', slaHours: 72 });
-      if (cost > COST_TIER_MID) steps.push({ roleCode: 'CEO', reason: 'Phê duyệt cấp CEO (chi phí lớn)', slaHours: 96 });
-      return steps;
-    }
-    case 'nhan_su': {
-      const steps: SuggestStep[] = [
-        { roleCode: 'TP_DT', reason: 'Xác nhận nhu cầu đào tạo / vị trí', slaHours: 48 },
-        { roleCode: 'TP_NS', reason: 'Đánh giá nguồn lực nhân sự', slaHours: 48 },
-      ];
-      const blockGd = creatorBlock === 'VP' ? 'GD_VP' : 'GD_KD';
-      steps.push({ roleCode: blockGd, reason: 'Phê duyệt cấp Giám đốc khối', slaHours: 72 });
-      if (cost > COST_TIER_MID) steps.push({ roleCode: 'CEO', reason: 'Vượt định biên / chi phí lớn', slaHours: 96 });
-      return steps;
-    }
-    case 'mkt_kd': {
-      const steps: SuggestStep[] = [
-        { roleCode: 'TP_MKT', reason: 'Phụ trách Marketing', slaHours: 48 },
-        { roleCode: 'GD_KD', reason: 'Phê duyệt khối Kinh doanh', slaHours: 72 },
-      ];
-      if (cost > COST_TIER_MID) steps.push({ roleCode: 'CEO', reason: 'Vượt hạn mức ngân sách', slaHours: 96 });
-      return steps;
-    }
-    case 'tai_chinh': {
-      const steps: SuggestStep[] = [];
-      if (cost <= 0) {
-        // 0 đ: TP / GĐ khối duyệt
-        steps.push({ roleCode: 'TP_KE', reason: 'Kiểm tra hồ sơ', slaHours: 48 });
-        steps.push({ roleCode: creatorBlock === 'KD' ? 'GD_KD' : 'GD_VP', reason: 'Phê duyệt cấp Giám đốc khối', slaHours: 72 });
-      } else if (cost < COST_TIER_SMALL) {
-        steps.push({ roleCode: 'TP_KE', reason: 'Kiểm tra ngân sách', slaHours: 48 });
-        steps.push({ roleCode: 'GD_VP', reason: 'Phê duyệt < 10 triệu', slaHours: 72 });
-      } else if (cost <= COST_TIER_MID) {
-        steps.push({ roleCode: 'TP_KE', reason: 'Kiểm tra ngân sách', slaHours: 48 });
-        steps.push({ roleCode: 'GD_VP', reason: 'Phê duyệt khối Văn phòng', slaHours: 72 });
-        steps.push({ roleCode: creatorBlock === 'KD' ? 'GD_KD' : 'GD_VP', reason: 'Phê duyệt khối liên quan', slaHours: 72 });
-      } else {
-        steps.push({ roleCode: creatorBlock === 'KD' ? 'GD_KD' : 'GD_VP', reason: 'Phê duyệt Giám đốc khối', slaHours: 72 });
-        steps.push({ roleCode: 'GD_VP', reason: 'Phê duyệt Giám đốc Văn phòng', slaHours: 72 });
-        steps.push({ roleCode: 'CEO', reason: 'Vượt 50 triệu — phê duyệt CEO', slaHours: 96 });
-      }
-      return steps;
-    }
-    case 'chien_luoc': {
-      const steps: SuggestStep[] = [
-        { roleCode: creatorBlock === 'KD' ? 'GD_KD' : 'GD_VP', reason: 'Phê duyệt Giám đốc khối', slaHours: 72 },
-        { roleCode: 'CEO', reason: 'Phê duyệt cấp CEO', slaHours: 96 },
-      ];
-      if (cost > COST_TIER_MID) steps.push({ roleCode: 'CT', reason: 'Quy mô lớn — cần Chủ tịch', slaHours: 96 });
-      return steps;
-    }
+function resolveBlockFromScope(targets: ScopeTarget[]): {
+  block: 'KD' | 'VP' | 'cross';
+  isCross: boolean;
+} {
+  if (targets.length === 0) return { block: 'KD', isCross: false };
+  let hasKD = false;
+  let hasVP = false;
+  for (const t of targets) {
+    if (t.blockHint === 'KD') hasKD = true;
+    if (t.blockHint === 'VP') hasVP = true;
   }
+  if (hasKD && hasVP) return { block: 'cross', isCross: true };
+  if (hasVP) return { block: 'VP', isCross: false };
+  return { block: 'KD', isCross: false };
+}
+
+interface ResolveChainInput {
+  kind: ProposalKindV5 | '';
+  priority: ProposalPriorityV5;
+  estimatedCost?: number;
+  scopeTargets: ScopeTarget[];
+}
+
+function resolveApproverChainV5(input: ResolveChainInput): {
+  steps: ResolvedStep[];
+  reasonSummary: string;
+} {
+  const { kind, priority, estimatedCost = 0, scopeTargets } = input;
+  if (!kind) return { steps: [], reasonSummary: '' };
+  const { block, isCross } = resolveBlockFromScope(scopeTargets);
+  const out: ResolvedStep[] = [];
+  const reasons: string[] = [];
+
+  // 1) Khẩn cấp hoặc kind = khan_cap → CEO ngay
+  if (priority === 'khan_cap' || kind === 'khan_cap') {
+    if (isCross) {
+      out.push({ roleCode: 'GD_KD', label: 'GĐ Kinh doanh', reason: 'Khối Kinh doanh có liên quan' });
+      out.push({ roleCode: 'GD_VP', label: 'GĐ Văn phòng', reason: 'Khối Văn phòng có liên quan' });
+    } else if (block === 'VP') {
+      out.push({ roleCode: 'GD_VP', label: 'GĐ Văn phòng', reason: 'Phụ trách khối liên quan' });
+    } else {
+      out.push({ roleCode: 'GD_KD', label: 'GĐ Kinh doanh', reason: 'Phụ trách khối liên quan' });
+    }
+    out.push({ roleCode: 'CEO', label: 'CEO', reason: 'Mức khẩn cấp — CEO duyệt' });
+    reasons.push('mức khẩn cấp');
+    return { steps: out, reasonSummary: reasons.join(' · ') };
+  }
+
+  // 2) Chiến lược → luôn lên CEO
+  if (kind === 'chien_luoc') {
+    if (isCross) {
+      out.push({ roleCode: 'GD_KD', label: 'GĐ Kinh doanh', reason: 'Khối Kinh doanh có liên quan' });
+      out.push({ roleCode: 'GD_VP', label: 'GĐ Văn phòng', reason: 'Khối Văn phòng có liên quan' });
+    } else {
+      out.push({
+        roleCode: block === 'VP' ? 'GD_VP' : 'GD_KD',
+        label: block === 'VP' ? 'GĐ Văn phòng' : 'GĐ Kinh doanh',
+        reason: 'Phụ trách khối liên quan',
+      });
+    }
+    out.push({ roleCode: 'CEO', label: 'CEO', reason: 'Đề xuất chiến lược' });
+    reasons.push('loại chiến lược');
+    return { steps: out, reasonSummary: reasons.join(' · ') };
+  }
+
+  // 3) Đầu tư hoặc có chi phí → xét ngưỡng tài chính
+  const hasCost = estimatedCost > 0 || kind === 'dau_tu';
+  if (hasCost) {
+    out.push({ roleCode: 'TP_KE', label: 'TP Kế toán', reason: 'Kiểm tra ngân sách' });
+    reasons.push('có chi phí');
+
+    if (estimatedCost > COST_TIER_MID) {
+      out.push({ roleCode: 'GD_VP', label: 'GĐ Văn phòng', reason: 'Phụ trách tài chính' });
+      if (block === 'KD' || isCross) {
+        out.push({ roleCode: 'GD_KD', label: 'GĐ Kinh doanh', reason: 'Khối Kinh doanh liên quan' });
+      }
+      out.push({ roleCode: 'CEO', label: 'CEO', reason: 'Vượt ngưỡng 50 triệu' });
+      reasons.push('> 50 triệu');
+      return { steps: out, reasonSummary: reasons.join(' · ') };
+    }
+    if (estimatedCost > COST_TIER_SMALL) {
+      out.push({ roleCode: 'GD_VP', label: 'GĐ Văn phòng', reason: 'Duyệt 10–50 triệu' });
+      if (block === 'KD' || isCross) {
+        out.push({ roleCode: 'GD_KD', label: 'GĐ Kinh doanh', reason: 'Khối Kinh doanh đồng ý' });
+      }
+      reasons.push('10–50 triệu');
+      return { steps: out, reasonSummary: reasons.join(' · ') };
+    }
+    // < 10 triệu (hoặc kind=dau_tu nhưng cost nhỏ)
+    out.push({ roleCode: 'GD_VP', label: 'GĐ Văn phòng', reason: 'Duyệt chi phí nhỏ' });
+    reasons.push('< 10 triệu');
+    return { steps: out, reasonSummary: reasons.join(' · ') };
+  }
+
+  // 4) Vận hành / cải tiến không chi phí — GĐ khối liên quan duyệt
+  if (isCross) {
+    out.push({ roleCode: 'GD_KD', label: 'GĐ Kinh doanh', reason: 'Khối Kinh doanh có liên quan' });
+    out.push({ roleCode: 'GD_VP', label: 'GĐ Văn phòng', reason: 'Khối Văn phòng có liên quan' });
+    reasons.push('liên khối');
+  } else {
+    out.push({
+      roleCode: block === 'VP' ? 'GD_VP' : 'GD_KD',
+      label: block === 'VP' ? 'GĐ Văn phòng' : 'GĐ Kinh doanh',
+      reason: 'Phụ trách khối liên quan',
+    });
+    reasons.push(`khối ${block === 'VP' ? 'Văn phòng' : 'Kinh doanh'}`);
+  }
+  // Mức quan trọng → bổ sung CEO ack
+  if (priority === 'quan_trong') {
+    out.push({ roleCode: 'CEO', label: 'CEO', reason: 'Mức quan trọng — CEO nắm' });
+    reasons.push('mức quan trọng');
+  }
+  return { steps: out, reasonSummary: reasons.join(' · ') };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// V5 → V3 mapper (để callsite V3 vẫn nhận được payload hợp lệ)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function kindV5ToV3(k: ProposalKindV5): ProposalKindV3 {
+  switch (k) {
+    case 'van_hanh':   return 'van_hanh';
+    case 'cai_tien':   return 'van_hanh';
+    case 'dau_tu':     return 'tai_chinh';
+    case 'chien_luoc': return 'chien_luoc';
+    case 'khan_cap':   return 'van_hanh';
+  }
+}
+
+function priorityV5ToV3(p: ProposalPriorityV5): ProposalPriorityV3 {
+  switch (p) {
+    case 'binh_thuong': return 'thuong';
+    case 'quan_trong':  return 'cao';
+    case 'khan_cap':    return 'khan';
+  }
+}
+
+function blockV5ToV3(b: 'KD' | 'VP' | 'cross'): ProposalBlockV3 {
+  if (b === 'cross') return 'lien_khoi';
+  return b;
+}
+
+function mapV5ToV3(p: CreateProposalPayloadV5): CreateProposalPayloadV3 {
+  const resolvedBlock = p.resolvedBlock ?? 'KD';
+  return {
+    status: p.status,
+    title: p.title,
+    kind: kindV5ToV3(p.kind),
+    priority: priorityV5ToV3(p.priority),
+    relatedBlock: blockV5ToV3(resolvedBlock),
+    relatedDeptId: undefined,
+    relatedBranchId: undefined,
+    currentSituation: p.currentSituation,
+    problemStatement: p.problemStatement,
+    evidence: p.evidence,
+    attachments: p.attachments,
+    proposedSolution: p.proposedSolution,
+    scope: p.scopeTargets.map((t) => t.label).join(' · '),
+    expectedStartDate: p.suggestedDeadline,
+    involvedUnits: p.scopeTargets.map((t) => t.label).join(', '),
+    expectedBenefit: p.expectedBenefit,
+    riskIfNot: p.riskIfNot,
+    riskIfDo: '',
+    estimatedCost: typeof p.estimatedCost === 'number' ? p.estimatedCost : null,
+    neededHeadcount: null,
+    approverChain: (p.resolvedApproverChain ?? []).map((s, idx) => ({
+      id: `v5-${idx}-${s.roleCode}`,
+      uid: '',
+      name: '',
+      roleCode: s.roleCode,
+      reason: s.reason,
+      slaHours: 48,
+    })),
+    createCoordAfter: p.afterApproval === 'de_nghi_tao_dieu_phoi',
+    expectedOwnerName: p.suggestedOwnerName,
+    expectedCollaborators: undefined,
+    expectedDeadline: p.suggestedDeadline,
+    expectedDeliverable: p.expectedResult || p.deploymentNote,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -266,175 +480,106 @@ function suggestApproverChain(input: SuggestInput): SuggestStep[] {
 export default function CreateProposalModal({
   open,
   onClose,
+  onSubmitV5,
   onSubmit,
   onCreate,
   users = [],
   currentUserRole,
   currentUserName,
-  departments = [],
-  branches = [],
+  currentUserBlock = 'KD',
 }: CreateProposalModalProps) {
-  // S1 — Thông tin chung
+  // BLOCK 1
   const [title, setTitle] = useState('');
-  const [kind, setKind] = useState<ProposalKindV3 | ''>('');
-  const [priority, setPriority] = useState<ProposalPriorityV3>('thuong');
-  const [relatedBlock, setRelatedBlock] = useState<ProposalBlockV3>('KD');
-  const [relatedDeptId, setRelatedDeptId] = useState<string>('');
-  const [relatedBranchId, setRelatedBranchId] = useState<string>('');
+  const [kind, setKind] = useState<ProposalKindV5 | ''>('');
+  const [priority, setPriority] = useState<ProposalPriorityV5>('binh_thuong');
+  const [source, setSource] = useState<ProposalSourceV5 | ''>('');
+  const [estimatedCostStr, setEstimatedCostStr] = useState('');
 
-  // S2 — Hiện trạng / Vấn đề
+  // BLOCK 2
   const [currentSituation, setCurrentSituation] = useState('');
   const [problemStatement, setProblemStatement] = useState('');
   const [evidence, setEvidence] = useState('');
 
-  // S3 — Nội dung đề xuất
+  // BLOCK 3
   const [proposedSolution, setProposedSolution] = useState('');
-  const [scope, setScope] = useState('');
-  const [expectedStartDate, setExpectedStartDate] = useState('');
-  const [involvedUnits, setInvolvedUnits] = useState('');
+  const [scopeTargets, setScopeTargets] = useState<ScopeTarget[]>([]);
+  const [decisionRequested, setDecisionRequested] = useState('');
+  const [scopeExpanded, setScopeExpanded] = useState(true);
 
-  // S4 — Tác động dự kiến
+  // BLOCK 4
   const [expectedBenefit, setExpectedBenefit] = useState('');
   const [riskIfNot, setRiskIfNot] = useState('');
-  const [riskIfDo, setRiskIfDo] = useState('');
-  const [estimatedCostStr, setEstimatedCostStr] = useState('');
-  const [neededHeadcountStr, setNeededHeadcountStr] = useState('');
+  const [expectedResult, setExpectedResult] = useState('');
 
-  // S5 — Luồng duyệt (custom override). Khi rỗng → dùng suggestion.
-  const [approverOverride, setApproverOverride] = useState<ApproverDraftV3[] | null>(null);
+  // BLOCK 5 — accordion thu gọn mặc định
+  const [afterExpanded, setAfterExpanded] = useState(false);
+  const [afterApproval, setAfterApproval] =
+    useState<'chi_phe_duyet' | 'de_nghi_tao_dieu_phoi'>('chi_phe_duyet');
+  const [suggestedOwnerName, setSuggestedOwnerName] = useState('');
+  const [suggestedDeadline, setSuggestedDeadline] = useState('');
+  const [deploymentNote, setDeploymentNote] = useState('');
 
-  // S6 — Sau duyệt
-  const [createCoordAfter, setCreateCoordAfter] = useState(false);
-  const [expectedOwnerName, setExpectedOwnerName] = useState('');
-  const [expectedCollaborators, setExpectedCollaborators] = useState<CollaboratorDraftV3[]>([]);
-  const [expectedDeadline, setExpectedDeadline] = useState('');
-  const [expectedDeliverable, setExpectedDeliverable] = useState('');
-
-  // ── Suggestion engine ─────────────────────────────────────────────────────
+  // ── derived ─────────────────────────────────────────────────────────────
   const estimatedCostNum = useMemo(() => {
     const trimmed = estimatedCostStr.trim();
-    if (!trimmed) return null;
+    if (!trimmed) return undefined;
     const n = Number(trimmed.replace(/[^\d.-]/g, ''));
-    return Number.isFinite(n) ? n : null;
+    return Number.isFinite(n) && n > 0 ? n : undefined;
   }, [estimatedCostStr]);
 
-  const suggested: ApproverDraftV3[] = useMemo(() => {
-    const steps = suggestApproverChain({
-      kind,
-      creatorBlock: relatedBlock,
-      estimatedCost: estimatedCostNum,
-    });
-    return steps.map((s, idx) => {
-      const u = users.find((x) => x.roleId === s.roleCode);
-      return {
-        id: `sg-${idx}-${s.roleCode}`,
-        uid: u?.id ?? '',
-        name: u?.name ?? '',
-        roleCode: s.roleCode,
-        reason: s.reason,
-        slaHours: s.slaHours,
-      };
-    });
-  }, [kind, relatedBlock, estimatedCostNum, users]);
+  const { block: resolvedBlock, isCross: isCrossBlock } = useMemo(
+    () => resolveBlockFromScope(scopeTargets),
+    [scopeTargets],
+  );
 
-  // Hiển thị chuỗi duyệt: override (nếu user đã chỉnh) HOẶC suggestion.
-  const approversShown: ApproverDraftV3[] = approverOverride ?? suggested;
+  const { steps: resolvedChain, reasonSummary } = useMemo(
+    () =>
+      resolveApproverChainV5({
+        kind,
+        priority,
+        estimatedCost: estimatedCostNum,
+        scopeTargets,
+      }),
+    [kind, priority, estimatedCostNum, scopeTargets],
+  );
 
   if (!open) return null;
 
-  // ── Approver helpers ──────────────────────────────────────────────────────
-  function ensureOverride(): ApproverDraftV3[] {
-    if (approverOverride) return approverOverride;
-    const cloned = suggested.map((s) => ({ ...s }));
-    setApproverOverride(cloned);
-    return cloned;
-  }
-
-  function addApproverStep() {
-    const base = ensureOverride();
-    const next: ApproverDraftV3[] = [
-      ...base,
-      {
-        id: `a-${Date.now()}-${base.length}`,
-        uid: '',
-        name: '',
-        roleCode: '',
-        reason: '',
-        slaHours: 48,
-      },
-    ];
-    setApproverOverride(next);
-  }
-
-  function updateApproverStep(id: string, patch: Partial<ApproverDraftV3>) {
-    const base = ensureOverride();
-    setApproverOverride(base.map((a) => (a.id === id ? { ...a, ...patch } : a)));
-  }
-
-  function removeApproverStep(id: string) {
-    const base = ensureOverride();
-    setApproverOverride(base.filter((a) => a.id !== id));
-  }
-
-  function resetToSuggestion() {
-    setApproverOverride(null);
-  }
-
-  function selectApproverUser(stepId: string, userId: string) {
-    const u = users.find((x) => x.id === userId);
-    if (!u) {
-      updateApproverStep(stepId, { uid: '', name: '' });
-      return;
-    }
-    updateApproverStep(stepId, {
-      uid: u.id,
-      name: u.name,
-      roleCode: u.roleId,
+  // ── scope helpers ────────────────────────────────────────────────────────
+  function toggleScopeTarget(t: ScopeTarget) {
+    setScopeTargets((prev) => {
+      const exists = prev.some((x) => x.id === t.id);
+      if (exists) return prev.filter((x) => x.id !== t.id);
+      return [...prev, t];
     });
   }
 
-  // ── Collaborator helpers ──────────────────────────────────────────────────
-  function addCollaborator() {
-    setExpectedCollaborators((prev) => [
-      ...prev,
-      { id: `c-${Date.now()}-${prev.length}`, unit: '', support: '' },
-    ]);
+  function isScopeChecked(id: string) {
+    return scopeTargets.some((x) => x.id === id);
   }
 
-  function updateCollaborator(id: string, patch: Partial<CollaboratorDraftV3>) {
-    setExpectedCollaborators((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
-  }
-
-  function removeCollaborator(id: string) {
-    setExpectedCollaborators((prev) => prev.filter((c) => c.id !== id));
-  }
-
-  // ── Reset / Close ─────────────────────────────────────────────────────────
+  // ── reset / close ────────────────────────────────────────────────────────
   function resetForm() {
     setTitle('');
     setKind('');
-    setPriority('thuong');
-    setRelatedBlock('KD');
-    setRelatedDeptId('');
-    setRelatedBranchId('');
+    setPriority('binh_thuong');
+    setSource('');
+    setEstimatedCostStr('');
     setCurrentSituation('');
     setProblemStatement('');
     setEvidence('');
     setProposedSolution('');
-    setScope('');
-    setExpectedStartDate('');
-    setInvolvedUnits('');
+    setScopeTargets([]);
+    setDecisionRequested('');
+    setScopeExpanded(true);
     setExpectedBenefit('');
     setRiskIfNot('');
-    setRiskIfDo('');
-    setEstimatedCostStr('');
-    setNeededHeadcountStr('');
-    setApproverOverride(null);
-    setCreateCoordAfter(false);
-    setExpectedOwnerName('');
-    setExpectedCollaborators([]);
-    setExpectedDeadline('');
-    setExpectedDeliverable('');
+    setExpectedResult('');
+    setAfterExpanded(false);
+    setAfterApproval('chi_phe_duyet');
+    setSuggestedOwnerName('');
+    setSuggestedDeadline('');
+    setDeploymentNote('');
   }
 
   function handleClose() {
@@ -442,84 +587,75 @@ export default function CreateProposalModal({
     onClose();
   }
 
-  // ── Validate & build payload ──────────────────────────────────────────────
+  // ── validate ─────────────────────────────────────────────────────────────
   function validateForSubmit(): string | null {
     if (!title.trim()) return 'Vui lòng nhập tiêu đề đề xuất.';
     if (!kind) return 'Vui lòng chọn loại đề xuất.';
-    if (!relatedBlock) return 'Vui lòng chọn khối liên quan.';
-    if (!proposedSolution.trim()) return 'Vui lòng nhập giải pháp đề xuất.';
-    if (approversShown.length === 0) return 'Chuỗi duyệt đang rỗng. Vui lòng chọn loại đề xuất hoặc thêm cấp duyệt thủ công.';
-    const hasEmpty = approversShown.some((a) => !a.uid && !a.name.trim() && !a.roleCode.trim());
-    if (hasEmpty) return 'Có cấp duyệt chưa chọn người hoặc vai trò. Vui lòng kiểm tra lại chuỗi duyệt.';
-    if (createCoordAfter) {
-      if (!expectedOwnerName.trim()) return 'Vui lòng nhập Owner dự kiến cho điều phối sau duyệt.';
-      if (!expectedDeadline) return 'Vui lòng chọn Deadline dự kiến cho điều phối sau duyệt.';
-      if (!expectedDeliverable.trim()) return 'Vui lòng nhập Kết quả cần bàn giao.';
-    }
+    if (!priority) return 'Vui lòng chọn mức ưu tiên.';
+    if (!source) return 'Vui lòng chọn nguồn phát sinh.';
+    if (!currentSituation.trim()) return 'Vui lòng mô tả hiện trạng.';
+    if (!problemStatement.trim()) return 'Vui lòng mô tả vấn đề cần xử lý.';
+    if (!proposedSolution.trim()) return 'Vui lòng nhập nội dung đề xuất.';
+    if (scopeTargets.length === 0) return 'Vui lòng chọn ít nhất 1 phạm vi ảnh hưởng.';
+    if (!decisionRequested.trim()) return 'Vui lòng nhập quyết định cần xin.';
+    if (!expectedBenefit.trim()) return 'Vui lòng nhập lợi ích kỳ vọng.';
+    if (!riskIfNot.trim()) return 'Vui lòng nhập rủi ro nếu không thực hiện.';
     return null;
   }
 
-  function buildPayload(status: 'nhap' | 'da_gui'): CreateProposalPayloadV3 {
-    const neededHeadcountNum = neededHeadcountStr.trim()
-      ? Number(neededHeadcountStr.replace(/[^\d]/g, ''))
-      : null;
-
+  function buildPayloadV5(status: 'nhap' | 'da_gui'): CreateProposalPayloadV5 {
     return {
       status,
-      // S1
       title: title.trim(),
-      kind: kind as ProposalKindV3,
+      kind: kind as ProposalKindV5,
       priority,
-      relatedBlock,
-      relatedDeptId: relatedDeptId || undefined,
-      relatedBranchId: relatedBranchId || undefined,
-      // S2
+      source: source as ProposalSourceV5,
+      estimatedCost: estimatedCostNum,
       currentSituation: currentSituation.trim(),
       problemStatement: problemStatement.trim(),
       evidence: evidence.trim() || undefined,
       attachments: [],
-      // S3
       proposedSolution: proposedSolution.trim(),
-      scope: scope.trim(),
-      expectedStartDate: expectedStartDate || undefined,
-      involvedUnits: involvedUnits.trim(),
-      // S4
+      scopeTargets,
+      decisionRequested: decisionRequested.trim(),
       expectedBenefit: expectedBenefit.trim(),
       riskIfNot: riskIfNot.trim(),
-      riskIfDo: riskIfDo.trim(),
-      estimatedCost: estimatedCostNum,
-      neededHeadcount: Number.isFinite(neededHeadcountNum) ? neededHeadcountNum : null,
-      // S5
-      approverChain: approversShown.map((a) => ({
-        ...a,
-        name: a.name.trim(),
-        roleCode: a.roleCode.trim(),
-        reason: a.reason.trim(),
-      })),
-      // S6
-      createCoordAfter,
-      expectedOwnerName: createCoordAfter ? expectedOwnerName.trim() : undefined,
-      expectedCollaborators: createCoordAfter
-        ? expectedCollaborators
-            .map((c) => ({ ...c, unit: c.unit.trim(), support: c.support.trim() }))
-            .filter((c) => c.unit)
-        : undefined,
-      expectedDeadline: createCoordAfter ? expectedDeadline : undefined,
-      expectedDeliverable: createCoordAfter ? expectedDeliverable.trim() : undefined,
+      expectedResult: expectedResult.trim(),
+      afterApproval,
+      suggestedOwnerName:
+        afterApproval === 'de_nghi_tao_dieu_phoi' && suggestedOwnerName.trim()
+          ? suggestedOwnerName.trim()
+          : undefined,
+      suggestedDeadline:
+        afterApproval === 'de_nghi_tao_dieu_phoi' && suggestedDeadline
+          ? suggestedDeadline
+          : undefined,
+      deploymentNote:
+        afterApproval === 'de_nghi_tao_dieu_phoi' && deploymentNote.trim()
+          ? deploymentNote.trim()
+          : undefined,
+      resolvedApproverChain: resolvedChain,
+      resolvedBlock,
+      isCrossBlock,
     };
   }
 
-  function emit(payload: CreateProposalPayloadV3) {
-    // Phát V3 cho callsite mới.
-    onSubmit?.(payload);
-    // Backward-compat: bổ sung field V2 cho callsite cũ.
-    if (onCreate) {
-      const legacy: CreateProposalPayload = {
-        ...payload,
-        description: payload.proposedSolution || payload.problemStatement,
-        deadline: payload.expectedStartDate ?? '',
-      };
-      onCreate(legacy);
+  function emit(payload: CreateProposalPayloadV5) {
+    // V5 trước
+    onSubmitV5?.(payload);
+
+    // V3 (DeXuatClient hiện tại) — map xuống V3 shape
+    if (onSubmit || onCreate) {
+      const v3 = mapV5ToV3(payload);
+      onSubmit?.(v3);
+      if (onCreate) {
+        const legacy: CreateProposalPayload = {
+          ...v3,
+          description: v3.proposedSolution || v3.problemStatement,
+          deadline: v3.expectedStartDate ?? '',
+        };
+        onCreate(legacy);
+      }
     }
   }
 
@@ -532,7 +668,7 @@ export default function CreateProposalModal({
       alert('Vui lòng chọn loại đề xuất.');
       return;
     }
-    emit(buildPayload('nhap'));
+    emit(buildPayloadV5('nhap'));
     resetForm();
     onClose();
   }
@@ -543,19 +679,19 @@ export default function CreateProposalModal({
       alert(err);
       return;
     }
-    emit(buildPayload('da_gui'));
+    emit(buildPayloadV5('da_gui'));
     resetForm();
     onClose();
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ── Render ───────────────────────────────────────────────────────────────
   return (
     <div
       className="fixed inset-0 z-50 bg-slate-900/50 flex items-start justify-center p-4 overflow-y-auto"
       onClick={handleClose}
     >
       <div
-        className="bg-white rounded-xl shadow-2xl w-full max-w-4xl my-8"
+        className="bg-white rounded-xl shadow-2xl w-full max-w-3xl my-8"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -569,6 +705,7 @@ export default function CreateProposalModal({
                 <span className="ml-1 text-slate-400">
                   · Người tạo: <span className="text-slate-600 font-medium">{currentUserName}</span>
                   {currentUserRole ? ` (${ROLE_LABEL[currentUserRole] ?? currentUserRole})` : ''}
+                  {currentUserBlock ? ` · Khối ${currentUserBlock === 'VP' ? 'Văn phòng' : 'Kinh doanh'}` : ''}
                 </span>
               )}
             </p>
@@ -584,14 +721,28 @@ export default function CreateProposalModal({
         </div>
 
         {/* Body */}
-        <div className="px-5 py-4 space-y-7 max-h-[72vh] overflow-y-auto">
-          {/* ──────────────── S1 — Thông tin chung ──────────────── */}
+        <div className="px-5 py-4 space-y-6 max-h-[72vh] overflow-y-auto">
+          {/* ───── Banner: 5 câu hỏi guide ───── */}
+          <section className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+            <p className="text-xs font-semibold text-amber-800 mb-1.5">
+              5 câu hỏi cần trả lời
+            </p>
+            <ol className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 text-xs text-amber-900 list-decimal list-inside">
+              <li>Đang có vấn đề gì?</li>
+              <li>Đề xuất giải pháp gì?</li>
+              <li>Ảnh hưởng tới ai?</li>
+              <li>Cần quyết định gì?</li>
+              <li>Nếu được duyệt thì kỳ vọng đạt gì?</li>
+            </ol>
+          </section>
+
+          {/* ───── BLOCK 1 — Thông tin đề xuất ───── */}
           <section>
             <h3 className="text-xs uppercase tracking-wider text-slate-500 mb-3 font-semibold">
-              1. Thông tin chung
+              1. Thông tin đề xuất
             </h3>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2">
+            <div className="space-y-3">
+              <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">
                   Tiêu đề <span className="text-rose-500">*</span>
                 </label>
@@ -604,12 +755,12 @@ export default function CreateProposalModal({
                 />
               </div>
 
-              <div className="col-span-2">
+              <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1.5">
                   Loại đề xuất <span className="text-rose-500">*</span>
                 </label>
                 <div className="flex flex-wrap gap-1.5">
-                  {KIND_OPTIONS.map(({ key, label, icon: Icon }) => (
+                  {KIND_V5_OPTIONS.map(({ key, label, icon: Icon, tone }) => (
                     <button
                       key={key}
                       type="button"
@@ -617,7 +768,7 @@ export default function CreateProposalModal({
                       className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition ${
                         kind === key
                           ? 'bg-emerald-600 text-white border-emerald-600'
-                          : 'bg-white text-slate-700 border-slate-300 hover:border-emerald-400'
+                          : `${tone} hover:border-emerald-400`
                       }`}
                     >
                       <Icon size={13} /> {label}
@@ -626,12 +777,12 @@ export default function CreateProposalModal({
                 </div>
               </div>
 
-              <div className="col-span-2">
+              <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1.5">
-                  Mức ưu tiên <span className="text-rose-500">*</span>
+                  Mức độ ưu tiên <span className="text-rose-500">*</span>
                 </label>
                 <div className="flex flex-wrap gap-1.5">
-                  {PRIORITY_OPTIONS.map(({ key, label, tone }) => (
+                  {PRIORITY_V5_OPTIONS.map(({ key, label, tone }) => (
                     <button
                       key={key}
                       type="button"
@@ -648,18 +799,18 @@ export default function CreateProposalModal({
                 </div>
               </div>
 
-              <div className="col-span-2">
+              <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1.5">
-                  Khối liên quan <span className="text-rose-500">*</span>
+                  Nguồn phát sinh <span className="text-rose-500">*</span>
                 </label>
                 <div className="flex flex-wrap gap-1.5">
-                  {BLOCK_OPTIONS.map(({ key, label }) => (
+                  {SOURCE_V5_OPTIONS.map(({ key, label }) => (
                     <button
                       key={key}
                       type="button"
-                      onClick={() => setRelatedBlock(key)}
+                      onClick={() => setSource(key)}
                       className={`px-3 py-1.5 text-xs rounded-lg border transition ${
-                        relatedBlock === key
+                        source === key
                           ? 'bg-emerald-600 text-white border-emerald-600'
                           : 'bg-white text-slate-700 border-slate-300 hover:border-emerald-400'
                       }`}
@@ -672,47 +823,76 @@ export default function CreateProposalModal({
 
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">
-                  Phòng ban liên quan
+                  Giá trị dự kiến (VNĐ)
+                  <span className="ml-1 text-[10px] text-slate-400">
+                    (tuỳ chọn — chỉ nhập nếu là Đầu tư hoặc liên quan tài chính)
+                  </span>
                 </label>
-                <select
-                  value={relatedDeptId}
-                  onChange={(e) => setRelatedDeptId(e.target.value)}
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
-                >
-                  <option value="">— Không chọn —</option>
-                  {departments.map((d) => (
-                    <option key={d.id} value={d.id}>{d.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">
-                  Cơ sở liên quan
-                </label>
-                <select
-                  value={relatedBranchId}
-                  onChange={(e) => setRelatedBranchId(e.target.value)}
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
-                >
-                  <option value="">— Toàn cộng đồng —</option>
-                  {branches.map((b) => (
-                    <option key={b.id} value={b.id}>{b.name}</option>
-                  ))}
-                </select>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={estimatedCostStr}
+                  onChange={(e) => setEstimatedCostStr(e.target.value)}
+                  placeholder="VD: 12000000"
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none tabular-nums"
+                />
               </div>
             </div>
           </section>
 
-          {/* ──────────────── S2 — Hiện trạng / Vấn đề ──────────────── */}
+          {/* ───── Luồng duyệt gợi ý (READ-ONLY) ───── */}
+          <section className="rounded-lg border border-emerald-200 bg-emerald-50/60 px-4 py-3">
+            <div className="flex items-center gap-1.5 mb-2">
+              <Workflow size={14} className="text-emerald-700" />
+              <p className="text-xs font-semibold text-emerald-800">
+                Hệ thống đề xuất luồng duyệt
+              </p>
+            </div>
+            {resolvedChain.length === 0 ? (
+              <p className="text-xs text-slate-500 italic">
+                Chọn loại đề xuất ở trên để hệ thống gợi ý chuỗi duyệt phù hợp.
+              </p>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {resolvedChain.map((s, idx) => (
+                    <span key={`${s.roleCode}-${idx}`} className="inline-flex items-center gap-1">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md bg-white border border-emerald-300 text-emerald-800">
+                        <span className="w-4 h-4 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold inline-flex items-center justify-center">
+                          {idx + 1}
+                        </span>
+                        {s.label}
+                      </span>
+                      {idx < resolvedChain.length - 1 && (
+                        <span className="text-emerald-600">→</span>
+                      )}
+                    </span>
+                  ))}
+                </div>
+                {reasonSummary && (
+                  <p className="text-[11px] text-emerald-700 mt-2">
+                    Lý do: {reasonSummary}
+                  </p>
+                )}
+                <p className="text-[11px] text-slate-500 mt-1.5 italic">
+                  Anh có thể đề nghị thay đổi luồng duyệt sau khi gửi nếu cần.
+                </p>
+              </>
+            )}
+          </section>
+
+          {/* ───── BLOCK 2 — Hiện trạng & Vấn đề (câu hỏi 1) ───── */}
           <section>
             <h3 className="text-xs uppercase tracking-wider text-slate-500 mb-3 font-semibold">
-              2. Hiện trạng / Vấn đề
+              2. Hiện trạng & Vấn đề
+              <span className="ml-2 text-[10px] normal-case text-slate-400 font-normal">
+                (Câu hỏi 1: Đang có vấn đề gì?)
+              </span>
             </h3>
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">
-                  Mô tả hiện trạng
+                  Hiện trạng <span className="text-rose-500">*</span>
                 </label>
                 <textarea
                   value={currentSituation}
@@ -724,7 +904,7 @@ export default function CreateProposalModal({
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">
-                  Vấn đề đang gặp
+                  Vấn đề cần xử lý <span className="text-rose-500">*</span>
                 </label>
                 <textarea
                   value={problemStatement}
@@ -736,7 +916,7 @@ export default function CreateProposalModal({
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">
-                  Bằng chứng / Dữ liệu tham chiếu
+                  Bằng chứng / Dữ liệu
                 </label>
                 <textarea
                   value={evidence}
@@ -749,21 +929,25 @@ export default function CreateProposalModal({
               <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-4 text-center">
                 <Paperclip size={18} className="mx-auto text-slate-400 mb-1.5" />
                 <p className="text-xs text-slate-500">
-                  Đính kèm file sẽ có ở phiên bản tiếp theo. Tạm thời dán link tài liệu vào ô &quot;Bằng chứng&quot;.
+                  Đính kèm ảnh / PDF / Excel / Word / Video sẽ có ở phiên bản tiếp theo.
+                  Tạm thời dán link tài liệu vào ô &quot;Bằng chứng&quot;.
                 </p>
               </div>
             </div>
           </section>
 
-          {/* ──────────────── S3 — Nội dung đề xuất ──────────────── */}
+          {/* ───── BLOCK 3 — Giải pháp đề xuất (câu hỏi 2, 3, 4) ───── */}
           <section>
             <h3 className="text-xs uppercase tracking-wider text-slate-500 mb-3 font-semibold">
-              3. Nội dung đề xuất
+              3. Giải pháp đề xuất
+              <span className="ml-2 text-[10px] normal-case text-slate-400 font-normal">
+                (Câu hỏi 2, 3, 4)
+              </span>
             </h3>
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">
-                  Giải pháp đề xuất <span className="text-rose-500">*</span>
+                  Nội dung đề xuất <span className="text-rose-500">*</span>
                 </label>
                 <textarea
                   value={proposedSolution}
@@ -773,55 +957,99 @@ export default function CreateProposalModal({
                   className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none resize-none"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    Phạm vi áp dụng
+
+              {/* Phạm vi ảnh hưởng — MULTI-SELECT */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-medium text-slate-600">
+                    Phạm vi ảnh hưởng <span className="text-rose-500">*</span>
+                    <span className="ml-1 text-[10px] text-slate-400">
+                      (chọn nhiều)
+                    </span>
                   </label>
-                  <input
-                    type="text"
-                    value={scope}
-                    onChange={(e) => setScope(e.target.value)}
-                    placeholder="VD: Toàn hệ thống / Cơ sở 24 NCT"
-                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
-                  />
+                  <button
+                    type="button"
+                    onClick={() => setScopeExpanded((v) => !v)}
+                    className="inline-flex items-center gap-1 text-[11px] text-slate-600 hover:text-emerald-700"
+                  >
+                    {scopeExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                    {scopeExpanded ? 'Thu gọn' : 'Mở rộng'}
+                  </button>
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    Thời gian mong muốn triển khai
-                  </label>
-                  <input
-                    type="date"
-                    value={expectedStartDate}
-                    onChange={(e) => setExpectedStartDate(e.target.value)}
-                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
-                  />
-                </div>
+
+                {scopeExpanded && (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-2.5">
+                    <ScopeGroup
+                      title="Trưởng phòng (TP)"
+                      items={SCOPE_TARGETS_TP}
+                      isChecked={isScopeChecked}
+                      onToggle={toggleScopeTarget}
+                    />
+                    <ScopeGroup
+                      title="Quản lý cơ sở (QLCS)"
+                      items={SCOPE_TARGETS_QLCS}
+                      isChecked={isScopeChecked}
+                      onToggle={toggleScopeTarget}
+                    />
+                    <ScopeGroup
+                      title="Cơ sở"
+                      items={SCOPE_TARGETS_CO_SO}
+                      isChecked={isScopeChecked}
+                      onToggle={toggleScopeTarget}
+                    />
+                    <ScopeGroup
+                      title="Khối / Giám đốc"
+                      items={SCOPE_TARGETS_KHOI}
+                      isChecked={isScopeChecked}
+                      onToggle={toggleScopeTarget}
+                    />
+                  </div>
+                )}
+
+                {/* Auto-suy luận khối liên quan (read-only tag) */}
+                {scopeTargets.length > 0 && (
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <span className="text-[11px] text-slate-500">Hệ thống suy luận:</span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded-md bg-violet-50 text-violet-700 border border-violet-200">
+                      Khối liên quan: {resolvedBlock === 'cross' ? 'Cả 2 khối' : resolvedBlock === 'VP' ? 'Văn phòng' : 'Kinh doanh'}
+                    </span>
+                    {isCrossBlock && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded-md bg-amber-50 text-amber-700 border border-amber-200">
+                        Có liên khối
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
+
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">
-                  Người / đơn vị liên quan
+                  Quyết định cần xin <span className="text-rose-500">*</span>
                 </label>
                 <textarea
-                  value={involvedUnits}
-                  onChange={(e) => setInvolvedUnits(e.target.value)}
+                  value={decisionRequested}
+                  onChange={(e) => setDecisionRequested(e.target.value)}
                   rows={2}
-                  placeholder="Ai cần tham gia, ai cần hỗ trợ..."
+                  placeholder="VD: Phê duyệt ngân sách 12 triệu để mua máy lọc nước..."
                   className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none resize-none"
                 />
               </div>
             </div>
           </section>
 
-          {/* ──────────────── S4 — Tác động dự kiến ──────────────── */}
+          {/* ───── BLOCK 4 — Hiệu quả kỳ vọng (câu hỏi 5) ───── */}
           <section>
-            <h3 className="text-xs uppercase tracking-wider text-slate-500 mb-3 font-semibold">
-              4. Tác động dự kiến
+            <h3 className="text-xs uppercase tracking-wider text-slate-500 mb-3 font-semibold flex items-center gap-1.5">
+              <TrendingUp size={13} className="text-emerald-600" />
+              4. Hiệu quả kỳ vọng
+              <span className="ml-1 text-[10px] normal-case text-slate-400 font-normal">
+                (Câu hỏi 5: Nếu được duyệt thì kỳ vọng đạt gì?)
+              </span>
             </h3>
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">
-                  Lợi ích kỳ vọng
+                  Lợi ích kỳ vọng <span className="text-rose-500">*</span>
                 </label>
                 <textarea
                   value={expectedBenefit}
@@ -831,311 +1059,138 @@ export default function CreateProposalModal({
                   className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none resize-none"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    Rủi ro nếu KHÔNG làm
-                  </label>
-                  <textarea
-                    value={riskIfNot}
-                    onChange={(e) => setRiskIfNot(e.target.value)}
-                    rows={2}
-                    placeholder="Hậu quả của việc trì hoãn..."
-                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none resize-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    Rủi ro nếu THỰC HIỆN
-                  </label>
-                  <textarea
-                    value={riskIfDo}
-                    onChange={(e) => setRiskIfDo(e.target.value)}
-                    rows={2}
-                    placeholder="Vấn đề có thể phát sinh, biện pháp giảm thiểu..."
-                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none resize-none"
-                  />
-                </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  Rủi ro nếu không thực hiện <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  value={riskIfNot}
+                  onChange={(e) => setRiskIfNot(e.target.value)}
+                  rows={2}
+                  placeholder="Hậu quả của việc trì hoãn..."
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none resize-none"
+                />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    Chi phí dự kiến (VNĐ)
-                    <span className="ml-1 text-[10px] text-slate-400">(ảnh hưởng chuỗi duyệt)</span>
-                  </label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={estimatedCostStr}
-                    onChange={(e) => {
-                      setEstimatedCostStr(e.target.value);
-                      // Khi đổi chi phí → reset override để re-suggest.
-                      setApproverOverride(null);
-                    }}
-                    placeholder="VD: 12000000"
-                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none tabular-nums"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    Nhân sự cần tham gia
-                  </label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={neededHeadcountStr}
-                    onChange={(e) => setNeededHeadcountStr(e.target.value)}
-                    placeholder="VD: 3 nhân sự"
-                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none tabular-nums"
-                  />
-                </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  Kết quả kỳ vọng
+                </label>
+                <textarea
+                  value={expectedResult}
+                  onChange={(e) => setExpectedResult(e.target.value)}
+                  rows={2}
+                  placeholder="VD: Mở thêm 2 lớp hè / Tăng khả năng phục vụ HV / Giảm rủi ro kỹ thuật..."
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none resize-none"
+                />
               </div>
             </div>
           </section>
 
-          {/* ──────────────── S5 — Luồng duyệt ──────────────── */}
-          <section>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-xs uppercase tracking-wider text-slate-500 font-semibold flex items-center gap-1.5">
-                <Workflow size={13} className="text-emerald-600" />
-                5. Luồng duyệt
-              </h3>
-              <div className="flex items-center gap-1.5">
-                {approverOverride && (
-                  <button
-                    type="button"
-                    onClick={resetToSuggestion}
-                    className="px-2.5 py-1.5 text-[11px] font-medium text-violet-700 bg-violet-50 hover:bg-violet-100 rounded-lg border border-violet-200"
-                  >
-                    Dùng lại gợi ý
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={addApproverStep}
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg border border-emerald-200"
-                >
-                  <Plus size={14} /> Thêm cấp duyệt
-                </button>
-              </div>
-            </div>
-            <p className="text-[11px] text-slate-500 mb-3">
-              Hệ thống đã gợi ý chuỗi duyệt theo loại + khối + chi phí. Bạn có thể chỉnh thêm/bớt nếu cần.
-            </p>
+          {/* ───── BLOCK 5 — Sau khi duyệt (accordion thu gọn) ───── */}
+          <section className="rounded-lg border border-slate-200 bg-white">
+            <button
+              type="button"
+              onClick={() => setAfterExpanded((v) => !v)}
+              className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-slate-50 rounded-lg"
+            >
+              <span className="text-xs uppercase tracking-wider text-slate-600 font-semibold flex items-center gap-1.5">
+                <CheckSquare size={13} className="text-emerald-600" />
+                5. Sau khi duyệt
+                <span className="ml-1 text-[10px] normal-case text-slate-400 font-normal">
+                  (tuỳ chọn — mặc định thu gọn)
+                </span>
+              </span>
+              {afterExpanded ? <ChevronDown size={14} className="text-slate-500" /> : <ChevronRight size={14} className="text-slate-500" />}
+            </button>
 
-            {approversShown.length === 0 ? (
-              <div className="text-xs text-slate-500 italic px-3 py-4 bg-slate-50 rounded-lg border border-dashed border-slate-200 text-center">
-                Chọn loại đề xuất ở Section 1 để hệ thống gợi ý chuỗi duyệt, hoặc bấm &quot;+ Thêm cấp duyệt&quot;.
-              </div>
-            ) : (
-              <ol className="space-y-2">
-                {approversShown.map((a, idx) => (
-                  <li
-                    key={a.id}
-                    className="flex items-start gap-2 rounded-lg border border-slate-200 bg-white p-2.5"
-                  >
-                    <div className="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold flex items-center justify-center mt-0.5">
-                      {idx + 1}
-                    </div>
-                    <div className="flex-1 grid grid-cols-3 gap-2">
+            {afterExpanded && (
+              <div className="px-4 pb-4 pt-1 space-y-3 border-t border-slate-100">
+                <div className="space-y-1.5">
+                  <label className="flex items-start gap-2 cursor-pointer select-none">
+                    <input
+                      type="radio"
+                      name="afterApproval"
+                      checked={afterApproval === 'chi_phe_duyet'}
+                      onChange={() => setAfterApproval('chi_phe_duyet')}
+                      className="mt-0.5 w-4 h-4 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <span className="text-sm text-slate-700">
+                      Chỉ phê duyệt
+                      <span className="block text-[11px] text-slate-500">
+                        Đề xuất được phê duyệt, không tự động tạo điều phối.
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2 cursor-pointer select-none">
+                    <input
+                      type="radio"
+                      name="afterApproval"
+                      checked={afterApproval === 'de_nghi_tao_dieu_phoi'}
+                      onChange={() => setAfterApproval('de_nghi_tao_dieu_phoi')}
+                      className="mt-0.5 w-4 h-4 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <span className="text-sm text-slate-700">
+                      Đề nghị tạo điều phối sau khi duyệt
+                      <span className="block text-[11px] text-slate-500">
+                        Hệ thống sẽ gợi ý tạo nhanh điều phối. Người duyệt vẫn có quyền chỉnh sửa.
+                      </span>
+                    </span>
+                  </label>
+                </div>
+
+                {afterApproval === 'de_nghi_tao_dieu_phoi' && (
+                  <div className="space-y-3 rounded-lg border border-emerald-200 bg-emerald-50/40 p-3">
+                    <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-[11px] font-medium text-slate-600 mb-1">
-                          Vai trò
+                        <label className="block text-xs font-medium text-slate-600 mb-1">
+                          Owner đề xuất
+                          <span className="ml-1 text-[10px] text-slate-400">(tuỳ chọn)</span>
                         </label>
                         <input
                           type="text"
-                          value={ROLE_LABEL[a.roleCode] ?? a.roleCode}
-                          onChange={(e) => updateApproverStep(a.id, { roleCode: e.target.value })}
-                          placeholder="VD: TP Đào tạo"
-                          className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-slate-50 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
-                          readOnly={!!a.uid}
+                          value={suggestedOwnerName}
+                          onChange={(e) => setSuggestedOwnerName(e.target.value)}
+                          placeholder="Tên người chịu trách nhiệm"
+                          className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                        />
+                        <p className="text-[10px] text-slate-500 mt-1 italic">
+                          Người duyệt vẫn có thể chỉnh sửa.
+                        </p>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">
+                          Deadline đề xuất
+                          <span className="ml-1 text-[10px] text-slate-400">(tuỳ chọn)</span>
+                        </label>
+                        <input
+                          type="date"
+                          value={suggestedDeadline}
+                          onChange={(e) => setSuggestedDeadline(e.target.value)}
+                          className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
                         />
                       </div>
-                      <div>
-                        <label className="block text-[11px] font-medium text-slate-600 mb-1">
-                          Người duyệt
-                        </label>
-                        {users.length > 0 ? (
-                          <select
-                            value={a.uid}
-                            onChange={(e) => selectApproverUser(a.id, e.target.value)}
-                            className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
-                          >
-                            <option value="">
-                              {a.roleCode ? `-- Chọn người (gợi ý: ${ROLE_LABEL[a.roleCode] ?? a.roleCode}) --` : '-- Chọn người --'}
-                            </option>
-                            {users.map((u) => (
-                              <option key={u.id} value={u.id}>
-                                {u.name} · {ROLE_LABEL[u.roleId] ?? u.roleId}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <input
-                            type="text"
-                            value={a.name}
-                            onChange={(e) => updateApproverStep(a.id, { name: e.target.value })}
-                            placeholder="Nhập tên người duyệt"
-                            className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
-                          />
-                        )}
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-medium text-slate-600 mb-1">
-                          Lý do · SLA
-                        </label>
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="text"
-                            value={a.reason}
-                            onChange={(e) => updateApproverStep(a.id, { reason: e.target.value })}
-                            placeholder="Lý do bước duyệt"
-                            className="flex-1 px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
-                          />
-                          <input
-                            type="number"
-                            min={1}
-                            value={a.slaHours}
-                            onChange={(e) =>
-                              updateApproverStep(a.id, { slaHours: Number(e.target.value) || 48 })
-                            }
-                            className="w-14 px-2 py-1.5 text-xs rounded-lg border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none tabular-nums"
-                            title="SLA (giờ)"
-                          />
-                          <span className="text-[10px] text-slate-400">h</span>
-                        </div>
-                      </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => removeApproverStep(a.id)}
-                      className="flex-shrink-0 p-1.5 rounded text-rose-600 hover:bg-rose-50 mt-4"
-                      aria-label="Xoá"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </section>
-
-          {/* ──────────────── S6 — Sau duyệt ──────────────── */}
-          <section>
-            <h3 className="text-xs uppercase tracking-wider text-slate-500 mb-3 font-semibold flex items-center gap-1.5">
-              <CheckSquare size={13} className="text-emerald-600" />
-              6. Sau duyệt
-            </h3>
-            <label className="inline-flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={createCoordAfter}
-                onChange={(e) => setCreateCoordAfter(e.target.checked)}
-                className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
-              />
-              <span className="text-sm text-slate-700">
-                Cần tạo điều phối sau khi được duyệt
-              </span>
-            </label>
-            <p className="text-[11px] text-slate-500 ml-6 mt-0.5">
-              Nếu chọn, sau khi đề xuất được phê duyệt, có thể tạo nhanh điều phối từ thông tin bên dưới.
-            </p>
-
-            {createCoordAfter && (
-              <div className="mt-3 ml-6 space-y-3 rounded-lg border border-emerald-200 bg-emerald-50/40 p-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">
-                      Owner dự kiến <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={expectedOwnerName}
-                      onChange={(e) => setExpectedOwnerName(e.target.value)}
-                      placeholder="Tên người chịu trách nhiệm chính"
-                      className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
-                    />
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">
+                        Ghi chú triển khai
+                        <span className="ml-1 text-[10px] text-slate-400">(tuỳ chọn)</span>
+                      </label>
+                      <textarea
+                        value={deploymentNote}
+                        onChange={(e) => setDeploymentNote(e.target.value)}
+                        rows={2}
+                        placeholder="Gợi ý cách triển khai, mốc thời gian quan trọng..."
+                        className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none resize-none"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1">
-                      Deadline dự kiến <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="date"
-                      value={expectedDeadline}
-                      onChange={(e) => setExpectedDeadline(e.target.value)}
-                      className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="block text-xs font-medium text-slate-600">
-                      Đơn vị phối hợp dự kiến
-                    </label>
-                    <button
-                      type="button"
-                      onClick={addCollaborator}
-                      className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-emerald-700 bg-white hover:bg-emerald-100 rounded border border-emerald-200"
-                    >
-                      <Plus size={12} /> Thêm
-                    </button>
-                  </div>
-                  {expectedCollaborators.length === 0 ? (
-                    <p className="text-[11px] text-slate-400 italic px-2 py-2 bg-white rounded border border-dashed border-slate-200 text-center">
-                      Chưa có đơn vị phối hợp.
-                    </p>
-                  ) : (
-                    <ul className="space-y-1.5">
-                      {expectedCollaborators.map((c) => (
-                        <li key={c.id} className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            value={c.unit}
-                            onChange={(e) => updateCollaborator(c.id, { unit: e.target.value })}
-                            placeholder="Đơn vị / Người"
-                            className="w-1/3 px-2.5 py-1.5 text-xs rounded border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
-                          />
-                          <input
-                            type="text"
-                            value={c.support}
-                            onChange={(e) => updateCollaborator(c.id, { support: e.target.value })}
-                            placeholder="Nội dung hỗ trợ ngắn"
-                            className="flex-1 px-2.5 py-1.5 text-xs rounded border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => removeCollaborator(c.id)}
-                            className="p-1.5 rounded text-rose-600 hover:bg-rose-50"
-                            aria-label="Xoá"
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    Kết quả cần bàn giao <span className="text-rose-500">*</span>
-                  </label>
-                  <textarea
-                    value={expectedDeliverable}
-                    onChange={(e) => setExpectedDeliverable(e.target.value)}
-                    rows={2}
-                    placeholder="Sản phẩm cuối cùng, tiêu chí nghiệm thu..."
-                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none resize-none"
-                  />
-                </div>
+                )}
               </div>
             )}
           </section>
         </div>
 
-        {/* Footer — 2 action */}
+        {/* Footer — 3 action */}
         <div className="px-5 py-3 border-t border-slate-200 flex items-center justify-end gap-2 bg-slate-50 rounded-b-xl sticky bottom-0">
           <button
             type="button"
@@ -1156,11 +1211,55 @@ export default function CreateProposalModal({
             onClick={handleSubmit}
             className="px-4 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm"
           >
-            Gửi duyệt
+            Gửi đề xuất
           </button>
-          {/* placeholder để TS không phàn nàn FileText unused */}
+          {/* keep imports referenced */}
           <FileText className="hidden" size={0} />
+          <Plus className="hidden" size={0} />
+          <Trash2 className="hidden" size={0} />
+          <Users className="hidden" size={0} />
+          <Megaphone className="hidden" size={0} />
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ScopeGroup sub-component (multi-select chip list)
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface ScopeGroupProps {
+  title: string;
+  items: ScopeTarget[];
+  isChecked: (id: string) => boolean;
+  onToggle: (t: ScopeTarget) => void;
+}
+
+function ScopeGroup({ title, items, isChecked, onToggle }: ScopeGroupProps) {
+  return (
+    <div>
+      <p className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1.5">
+        {title}
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {items.map((t) => {
+          const checked = isChecked(t.id);
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => onToggle(t)}
+              className={`px-2.5 py-1 text-[11px] rounded-md border transition ${
+                checked
+                  ? 'bg-emerald-600 text-white border-emerald-600'
+                  : 'bg-white text-slate-700 border-slate-300 hover:border-emerald-400'
+              }`}
+            >
+              {checked ? '✓ ' : ''}{t.label}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

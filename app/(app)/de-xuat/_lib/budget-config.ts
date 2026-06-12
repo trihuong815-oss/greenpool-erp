@@ -75,21 +75,20 @@ export function suggestApproverChain(input: SuggestInput): SuggestedStep[] {
     return out;
   }
 
-  // tier NO_COST — theo loại nghiệp vụ
-  if (kind === 'nhan_su') {
-    out.push({ roleCode: 'TP_DT', label: 'TP Đào tạo', reason: 'Xác nhận nhu cầu nghiệp vụ' });
-    out.push({ roleCode: 'TP_NS', label: 'TP Nhân sự', reason: 'Xác nhận nguồn lực' });
-    out.push({ roleCode: 'GD_KD', label: 'GĐ Kinh doanh', reason: 'Duyệt cấp khối' });
+  // tier NO_COST — theo loại nghiệp vụ V5
+  if (kind === 'khan_cap') {
+    out.push({ roleCode: creatorBlock === 'KD' ? 'GD_KD' : 'GD_VP', label: `GĐ ${creatorBlock === 'KD' ? 'Kinh doanh' : 'Văn phòng'}`, reason: 'Phụ trách khối' });
+    out.push({ roleCode: 'CEO', label: 'CEO', reason: 'Mức khẩn cấp — CEO duyệt' });
     return out;
   }
-  if (kind === 'mkt_kd') {
-    out.push({ roleCode: 'TP_MKT', label: 'TP Marketing', reason: 'Owner nghiệp vụ' });
-    out.push({ roleCode: 'GD_KD', label: 'GĐ Kinh doanh', reason: 'Duyệt cấp khối' });
+  if (kind === 'cai_tien') {
+    out.push({ roleCode: creatorBlock === 'KD' ? 'GD_KD' : 'GD_VP', label: `GĐ ${creatorBlock === 'KD' ? 'Kinh doanh' : 'Văn phòng'}`, reason: 'Đề xuất cải tiến — GĐ khối duyệt' });
     return out;
   }
-  if (kind === 'tai_chinh') {
-    out.push({ roleCode: 'TP_KE', label: 'TP Kế toán', reason: 'Owner nghiệp vụ' });
-    out.push({ roleCode: 'GD_VP', label: 'GĐ Văn phòng', reason: 'Duyệt cấp khối' });
+  if (kind === 'dau_tu') {
+    // Đầu tư không có cost → vẫn phải có TP Kế toán xác nhận + GĐ VP duyệt
+    out.push({ roleCode: 'TP_KE', label: 'TP Kế toán', reason: 'Kiểm tra ngân sách đầu tư' });
+    out.push({ roleCode: 'GD_VP', label: 'GĐ Văn phòng', reason: 'Phụ trách tài chính' });
     return out;
   }
   // van_hanh — TP nghiệp vụ liên quan + GĐ khối nếu cross-dept
