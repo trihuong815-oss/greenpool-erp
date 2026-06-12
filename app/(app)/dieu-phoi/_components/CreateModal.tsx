@@ -67,21 +67,6 @@ const SEVERITIES_V4: { id: SeverityV4; label: string }[] = [
   { id: 'khan_cap',    label: 'Khẩn cấp' },
 ];
 
-const LEVELS_V4: { id: CoordLevelV4; label: string }[] = [
-  { id: 'thong_thuong', label: 'Thông thường' },
-  { id: 'quan_trong',   label: 'Quan trọng' },
-  { id: 'trong_diem',   label: 'Trọng điểm' },
-];
-
-const SOURCES_V4: { id: CoordSourceV4; label: string }[] = [
-  { id: 'de_xuat',     label: 'Đề xuất' },
-  { id: 'hop',         label: 'Họp' },
-  { id: 'kpi',         label: 'KPI' },
-  { id: 'chi_dao_ceo', label: 'Chỉ đạo CEO' },
-  { id: 'phat_sinh',   label: 'Phát sinh' },
-  { id: 'khac',        label: 'Khác' },
-];
-
 const DEPT_IDS: DeptId[] = ['MKT', 'DT', 'KT', 'QLCS', 'NS', 'KE', 'GS'];
 const BRANCH_IDS: BranchId[] = ['HM', 'NCT24', 'LD', 'TT', 'TK', 'CG'];
 const BLOCKS: Block[] = ['KD', 'VP'];
@@ -264,8 +249,10 @@ export default function CreateModal({
   const [description, setDescription] = useState('');
   const [type, setType] = useState<CoordTypeV4 | ''>('');
   const [severity, setSeverity] = useState<SeverityV4>('binh_thuong');
-  const [level, setLevel] = useState<CoordLevelV4>('thong_thuong');
-  const [source, setSource] = useState<CoordSourceV4 | ''>('');
+  // V6.1 (anh chốt 2026-06-12): bỏ "Cấp độ điều phối" + "Nguồn" khỏi form
+  // (trùng ý nghĩa với "Mức độ"). Giữ field type với default ngầm cho backward compat.
+  const level: CoordLevelV4 = 'thong_thuong';
+  const source: CoordSourceV4 = 'khac';
   const [dueDate, setDueDate] = useState('');
 
   // ── Khối 2 — Owner
@@ -358,8 +345,6 @@ export default function CreateModal({
     setDescription('');
     setType('');
     setSeverity('binh_thuong');
-    setLevel('thong_thuong');
-    setSource('');
     setDueDate('');
     setOwnerBlock(currentUserBlock ?? '');
     setOwnerUid('');
@@ -387,8 +372,6 @@ export default function CreateModal({
     if (title.trim().length < 3) e.title = 'Tiêu đề phải có ít nhất 3 ký tự.';
     if (!type) e.type = 'Vui lòng chọn loại công việc.';
     if (!severity) e.severity = 'Vui lòng chọn mức độ.';
-    if (!level) e.level = 'Vui lòng chọn cấp độ điều phối.';
-    if (!source) e.source = 'Vui lòng chọn nguồn.';
     if (!dueDate) e.dueDate = 'Vui lòng chọn deadline tổng.';
     if (!ownerUid || !selectedOwner) e.ownerUid = 'Vui lòng chọn Owner duy nhất.';
     if (collaborators.length === 0) {
@@ -418,7 +401,7 @@ export default function CreateModal({
       type: type as CoordTypeV4,
       severity,
       level,
-      source: source as CoordSourceV4,
+      source: source,
       dueDate,
       ownerUid: selectedOwner.uid,
       ownerName: selectedOwner.name,
@@ -651,29 +634,6 @@ export default function CreateModal({
                 </div>
               </div>
 
-              {/* Cấp độ điều phối — 3 chip */}
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1.5">
-                  Cấp độ điều phối <span className="text-rose-500">*</span>
-                </label>
-                <div className="flex flex-wrap gap-1.5">
-                  {LEVELS_V4.map((l) => (
-                    <button
-                      key={l.id}
-                      type="button"
-                      onClick={() => setLevel(l.id)}
-                      className={`px-3 py-1.5 text-xs rounded-lg border transition ${
-                        level === l.id
-                          ? 'bg-emerald-600 text-white border-emerald-600'
-                          : 'bg-white text-slate-700 border-slate-300 hover:border-emerald-400'
-                      }`}
-                    >
-                      {l.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
               {/* Deadline tổng */}
               <div className="col-span-2">
                 <label className="block text-xs font-medium text-slate-600 mb-1">
@@ -692,29 +652,6 @@ export default function CreateModal({
                 {errors.dueDate && <p className="text-[11px] text-rose-600 mt-1">{errors.dueDate}</p>}
               </div>
 
-              {/* Nguồn — 6 chip */}
-              <div className="col-span-2">
-                <label className="block text-xs font-medium text-slate-600 mb-1.5">
-                  Nguồn <span className="text-rose-500">*</span>
-                </label>
-                <div className="flex flex-wrap gap-1.5">
-                  {SOURCES_V4.map((s) => (
-                    <button
-                      key={s.id}
-                      type="button"
-                      onClick={() => setSource(s.id)}
-                      className={`px-3 py-1.5 text-xs rounded-lg border transition ${
-                        source === s.id
-                          ? 'bg-emerald-600 text-white border-emerald-600'
-                          : 'bg-white text-slate-700 border-slate-300 hover:border-emerald-400'
-                      }`}
-                    >
-                      {s.label}
-                    </button>
-                  ))}
-                </div>
-                {errors.source && <p className="text-[11px] text-rose-600 mt-1">{errors.source}</p>}
-              </div>
             </div>
           </section>
 
