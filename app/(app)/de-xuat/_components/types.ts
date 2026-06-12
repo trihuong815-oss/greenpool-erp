@@ -127,6 +127,69 @@ export interface WorkflowRule {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────
+// V6+ Đơn vị liên quan (multi-select) — auto detect Trong khối / Liên khối
+// ────────────────────────────────────────────────────────────────────────────
+
+/** Đơn vị liên quan trong đề xuất — multi-select trong form. */
+export interface RelatedUnit {
+  id: string;          // 'TP_MKT' | 'QLCS_HM' | 'GD_KD' | ...
+  label: string;       // 'TP Marketing' | 'QLCS Hoàng Mai' | ...
+  block: 'KD' | 'VP';  // khối của đơn vị
+}
+
+export type UnitsScope = 'trong_khoi' | 'lien_khoi';
+
+/** Danh sách đơn vị có thể chọn (lookup table). */
+export const AVAILABLE_RELATED_UNITS: RelatedUnit[] = [
+  // Khối Kinh doanh
+  { id: 'GD_KD',     label: 'GĐ Kinh doanh',  block: 'KD' },
+  { id: 'TP_MKT',    label: 'TP Marketing',   block: 'KD' },
+  { id: 'TP_DT',     label: 'TP Đào tạo',     block: 'KD' },
+  { id: 'TP_KT',     label: 'TP Kỹ thuật',    block: 'KD' },
+  { id: 'QLCS_HM',   label: 'QLCS Hoàng Mai', block: 'KD' },
+  { id: 'QLCS_TK',   label: 'QLCS Thụy Khuê', block: 'KD' },
+  { id: 'QLCS_CTT',  label: 'QLCS Công Trần Tâm', block: 'KD' },
+  { id: 'QLCS_24NCT',label: 'QLCS 24 NCT',    block: 'KD' },
+  { id: 'QLCS_TT',   label: 'QLCS Thanh Trì', block: 'KD' },
+  // Khối Văn phòng
+  { id: 'GD_VP',     label: 'GĐ Văn phòng',   block: 'VP' },
+  { id: 'TP_NS',     label: 'TP Nhân sự',     block: 'VP' },
+  { id: 'TP_KE',     label: 'TP Kế toán',     block: 'VP' },
+  { id: 'TP_GS',     label: 'TP Giám sát',    block: 'VP' },
+];
+
+/** Lookup khối từ roleCode (cho creatorBlock auto). */
+export const ROLE_TO_BLOCK: Record<string, 'KD' | 'VP'> = {
+  GD_KD: 'KD', TP_MKT: 'KD', TP_DT: 'KD', TP_KT: 'KD',
+  QLCS_HM: 'KD', QLCS_TK: 'KD', QLCS_CTT: 'KD', QLCS_24NCT: 'KD', QLCS_TT: 'KD',
+  GD_VP: 'VP', TP_NS: 'VP', TP_KE: 'VP', TP_GS: 'VP',
+};
+
+/**
+ * Auto detect Trong khối / Liên khối.
+ * - 'lien_khoi' nếu có ≥1 đơn vị KD VÀ ≥1 đơn vị VP (kể cả creator).
+ * - 'trong_khoi' nếu tất cả (creator + units) thuộc CÙNG 1 khối.
+ */
+export function detectUnitsScope(
+  creatorBlock: 'KD' | 'VP',
+  relatedUnits: RelatedUnit[],
+): UnitsScope {
+  const blocks = new Set<'KD' | 'VP'>([creatorBlock]);
+  for (const u of relatedUnits) blocks.add(u.block);
+  return blocks.size > 1 ? 'lien_khoi' : 'trong_khoi';
+}
+
+export const UNITS_SCOPE_LABEL: Record<UnitsScope, string> = {
+  trong_khoi: 'Trong khối',
+  lien_khoi: 'Liên khối',
+};
+export const UNITS_SCOPE_COLOR: Record<UnitsScope, string> = {
+  trong_khoi: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+  lien_khoi: 'bg-violet-50 text-violet-700 ring-violet-200',
+};
+
+// ────────────────────────────────────────────────────────────────────────────
 // V6 ProposalV6 — 5 trường nhập V6 + standard meta + legacy V5 (giữ shape)
 // ────────────────────────────────────────────────────────────────────────────
 // Cardinality của các field LEGACY V5 giữ NGUYÊN như V5 cũ (required /
@@ -152,6 +215,10 @@ export interface ProposalV6 {
   reason?: string;
   estimatedCost?: number;   // CHỈ hiện khi kind='dau_tu'
   attachments: ProposalAttachment[];
+  /** V6+: Đơn vị liên quan (multi-select). Auto detect Trong/Liên khối. */
+  relatedUnits?: RelatedUnit[];
+  /** V6+ auto computed (KHÔNG cho user chọn). */
+  unitsScope?: UnitsScope;
 
   // ───── Approver (auto từ Workflow Engine V6) ─────
   approverChain: ApproverStep[];

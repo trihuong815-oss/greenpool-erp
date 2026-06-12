@@ -329,6 +329,8 @@ function DexuatTable(props: DexuatTableProps) {
                 <th className="px-3 py-2.5">Tên đề xuất</th>
                 <th className="px-3 py-2.5">Loại</th>
                 <th className="px-3 py-2.5">Người tạo</th>
+                <th className="px-3 py-2.5">Đơn vị liên quan</th>
+                <th className="px-3 py-2.5">Khối</th>
                 <th className="px-3 py-2.5">Người duyệt hiện tại</th>
                 <th className="px-3 py-2.5">SLA</th>
                 <th className="px-3 py-2.5">Trạng thái</th>
@@ -540,6 +542,58 @@ function DexuatRow({ p, currentUserUid, currentUserRole, onRowClick, onAction }:
             <span className="text-slate-400 text-[10px]">{p.creatorRole}</span>
           )}
         </div>
+      </td>
+
+      {/* 4b. Đơn vị liên quan (V6+) */}
+      <td className="px-3 py-2.5">
+        {(() => {
+          const units = Array.isArray((p as any).relatedUnits) ? (p as any).relatedUnits : [];
+          if (units.length === 0) return <span className="text-slate-300 text-xs">—</span>;
+          const first2 = units.slice(0, 2);
+          const more = units.length - first2.length;
+          return (
+            <div className="flex flex-wrap gap-1 max-w-[200px]">
+              {first2.map((u: any) => (
+                <span
+                  key={u.id}
+                  className={`px-1.5 py-0.5 rounded text-[10px] font-medium ring-1 ${
+                    u.block === 'KD'
+                      ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
+                      : 'bg-violet-50 text-violet-700 ring-violet-200'
+                  }`}
+                  title={u.label}
+                >
+                  {u.label}
+                </span>
+              ))}
+              {more > 0 && (
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600">
+                  +{more}
+                </span>
+              )}
+            </div>
+          );
+        })()}
+      </td>
+
+      {/* 4c. Tag khối (Trong khối / Liên khối — auto từ unitsScope) */}
+      <td className="px-3 py-2.5">
+        {(() => {
+          const scope = (p as any).unitsScope as 'trong_khoi' | 'lien_khoi' | undefined;
+          if (!scope) return <span className="text-slate-300 text-xs">—</span>;
+          if (scope === 'lien_khoi') {
+            return (
+              <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-violet-100 text-violet-800 ring-1 ring-violet-200">
+                🔗 Liên khối
+              </span>
+            );
+          }
+          return (
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200">
+              ✓ Trong khối
+            </span>
+          );
+        })()}
       </td>
 
       {/* 5. Người duyệt hiện tại */}

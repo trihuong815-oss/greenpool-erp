@@ -44,6 +44,12 @@ import {
 
 import { resolveApproverChain } from '../_lib/chain-resolver';
 import { formatVND } from '../_lib/proposal-settings';
+import {
+  AVAILABLE_RELATED_UNITS,
+  detectUnitsScope,
+  UNITS_SCOPE_LABEL,
+  UNITS_SCOPE_COLOR,
+} from './types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types V5 — GIỮ NGUYÊN export (DeXuatClient hiện vẫn import)
@@ -198,7 +204,7 @@ export interface ProposalAttachmentDraftV6 {
   url?: string;
 }
 
-/** Payload V6 minimal — đúng SPEC 5 trường nhập. */
+/** Payload V6 minimal — đúng SPEC 5 trường nhập + V6+ relatedUnits. */
 export interface CreateProposalPayloadV6 {
   status: 'nhap' | 'da_gui';
   // 5 trường nhập
@@ -207,6 +213,9 @@ export interface CreateProposalPayloadV6 {
   reason: string;
   estimatedCost?: number;
   attachments?: ProposalAttachmentDraftV6[];
+  // V6+ Đơn vị liên quan (multi-select) + auto scope
+  relatedUnits?: { id: string; label: string; block: 'KD' | 'VP' }[];
+  unitsScope?: 'trong_khoi' | 'lien_khoi';
   // Auto computed (read-only client preview)
   resolvedApproverChain?: ResolvedStep[];
 }
@@ -381,12 +390,14 @@ export default function CreateProposalModal({
   currentUserName,
   currentUserBlock = 'KD',
 }: CreateProposalModalProps) {
-  // 5 trường nhập V6
+  // 5 trường nhập V6 + V6+ relatedUnits
   const [title, setTitle] = useState('');
   const [kind, setKind] = useState<ProposalKindV5 | ''>('');
   const [reason, setReason] = useState('');
   const [estimatedCostStr, setEstimatedCostStr] = useState('');
   const [attachments, setAttachments] = useState<ProposalAttachmentDraftV6[]>([]);
+  // V6+ Đơn vị liên quan multi-select
+  const [relatedUnitIds, setRelatedUnitIds] = useState<string[]>([]);
 
   // ── derived ─────────────────────────────────────────────────────────────
   const estimatedCostNum = useMemo(() => {
@@ -404,6 +415,21 @@ export default function CreateProposalModal({
       creatorBlock: currentUserBlock,
     });
   }, [kind, estimatedCostNum, currentUserBlock]);
+
+  // V6+ relatedUnits + auto scope
+  const relatedUnits = useMemo(
+    () => AVAILABLE_RELATED_UNITS.filter((u) => relatedUnitIds.includes(u.id)),
+    [relatedUnitIds],
+  );
+  const unitsScope = useMemo(
+    () => detectUnitsScope(currentUserBlock, relatedUnits),
+    [currentUserBlock, relatedUnits],
+  );
+  function toggleUnit(id: string) {
+    setRelatedUnitIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  }
 
   const chainReason = useMemo(() => {
     if (!kind) return '';
@@ -424,6 +450,7 @@ export default function CreateProposalModal({
     setReason('');
     setEstimatedCostStr('');
     setAttachments([]);
+    setRelatedUnitIds([]);
   }
 
   function handleClose() {
@@ -454,6 +481,9 @@ export default function CreateProposalModal({
       reason: reason.trim(),
       estimatedCost: kind === 'dau_tu' ? estimatedCostNum : undefined,
       attachments: attachments.length ? attachments : undefined,
+      // V6+ Đơn vị liên quan + auto scope
+      relatedUnits: relatedUnits.length ? relatedUnits : undefined,
+      unitsScope: relatedUnits.length ? unitsScope : undefined,
       resolvedApproverChain: resolvedChain,
     };
   }
@@ -640,6 +670,87 @@ export default function CreateProposalModal({
               )}
             </div>
           )}
+
+          {/* V6+ — Đơn vị liên quan (multi-select) + auto tag Trong khối / Liên khối */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+              Đơn vị liên quan
+              <span className="ml-1 text-[10px] font-normal text-slate-400">
+                (chọn nhiều · hệ thống tự xác định Trong khối / Liên khối)
+              </span>
+            </label>
+            <div className="rounded-lg border border-slate-200 bg-white p-3">
+              {/* Khối KD */}
+              <div className="mb-2">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 mb-1">
+                  Khối Kinh doanh
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {AVAILABLE_RELATED_UNITS.filter((u) => u.block === 'KD').map((u) => {
+                    const active = relatedUnitIds.includes(u.id);
+                    return (
+                      <button
+                        key={u.id}
+                        type="button"
+                        onClick={() => toggleUnit(u.id)}
+                        className={
+                          'px-2.5 py-1 rounded-md text-xs font-medium ring-1 transition ' +
+                          (active
+                            ? 'bg-emerald-100 text-emerald-800 ring-emerald-300'
+                            : 'bg-white text-slate-600 ring-slate-200 hover:ring-emerald-300')
+                        }
+                      >
+                        {u.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              {/* Khối VP */}
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-violet-700 mb-1">
+                  Khối Văn phòng
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {AVAILABLE_RELATED_UNITS.filter((u) => u.block === 'VP').map((u) => {
+                    const active = relatedUnitIds.includes(u.id);
+                    return (
+                      <button
+                        key={u.id}
+                        type="button"
+                        onClick={() => toggleUnit(u.id)}
+                        className={
+                          'px-2.5 py-1 rounded-md text-xs font-medium ring-1 transition ' +
+                          (active
+                            ? 'bg-violet-100 text-violet-800 ring-violet-300'
+                            : 'bg-white text-slate-600 ring-slate-200 hover:ring-violet-300')
+                        }
+                      >
+                        {u.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+            {/* Auto-tag scope chip */}
+            <div className="mt-2 flex items-center gap-2 text-[11px]">
+              <span className="text-slate-500">Phạm vi tự xác định:</span>
+              <span
+                className={
+                  'inline-flex items-center px-2 py-0.5 rounded ring-1 ring-inset font-semibold ' +
+                  UNITS_SCOPE_COLOR[unitsScope]
+                }
+              >
+                {unitsScope === 'lien_khoi' ? '🔗 ' : '✓ '}
+                {UNITS_SCOPE_LABEL[unitsScope]}
+              </span>
+              <span className="text-slate-400">
+                ({relatedUnits.length} đơn vị · creator khối{' '}
+                {currentUserBlock === 'KD' ? 'KD' : 'VP'})
+              </span>
+            </div>
+          </div>
 
           {/* 5 — File đính kèm (placeholder) */}
           <div>

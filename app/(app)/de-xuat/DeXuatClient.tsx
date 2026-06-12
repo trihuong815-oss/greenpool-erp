@@ -244,6 +244,15 @@ function adaptTaskToProposalV6(t: Task, users: UserLite[]): ProposalV6 {
     linkedCoordTaskId: typeof meta.linkedCoordId === 'string' ? meta.linkedCoordId : undefined,
     linkedCoordTaskCode: typeof meta.linkedCoordCode === 'string' ? meta.linkedCoordCode : undefined,
 
+    // V6+ Đơn vị liên quan + auto scope (đọc từ meta.relatedUnits nếu có)
+    relatedUnits: Array.isArray(meta.relatedUnits) ? meta.relatedUnits : undefined,
+    unitsScope: meta.unitsScope === 'lien_khoi' || meta.unitsScope === 'trong_khoi'
+      ? meta.unitsScope
+      : (Array.isArray(meta.relatedUnits) && meta.relatedUnits.length > 0
+        ? (new Set([creatorBlock, ...meta.relatedUnits.map((u: any) => u.block)]).size > 1
+            ? 'lien_khoi' : 'trong_khoi')
+        : undefined),
+
     // ═══ LEGACY V5 FIELDS — giữ shape để sibling chưa migrate không vỡ ═══
     priority: 'binh_thuong',
     source: 'phat_sinh',
@@ -413,12 +422,15 @@ export function DeXuatClient(props: Props) {
         estimatedCost: isInvestment ? (payload.estimatedCost ?? null) : null,
         approverUserIds,
         expectedDeliverable: null,
-        // Meta lưu các trường V6 + reverse-compat sang V5.
+        // Meta lưu các trường V6 + V6+ relatedUnits + reverse-compat sang V5.
         meta: {
           proposalKindV6: payload.kind,
           reason: payload.reason,
           resolvedApproverChain: payload.resolvedApproverChain,
           draftStatus: payload.status, // 'nhap' | 'da_gui'
+          // V6+ Đơn vị liên quan + auto scope
+          relatedUnits: payload.relatedUnits ?? [],
+          unitsScope: payload.unitsScope,
           // V5 reverse-compat (cho adapter chỗ khác đọc)
           proposalKindV5: payload.kind,
           problemStatement: payload.reason,
@@ -502,6 +514,24 @@ export function DeXuatClient(props: Props) {
       // 2. Tạo task coord assignment với meta tham chiếu
       //    SPEC: CHỈ map 4 field — title / reason→description / file / mã tham chiếu.
       //    KHÔNG map Owner/KPI/Deadline (xác định tại Điều phối).
+      // V6+: gợi ý collaborators từ relatedUnits đề xuất (TP_*/QLCS_*/GD_KD/GD_VP)
+      const relatedUnits = Array.isArray((p as any).relatedUnits) ? (p as any).relatedUnits : [];
+      const collaboratorDeptIds: string[] = [];
+      const collaboratorFacilityIds: string[] = [];
+      const collaboratorRoles: Record<string, string> = {};
+      for (const u of relatedUnits) {
+        // TP_* → dept · QLCS_<BR> → facility · GD_KD/GD_VP → role tag
+        if (u.id.startsWith('TP_')) {
+          const deptCode = u.id.slice(3); // 'MKT', 'DT', 'KT', 'NS', 'KE', 'GS'
+          collaboratorDeptIds.push(deptCode);
+          collaboratorRoles[`dept:${deptCode}`] = `Phối hợp triển khai từ đề xuất ${p.code}`;
+        } else if (u.id.startsWith('QLCS_')) {
+          const branch = u.id.slice(5); // 'HM', 'TK', 'CTT', '24NCT', 'TT'
+          collaboratorFacilityIds.push(branch);
+          collaboratorRoles[`facility:${branch}`] = `Phối hợp triển khai từ đề xuất ${p.code}`;
+        }
+        // GD_KD / GD_VP — không map thành collaborator (Owner sẽ xác định khi tạo điều phối)
+      }
       const body: any = {
         kind: 'assignment',
         title: p.title,
@@ -515,9 +545,14 @@ export function DeXuatClient(props: Props) {
         assigneeUserIds: [],
         goal: null,
         expectedDeliverable: null,
+        // V6+ gợi ý đơn vị phối hợp (người tạo điều phối có thể chỉnh)
+        collaboratorDeptIds,
+        collaboratorFacilityIds,
+        collaboratorRoles,
         meta: {
           fromProposalId: p.id,
           fromProposalCode: p.code,
+          relatedUnits, // pass nguyên để adapter coord dùng nếu cần
         },
       };
       await tasksApi.create(body);

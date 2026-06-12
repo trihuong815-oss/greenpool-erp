@@ -331,6 +331,104 @@ export default function DexuatDashboard({
           </ul>
         </div>
       </div>
+
+      {/* Tầng 3 — Donut "Cơ cấu đề xuất theo khối" + Bảng "Điểm nghẽn đề xuất" */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+
+        {/* A — Donut theo khối */}
+        <div className="rounded-xl border border-slate-200 bg-white p-5">
+          <h3 className="mb-4 text-sm font-semibold text-slate-700">
+            Cơ cấu đề xuất theo khối
+          </h3>
+          {(() => {
+            // Compute từ proposals: KD/VP/Liên khối
+            let kd = 0, vp = 0, cross = 0;
+            for (const p of proposals as any[]) {
+              const units: { block: 'KD'|'VP' }[] = Array.isArray(p.relatedUnits) ? p.relatedUnits : [];
+              const blocks = new Set<'KD'|'VP'>([p.creatorBlock]);
+              for (const u of units) blocks.add(u.block);
+              if (blocks.size > 1) cross++;
+              else if (blocks.has('KD')) kd++;
+              else vp++;
+            }
+            const total = kd + vp + cross;
+            const segs = [
+              { value: kd, color: '#10b981', label: 'Khối Kinh doanh' },
+              { value: vp, color: '#8b5cf6', label: 'Khối Văn phòng' },
+              { value: cross, color: '#f59e0b', label: 'Liên khối' },
+            ];
+            return (
+              <div className="grid grid-cols-1 items-center gap-6 md:grid-cols-2">
+                <div className="flex justify-center md:justify-start">
+                  <DonutChart segments={segs} total={total} />
+                </div>
+                <ul className="space-y-2.5 text-sm">
+                  {segs.map((s) => {
+                    const pct = total > 0 ? Math.round((s.value / total) * 100) : 0;
+                    return (
+                      <li key={s.label} className="flex items-center gap-3">
+                        <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: s.color }} />
+                        <span className="flex-1 truncate text-slate-700">{s.label}</span>
+                        <span className="tabular-nums font-semibold text-slate-800">{s.value}</span>
+                        <span className="w-12 text-right text-xs tabular-nums text-slate-500">{pct}%</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            );
+          })()}
+        </div>
+
+        {/* B — Bảng "Điểm nghẽn đề xuất" — group theo người duyệt hiện tại */}
+        <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+          <div className="bg-rose-50/60 px-4 py-2.5 border-b border-rose-100">
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-rose-700">
+              Điểm nghẽn đề xuất
+            </h3>
+          </div>
+          {(() => {
+            // Group by currentApprover (approverChain[approverIdx]); chỉ đếm pending status
+            interface AggRow { key: string; name: string; holding: number; longestHours: number }
+            const groups = new Map<string, AggRow>();
+            for (const p of proposals as any[]) {
+              if (!['da_gui', 'dang_xem_xet', 'yeu_cau_bo_sung'].includes(p.status)) continue;
+              const cur = p.approverChain?.[p.approverIdx];
+              if (!cur) continue;
+              const key = (cur.uid || cur.roleCode || cur.name || 'unknown');
+              const name = cur.name || cur.roleCode || cur.uid || 'Chưa xác định';
+              const hrs = p.updatedAt ? (nowMs - new Date(p.updatedAt).getTime()) / 3_600_000 : 0;
+              const ex = groups.get(key);
+              if (!ex) groups.set(key, { key, name, holding: 1, longestHours: hrs });
+              else { ex.holding++; if (hrs > ex.longestHours) ex.longestHours = hrs; }
+            }
+            const rows = Array.from(groups.values())
+              .sort((a, b) => b.holding - a.holding || b.longestHours - a.longestHours)
+              .slice(0, 5);
+            if (rows.length === 0) {
+              return <div className="py-8 text-center text-sm text-emerald-600 font-medium">✓ Không có điểm nghẽn</div>;
+            }
+            return (
+              <div>
+                <div className="grid grid-cols-[1fr_70px_90px] gap-3 px-4 py-2 border-b border-slate-200 text-[10px] uppercase text-slate-400 tracking-wider">
+                  <div>Người duyệt hiện tại</div>
+                  <div className="text-center">Đang giữ</div>
+                  <div className="text-right">Chờ lâu nhất</div>
+                </div>
+                {rows.map((r) => (
+                  <div key={r.key} className="grid grid-cols-[1fr_70px_90px] gap-3 px-4 py-2.5 items-center hover:bg-slate-50 text-sm border-b border-slate-50 last:border-0">
+                    <div className="font-medium text-slate-800 truncate">{r.name}</div>
+                    <div className="text-center tabular-nums text-slate-700">{r.holding} đề xuất</div>
+                    <div className="text-right font-semibold tabular-nums text-rose-600">
+                      {r.longestHours < 24 ? `${Math.round(r.longestHours)} giờ` : `${(r.longestHours / 24).toFixed(1)} ngày`}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+        </div>
+      </div>
     </div>
   );
 }
