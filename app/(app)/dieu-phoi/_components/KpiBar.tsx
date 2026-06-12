@@ -9,7 +9,16 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react';
-import type { CoordTask } from './types';
+import type { CoordTask, Collaborator } from './types';
+
+// ============================================================
+// V4 SPEC — 5 KPI cards (KHÔNG accent strip 4px)
+// 1. Cần tôi xử lý (rose)       : Σ owner đang chờ + collab bị trả lại + collab chưa gửi + tôi cần duyệt
+// 2. Chờ phản hồi (sky)         : collab ∈ [chua_tiep_nhan, gui_hoan_thanh, bi_tra_lai]
+// 3. Chờ Owner xác nhận (amber) : task.status='cho_owner_xac_nhan'
+// 4. Liên khối (violet)         : task.scope='lien_khoi'
+// 5. Quá hạn (rose-strong)      : isOverdue helper
+// ============================================================
 
 interface KpiBarProps {
   tasks: CoordTask[];
@@ -18,15 +27,12 @@ interface KpiBarProps {
 
 type AccentKey = 'rose' | 'sky' | 'amber' | 'violet' | 'rose-strong';
 
-// Static class maps so Tailwind JIT/purge can detect every utility.
-// 2026-06-12: bỏ ACCENT_BAR — mock card không có accent strip 4px bên trái.
-
 const ICON_WRAP: Record<AccentKey, string> = {
   rose: 'bg-rose-50',
   sky: 'bg-sky-50',
   amber: 'bg-amber-50',
   violet: 'bg-violet-50',
-  'rose-strong': 'bg-rose-50',
+  'rose-strong': 'bg-rose-100',
 };
 
 const ICON_COLOR: Record<AccentKey, string> = {
@@ -62,6 +68,7 @@ interface KpiItem {
   count: number;
 }
 
+/** V4: Quá hạn helper — hôm nay > dueDate và task chưa hoàn thành / đóng. */
 function isOverdue(task: CoordTask, todayMs: number): boolean {
   if (task.status === 'hoan_thanh' || task.status === 'dong_ho_so') return false;
   if (!task.dueDate) return false;
@@ -69,30 +76,85 @@ function isOverdue(task: CoordTask, todayMs: number): boolean {
   return Number.isFinite(due) && due < todayMs;
 }
 
+/** V4: Đọc collab status mở rộng (gui_hoan_thanh / bi_tra_lai) qua cast — types.ts chưa có. */
+function collabStatusOf(c: Collaborator): string {
+  return (c as unknown as { status?: string }).status ?? c.status;
+}
+
+/** V4: task.status mở rộng — cho_owner_xac_nhan / cho_duyet_ket_qua. */
+function taskStatusOf(t: CoordTask): string {
+  return (t as unknown as { status?: string }).status ?? t.status;
+}
+
 export default function KpiBar({ tasks, currentUserUid }: KpiBarProps) {
   const todayMs = Date.now();
 
-  // Determine the current user's display name from any task they own
-  // (mock-data driven — falls back to uid for matching waitingForPerson).
+  // Lấy tên hiển thị của user hiện tại (mock-data driven)
   const myTask = tasks.find((t) => t.ownerUid === currentUserUid);
   const myName = myTask?.ownerName ?? '';
 
   let cantToiXuLy = 0;
   let choPhanHoi = 0;
-  let choDuyet = 0;
+  let choOwnerXacNhan = 0;
   let lienKhoi = 0;
   let quaHan = 0;
 
   for (const t of tasks) {
     const overdue = isOverdue(t, todayMs);
     const ownedByMe = t.ownerUid === currentUserUid;
-    const waitingOnMe = myName.length > 0 && t.waitingForPerson === myName;
+    const tStatus = taskStatusOf(t);
 
-    if (ownedByMe || waitingOnMe || overdue) cantToiXuLy += 1;
-    if (t.status === 'cho_phan_hoi') choPhanHoi += 1;
-    if (t.status === 'cho_phe_duyet') choDuyet += 1;
+    // -------- KPI 1: Cần tôi xử lý --------
+    // a) Owner = tôi và task đang chờ xử lý (chưa hoàn thành / đóng)
+    const ownerNeedsAction =
+      ownedByMe &&
+      tStatus !== 'hoan_thanh' &&
+      tStatus !== 'dong_ho_so' &&
+      (tStatus === 'cho_owner_xac_nhan' ||
+        tStatus === 'cho_phan_hoi' ||
+        tStatus === 'khoi_tao' ||
+        tStatus === 'dang_xu_ly' ||
+        tStatus === 'dang_phoi_hop');
+
+    // b) Tôi là collab bị trả lại HOẶC chưa gửi (chua_tiep_nhan / da_tiep_nhan / dang_thuc_hien / bi_tra_lai)
+    let iAmCollabPending = false;
+    let iAmApprover = false;
+    for (const c of t.collaborators ?? []) {
+      const s = collabStatusOf(c);
+      if (c.responsibleUid === currentUserUid &&
+          (s === 'chua_tiep_nhan' || s === 'da_tiep_nhan' || s === 'dang_thuc_hien' || s === 'bi_tra_lai')) {
+        iAmCollabPending = true;
+      }
+    }
+    // c) Tôi cần duyệt (cho_duyet_ket_qua + người duyệt = tôi)
+    const approverUid =
+      (t as unknown as { approverUid?: string; reviewerUid?: string }).approverUid ??
+      (t as unknown as { reviewerUid?: string }).reviewerUid;
+    if (tStatus === 'cho_duyet_ket_qua' && approverUid === currentUserUid) {
+      iAmApprover = true;
+    }
+
+    if (ownerNeedsAction || iAmCollabPending || iAmApprover) cantToiXuLy += 1;
+
+    // -------- KPI 2: Chờ phản hồi --------
+    // collab ∈ [chua_tiep_nhan, gui_hoan_thanh, bi_tra_lai] — đếm theo TASK (task có ≥1 collab khớp)
+    const hasPendingCollab = (t.collaborators ?? []).some((c) => {
+      const s = collabStatusOf(c);
+      return s === 'chua_tiep_nhan' || s === 'gui_hoan_thanh' || s === 'bi_tra_lai';
+    });
+    if (hasPendingCollab) choPhanHoi += 1;
+
+    // -------- KPI 3: Chờ Owner xác nhận --------
+    if (tStatus === 'cho_owner_xac_nhan') choOwnerXacNhan += 1;
+
+    // -------- KPI 4: Liên khối --------
     if (t.scope === 'lien_khoi') lienKhoi += 1;
+
+    // -------- KPI 5: Quá hạn --------
     if (overdue) quaHan += 1;
+
+    // Suppress unused myName warning (giữ var cho future use waitingForPerson)
+    void myName;
   }
 
   const items: KpiItem[] = [
@@ -113,12 +175,12 @@ export default function KpiBar({ tasks, currentUserUid }: KpiBarProps) {
       count: choPhanHoi,
     },
     {
-      key: 'cho-duyet',
-      label: 'Chờ duyệt',
-      subtext: 'liên quan đến tôi',
+      key: 'cho-owner-xac-nhan',
+      label: 'Chờ Owner xác nhận',
+      subtext: 'task chờ chốt cuối',
       icon: CheckCircle,
       accent: 'amber',
-      count: choDuyet,
+      count: choOwnerXacNhan,
     },
     {
       key: 'lien-khoi',

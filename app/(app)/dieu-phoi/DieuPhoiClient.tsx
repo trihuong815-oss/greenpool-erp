@@ -1,5 +1,20 @@
 'use client';
 
+// ============================================================
+// DieuPhoiClient — Integration V4 (Phase 3, 2026-06-12)
+// ------------------------------------------------------------
+// - Wire CreateModal V4 + DetailDrawer V4 + adapter V4
+// - Pure client-side state mutation (optimistic) — server endpoint
+//   per-collab CHƯA có (V5 backlog: /api/coord-tasks/[id]/...).
+//   Tất cả 9 handler dùng:
+//     1) workflow-engine.ts để tính next CoordStatus
+//     2) coord-notifications.ts để build NotificationTrigger[]
+//     3) console.log + alert (V1 contract — backend wire ở V5)
+// - handleCreate: dùng tasksApi.create (vẫn map CreatePayload V4 → TaskCreate body cũ /api/tasks)
+// - currentUserUid / currentUserRole pass xuống DetailDrawer + KpiBar.
+// - Tiếng Việt CÓ DẤU đầy đủ (không mojibake).
+// ============================================================
+
 import { useCallback, useEffect, useState } from 'react';
 import { Calendar, ChevronDown, Loader2, Plus, RefreshCw } from 'lucide-react';
 import KpiBar from './_components/KpiBar';
@@ -12,10 +27,24 @@ import ImportantNotiPanel from './_components/ImportantNotiPanel';
 import CoordinationTable from './_components/CoordinationTable';
 import CreateModal, { type CreatePayload } from './_components/CreateModal';
 import DetailDrawer from './_components/DetailDrawer';
-import { tasksApi } from '@/lib/services/tasks/api-client';
-import type { CoordTask } from './_components/types';
+import { tasksApi, type TaskCreate, type TaskPriority } from '@/lib/services/tasks/api-client';
+import type { CoordTask, Collaborator, CollabStatus, CoordStatus } from './_components/types';
 import { adaptTask } from './_lib/adapter';
 import { canCreateCoord } from './_lib/permissions';
+import {
+  nextStatusAfterCollabUpdate,
+  computeProgress,
+  type CoordTaskV4,
+} from './_lib/workflow-engine';
+import {
+  notifyOnCreate,
+  notifyOnCollabSubmit,
+  notifyOnCollabAccepted,
+  notifyOnCollabRejected,
+  notifyOnAllCollabDone,
+  notifyOnCoordComplete,
+  type NotificationTrigger,
+} from './_lib/coord-notifications';
 
 interface DieuPhoiClientProps {
   currentUserUid: string;
@@ -23,7 +52,37 @@ interface DieuPhoiClientProps {
   currentUserRole: string;
 }
 
-export default function DieuPhoiClient({ currentUserUid, currentUserRole }: DieuPhoiClientProps) {
+/**
+ * V1 helper: emit notifications -> console (V5 sẽ wire FCM thật).
+ */
+function emitNotifications(label: string, triggers: NotificationTrigger[]): void {
+  if (!triggers.length) return;
+  // eslint-disable-next-line no-console
+  console.log(`[dieu-phoi][noti] ${label}`, triggers);
+}
+
+/**
+ * Helper update 1 collaborator trong CoordTask (immutable).
+ * Sau khi patch collab → recompute task.status theo workflow-engine.
+ */
+function patchCollab(
+  task: CoordTask,
+  collabId: string,
+  patch: Partial<Collaborator>,
+): CoordTask {
+  const nextCollabs = task.collaborators.map((c) =>
+    c.id === collabId ? { ...c, ...patch } : c,
+  );
+  const draft: CoordTask = { ...task, collaborators: nextCollabs };
+  const nextStatus = nextStatusAfterCollabUpdate(draft as CoordTaskV4);
+  return { ...draft, status: nextStatus, updatedAt: new Date().toISOString() };
+}
+
+export default function DieuPhoiClient({
+  currentUserUid,
+  currentUserName,
+  currentUserRole,
+}: DieuPhoiClientProps) {
   const canCreate = canCreateCoord(currentUserRole);
   const [showCreate, setShowCreate] = useState(false);
   const [selected, setSelected] = useState<CoordTask | null>(null);
@@ -36,81 +95,435 @@ export default function DieuPhoiClient({ currentUserUid, currentUserRole }: Dieu
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true); setError(null);
-    tasksApi.list({ mode: 'all' })
-      .then((rows) => { if (!cancelled) setTasks(rows.map(adaptTask)); })
-      .catch((e) => { if (!cancelled) setError(e?.message ?? 'Lỗi tải dữ liệu điều phối'); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+    setLoading(true);
+    setError(null);
+    tasksApi
+      .list({ mode: 'all' })
+      .then((rows) => {
+        if (!cancelled) setTasks(rows.map(adaptTask));
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e?.message ?? 'Lỗi tải dữ liệu điều phối');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [reloadKey]);
 
-  // V1: chỉ log + alert (chưa có API per-collab status).
-  // V2 sẽ wire vào endpoint riêng — vd PATCH /api/tasks/:id/collaborator/:collabId.
-  const handleAcceptCollab = useCallback((taskId: string, collabId: string) => {
-    console.log('[dieu-phoi] accept collab', { taskId, collabId });
-    alert('V1: Đã ghi nhận TIẾP NHẬN (chưa có API). V2 sẽ persist lên server.');
-  }, []);
-  const handleRejectCollab = useCallback((taskId: string, collabId: string, reason: string) => {
-    console.log('[dieu-phoi] reject collab', { taskId, collabId, reason });
-    alert(`V1: Đã ghi nhận TỪ CHỐI — lý do: "${reason}". V2 sẽ persist.`);
-  }, []);
-  const handleCompleteCollab = useCallback((taskId: string, collabId: string) => {
-    console.log('[dieu-phoi] complete collab', { taskId, collabId });
-    alert('V1: Đã ghi nhận HOÀN THÀNH (chưa có API). V2 sẽ persist.');
+  // Helper: cập nhật 1 task vào state + cập nhật selected drawer.
+  const applyTaskUpdate = useCallback((next: CoordTask) => {
+    setTasks((prev) => prev.map((t) => (t.id === next.id ? next : t)));
+    setSelected((sel) => (sel && sel.id === next.id ? next : sel));
   }, []);
 
-  const handleCreate = useCallback(async (payload: CreatePayload) => {
-    try {
-      // V1 (transition): map CreateCoordPayload (V2 shape) → TaskCreate body cũ /api/tasks.
-      // collaborators[i].unitId có dạng 'DEPT:KE' | 'BRANCH:HM' → tách prefix.
-      const FACILITY_IDS = ['HM', 'NCT24', 'LD', 'TT', 'TK', 'CG'];
-      const ownerIsFacility = payload.ownerBlock === 'KD' && FACILITY_IDS.includes(payload.ownerDeptId);
-      const collaboratorDeptIds: string[] = [];
-      const collaboratorFacilityIds: string[] = [];
-      const collaboratorRoles: Record<string, string> = {};
-      for (const c of payload.collaborators) {
-        if (!c.unitId) continue;
-        const [prefix, rawId] = c.unitId.split(':');
-        if (!prefix || !rawId) continue;
-        if (prefix === 'DEPT') {
-          collaboratorDeptIds.push(rawId);
-          collaboratorRoles[`dept:${rawId}`] = c.supportContent;
-        } else if (prefix === 'BRANCH') {
-          collaboratorFacilityIds.push(rawId);
-          collaboratorRoles[`facility:${rawId}`] = c.supportContent;
+  // ============================================================
+  // 1. handleCreate — POST /api/tasks (giữ adapter map V4→V3 body)
+  // ============================================================
+  const handleCreate = useCallback(
+    async (payload: CreatePayload) => {
+      try {
+        const FACILITY_IDS = ['HM', 'NCT24', 'LD', 'TT', 'TK', 'CG'];
+        const ownerIsFacility =
+          payload.ownerBlock === 'KD' && FACILITY_IDS.includes(payload.ownerUnitId);
+        const collaboratorDeptIds: string[] = [];
+        const collaboratorFacilityIds: string[] = [];
+        const collaboratorRoles: Record<string, string> = {};
+        for (const c of payload.collaborators) {
+          if (!c.unitId) continue;
+          const [prefix, rawId] = c.unitId.split(':');
+          if (!prefix || !rawId) continue;
+          if (prefix === 'DEPT') {
+            collaboratorDeptIds.push(rawId);
+            collaboratorRoles[`dept:${rawId}`] = c.supportContent;
+          } else if (prefix === 'BRANCH') {
+            collaboratorFacilityIds.push(rawId);
+            collaboratorRoles[`facility:${rawId}`] = c.supportContent;
+          }
         }
-      }
-      const body: any = {
-        kind: payload.type === 'de_xuat' || payload.type === 'phe_duyet' ? 'proposal' : 'assignment',
-        title: payload.title,
-        description: [
+
+        const description = [
           payload.description,
           payload.objective ? `\n— Mục tiêu: ${payload.objective}` : '',
           payload.finalDeliverable ? `\n— Kết quả bàn giao: ${payload.finalDeliverable}` : '',
-        ].filter(Boolean).join(''),
-        priority: payload.priority,
-        dueDate: payload.dueDate || null,
-        assigneeBlock: payload.ownerBlock || 'KD',
-        assigneeDeptId: ownerIsFacility ? null : payload.ownerDeptId || null,
-        assigneeFacilityId: ownerIsFacility ? payload.ownerDeptId : null,
-        assigneeUserIds: payload.ownerUid ? [payload.ownerUid] : [],
-        ownerUid: payload.ownerUid,
-        ownerName: payload.ownerName,
-        goal: payload.objective || null,
-        expectedDeliverable: payload.finalDeliverable || null,
-        collaboratorDeptIds,
-        collaboratorFacilityIds,
-        collaboratorRoles,
-        approverUid: payload.approverUid ?? null,
-        approverName: payload.approverName ?? null,
+        ]
+          .filter(Boolean)
+          .join('');
+
+        const priority: TaskPriority =
+          payload.severity === 'khan_cap'
+            ? 'high'
+            : payload.level === 'trong_diem'
+              ? 'high'
+              : 'normal';
+
+        const body: TaskCreate = {
+          kind: 'assignment',
+          title: payload.title,
+          description,
+          priority,
+          dueDate: payload.dueDate || null,
+          assigneeBlock: payload.ownerBlock || 'KD',
+          assigneeDeptId: ownerIsFacility ? null : payload.ownerUnitId || null,
+          assigneeFacilityId: ownerIsFacility ? payload.ownerUnitId : null,
+          assigneeUserIds: payload.ownerUid ? [payload.ownerUid] : [],
+          goal: payload.objective || null,
+          expectedDeliverable: payload.finalDeliverable || null,
+          collaboratorDeptIds,
+          collaboratorFacilityIds,
+          collaboratorRoles,
+        };
+
+        const created = await tasksApi.create(body);
+
+        // Emit noti "coord_created" — V1 chỉ console.log, V5 wire FCM.
+        const fakeCoord: CoordTask = {
+          id: created.id,
+          code: `DP-${new Date().getFullYear()}-${created.id.slice(0, 4).toUpperCase()}`,
+          title: payload.title,
+          type: 'van_hanh',
+          scope: payload.scope,
+          status: 'khoi_tao',
+          priority: 'normal',
+          ownerUid: payload.ownerUid,
+          ownerName: payload.ownerName,
+          ownerBlock: payload.ownerBlock,
+          collaborators: payload.collaborators.map((c, idx) => ({
+            id: `c-${idx}`,
+            unitName: c.unitName,
+            supportContent: c.supportContent,
+            deliverable: '',
+            deadline: c.deadline,
+            status: 'chua_tiep_nhan' as CollabStatus,
+            responsibleUid: '',
+            responsibleName: c.unitName,
+          })),
+          collaboratorUnits: payload.collaborators.map((c) => c.unitName),
+          waitingForPerson: payload.ownerName,
+          waitingForContent: 'Owner tiếp nhận',
+          waitingSince: new Date().toISOString(),
+          dueDate: payload.dueDate,
+          createdAt: new Date().toISOString(),
+          createdByUid: currentUserUid,
+          createdByName: currentUserName,
+          resultApproverUid: payload.approverUid,
+          resultApproverName: payload.approverName,
+        };
+        emitNotifications('create', notifyOnCreate(fakeCoord, payload.approverUid));
+
+        setShowCreate(false);
+        reload();
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'lỗi không xác định';
+        alert(`Tạo điều phối thất bại: ${msg}`);
+      }
+    },
+    [reload, currentUserUid, currentUserName],
+  );
+
+  // ============================================================
+  // 2. handleCollabAccept — Collab tiếp nhận
+  //    status: chua_tiep_nhan → da_tiep_nhan
+  // ============================================================
+  const handleCollabAccept = useCallback(
+    (taskId: string, collabId: string) => {
+      const task = tasks.find((t) => t.id === taskId);
+      if (!task) return;
+      const collab = task.collaborators.find((c) => c.id === collabId);
+      if (!collab) return;
+      if (collab.status !== 'chua_tiep_nhan') {
+        alert('Trạng thái không hợp lệ để tiếp nhận.');
+        return;
+      }
+      const nowIso = new Date().toISOString();
+      const next = patchCollab(task, collabId, {
+        status: 'da_tiep_nhan',
+        acceptedAt: nowIso,
+      });
+      applyTaskUpdate(next);
+      // eslint-disable-next-line no-console
+      console.log('[dieu-phoi] collab accept', { taskId, collabId });
+      alert(`V1 (local): Đã tiếp nhận phần phối hợp "${collab.unitName}".\nV5 sẽ POST /api/coord-tasks/${taskId}/collaborators/${collabId}/accept.`);
+    },
+    [tasks, applyTaskUpdate],
+  );
+
+  // ============================================================
+  // 3. handleCollabSubmit — Collab gửi hoàn thành
+  //    status: da_tiep_nhan|dang_thuc_hien|bi_tra_lai → gui_hoan_thanh
+  // ============================================================
+  const handleCollabSubmit = useCallback(
+    (
+      taskId: string,
+      collabId: string,
+      payload: { result: string; note: string; files: string[] },
+    ) => {
+      const task = tasks.find((t) => t.id === taskId);
+      if (!task) return;
+      const collab = task.collaborators.find((c) => c.id === collabId);
+      if (!collab) return;
+      const allowed: CollabStatus[] = ['da_tiep_nhan', 'dang_thuc_hien', 'bi_tra_lai'];
+      if (!allowed.includes(collab.status)) {
+        alert('Trạng thái không hợp lệ để gửi hoàn thành.');
+        return;
+      }
+      const nowIso = new Date().toISOString();
+      const nextCollab: Partial<Collaborator> = {
+        status: 'gui_hoan_thanh',
+        submittedAt: nowIso,
+        submittedResult: payload.result,
+        submittedNote: payload.note,
+        submittedFiles: payload.files,
       };
-      await tasksApi.create(body);
-      setShowCreate(false);
-      reload();
-    } catch (e: any) {
-      alert(`Tạo điều phối thất bại: ${e?.message ?? 'lỗi không xác định'}`);
-    }
-  }, [reload]);
+      const next = patchCollab(task, collabId, nextCollab);
+      applyTaskUpdate(next);
+
+      const updatedCollab = next.collaborators.find((c) => c.id === collabId)!;
+      emitNotifications('collab_submit', notifyOnCollabSubmit(next, updatedCollab));
+      // eslint-disable-next-line no-console
+      console.log('[dieu-phoi] collab submit', { taskId, collabId, payload });
+      alert(`V1 (local): Đã gửi hoàn thành.\nV5 sẽ POST /api/coord-tasks/${taskId}/collaborators/${collabId}/submit.`);
+    },
+    [tasks, applyTaskUpdate],
+  );
+
+  // ============================================================
+  // 4. handleOwnerAcceptCollab — Owner chấp nhận phần collab
+  //    status: gui_hoan_thanh → hoan_thanh
+  //    Nếu tất cả collab='hoan_thanh' → coord status auto chuyển 'cho_owner_xac_nhan'
+  // ============================================================
+  const handleOwnerAcceptCollab = useCallback(
+    (taskId: string, collabId: string) => {
+      const task = tasks.find((t) => t.id === taskId);
+      if (!task) return;
+      const collab = task.collaborators.find((c) => c.id === collabId);
+      if (!collab) return;
+      if (collab.status !== 'gui_hoan_thanh') {
+        alert('Phần phối hợp không ở trạng thái chờ Owner duyệt.');
+        return;
+      }
+      const nowIso = new Date().toISOString();
+      const next = patchCollab(task, collabId, {
+        status: 'hoan_thanh',
+        completedAt: nowIso,
+        acceptedAt: collab.acceptedAt ?? nowIso,
+      });
+      applyTaskUpdate(next);
+
+      const updatedCollab = next.collaborators.find((c) => c.id === collabId)!;
+      emitNotifications('collab_accepted', notifyOnCollabAccepted(next, updatedCollab));
+
+      // Nếu vừa đủ tất cả collab xong → noti "all_collab_done" cho Owner.
+      if (computeProgress(next.collaborators) >= 100) {
+        emitNotifications('all_collab_done', notifyOnAllCollabDone(next));
+      }
+
+      // eslint-disable-next-line no-console
+      console.log('[dieu-phoi] owner accept collab', { taskId, collabId });
+      alert(`V1 (local): Đã chấp nhận phần phối hợp.\nV5 sẽ POST /api/coord-tasks/${taskId}/collaborators/${collabId}/accept.`);
+    },
+    [tasks, applyTaskUpdate],
+  );
+
+  // ============================================================
+  // 5. handleOwnerRejectCollab — Owner trả lại phần collab
+  //    status: gui_hoan_thanh → bi_tra_lai (kèm reason)
+  // ============================================================
+  const handleOwnerRejectCollab = useCallback(
+    (taskId: string, collabId: string, reason: string) => {
+      const r = reason.trim();
+      if (!r) {
+        alert('Vui lòng nhập lý do trả lại.');
+        return;
+      }
+      const task = tasks.find((t) => t.id === taskId);
+      if (!task) return;
+      const collab = task.collaborators.find((c) => c.id === collabId);
+      if (!collab) return;
+      if (collab.status !== 'gui_hoan_thanh') {
+        alert('Phần phối hợp không ở trạng thái chờ Owner duyệt.');
+        return;
+      }
+      const nowIso = new Date().toISOString();
+      const next = patchCollab(task, collabId, {
+        status: 'bi_tra_lai',
+        rejectedAt: nowIso,
+        rejectionReason: r,
+      });
+      applyTaskUpdate(next);
+
+      const updatedCollab = next.collaborators.find((c) => c.id === collabId)!;
+      emitNotifications('collab_rejected', notifyOnCollabRejected(next, updatedCollab, r));
+      // eslint-disable-next-line no-console
+      console.log('[dieu-phoi] owner reject collab', { taskId, collabId, reason: r });
+      alert(`V1 (local): Đã trả lại phần phối hợp.\nV5 sẽ POST /api/coord-tasks/${taskId}/collaborators/${collabId}/reject.`);
+    },
+    [tasks, applyTaskUpdate],
+  );
+
+  // ============================================================
+  // 6. handleOwnerConfirmAll — Owner xác nhận hoàn thành tổng thể
+  //    status: cho_owner_xac_nhan → (cho_duyet_ket_qua | hoan_thanh)
+  // ============================================================
+  const handleOwnerConfirmAll = useCallback(
+    (taskId: string) => {
+      const task = tasks.find((t) => t.id === taskId);
+      if (!task) return;
+      if ((task.status as string) !== 'cho_owner_xac_nhan') {
+        alert('Điều phối chưa sẵn sàng để Owner xác nhận hoàn thành.');
+        return;
+      }
+      const nowIso = new Date().toISOString();
+      const hasApprover = !!task.resultApproverUid;
+      const nextStatus: CoordStatus = hasApprover
+        ? ('cho_duyet_ket_qua' as CoordStatus)
+        : ('hoan_thanh' as CoordStatus);
+      const next: CoordTask = { ...task, status: nextStatus, updatedAt: nowIso };
+      applyTaskUpdate(next);
+
+      if (!hasApprover) {
+        // Đã hoàn thành luôn → noti complete.
+        emitNotifications('coord_completed', notifyOnCoordComplete(next, next.createdByUid));
+      } else {
+        // eslint-disable-next-line no-console
+        console.log('[dieu-phoi] owner confirm — waiting approver', { taskId });
+      }
+      alert(`V1 (local): Đã xác nhận hoàn thành tổng thể.\nV5 sẽ POST /api/coord-tasks/${taskId}/owner-confirm.`);
+    },
+    [tasks, applyTaskUpdate],
+  );
+
+  // ============================================================
+  // 7. handleOwnerRequestSupplement — Owner YCBS các collab đã chọn
+  //    Mỗi collab → status='bi_tra_lai' + rejectionReason; task → 'dang_phoi_hop'.
+  // ============================================================
+  const handleOwnerRequestSupplement = useCallback(
+    (taskId: string, collabIds: string[], reason: string) => {
+      const r = reason.trim();
+      if (!r) {
+        alert('Vui lòng nhập lý do bổ sung.');
+        return;
+      }
+      if (!collabIds || collabIds.length === 0) {
+        alert('Chưa chọn đơn vị phối hợp nào.');
+        return;
+      }
+      const task = tasks.find((t) => t.id === taskId);
+      if (!task) return;
+      const nowIso = new Date().toISOString();
+      const ids = new Set(collabIds);
+      const nextCollabs = task.collaborators.map((c) =>
+        ids.has(c.id)
+          ? {
+              ...c,
+              status: 'bi_tra_lai' as CollabStatus,
+              rejectedAt: nowIso,
+              rejectionReason: r,
+            }
+          : c,
+      );
+      const next: CoordTask = {
+        ...task,
+        collaborators: nextCollabs,
+        status: 'dang_phoi_hop' as CoordStatus,
+        updatedAt: nowIso,
+      };
+      applyTaskUpdate(next);
+
+      // Emit reject noti cho từng collab được YCBS.
+      for (const c of nextCollabs) {
+        if (ids.has(c.id)) {
+          emitNotifications(
+            'collab_rejected_ycbs',
+            notifyOnCollabRejected(next, c, r),
+          );
+        }
+      }
+      // eslint-disable-next-line no-console
+      console.log('[dieu-phoi] owner ycbs', { taskId, collabIds, reason: r });
+      alert(`V1 (local): Đã yêu cầu bổ sung ${collabIds.length} đơn vị.\nV5 sẽ POST /api/coord-tasks/${taskId}/owner-request-supplement.`);
+    },
+    [tasks, applyTaskUpdate],
+  );
+
+  // ============================================================
+  // 8. handleResultApprove / handleResultReject — Người duyệt
+  //    cho_duyet_ket_qua → hoan_thanh | dang_xu_ly (trả lại)
+  // ============================================================
+  const handleResultApprove = useCallback(
+    (taskId: string) => {
+      const task = tasks.find((t) => t.id === taskId);
+      if (!task) return;
+      if ((task.status as string) !== 'cho_duyet_ket_qua') {
+        alert('Điều phối không ở trạng thái chờ duyệt kết quả.');
+        return;
+      }
+      const next: CoordTask = {
+        ...task,
+        status: 'hoan_thanh' as CoordStatus,
+        updatedAt: new Date().toISOString(),
+      };
+      applyTaskUpdate(next);
+      emitNotifications('coord_completed', notifyOnCoordComplete(next, next.createdByUid));
+      // eslint-disable-next-line no-console
+      console.log('[dieu-phoi] result approve', { taskId });
+      alert(`V1 (local): Đã duyệt kết quả.\nV5 sẽ POST /api/coord-tasks/${taskId}/result-approve.`);
+    },
+    [tasks, applyTaskUpdate],
+  );
+
+  const handleResultReject = useCallback(
+    (taskId: string, reason: string) => {
+      const r = reason.trim();
+      if (!r) {
+        alert('Vui lòng nhập lý do trả lại kết quả.');
+        return;
+      }
+      const task = tasks.find((t) => t.id === taskId);
+      if (!task) return;
+      if ((task.status as string) !== 'cho_duyet_ket_qua') {
+        alert('Điều phối không ở trạng thái chờ duyệt kết quả.');
+        return;
+      }
+      const next: CoordTask = {
+        ...task,
+        status: 'dang_xu_ly' as CoordStatus,
+        updatedAt: new Date().toISOString(),
+      };
+      applyTaskUpdate(next);
+      // eslint-disable-next-line no-console
+      console.log('[dieu-phoi] result reject', { taskId, reason: r });
+      alert(`V1 (local): Đã trả lại kết quả về Owner.\nV5 sẽ POST /api/coord-tasks/${taskId}/result-reject.`);
+    },
+    [tasks, applyTaskUpdate],
+  );
+
+  // ============================================================
+  // 9. handleCloseDossier — Đóng hồ sơ
+  //    hoan_thanh → dong_ho_so (archive)
+  // ============================================================
+  const handleCloseDossier = useCallback(
+    (taskId: string) => {
+      const task = tasks.find((t) => t.id === taskId);
+      if (!task) return;
+      if ((task.status as string) !== 'hoan_thanh') {
+        alert('Chỉ đóng hồ sơ khi điều phối ở trạng thái Hoàn thành.');
+        return;
+      }
+      const next: CoordTask = {
+        ...task,
+        status: 'dong_ho_so' as CoordStatus,
+        updatedAt: new Date().toISOString(),
+      };
+      applyTaskUpdate(next);
+      // eslint-disable-next-line no-console
+      console.log('[dieu-phoi] close dossier', { taskId });
+      alert(`V1 (local): Đã đóng hồ sơ.\nV5 sẽ POST /api/coord-tasks/${taskId}/close-dossier.`);
+    },
+    [tasks, applyTaskUpdate],
+  );
 
   return (
     <div className="max-w-screen-2xl mx-auto">
@@ -122,14 +535,28 @@ export default function DieuPhoiClient({ currentUserUid, currentUserRole }: Dieu
               <Calendar size={14} className="text-slate-400" />
               <span className="tabular-nums">{new Date().toLocaleDateString('vi-VN')}</span>
             </div>
-            <button type="button" className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-sm hover:bg-slate-50">
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-sm hover:bg-slate-50"
+            >
               Tất cả khối <ChevronDown size={14} className="text-slate-400" />
             </button>
-            <button type="button" className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-sm hover:bg-slate-50">
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-sm hover:bg-slate-50"
+            >
               Tất cả cơ sở <ChevronDown size={14} className="text-slate-400" />
             </button>
-            <button type="button" onClick={reload} className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-sm hover:bg-slate-50" title="Tải lại">
-              <RefreshCw size={14} className={loading ? 'animate-spin text-slate-400' : 'text-slate-500'} />
+            <button
+              type="button"
+              onClick={reload}
+              className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-sm hover:bg-slate-50"
+              title="Tải lại"
+            >
+              <RefreshCw
+                size={14}
+                className={loading ? 'animate-spin text-slate-400' : 'text-slate-500'}
+              />
             </button>
           </div>
           <button
@@ -183,15 +610,30 @@ export default function DieuPhoiClient({ currentUserUid, currentUserRole }: Dieu
         )}
       </div>
 
-      {showCreate && <CreateModal open onClose={() => setShowCreate(false)} onCreate={handleCreate} />}
+      {showCreate && (
+        <CreateModal
+          open
+          onClose={() => setShowCreate(false)}
+          onCreate={handleCreate}
+          currentUserUid={currentUserUid}
+          currentUserName={currentUserName}
+          currentUserRole={currentUserRole}
+        />
+      )}
       <DetailDrawer
         task={selected}
         currentUserUid={currentUserUid}
         currentUserRole={currentUserRole}
         onClose={() => setSelected(null)}
-        onAcceptCollab={handleAcceptCollab}
-        onRejectCollab={handleRejectCollab}
-        onCompleteCollab={handleCompleteCollab}
+        onCollabAccept={handleCollabAccept}
+        onCollabSubmit={handleCollabSubmit}
+        onOwnerAcceptCollab={handleOwnerAcceptCollab}
+        onOwnerRejectCollab={handleOwnerRejectCollab}
+        onOwnerConfirmAll={handleOwnerConfirmAll}
+        onOwnerRequestSupplement={handleOwnerRequestSupplement}
+        onResultApprove={handleResultApprove}
+        onResultReject={handleResultReject}
+        onCloseDossier={handleCloseDossier}
       />
     </div>
   );
