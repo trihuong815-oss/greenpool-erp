@@ -424,6 +424,9 @@ export function DeXuatClient(props: Props) {
         estimatedCost: isInvestment ? (payload.estimatedCost ?? null) : null,
         approverUserIds,
         expectedDeliverable: null,
+        // V6.4 (2026-06-12): người nhận đề xuất (UID) — server cần để build chain.
+        recipientTier: payload.recipientTier ?? 'senior',
+        recipientUid: payload.recipientUid,
         // Meta lưu các trường V6 + V6+ relatedUnits + reverse-compat sang V5.
         meta: {
           proposalKindV6: payload.kind,

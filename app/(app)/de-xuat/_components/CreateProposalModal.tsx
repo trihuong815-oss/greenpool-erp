@@ -216,6 +216,10 @@ export interface CreateProposalPayloadV6 {
   // V6+ Đơn vị liên quan (multi-select) + auto scope
   relatedUnits?: { id: string; label: string; block: 'KD' | 'VP' }[];
   unitsScope?: 'trong_khoi' | 'lien_khoi';
+  // V6.4 (2026-06-12): người nhận đề xuất — UID cụ thể (server cần để build chain).
+  recipientTier?: 'peer' | 'senior';
+  recipientUid?: string;
+  recipientName?: string;
   // Auto computed (read-only client preview)
   resolvedApproverChain?: ResolvedStep[];
 }
@@ -405,6 +409,39 @@ export default function CreateProposalModal({
   const [attachments, setAttachments] = useState<ProposalAttachmentDraftV6[]>([]);
   // V6+ Đơn vị liên quan multi-select
   const [relatedUnitIds, setRelatedUnitIds] = useState<string[]>([]);
+  // V6.4 (2026-06-12): chọn người nhận đề xuất cụ thể (UID)
+  const [recipientTier, setRecipientTier] = useState<'peer' | 'senior'>('senior');
+  const [recipientUid, setRecipientUid] = useState('');
+  const [recipientName, setRecipientName] = useState('');
+  const [recipientOptions, setRecipientOptions] = useState<Array<{ uid: string; displayName: string; roleCode: string; roleName: string }>>([]);
+  const [loadingRecipients, setLoadingRecipients] = useState(false);
+
+  // Fetch candidate list khi đổi tier
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setLoadingRecipients(true);
+    fetch(`/api/proposals/recipients?tier=${recipientTier}`)
+      .then((r) => r.json())
+      .then((j) => {
+        if (cancelled) return;
+        const items = Array.isArray(j?.items) ? j.items : [];
+        setRecipientOptions(items);
+        // Nếu UID hiện tại không còn trong list → reset
+        if (recipientUid && !items.some((x: any) => x.uid === recipientUid)) {
+          setRecipientUid('');
+          setRecipientName('');
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setRecipientOptions([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingRecipients(false);
+      });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, recipientTier]);
 
   // V6.2: pre-fill state khi mở mode edit
   useEffect(() => {
@@ -418,6 +455,14 @@ export default function CreateProposalModal({
     setRelatedUnitIds(
       Array.isArray(p.relatedUnits) ? p.relatedUnits.map((u: any) => u.id) : [],
     );
+    // V6.4: pre-fill recipient nếu có
+    const tier = (p as any).recipientTier;
+    if (tier === 'peer' || tier === 'senior') setRecipientTier(tier);
+    const uid = (p as any).recipientUid;
+    if (typeof uid === 'string') {
+      setRecipientUid(uid);
+      setRecipientName(typeof (p as any).recipientName === 'string' ? (p as any).recipientName : '');
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialProposal?.id]);
 
@@ -473,6 +518,9 @@ export default function CreateProposalModal({
     setEstimatedCostStr('');
     setAttachments([]);
     setRelatedUnitIds([]);
+    setRecipientUid('');
+    setRecipientName('');
+    // KHÔNG reset recipientTier — giữ tier user chọn để UX mượt khi tạo đề xuất kế tiếp.
   }
 
   function handleClose() {
@@ -492,6 +540,7 @@ export default function CreateProposalModal({
     if (estimatedCostStr.trim() && (estimatedCostNum ?? 0) <= 0) {
       return 'Giá trị dự kiến phải lớn hơn 0.';
     }
+    if (!recipientUid) return 'Vui lòng chọn người nhận đề xuất.';
     return null;
   }
 
@@ -506,6 +555,10 @@ export default function CreateProposalModal({
       // V6+ Đơn vị liên quan + auto scope
       relatedUnits: relatedUnits.length ? relatedUnits : undefined,
       unitsScope: relatedUnits.length ? unitsScope : undefined,
+      // V6.4: chọn người nhận cụ thể (UID)
+      recipientTier,
+      recipientUid: recipientUid || undefined,
+      recipientName: recipientName || undefined,
       resolvedApproverChain: resolvedChain,
     };
   }
@@ -833,6 +886,67 @@ export default function CreateProposalModal({
               )}
             </div>
           </div>
+
+          {/* V6.4 (2026-06-12): Chọn người nhận đề xuất — UID cụ thể */}
+          <section className="rounded-lg border border-slate-200 bg-white px-4 py-3">
+            <label className="block text-xs font-semibold text-slate-700 mb-2">
+              Gửi đề xuất tới <span className="text-rose-500">*</span>
+            </label>
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <span className="text-[11px] text-slate-500">Cấp:</span>
+              <div className="inline-flex rounded-md ring-1 ring-slate-200 overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setRecipientTier('senior')}
+                  className={`px-3 py-1 text-xs font-medium ${
+                    recipientTier === 'senior'
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-white text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  Cấp trên
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRecipientTier('peer')}
+                  className={`px-3 py-1 text-xs font-medium border-l border-slate-200 ${
+                    recipientTier === 'peer'
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-white text-slate-600 hover:bg-slate-50'
+                  }`}
+                >
+                  Ngang cấp
+                </button>
+              </div>
+            </div>
+            <select
+              value={recipientUid}
+              onChange={(e) => {
+                const uid = e.target.value;
+                setRecipientUid(uid);
+                const opt = recipientOptions.find((o) => o.uid === uid);
+                setRecipientName(opt?.displayName ?? '');
+              }}
+              disabled={loadingRecipients}
+              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            >
+              <option value="">
+                {loadingRecipients
+                  ? 'Đang tải danh sách...'
+                  : recipientOptions.length === 0
+                  ? 'Không có người nhận phù hợp ở cấp này'
+                  : '— Chọn người nhận —'}
+              </option>
+              {recipientOptions.map((o) => (
+                <option key={o.uid} value={o.uid}>
+                  {o.displayName} · {o.roleName || o.roleCode}
+                </option>
+              ))}
+            </select>
+            <p className="text-[11px] text-slate-500 mt-1.5 italic">
+              Người được chọn sẽ là cấp đầu tiên duyệt. Hệ thống tự bổ sung các cấp tiếp theo dựa trên luồng duyệt gợi ý bên dưới.
+            </p>
+          </section>
 
           {/* Luồng duyệt gợi ý — READ-ONLY */}
           <section className="rounded-lg border border-emerald-200 bg-emerald-50/60 px-4 py-3">
