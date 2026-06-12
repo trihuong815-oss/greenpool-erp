@@ -247,7 +247,7 @@ export default function GiaoViecClient({
             <p className="text-xs text-slate-500 mt-0.5">{new Date().toLocaleDateString('vi-VN', { weekday:'long', day:'2-digit', month:'2-digit', year:'numeric' })}</p>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={refresh} className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition" title="Lam moi">
+            <button onClick={refresh} className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition" title="Làm mới">
               <RefreshCw size={14} />
             </button>
             {(canCreateAssignment || canCreateProposal) && (
@@ -264,10 +264,10 @@ export default function GiaoViecClient({
         {/* 5 KPI CARDS */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
           <KpiCard label="Can toi xu ly" value={kpi.needAction} icon={Inbox} accent={kpi.needAction > 0 ? 'rose' : 'slate'} onClick={() => jumpToTab('pending-response')} />
-          <KpiCard label="Dang xu ly" value={kpi.inProgress} icon={Clock} accent="sky" onClick={() => jumpToTab('mine')} />
-          <KpiCard label="Lien khoi" value={kpi.crossBlock} icon={ArrowRight} accent={kpi.crossBlock > 0 ? 'indigo' : 'slate'} onClick={() => jumpToTab('cross-block')} />
-          <KpiCard label="Qua han" value={kpi.overdue} icon={AlertTriangle} accent={kpi.overdue > 0 ? 'rose' : 'slate'} onClick={() => jumpToTab('overdue')} />
-          <KpiCard label="Hoan thanh" value={kpi.done} icon={CheckCircle2} accent="emerald" />
+          <KpiCard label="Đang xử lý" value={kpi.inProgress} icon={Clock} accent="sky" onClick={() => jumpToTab('mine')} />
+          <KpiCard label="Liên khối" value={kpi.crossBlock} icon={ArrowRight} accent={kpi.crossBlock > 0 ? 'indigo' : 'slate'} onClick={() => jumpToTab('cross-block')} />
+          <KpiCard label="Quá hạn" value={kpi.overdue} icon={AlertTriangle} accent={kpi.overdue > 0 ? 'rose' : 'slate'} onClick={() => jumpToTab('overdue')} />
+          <KpiCard label="Hoàn thành" value={kpi.done} icon={CheckCircle2} accent="emerald" />
         </div>
 
         {/* KHOI 1–3: Can xu ly / Tinh hinh / Diem nghen */}
@@ -384,7 +384,7 @@ export default function GiaoViecClient({
                       <div className="text-xs text-slate-500 truncate">{wf.unitName} — {wf.content}</div>
                     </div>
                     <span className={`text-xs font-bold tabular-nums shrink-0 ${days >= 3 ? 'text-rose-600' : days >= 1 ? 'text-amber-600' : 'text-slate-500'}`}>
-                      {days === 0 ? 'Hom nay' : `${days} ngay`}
+                      {days === 0 ? 'Hôm nay' : `${days} ngay`}
                     </span>
                   </button>
                 ))}
@@ -426,7 +426,7 @@ export default function GiaoViecClient({
             <Search size={12} className="text-slate-400 shrink-0" />
             <input
               type="text"
-              placeholder="Tim kiem cong viec..."
+              placeholder="Tìm kiếm cong viec..."
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
               className="bg-transparent outline-none flex-1 placeholder:text-slate-400 text-sm"
@@ -540,7 +540,7 @@ function CoordTable({ tasks, departments, branches, users, onSelect, today }: {
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-slate-200 bg-slate-50/80">
-            {['#', 'Cong viec', 'Loai', 'Chu tri', 'Phoi hop', 'Dang cho', 'Deadline', 'Trang thai', 'UU tien'].map(h => (
+            {['#', 'Công việc', 'Loại', 'Chủ trì', 'Phối hợp', 'Đang chờ', 'Deadline', 'Trạng thái', 'UU tien'].map(h => (
               <th key={h} className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wide py-2.5 px-3 whitespace-nowrap first:pl-4 last:pr-4">{h}</th>
             ))}
           </tr>
@@ -614,7 +614,7 @@ function CoordTable({ tasks, departments, branches, users, onSelect, today }: {
                       <div className="text-xs font-semibold text-slate-700 truncate max-w-[130px]">{wf.unitName}</div>
                       <div className="text-xs text-slate-400 truncate max-w-[130px]">{wf.content}</div>
                       <div className={`text-xs font-bold tabular-nums ${days! >= 3 ? 'text-rose-600' : days! >= 1 ? 'text-amber-600' : 'text-slate-500'}`}>
-                        {days === 0 ? 'Hom nay' : `${days} ngay`}
+                        {days === 0 ? 'Hôm nay' : `${days} ngay`}
                       </div>
                     </div>
                   ) : (

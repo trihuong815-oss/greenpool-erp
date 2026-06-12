@@ -28,8 +28,8 @@ const COORD_TYPE_OPTIONS: { value: CoordType; label: string; desc: string }[] = 
   { value: 'canh-bao', label: 'Cảnh báo', desc: 'Cảnh báo / escalation can xu ly ngay' },
 ];
 const SCOPE_OPTIONS: { value: CoordScope; label: string }[] = [
-  { value: 'noi-bo-phong', label: 'Noi bo phong ban' },
-  { value: 'noi-bo-khoi', label: 'Noi bo khoi (KD / VP)' },
+  { value: 'noi-bo-phong', label: 'Nội bộ phòng ban' },
+  { value: 'noi-bo-khoi', label: 'Nội bộ khối (KD / VP)' },
   { value: 'lien-khoi', label: 'Liên khối KD - VP' },
   { value: 'lien-co-so', label: 'Liên cơ sở (nhieu branch)' },
   { value: 'du-an', label: 'Dự án / Project' },
@@ -117,7 +117,7 @@ export default function TaskCreateModal({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!title.trim()) { setError('Vui long nhap tieu de'); return; }
+    if (!title.trim()) { setError('Vui lòng nhập tiêu đề'); return; }
     setBusy(true); setError(null);
     try {
       const body: any = {
@@ -146,7 +146,7 @@ export default function TaskCreateModal({
       await tasksApi.create(body);
       onChange();
     } catch (err: any) {
-      setError(err.message || 'Co loi xay ra');
+      setError(err.message || 'Có lỗi xảy ra');
     } finally {
       setBusy(false);
     }
@@ -175,35 +175,35 @@ export default function TaskCreateModal({
             <section>
               <SectionHeading>Thong tin chung</SectionHeading>
               <div className="space-y-4">
-                <Field label="Tieu de *">
+                <Field label="Tiêu đề *">
                   <input value={title} onChange={e => setTitle(e.target.value)} maxLength={200}
                     placeholder="VD: Mo lop he Green Pool Linh Dam..."
                     className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" />
                 </Field>
-                <Field label="Muc tieu / Ket qua mong doi">
+                <Field label="Mục tiêu / Kết quả mong doi">
                   <input value={goal} onChange={e => setGoal(e.target.value)}
                     placeholder="VD: Tuyen du 120 hoc vien, doanh thu du kien 240 trieu"
                     className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100" />
                 </Field>
-                <Field label="Mo ta them">
+                <Field label="Mô tả thêm">
                   <textarea value={description} onChange={e => setDescription(e.target.value)} rows={2}
                     placeholder="Them boi canh, yeu cau cu the..."
                     className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 resize-none" />
                 </Field>
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Loai dieu phoi *">
+                  <Field label="Loại điều phối *">
                     <select value={coordType} onChange={e => setCoordType(e.target.value as CoordType)}
                       className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 bg-white">
                       {COORD_TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>
                   </Field>
-                  <Field label="Pham vi">
+                  <Field label="Phạm vi">
                     <select value={coordScope} onChange={e => setCoordScope(e.target.value as CoordScope)}
                       className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 bg-white">
                       {SCOPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>
                   </Field>
-                  <Field label="Muc do uu tien">
+                  <Field label="Mức độ ưu tiên">
                     <select value={priority} onChange={e => setPriority(e.target.value as TaskPriority)}
                       className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 bg-white">
                       <option value="high">Cao</option>
@@ -224,14 +224,14 @@ export default function TaskCreateModal({
               <SectionHeading>Chu tri (Owner duy nhat)</SectionHeading>
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Kieu phan cong">
+                  <Field label="Kiểu phân công">
                     <select value={assigneeType} onChange={e => setAssigneeType(e.target.value as 'dept' | 'facility')}
                       className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 bg-white">
                       <option value="dept">Phong ban</option>
                       <option value="facility">Co so</option>
                     </select>
                   </Field>
-                  <Field label="Khoi chu tri">
+                  <Field label="Khối chủ trì">
                     <select value={assigneeBlock} onChange={e => setAssigneeBlock(e.target.value as Block)}
                       className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 bg-white">
                       <option value="KD">Kinh doanh</option>
@@ -240,7 +240,7 @@ export default function TaskCreateModal({
                   </Field>
                 </div>
                 {assigneeType === 'dept' ? (
-                  <Field label="Don vi chu tri">
+                  <Field label="Đơn vị chủ trì">
                     <select value={assigneeDeptId} onChange={e => setAssigneeDeptId(e.target.value)}
                       className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 bg-white">
                       <option value="">Chon phong ban...</option>
@@ -248,7 +248,7 @@ export default function TaskCreateModal({
                     </select>
                   </Field>
                 ) : (
-                  <Field label="Co so chu tri">
+                  <Field label="Cơ sở chủ trì">
                     <select value={assigneeFacilityId} onChange={e => setAssigneeFacilityId(e.target.value)}
                       className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 bg-white">
                       <option value="">Chon co so...</option>
@@ -256,7 +256,7 @@ export default function TaskCreateModal({
                     </select>
                   </Field>
                 )}
-                <Field label="Nguoi chiu trach nhiem (Owner) — co the chon nhieu nguoi thuc hien">
+                <Field label="Người chịu trách nhiệm (Owner) — co the chon nhieu nguoi thuc hien">
                   <div className="max-h-32 overflow-y-auto rounded-lg border border-slate-200 divide-y divide-slate-50">
                     {deptUsers.slice(0, 20).map(u => {
                       const uid = u.id || u.id || '';
@@ -287,7 +287,7 @@ export default function TaskCreateModal({
               </div>
               {collabUnits.length === 0 && (
                 <p className="text-xs text-slate-400 text-center py-4 border border-dashed border-slate-200 rounded-lg">
-                  Chua co don vi phoi hop. Nhan "Them don vi" de them.
+                  Chua co don vi phoi hop. Nhan "Thêm đơn vị" de them.
                 </p>
               )}
               <div className="space-y-4">
@@ -298,19 +298,19 @@ export default function TaskCreateModal({
                       <button type="button" onClick={() => removeCollabUnit(idx)} className="text-slate-400 hover:text-rose-500"><Trash2 size={13} /></button>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
-                      <Field label="Don vi">
+                      <Field label="Đơn vị">
                         <select value={cu.unitId} onChange={e => updateCollabUnit(idx, 'unitId', e.target.value)}
                           className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-500 bg-white">
                           <option value="">Chon don vi...</option>
-                          <optgroup label="Phong ban">
+                          <optgroup label="Phòng ban">
                             {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                           </optgroup>
-                          <optgroup label="Co so">
+                          <optgroup label="Cơ sở">
                             {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                           </optgroup>
                         </select>
                       </Field>
-                      <Field label="Nguoi phu trach">
+                      <Field label="Người phụ trách">
                         <select value={cu.ownerId} onChange={e => updateCollabUnit(idx, 'ownerId', e.target.value)}
                           className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-500 bg-white">
                           <option value="">Chon nguoi...</option>
@@ -322,17 +322,17 @@ export default function TaskCreateModal({
                       </Field>
                     </div>
                     <div className="mt-3 space-y-2">
-                      <Field label="Noi dung can ho tro *">
+                      <Field label="Nội dung cần hỗ trợ *">
                         <input value={cu.assignment} onChange={e => updateCollabUnit(idx, 'assignment', e.target.value)}
                           placeholder="VD: Thiet ke banner tuyen sinh 3 size"
                           className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-500" />
                       </Field>
-                      <Field label="Ket qua can ban giao">
+                      <Field label="Kết quả cần bàn giao">
                         <input value={cu.deliverable} onChange={e => updateCollabUnit(idx, 'deliverable', e.target.value)}
                           placeholder="VD: Banner hoan chinh JPG + PNG du 3 kich co"
                           className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-500" />
                       </Field>
-                      <Field label="Deadline rieng">
+                      <Field label="Deadline riêng">
                         <input type="date" value={cu.dueDate || ''} onChange={e => updateCollabUnit(idx, 'dueDate', e.target.value)}
                           className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-500" />
                       </Field>
@@ -347,19 +347,19 @@ export default function TaskCreateModal({
               <SectionHeading>Dang cho ai? (Waiting-For)</SectionHeading>
               <p className="text-xs text-slate-500 mb-3">Neu hien tai dang can ai do phan hoi / bao cao truoc khi tien hanh, khai bao o day.</p>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Dang cho don vi nao">
+                <Field label="Đang chờ don vi nao">
                   <select value={waitingForUnitId} onChange={e => setWaitingForUnitId(e.target.value)}
                     className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 bg-white">
                     <option value="">Khong cho ai</option>
-                    <optgroup label="Phong ban">
+                    <optgroup label="Phòng ban">
                       {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                     </optgroup>
-                    <optgroup label="Co so">
+                    <optgroup label="Cơ sở">
                       {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                     </optgroup>
                   </select>
                 </Field>
-                <Field label="Dang cho noi dung gi">
+                <Field label="Đang chờ noi dung gi">
                   <input value={waitingForContent} onChange={e => setWaitingForContent(e.target.value)}
                     placeholder="VD: Xac nhan ngan sach, Ban thiet ke..."
                     className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-500" />

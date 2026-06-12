@@ -34,7 +34,7 @@ const COORD_TYPE_LABEL: Record<string, string> = {
   'proposal': 'Đề xuất', 'assignment': 'Điều phối',
 };
 const COORD_SCOPE_LABEL: Record<string, string> = {
-  'noi-bo-phong': 'Noi bo phong', 'noi-bo-khoi': 'Noi bo khoi',
+  'noi-bo-phong': 'Nội bộ phòng', 'noi-bo-khoi': 'Nội bộ khối',
   'lien-khoi': 'Liên khối', 'lien-co-so': 'Liên cơ sở', 'du-an': 'Dự án',
 };
 const STATUS_LABEL: Record<string, string> = {
@@ -198,7 +198,7 @@ export default function TaskDetailModal({
           {(['detail', 'timeline'] as const).map(t => (
             <button key={t} onClick={() => setActiveTab(t)}
               className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition ${activeTab === t ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
-              {t === 'detail' ? 'Chi tiet' : 'Lich su xu ly'}
+              {t === 'detail' ? 'Chi tiết' : 'Lịch sử xử lý'}
             </button>
           ))}
         </div>
@@ -248,11 +248,11 @@ function DetailTab({ task, coordType, coordScope, collabUnits, waitingFor, daysW
           <div className="rounded-xl border border-slate-200 bg-white p-4">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Thong tin cong viec</h3>
             <div className="space-y-2.5">
-              <MetaRow label="Chu tri" value={ownerName} />
-              <MetaRow label="Loai" value={COORD_TYPE_LABEL[coordType] || coordType} />
-              {coordScope && <MetaRow label="Pham vi" value={COORD_SCOPE_LABEL[coordScope] || coordScope} />}
-              <MetaRow label="Khoi" value={task.assigneeBlock === 'KD' ? 'Kinh doanh' : task.assigneeBlock === 'VP' ? 'Van phong' : task.assigneeBlock} />
-              <MetaRow label="Uu tien">
+              <MetaRow label="Chủ trì" value={ownerName} />
+              <MetaRow label="Loại" value={COORD_TYPE_LABEL[coordType] || coordType} />
+              {coordScope && <MetaRow label="Phạm vi" value={COORD_SCOPE_LABEL[coordScope] || coordScope} />}
+              <MetaRow label="Khối" value={task.assigneeBlock === 'KD' ? 'Kinh doanh' : task.assigneeBlock === 'VP' ? 'Văn phòng' : task.assigneeBlock} />
+              <MetaRow label="Ưu tiên">
                 <span className={PRIORITY_COLOR[task.priority]}>{PRIORITY_LABEL[task.priority] || task.priority}</span>
               </MetaRow>
               <MetaRow label="Deadline">
@@ -261,9 +261,9 @@ function DetailTab({ task, coordType, coordScope, collabUnits, waitingFor, daysW
                   {overdue && ' (!)'}
                 </span>
               </MetaRow>
-              <MetaRow label="Tao luc" value={formatDateTime(task.createdAt)} />
-              <MetaRow label="Tao boi" value={task.createdByName} />
-              <MetaRow label="Cap nhat" value={formatDateTime(task.updatedAt)} />
+              <MetaRow label="Tạo lúc" value={formatDateTime(task.createdAt)} />
+              <MetaRow label="Tạo bởi" value={task.createdByName} />
+              <MetaRow label="Cập nhật" value={formatDateTime(task.updatedAt)} />
             </div>
           </div>
 
@@ -286,7 +286,7 @@ function DetailTab({ task, coordType, coordScope, collabUnits, waitingFor, daysW
             {progressInput !== task.progressPct && (
               <button onClick={updateProgress} disabled={busy === 'progress'}
                 className="mt-2 w-full py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition">
-                {busy === 'progress' ? 'Dang luu...' : 'Luu tien do'}
+                {busy === 'progress' ? 'Đang lưu...' : 'Lưu tiến độ'}
               </button>
             )}
           </div>
@@ -297,10 +297,10 @@ function DetailTab({ task, coordType, coordScope, collabUnits, waitingFor, daysW
             <div className="space-y-1.5">
               {[
                 { key: 'tiep-nhan', label: 'Tiếp nhận', show: status === 'khoi-tao' },
-                { key: 'dang-xu-ly', label: 'Bat dau xu ly', show: ['khoi-tao','tiep-nhan'].includes(status) },
+                { key: 'dang-xu-ly', label: 'Bắt đầu xử lý', show: ['khoi-tao','tiep-nhan'].includes(status) },
                 { key: 'dang-phoi-hop', label: 'Đang phối hợp', show: ['dang-xu-ly'].includes(status) },
                 { key: 'cho-phan-hoi', label: 'Chuyen: Chờ phản hồi', show: ['dang-xu-ly','dang-phoi-hop'].includes(status) },
-                { key: 'cho-phe-duyet', label: 'Gui phe duyet', show: ['dang-xu-ly','dang-phoi-hop'].includes(status) },
+                { key: 'cho-phe-duyet', label: 'Gửi phê duyệt', show: ['dang-xu-ly','dang-phoi-hop'].includes(status) },
                 { key: 'hoan-thanh', label: 'Xac nhan Hoàn thành', show: !['hoan-thanh','dong-ho-so','cancelled','rejected'].includes(status) },
                 { key: 'dong-ho-so', label: 'Đóng hồ sơ', show: status === 'hoan-thanh' },
               ].filter(a => a.show).map(a => (
@@ -378,7 +378,7 @@ function DetailTab({ task, coordType, coordScope, collabUnits, waitingFor, daysW
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <div className={`text-2xl font-bold tabular-nums ${daysWaiting! >= 3 ? 'text-rose-600' : daysWaiting! >= 1 ? 'text-amber-600' : 'text-slate-600'}`}>
-                    {daysWaiting === 0 ? 'Hom nay' : `${daysWaiting} ngay`}
+                    {daysWaiting === 0 ? 'Hôm nay' : `${daysWaiting} ngay`}
                   </div>
                 </div>
                 <div className="space-y-1.5 text-xs">
