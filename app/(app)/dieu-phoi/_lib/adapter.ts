@@ -153,35 +153,56 @@ function buildCollaborators(t: Task): Collaborator[] {
   // V6.2: server lưu deadline riêng cho mỗi collab trong collaboratorDeadlines
   // (key 'dept:KT' / 'facility:HM'). Nếu thiếu → fallback dueDate tổng.
   const deadlines = ((t as any).collaboratorDeadlines as Record<string, string> | undefined) ?? {};
+  // V6.4 (2026-06-12): server lưu STATE từng collab trong collaboratorStates
+  // (status + acceptedAt + submittedAt + submittedResult + ...). Nếu thiếu → fallback 'chua_tiep_nhan'.
+  const states = ((t as any).collaboratorStates as Record<string, any> | undefined) ?? {};
   const deadlineDefault = t.dueDate ?? '';
   const statusDefault: CollabStatus = 'chua_tiep_nhan';
 
   for (const deptId of t.collaboratorDeptIds ?? []) {
     const label = DEPT_IDS.has(deptId) ? DEPT_LABEL[deptId as DeptId] : deptId;
+    const stateKey = `dept:${deptId}`;
+    const st = states[stateKey] ?? {};
     out.push({
       id: `dept-${deptId}`,
       unitName: label,
-      supportContent: roles[`dept:${deptId}`] ?? '',
+      supportContent: roles[stateKey] ?? '',
       deliverable: '',
-      deadline: deadlines[`dept:${deptId}`] || deadlineDefault,
-      status: statusDefault,
-      responsibleUid: '',
-      responsibleName: label,
+      deadline: deadlines[stateKey] || deadlineDefault,
+      status: (st.status as CollabStatus) || statusDefault,
+      acceptedAt: st.acceptedAt,
+      submittedAt: st.submittedAt,
+      completedAt: st.completedAt,
+      submittedResult: st.submittedResult,
+      submittedNote: st.submittedNote,
+      submittedFiles: st.submittedFiles,
+      rejectionReason: st.rejectionReason,
+      responsibleUid: st.actorUid ?? '',
+      responsibleName: st.actorName || label,
     });
   }
   for (const facilityId of t.collaboratorFacilityIds ?? []) {
     const label = BRANCH_IDS.has(facilityId)
       ? BRANCH_LABEL[facilityId as BranchId]
       : facilityId;
+    const stateKey = `facility:${facilityId}`;
+    const st = states[stateKey] ?? {};
     out.push({
       id: `facility-${facilityId}`,
       unitName: label,
-      supportContent: roles[`facility:${facilityId}`] ?? '',
+      supportContent: roles[stateKey] ?? '',
       deliverable: '',
-      deadline: deadlines[`facility:${facilityId}`] || deadlineDefault,
-      status: statusDefault,
-      responsibleUid: '',
-      responsibleName: label,
+      deadline: deadlines[stateKey] || deadlineDefault,
+      status: (st.status as CollabStatus) || statusDefault,
+      acceptedAt: st.acceptedAt,
+      submittedAt: st.submittedAt,
+      completedAt: st.completedAt,
+      submittedResult: st.submittedResult,
+      submittedNote: st.submittedNote,
+      submittedFiles: st.submittedFiles,
+      rejectionReason: st.rejectionReason,
+      responsibleUid: st.actorUid ?? '',
+      responsibleName: st.actorName || label,
     });
   }
   return out;

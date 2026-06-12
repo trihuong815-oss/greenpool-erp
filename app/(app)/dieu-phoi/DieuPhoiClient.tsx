@@ -33,15 +33,11 @@ import { adaptTask } from './_lib/adapter';
 import { canCreateCoord } from './_lib/permissions';
 import {
   nextStatusAfterCollabUpdate,
-  computeProgress,
   type CoordTaskV4,
 } from './_lib/workflow-engine';
 import {
   notifyOnCreate,
-  notifyOnCollabSubmit,
-  notifyOnCollabAccepted,
   notifyOnCollabRejected,
-  notifyOnAllCollabDone,
   notifyOnCoordComplete,
   type NotificationTrigger,
 } from './_lib/coord-notifications';
@@ -316,143 +312,105 @@ export default function DieuPhoiClient({
   );
 
   // ============================================================
-  // 2. handleCollabAccept — Collab tiếp nhận
-  //    status: chua_tiep_nhan → da_tiep_nhan
+  // V6.4 (2026-06-12): 4 handler GỌI API thật (server persist trạng thái).
+  // Client id format `dept-XX` / `facility-XX` → server key `dept:XX` / `facility:XX`.
+  // ============================================================
+
+  const collabIdToKey = (collabId: string): string | null => {
+    if (collabId.startsWith('dept-')) return `dept:${collabId.slice(5)}`;
+    if (collabId.startsWith('facility-')) return `facility:${collabId.slice(9)}`;
+    return null;
+  };
+
+  const callCollabTransition = useCallback(
+    async (
+      taskId: string,
+      collabId: string,
+      action: 'accept' | 'submit' | 'owner_accept' | 'owner_reject',
+      payload?: Record<string, unknown>,
+    ): Promise<boolean> => {
+      const collabKey = collabIdToKey(collabId);
+      if (!collabKey) {
+        alert('collabId không hợp lệ.');
+        return false;
+      }
+      try {
+        const res = await fetch(`/api/tasks/${taskId}/collaborators/transition`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ collabKey, action, payload }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          alert(`Thao tác thất bại: ${json?.error ?? res.status}`);
+          return false;
+        }
+        return true;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'lỗi không xác định';
+        alert(`Lỗi kết nối: ${msg}`);
+        return false;
+      }
+    },
+    [],
+  );
+
+  // ============================================================
+  // 2. handleCollabAccept — Collab tiếp nhận: chua_tiep_nhan → da_tiep_nhan
   // ============================================================
   const handleCollabAccept = useCallback(
-    (taskId: string, collabId: string) => {
-      const task = tasks.find((t) => t.id === taskId);
-      if (!task) return;
-      const collab = task.collaborators.find((c) => c.id === collabId);
-      if (!collab) return;
-      if (collab.status !== 'chua_tiep_nhan') {
-        alert('Trạng thái không hợp lệ để tiếp nhận.');
-        return;
-      }
-      const nowIso = new Date().toISOString();
-      const next = patchCollab(task, collabId, {
-        status: 'da_tiep_nhan',
-        acceptedAt: nowIso,
-      });
-      applyTaskUpdate(next);
-      // eslint-disable-next-line no-console
-      console.log('[dieu-phoi] collab accept', { taskId, collabId });
-      alert(`V1 (local): Đã tiếp nhận phần phối hợp "${collab.unitName}".\nV5 sẽ POST /api/coord-tasks/${taskId}/collaborators/${collabId}/accept.`);
+    async (taskId: string, collabId: string) => {
+      const ok = await callCollabTransition(taskId, collabId, 'accept');
+      if (ok) reload();
     },
-    [tasks, applyTaskUpdate],
+    [callCollabTransition, reload],
   );
 
   // ============================================================
   // 3. handleCollabSubmit — Collab gửi hoàn thành
-  //    status: da_tiep_nhan|dang_thuc_hien|bi_tra_lai → gui_hoan_thanh
   // ============================================================
   const handleCollabSubmit = useCallback(
-    (
+    async (
       taskId: string,
       collabId: string,
       payload: { result: string; note: string; files: string[] },
     ) => {
-      const task = tasks.find((t) => t.id === taskId);
-      if (!task) return;
-      const collab = task.collaborators.find((c) => c.id === collabId);
-      if (!collab) return;
-      const allowed: CollabStatus[] = ['da_tiep_nhan', 'dang_thuc_hien', 'bi_tra_lai'];
-      if (!allowed.includes(collab.status)) {
-        alert('Trạng thái không hợp lệ để gửi hoàn thành.');
-        return;
-      }
-      const nowIso = new Date().toISOString();
-      const nextCollab: Partial<Collaborator> = {
-        status: 'gui_hoan_thanh',
-        submittedAt: nowIso,
-        submittedResult: payload.result,
-        submittedNote: payload.note,
-        submittedFiles: payload.files,
-      };
-      const next = patchCollab(task, collabId, nextCollab);
-      applyTaskUpdate(next);
-
-      const updatedCollab = next.collaborators.find((c) => c.id === collabId)!;
-      emitNotifications('collab_submit', notifyOnCollabSubmit(next, updatedCollab));
-      // eslint-disable-next-line no-console
-      console.log('[dieu-phoi] collab submit', { taskId, collabId, payload });
-      alert(`V1 (local): Đã gửi hoàn thành.\nV5 sẽ POST /api/coord-tasks/${taskId}/collaborators/${collabId}/submit.`);
+      const ok = await callCollabTransition(taskId, collabId, 'submit', {
+        result: payload.result,
+        note: payload.note,
+        files: payload.files,
+      });
+      if (ok) reload();
     },
-    [tasks, applyTaskUpdate],
+    [callCollabTransition, reload],
   );
 
   // ============================================================
-  // 4. handleOwnerAcceptCollab — Owner chấp nhận phần collab
-  //    status: gui_hoan_thanh → hoan_thanh
-  //    Nếu tất cả collab='hoan_thanh' → coord status auto chuyển 'cho_owner_xac_nhan'
+  // 4. handleOwnerAcceptCollab — Owner chấp nhận: gui_hoan_thanh → hoan_thanh
+  // Server tự auto-set task.status='cho_owner_xac_nhan' khi tất cả collab done.
   // ============================================================
   const handleOwnerAcceptCollab = useCallback(
-    (taskId: string, collabId: string) => {
-      const task = tasks.find((t) => t.id === taskId);
-      if (!task) return;
-      const collab = task.collaborators.find((c) => c.id === collabId);
-      if (!collab) return;
-      if (collab.status !== 'gui_hoan_thanh') {
-        alert('Phần phối hợp không ở trạng thái chờ Owner duyệt.');
-        return;
-      }
-      const nowIso = new Date().toISOString();
-      const next = patchCollab(task, collabId, {
-        status: 'hoan_thanh',
-        completedAt: nowIso,
-        acceptedAt: collab.acceptedAt ?? nowIso,
-      });
-      applyTaskUpdate(next);
-
-      const updatedCollab = next.collaborators.find((c) => c.id === collabId)!;
-      emitNotifications('collab_accepted', notifyOnCollabAccepted(next, updatedCollab));
-
-      // Nếu vừa đủ tất cả collab xong → noti "all_collab_done" cho Owner.
-      if (computeProgress(next.collaborators) >= 100) {
-        emitNotifications('all_collab_done', notifyOnAllCollabDone(next));
-      }
-
-      // eslint-disable-next-line no-console
-      console.log('[dieu-phoi] owner accept collab', { taskId, collabId });
-      alert(`V1 (local): Đã chấp nhận phần phối hợp.\nV5 sẽ POST /api/coord-tasks/${taskId}/collaborators/${collabId}/accept.`);
+    async (taskId: string, collabId: string) => {
+      const ok = await callCollabTransition(taskId, collabId, 'owner_accept');
+      if (ok) reload();
     },
-    [tasks, applyTaskUpdate],
+    [callCollabTransition, reload],
   );
 
   // ============================================================
-  // 5. handleOwnerRejectCollab — Owner trả lại phần collab
-  //    status: gui_hoan_thanh → bi_tra_lai (kèm reason)
+  // 5. handleOwnerRejectCollab — Owner trả lại: gui_hoan_thanh → bi_tra_lai
   // ============================================================
   const handleOwnerRejectCollab = useCallback(
-    (taskId: string, collabId: string, reason: string) => {
+    async (taskId: string, collabId: string, reason: string) => {
       const r = reason.trim();
       if (!r) {
         alert('Vui lòng nhập lý do trả lại.');
         return;
       }
-      const task = tasks.find((t) => t.id === taskId);
-      if (!task) return;
-      const collab = task.collaborators.find((c) => c.id === collabId);
-      if (!collab) return;
-      if (collab.status !== 'gui_hoan_thanh') {
-        alert('Phần phối hợp không ở trạng thái chờ Owner duyệt.');
-        return;
-      }
-      const nowIso = new Date().toISOString();
-      const next = patchCollab(task, collabId, {
-        status: 'bi_tra_lai',
-        rejectedAt: nowIso,
-        rejectionReason: r,
-      });
-      applyTaskUpdate(next);
-
-      const updatedCollab = next.collaborators.find((c) => c.id === collabId)!;
-      emitNotifications('collab_rejected', notifyOnCollabRejected(next, updatedCollab, r));
-      // eslint-disable-next-line no-console
-      console.log('[dieu-phoi] owner reject collab', { taskId, collabId, reason: r });
-      alert(`V1 (local): Đã trả lại phần phối hợp.\nV5 sẽ POST /api/coord-tasks/${taskId}/collaborators/${collabId}/reject.`);
+      const ok = await callCollabTransition(taskId, collabId, 'owner_reject', { reason: r });
+      if (ok) reload();
     },
-    [tasks, applyTaskUpdate],
+    [callCollabTransition, reload],
   );
 
   // ============================================================
