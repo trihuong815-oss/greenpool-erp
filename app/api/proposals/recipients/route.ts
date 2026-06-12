@@ -38,15 +38,17 @@ function targetRolesFor(callerRole: string, tier: 'peer' | 'senior'): string[] {
       return [];
     }
     if (callerRole.startsWith('QLCS_')) return ALL_QLCS;
-    if (callerRole === 'CEO' || callerRole === 'ADMIN') return [];
+    // CEO, CHU_TICH, ADMIN — đỉnh quản trị, không có peer.
+    if (callerRole === 'CEO' || callerRole === 'CHU_TICH' || callerRole === 'ADMIN') return [];
     return [];
   }
   // senior
-  if (callerRole === 'CEO' || callerRole === 'ADMIN') return [];
+  if (callerRole === 'CHU_TICH' || callerRole === 'ADMIN') return []; // đỉnh tuyệt đối
+  if (callerRole === 'CEO') return ['CHU_TICH']; // V6.4 (2026-06-13): CEO → CHU_TICH
   if (callerRole === 'GD_KD' || callerRole === 'GD_VP') return ['CEO'];
   if (callerRole.startsWith('QLCS_')) return ['GD_KD'];
   if (callerRole.startsWith('TP_')) {
-    // TP_KT thuộc KD → GD_KD. TP_DT/MKT thuộc KD nhưng module-wise lên GD_KD; TP_NS/KE/GS thuộc VP → GD_VP.
+    // TP_KT thuộc KD → GD_KD. TP_DT/MKT thuộc KD → GD_KD; TP_NS/KE/GS thuộc VP → GD_VP.
     if (TP_KD.includes(callerRole)) return ['GD_KD'];
     if (TP_VP.includes(callerRole)) return ['GD_VP'];
     return [];

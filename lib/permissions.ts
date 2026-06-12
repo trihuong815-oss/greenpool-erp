@@ -73,6 +73,9 @@ export const MENU_PERMISSIONS: Record<string, string[]> = {
 
 // Role → khối mapping (single source of truth — tasks-scope/sales-scope import từ đây)
 export const ROLE_BLOCK: Record<string, 'KD' | 'VP' | 'all'> = {
+  // V6.4 (2026-06-13): Chủ tịch HĐQT — đỉnh quản trị, block='all' (như CEO/ADMIN).
+  // User thực: daoduong.ct@greenpool.vn.
+  CHU_TICH: 'all',
   ADMIN: 'all', CEO: 'all', GD_KD: 'KD', GD_VP: 'VP',
   // KD — Vận hành cơ sở
   QLCS_HM: 'KD', QLCS_TK: 'KD', QLCS_CTT: 'KD', QLCS_24NCT: 'KD', QLCS_TT: 'KD',

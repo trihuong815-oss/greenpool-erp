@@ -18,8 +18,12 @@ export function isGD(p: CallerProfile): boolean {
   return p.role_code === 'GD_KD' || p.role_code === 'GD_VP';
 }
 
+// Top management = CEO + ADMIN + CHU_TICH.
+// Helper này check "đỉnh quản trị" cho mục đích scope (read/write all, bypass block).
+// V6.4 (2026-06-13): thêm CHU_TICH — anh Đào Văn Dương (daoduong.ct@greenpool.vn).
+// LƯU Ý: khác với `lib/auth/roles.ts:isCEO` — kia check === 'CEO' chặt chẽ.
 export function isCEO(p: CallerProfile): boolean {
-  return p.role_code === 'CEO' || p.role_code === 'ADMIN';
+  return p.role_code === 'CEO' || p.role_code === 'ADMIN' || p.role_code === 'CHU_TICH';
 }
 
 // ADMIN system thuần — duy nhất role được bypass quy tắc nghiệp vụ
