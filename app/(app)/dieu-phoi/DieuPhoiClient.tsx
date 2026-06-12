@@ -623,7 +623,7 @@ export default function DieuPhoiClient({
         {/* Page header — title + actions */}
         <div className="flex flex-wrap items-end justify-between gap-3 pb-1">
           <div>
-            <h1 className="text-lg font-bold text-slate-800 tracking-tight">Điều phối công việc</h1>
+            <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-emerald-700 to-teal-600 bg-clip-text text-transparent">Điều phối công việc</h1>
             <p className="text-xs text-slate-500 mt-0.5">Theo dõi & điều phối nhiệm vụ liên phòng ban, liên cơ sở.</p>
           </div>
           <button

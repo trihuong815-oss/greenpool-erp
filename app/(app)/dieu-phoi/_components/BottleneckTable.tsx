@@ -88,17 +88,17 @@ export default function BottleneckTable({ tasks }: Props) {
   }, [tasks]);
 
   return (
-    <div className="rounded-xl border border-slate-200/70 bg-white shadow-md ring-1 ring-slate-50 overflow-hidden">
+    <div className="rounded-xl border border-slate-200/70 bg-white shadow-md ring-1 ring-slate-50 overflow-hidden transition hover:-translate-y-0.5 hover:shadow-lg">
       <div className="bg-gradient-to-r from-rose-50 to-rose-50/40 px-4 py-2 border-b border-rose-100/70 flex items-center justify-between">
         <h3 className="text-[11px] font-bold uppercase tracking-wider text-rose-700">Điểm nghẽn hiện tại</h3>
         <button type="button" className="text-[11px] font-medium text-emerald-600 hover:underline">Xem tất cả</button>
       </div>
 
-      <div className="grid grid-cols-[minmax(140px,1.2fr)_70px_90px_1.5fr] gap-2 px-3 py-1.5 border-b border-slate-100 text-[10px] uppercase text-slate-400 tracking-wider font-medium">
+      <div className="grid grid-cols-[minmax(120px,1.4fr)_44px_60px_1.6fr] gap-2 px-3 py-1.5 border-b border-slate-100 text-[10px] uppercase text-slate-400 tracking-wider font-medium">
         <div>Người / Đơn vị</div>
-        <div>Đang giữ</div>
-        <div>Chờ lâu nhất</div>
-        <div>Nội dung đang chờ</div>
+        <div className="text-center">SL</div>
+        <div className="text-right">Chờ</div>
+        <div>Nội dung</div>
       </div>
 
       {rows.length === 0 ? (
@@ -106,7 +106,7 @@ export default function BottleneckTable({ tasks }: Props) {
       ) : (
         <div>
           {rows.map((row, idx) => (
-            <div key={idx} className="grid grid-cols-[minmax(140px,1.2fr)_70px_90px_1.5fr] gap-2 px-3 py-2.5 items-center hover:bg-slate-50/70 text-sm border-b border-slate-50 last:border-0 transition-colors">
+            <div key={idx} className="grid grid-cols-[minmax(120px,1.4fr)_44px_60px_1.6fr] gap-2 px-3 py-2.5 items-center hover:bg-slate-50/70 text-sm border-b border-slate-50 last:border-0 transition-colors">
               <div className="flex items-center gap-2 min-w-0">
                 <span className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-100 to-emerald-200 text-emerald-700 text-[10px] font-bold flex items-center justify-center shrink-0 shadow-sm ring-1 ring-white/60">
                   {initialsOf(row.name)}
@@ -118,9 +118,9 @@ export default function BottleneckTable({ tasks }: Props) {
                   )}
                 </div>
               </div>
-              <div className="tabular-nums text-slate-700">{row.holding}</div>
-              <div className="text-rose-600 font-semibold tabular-nums">{row.maxDays.toFixed(1)} ngày</div>
-              <div className="text-slate-600 truncate">{row.content || row.sample.title}</div>
+              <div className="text-center tabular-nums text-slate-700 font-medium">{row.holding}</div>
+              <div className="text-right text-rose-600 font-semibold tabular-nums">{row.maxDays.toFixed(1)}d</div>
+              <div className="text-slate-600 truncate text-xs" title={row.content || row.sample.title}>{row.content || row.sample.title}</div>
             </div>
           ))}
         </div>

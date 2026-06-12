@@ -93,7 +93,7 @@ export default function TopWatchList({ tasks }: Props) {
   [tasks]);
 
   return (
-    <div className="rounded-xl border border-slate-200/70 bg-white shadow-md ring-1 ring-slate-50 overflow-hidden">
+    <div className="rounded-xl border border-slate-200/70 bg-white shadow-md ring-1 ring-slate-50 overflow-hidden transition hover:-translate-y-0.5 hover:shadow-lg">
       <div className="bg-gradient-to-r from-amber-50 to-amber-50/40 px-4 py-2 border-b border-amber-100/70 flex items-center justify-between">
         <h3 className="text-[11px] font-bold uppercase tracking-wider text-amber-700">Top việc cần quan tâm</h3>
         <button type="button" className="text-[11px] font-medium text-emerald-600 hover:text-emerald-700 hover:underline">Xem tất cả</button>

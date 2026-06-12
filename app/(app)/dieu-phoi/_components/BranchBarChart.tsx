@@ -34,7 +34,7 @@ export default function BranchBarChart({ tasks }: Props) {
   }), [tasks]);
 
   return (
-    <div className="rounded-xl border border-slate-200/70 bg-white p-4 shadow-md ring-1 ring-slate-50">
+    <div className="rounded-xl border border-slate-200/70 bg-white p-4 shadow-md ring-1 ring-slate-50 transition hover:-translate-y-0.5 hover:shadow-lg">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
           Hiệu suất điều phối theo cơ sở

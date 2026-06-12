@@ -75,7 +75,7 @@ export default function BlockDonut({ tasks }: Props) {
   });
 
   return (
-    <div className="rounded-xl border border-slate-200/70 bg-white p-4 shadow-md ring-1 ring-slate-50">
+    <div className="rounded-xl border border-slate-200/70 bg-white p-4 shadow-md ring-1 ring-slate-50 transition hover:-translate-y-0.5 hover:shadow-lg">
       <h3 className="mb-4 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
         Cơ cấu công việc theo khối
       </h3>
