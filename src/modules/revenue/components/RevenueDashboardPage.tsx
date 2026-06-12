@@ -645,7 +645,8 @@ function BranchCard({
         </div>
       </div>
 
-      {/* Source list */}
+      {/* Source list — Mock-Frame 2026-06-12: grid 4 cột cố định để thanh tiến độ,
+          số count và % LUÔN CÙNG 1 HÀNG. Không flex-wrap. Mobile vẫn fit. */}
       <div className="mt-4 border-t border-slate-100 pt-3">
         <div className="mb-2 flex items-center justify-between">
           <h4 className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
@@ -653,37 +654,46 @@ function BranchCard({
           </h4>
           <span className="text-[10px] text-slate-400">tổng · chốt / chưa chốt · tỷ lệ</span>
         </div>
-        <ul className="space-y-1.5">
+        <ul className="space-y-2">
           {sources.map((s) => {
             const Icon = SOURCE_ICON[s.source];
             const notClosed = Math.max(0, s.actualLeads - s.actualClosed);
-            // Màu phải khớp với CON SỐ hiển thị bên cạnh = closeRatePct.
-            // Multiplier 1.5 để 60%≈good, 40%≈warning (theo convention của SourceCell elsewhere).
             const closeHex = STATUS_BAR_HEX[statusKey(s.closeRatePct * 1.5)];
+            // Thanh tiến độ = % chốt trên tổng lead nguồn này (cap 100)
+            const barPct = Math.min(100, Math.max(0, s.closeRatePct));
             return (
-              // Phase 13.16.5: mobile stack vertical, desktop horizontal — DotScale ẩn mobile để có khoảng thở
-              <li key={s.source} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-                <Icon size={13} className="text-slate-400 flex-shrink-0" />
-                <span className="w-20 sm:w-24 flex-shrink-0 truncate font-medium text-slate-700">
+              <li
+                key={s.source}
+                className="grid grid-cols-[18px_minmax(64px,80px)_1fr_minmax(80px,auto)_32px] items-center gap-x-2 text-xs"
+              >
+                {/* 1. Icon */}
+                <Icon size={13} className="text-slate-400" />
+                {/* 2. Tên nguồn */}
+                <span className="truncate font-medium text-slate-700">
                   {SOURCE_LABEL[s.source]}
                 </span>
-                <span className="hidden sm:inline-flex">
-                  <DotScale pct={s.closeRatePct} hex={BRAND_EMERALD} />
+                {/* 3. Thanh tiến độ — chiếm flex-1 */}
+                <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-[width] duration-500"
+                    style={{ width: `${barPct}%`, backgroundColor: closeHex }}
+                    title={`${s.closeRatePct}% chốt`}
+                  />
+                </div>
+                {/* 4. Số count: tổng · chốt / chưa chốt — tabular-nums giữ cột */}
+                <span className="text-right tabular-nums whitespace-nowrap text-[11px]">
+                  <span className="text-slate-400">{s.actualLeads.toLocaleString("vi-VN")}</span>
+                  <span className="text-slate-300 mx-0.5">·</span>
+                  <span className="font-semibold text-emerald-700" title="Đã chốt">{s.actualClosed.toLocaleString("vi-VN")}</span>
+                  <span className="text-slate-300 mx-0.5">/</span>
+                  <span className="font-semibold text-amber-700" title="Chưa chốt">{notClosed.toLocaleString("vi-VN")}</span>
                 </span>
-                <span className="ml-auto flex items-center gap-2 tabular-nums whitespace-nowrap">
-                  <span className="text-[11px]">
-                    <span className="text-slate-400">{s.actualLeads.toLocaleString("vi-VN")}</span>
-                    <span className="text-slate-300 mx-0.5">·</span>
-                    <span className="font-semibold text-emerald-700" title="Đã chốt">{s.actualClosed.toLocaleString("vi-VN")}</span>
-                    <span className="text-slate-300 mx-0.5">/</span>
-                    <span className="font-semibold text-amber-700" title="Chưa chốt">{notClosed.toLocaleString("vi-VN")}</span>
-                  </span>
-                  <span
-                    className="w-10 text-right text-[11px] font-bold"
-                    style={{ color: closeHex }}
-                  >
-                    {s.closeRatePct}%
-                  </span>
+                {/* 5. % rate */}
+                <span
+                  className="text-right text-[11px] font-bold tabular-nums"
+                  style={{ color: closeHex }}
+                >
+                  {s.closeRatePct}%
                 </span>
               </li>
             );
@@ -2114,7 +2124,10 @@ export function RevenueDashboardPage({ viewer, realBranches, initialYear, staleD
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {/* 2026-06-12: tăng diện tích mỗi BranchCard — 2 col từ lg (~1024px),
+                  3 col từ 2xl (~1536px). Trước đây 3 col bắt đầu từ xl (1280) gây
+                  card hẹp khiến thanh tiến độ + số bị chen lệch hàng. */}
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
                 {visibleBranches.map((branch) => (
                   <BranchCard
                     key={branch.branchId}

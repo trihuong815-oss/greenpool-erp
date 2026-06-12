@@ -21,18 +21,18 @@ interface Props {
 }
 
 const COORD_TYPE_OPTIONS: { value: CoordType; label: string; desc: string }[] = [
-  { value: 'dieu-phoi', label: 'Dieu phoi', desc: 'Phan cong nhieu don vi cung thuc hien' },
-  { value: 'ho-tro', label: 'Ho tro', desc: 'Don vi khac ho tro co so / phong ban' },
-  { value: 'de-xuat', label: 'De xuat', desc: 'De xuat len tren hoac ngang cap' },
-  { value: 'phe-duyet', label: 'Phe duyet', desc: 'Yeu cau phe duyet tu GD / CEO' },
-  { value: 'canh-bao', label: 'Canh bao', desc: 'Canh bao / escalation can xu ly ngay' },
+  { value: 'dieu-phoi', label: 'Điều phối', desc: 'Phân công nhiều đơn vị cùng thực hiện' },
+  { value: 'ho-tro', label: 'Hỗ trợ', desc: 'Đơn vị khac ho tro co so / phong ban' },
+  { value: 'de-xuat', label: 'Đề xuất', desc: 'Đề xuất lên trên hoặc ngang cấp' },
+  { value: 'phe-duyet', label: 'Phê duyệt', desc: 'Yêu cầu phê duyệt từ GĐ / CEO' },
+  { value: 'canh-bao', label: 'Cảnh báo', desc: 'Cảnh báo / escalation can xu ly ngay' },
 ];
 const SCOPE_OPTIONS: { value: CoordScope; label: string }[] = [
   { value: 'noi-bo-phong', label: 'Noi bo phong ban' },
   { value: 'noi-bo-khoi', label: 'Noi bo khoi (KD / VP)' },
-  { value: 'lien-khoi', label: 'Lien khoi KD - VP' },
-  { value: 'lien-co-so', label: 'Lien co so (nhieu branch)' },
-  { value: 'du-an', label: 'Du an / Project' },
+  { value: 'lien-khoi', label: 'Liên khối KD - VP' },
+  { value: 'lien-co-so', label: 'Liên cơ sở (nhieu branch)' },
+  { value: 'du-an', label: 'Dự án / Project' },
 ];
 
 const emptyUnit = (): CollabUnit => ({
@@ -60,7 +60,7 @@ export default function TaskCreateModal({
   const [assigneeType, setAssigneeType] = useState<'dept' | 'facility'>('dept');
   const [assigneeUserIds, setAssigneeUserIds] = useState<string[]>([]);
 
-  // DON VI PHOI HOP â multiple units with per-unit detail
+  // DON VI PHOI HOP — multiple units with per-unit detail
   const [collabUnits, setCollabUnits] = useState<CollabUnit[]>([]);
 
   // WAITING-FOR
@@ -256,7 +256,7 @@ export default function TaskCreateModal({
                     </select>
                   </Field>
                 )}
-                <Field label="Nguoi chiu trach nhiem (Owner) â co the chon nhieu nguoi thuc hien">
+                <Field label="Nguoi chiu trach nhiem (Owner) — co the chon nhieu nguoi thuc hien">
                   <div className="max-h-32 overflow-y-auto rounded-lg border border-slate-200 divide-y divide-slate-50">
                     {deptUsers.slice(0, 20).map(u => {
                       const uid = u.id || u.id || '';

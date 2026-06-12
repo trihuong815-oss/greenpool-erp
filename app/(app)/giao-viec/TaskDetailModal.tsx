@@ -29,21 +29,21 @@ interface Props {
 }
 
 const COORD_TYPE_LABEL: Record<string, string> = {
-  'dieu-phoi': 'Dieu phoi', 'ho-tro': 'Ho tro', 'de-xuat': 'De xuat',
-  'phe-duyet': 'Phe duyet', 'canh-bao': 'Canh bao',
-  'proposal': 'De xuat', 'assignment': 'Dieu phoi',
+  'dieu-phoi': 'Điều phối', 'ho-tro': 'Hỗ trợ', 'de-xuat': 'Đề xuất',
+  'phe-duyet': 'Phê duyệt', 'canh-bao': 'Cảnh báo',
+  'proposal': 'Đề xuất', 'assignment': 'Điều phối',
 };
 const COORD_SCOPE_LABEL: Record<string, string> = {
   'noi-bo-phong': 'Noi bo phong', 'noi-bo-khoi': 'Noi bo khoi',
-  'lien-khoi': 'Lien khoi', 'lien-co-so': 'Lien co so', 'du-an': 'Du an',
+  'lien-khoi': 'Liên khối', 'lien-co-so': 'Liên cơ sở', 'du-an': 'Dự án',
 };
 const STATUS_LABEL: Record<string, string> = {
-  'khoi-tao': 'Khoi tao', 'tiep-nhan': 'Tiep nhan', 'dang-xu-ly': 'Dang xu ly',
-  'dang-phoi-hop': 'Dang phoi hop', 'cho-phan-hoi': 'Cho phan hoi',
-  'cho-phe-duyet': 'Cho phe duyet', 'hoan-thanh': 'Hoan thanh', 'dong-ho-so': 'Dong ho so',
-  pending_approval: 'Cho duyet', pending: 'Cho lam', in_progress: 'Dang lam',
-  requested_revision: 'Yeu cau bo sung', done: 'Hoan thanh',
-  rejected: 'Tu choi', cancelled: 'Huy',
+  'khoi-tao': 'Khởi tạo', 'tiep-nhan': 'Tiếp nhận', 'dang-xu-ly': 'Đang xử lý',
+  'dang-phoi-hop': 'Đang phối hợp', 'cho-phan-hoi': 'Chờ phản hồi',
+  'cho-phe-duyet': 'Chờ phê duyệt', 'hoan-thanh': 'Hoàn thành', 'dong-ho-so': 'Đóng hồ sơ',
+  pending_approval: 'Chờ duyệt', pending: 'Chờ làm', in_progress: 'Đang làm',
+  requested_revision: 'Yêu cầu bổ sung', done: 'Hoàn thành',
+  rejected: 'Từ chối', cancelled: 'Huỷ',
 };
 const STATUS_COLOR: Record<string, string> = {
   'khoi-tao': 'bg-slate-100 text-slate-600', 'tiep-nhan': 'bg-blue-100 text-blue-700',
@@ -56,14 +56,14 @@ const STATUS_COLOR: Record<string, string> = {
   cancelled: 'bg-slate-100 text-slate-400',
 };
 const COLLAB_STATUS_LABEL: Record<string, string> = {
-  'chua-tiep-nhan': 'Chua tiep nhan', 'dang-thuc-hien': 'Dang thuc hien',
-  'hoan-thanh': 'Hoan thanh', 'tu-choi': 'Tu choi',
+  'chua-tiep-nhan': 'Chưa tiếp nhận', 'dang-thuc-hien': 'Đang thực hiện',
+  'hoan-thanh': 'Hoàn thành', 'tu-choi': 'Từ chối',
 };
 const COLLAB_STATUS_COLOR: Record<string, string> = {
   'chua-tiep-nhan': 'bg-slate-100 text-slate-500', 'dang-thuc-hien': 'bg-sky-100 text-sky-700',
   'hoan-thanh': 'bg-emerald-100 text-emerald-700', 'tu-choi': 'bg-rose-100 text-rose-700',
 };
-const PRIORITY_LABEL: Record<string, string> = { high: 'Cao', normal: 'Trung binh', low: 'Thap' };
+const PRIORITY_LABEL: Record<string, string> = { high: 'Cao', normal: 'Trung bình', low: 'Thấp' };
 const PRIORITY_COLOR: Record<string, string> = { high: 'text-rose-600 font-bold', medium: 'text-amber-600 font-semibold', low: 'text-slate-400' };
 
 function getTaskStatus(t: Task): string { return (t as any).coordStatus || t.status; }
@@ -296,13 +296,13 @@ function DetailTab({ task, coordType, coordScope, collabUnits, waitingFor, daysW
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">Doi trang thai</h3>
             <div className="space-y-1.5">
               {[
-                { key: 'tiep-nhan', label: 'Tiep nhan', show: status === 'khoi-tao' },
+                { key: 'tiep-nhan', label: 'Tiếp nhận', show: status === 'khoi-tao' },
                 { key: 'dang-xu-ly', label: 'Bat dau xu ly', show: ['khoi-tao','tiep-nhan'].includes(status) },
-                { key: 'dang-phoi-hop', label: 'Dang phoi hop', show: ['dang-xu-ly'].includes(status) },
-                { key: 'cho-phan-hoi', label: 'Chuyen: Cho phan hoi', show: ['dang-xu-ly','dang-phoi-hop'].includes(status) },
+                { key: 'dang-phoi-hop', label: 'Đang phối hợp', show: ['dang-xu-ly'].includes(status) },
+                { key: 'cho-phan-hoi', label: 'Chuyen: Chờ phản hồi', show: ['dang-xu-ly','dang-phoi-hop'].includes(status) },
                 { key: 'cho-phe-duyet', label: 'Gui phe duyet', show: ['dang-xu-ly','dang-phoi-hop'].includes(status) },
-                { key: 'hoan-thanh', label: 'Xac nhan Hoan thanh', show: !['hoan-thanh','dong-ho-so','cancelled','rejected'].includes(status) },
-                { key: 'dong-ho-so', label: 'Dong ho so', show: status === 'hoan-thanh' },
+                { key: 'hoan-thanh', label: 'Xac nhan Hoàn thành', show: !['hoan-thanh','dong-ho-so','cancelled','rejected'].includes(status) },
+                { key: 'dong-ho-so', label: 'Đóng hồ sơ', show: status === 'hoan-thanh' },
               ].filter(a => a.show).map(a => (
                 <button key={a.key} onClick={() => changeStatus(a.key)} disabled={busy === 'status'}
                   className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-slate-200 hover:border-emerald-300 hover:bg-emerald-50 text-left text-sm font-medium text-slate-700 transition disabled:opacity-50">

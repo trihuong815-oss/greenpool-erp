@@ -68,21 +68,21 @@ export interface WaitingFor {
 
 export type Block = 'KD' | 'VP';
 export type TaskStatus =
-  | 'pending_approval'   // chá» duyá»t (single hoáº·c multi-step theo approvalChain)
-  | 'pending'            // sáºµn sÃ ng lÃ m (ÄÃ£ qua háº¿t chain duyá»t)
-  | 'in_progress'        // Äang lÃ m (recipient set kÃ¨m expectedCompletionDate)
-  | 'requested_revision' // recipient yÃªu cáº§u creator bá» sung
-  | 'done'               // hoÃ n thÃ nh
-  | 'rejected'           // bá» tá»« chá»i á» báº¥t ká»³ bÆ°á»c duyá»t nÃ o
+  | 'pending_approval'   // chờ duyệt (single hoặc multi-step theo approvalChain)
+  | 'pending'            // sẵn sàng làm (đã qua hết chain duyệt)
+  | 'in_progress'        // đang làm (recipient set kèm expectedCompletionDate)
+  | 'requested_revision' // recipient yêu cầu creator bổ sung
+  | 'done'               // hoàn thành
+  | 'rejected'           // bị từ chối ở bất kỳ bước duyệt nào
   | 'cancelled';         // creator huá»·
 export type TaskPriority = 'low' | 'normal' | 'high' | 'urgent';
-// 'general' = legacy/migrated task (chÆ°a phÃ¢n loáº¡i proposal/assignment) â chá» tá»n táº¡i
-// trong data ÄÃ£ backfill, KHÃNG cho táº¡o má»i á» UI/API.
+// 'general' = legacy/migrated task (chưa phân loại proposal/assignment) — chỉ tồn tại
+// trong data đã backfill, KHÔNG cho tạo mới ở UI/API.
 export type TaskKind = 'proposal' | 'assignment' | 'general';
 
 export interface Task {
   id: string;
-  kind: TaskKind;             // 'proposal' = Äá» xuáº¥t | 'assignment' = Giao viá»c
+  kind: TaskKind;             // 'proposal' = Đề xuất | 'assignment' = Giao việc
   title: string;
   description: string;
   createdBy: string;
@@ -94,11 +94,11 @@ export interface Task {
   assigneeDeptId: string | null;
   assigneeFacilityId: string | null;
   assigneeUserIds: string[];
-  /** ÄÆ¡n vá» phá»i há»£p â phÃ²ng ban tham gia thá»±c hiá»n (khÃ´ng pháº£i ngÆ°á»i chá»u trÃ¡ch nhiá»m chÃ­nh) */
+  /** Đơn vị phối hợp — phòng ban tham gia thực hiện (không phải người chịu trách nhiệm chính) */
   collaboratorDeptIds?: string[];
-  /** ÄÆ¡n vá» phá»i há»£p â cÆ¡ sá» tham gia thá»±c hiá»n */
+  /** Đơn vị phối hợp — cơ sở tham gia thực hiện */
   collaboratorFacilityIds?: string[];
-  /** TiÃªu Äá»/Má»¥c tiÃªu cÃ´ng viá»c (bá» sung cho description ngáº¯n) */
+  /** Tiêu đề/Mục tiêu công việc (bổ sung cho description ngắn) */
   goal?: string | null;
   crossBlock: boolean;
   status: TaskStatus;
@@ -111,37 +111,37 @@ export interface Task {
   progressPct: number;
   updatedAt: string;
   updatedBy: string;
-  // ââ Äá» xuáº¥t (kind='proposal') v2 â anh chá»t 2026-05-30 ââââââââââââââââ
-  /** Ná»i dung Äá» xuáº¥t: tÃ i chÃ­nh (kÃ¨m financialGroup + estimatedCost) hoáº·c váº­n hÃ nh */
+  // ── Đề xuất (kind='proposal') v2 — anh chốt 2026-05-30 ────────────────
+  /** Nội dung đề xuất: tài chính (kèm financialGroup + estimatedCost) hoặc vận hành */
   proposalType?: ProposalType | null;
-  /** NhÃ³m chi (chá» tÃ i chÃ­nh): thÆ°á»ng xuyÃªn (khÃ´ng cáº§n duyá»t) / chi khÃ¡c */
+  /** Nhóm chi (chỉ tài chính): thường xuyên (không cần duyệt) / chi khác */
   financialGroup?: FinancialGroup | null;
-  /** Chi phÃ­ dá»± kiáº¿n (VND) â báº¯t buá»c vá»i tÃ i chÃ­nh + chi_khac; quyáº¿t Äá»nh cÃ³ cáº§n duyá»t hay khÃ´ng (> 5tr â cáº§n) */
+  /** Chi phí dự kiến (VND) — bắt buộc với tài chính + chi_khac; quyết định có cần duyệt hay không (> 5tr → cần) */
   estimatedCost?: number | null;
-  /** Recipient nháº­p khi chuyá»n in_progress: dá»± kiáº¿n hoÃ n thÃ nh */
+  /** Recipient nhập khi chuyển in_progress: dự kiến hoàn thành */
   expectedCompletionDate?: string | null;
-  /** Chuá»i role cáº§n duyá»t theo thá»© tá»±. [] = khÃ´ng cáº§n duyá»t. ['GD_KD'] = 1 cáº¥p. ['GD_KD','GD_VP'] = cross-block 2 cáº¥p */
+  /** Chuỗi role cần duyệt theo thứ tự. [] = không cần duyệt. ['GD_KD'] = 1 cấp. ['GD_KD','GD_VP'] = cross-block 2 cấp */
   approvalChain?: string[];
-  /** Lá»ch sá»­ cÃ¡c bÆ°á»c duyá»t ÄÃ£ hoÃ n thÃ nh */
+  /** Lịch sử các bước duyệt đã hoàn thành */
   approvalsCompleted?: ApprovalStep[];
-  /** Role cáº§n duyá»t tiáº¿p theo (cho UI hiá»n thá»). null khi chain done hoáº·c chÆ°a start. */
+  /** Role cần duyệt tiếp theo (cho UI hiển thị). null khi chain done hoặc chưa start. */
   currentApprover?: string | null;
-  /** Lá»ch sá»­ yÃªu cáº§u bá» sung tá»« recipient â creator (lÆ°u Äá» track) */
+  /** Lịch sử yêu cầu bổ sung từ recipient → creator (lưu để track) */
   revisionRequests?: RevisionRequest[];
-  /** Role label tiáº¿ng Viá»t â UI dÃ¹ng Äá» render chain (vd "GiÃ¡m Äá»c Khá»i KD") */
+  /** Role label tiếng Việt — UI dùng để render chain (vd "Giám đốc Khối KD") */
   approvalChainLabels?: Record<string, string>;
-  // ââ Nháº¯c viá»c (Phase Mock-Frame-3 2026-06-12) ââââââââââââââââââââââââ
-  /** ISO string khi creator/admin báº¥m "Nháº¯c viá»c" gáº§n nháº¥t */
+  // ── Nhắc việc (Phase Mock-Frame-3 2026-06-12) ────────────────────────
+  /** ISO string khi creator/admin bấm "Nhắc việc" gần nhất */
   lastNudgeAt?: string | null;
   lastNudgeBy?: string | null;
   lastNudgeByName?: string | null;
-  /** Äáº¿m tá»ng láº§n ÄÃ£ nháº¯c trÃªn task nÃ y */
+  /** Đếm tổng lần đã nhắc trên task này */
   nudgeCount?: number;
-  // ââ Mock-Frame-7 (2026-06-12) â bÃ n giao + nhiá»m vá»¥ phá»i há»£p ââ
-  /** Káº¿t quáº£ bÃ n giao dá»± kiáº¿n (output cá»¥ thá», khÃ¡c `goal` = má»¥c tiÃªu/intent) */
+  // ── Mock-Frame-7 (2026-06-12) — bàn giao + nhiệm vụ phối hợp ──
+  /** Kết quả bàn giao dự kiến (output cụ thể, khác `goal` = mục tiêu/intent) */
   expectedDeliverable?: string | null;
-  /** MÃ´ táº£ nhiá»m vá»¥ riÃªng cho má»i ÄÆ¡n vá» phá»i há»£p.
-   *  Key format: "dept:<id>" hoáº·c "facility:<id>". */
+  /** Mô tả nhiệm vụ riêng cho mỗi đơn vị phối hợp.
+   *  Key format: "dept:<id>" hoặc "facility:<id>". */
   collaboratorRoles?: Record<string, string>;
   // ========== DIEU PHOI v2 fields ==========
   /** Loai dieu phoi (v2) */
@@ -158,18 +158,18 @@ export interface Task {
   finalDeliverable?: string | null;
 }
 
-/** Map role â label tiáº¿ng Viá»t cho UI chain. */
+/** Map role → label tiếng Việt cho UI chain. */
 export const ROLE_LABEL_VN: Record<string, string> = {
-  GD_KD: 'GiÃ¡m Äá»c Khá»i Kinh doanh',
-  GD_VP: 'GiÃ¡m Äá»c Khá»i VÄn phÃ²ng',
-  CEO: 'Chá»§ tá»ch / CEO',
-  ADMIN: 'Quáº£n trá» há» thá»ng',
-  TP_KE: 'TrÆ°á»ng phÃ²ng Káº¿ toÃ¡n',
-  TP_NS: 'TrÆ°á»ng phÃ²ng NhÃ¢n sá»±',
-  TP_KT: 'TrÆ°á»ng phÃ²ng Ká»¹ thuáº­t',
-  TP_DT: 'TrÆ°á»ng phÃ²ng ÄÃ o táº¡o',
-  TP_MKT: 'TrÆ°á»ng phÃ²ng Marketing',
-  TP_GS: 'TrÆ°á»ng phÃ²ng GiÃ¡m sÃ¡t',
+  GD_KD: 'Giám đốc Khối Kinh doanh',
+  GD_VP: 'Giám đốc Khối Văn phòng',
+  CEO: 'Chủ tịch / CEO',
+  ADMIN: 'Quản trị hệ thống',
+  TP_KE: 'Trưởng phòng Kế toán',
+  TP_NS: 'Trưởng phòng Nhân sự',
+  TP_KT: 'Trưởng phòng Kỹ thuật',
+  TP_DT: 'Trưởng phòng Đào tạo',
+  TP_MKT: 'Trưởng phòng Marketing',
+  TP_GS: 'Trưởng phòng Giám sát',
 };
 export function roleLabelVN(role: string): string {
   return ROLE_LABEL_VN[role] ?? role;
@@ -195,18 +195,18 @@ export interface RevisionRequest {
 }
 
 export const PROPOSAL_TYPE_LABEL: Record<ProposalType, string> = {
-  tai_chinh: 'TÃ i chÃ­nh',
-  van_hanh: 'Váº­n hÃ nh',
+  tai_chinh: 'Tài chính',
+  van_hanh: 'Vận hành',
 };
 export const FINANCIAL_GROUP_LABEL: Record<FinancialGroup, string> = {
-  chi_thuong_xuyen: 'Chi hoáº¡t Äá»ng thÆ°á»ng xuyÃªn',
-  chi_khac: 'Chi khÃ¡c (mua sáº¯m, sá»­a chá»¯a, Äáº§u tÆ°...)',
+  chi_thuong_xuyen: 'Chi hoạt động thường xuyên',
+  chi_khac: 'Chi khác (mua sắm, sửa chữa, đầu tư...)',
 };
-/** NgÆ°á»¡ng tá»± quyáº¿t: chi khÃ¡c â¤ giÃ¡ trá» nÃ y â QLCS tá»± quyáº¿t, khÃ´ng cáº§n GÄ duyá»t */
+/** Ngưỡng tự quyết: chi khác ≤ giá trị này → QLCS tự quyết, không cần GĐ duyệt */
 export const AUTO_APPROVE_THRESHOLD = 5_000_000;
 
 export interface TaskCreate {
-  kind: TaskKind;              // báº¯t buá»c: Äá» xuáº¥t hay giao viá»c
+  kind: TaskKind;              // bắt buộc: đề xuất hay giao việc
   title: string;
   description: string;
   assigneeBlock: Block;
@@ -218,15 +218,15 @@ export interface TaskCreate {
   goal?: string | null;
   priority: TaskPriority;
   dueDate?: string | null;
-  // Äá» xuáº¥t v2 (kind='proposal'): báº¯t buá»c proposalType.
-  // Náº¿u tai_chinh: báº¯t buá»c financialGroup; náº¿u chi_khac thÃ¬ estimatedCost báº¯t buá»c (server validate).
+  // Đề xuất v2 (kind='proposal'): bắt buộc proposalType.
+  // Nếu tai_chinh: bắt buộc financialGroup; nếu chi_khac thì estimatedCost bắt buộc (server validate).
   proposalType?: ProposalType | null;
   financialGroup?: FinancialGroup | null;
   estimatedCost?: number | null;
-  // Phase 12.5 (2026-06-03): chuá»i UID ngÆ°á»i duyá»t theo thá»© tá»± (chá» dÃ¹ng cho kind='proposal').
-  // Empty/undefined = khÃ´ng cáº§n duyá»t â Äi tháº³ng pending. Server force assignee=creator.
+  // Phase 12.5 (2026-06-03): chuỗi UID người duyệt theo thứ tự (chỉ dùng cho kind='proposal').
+  // Empty/undefined = không cần duyệt → đi thẳng pending. Server force assignee=creator.
   approverUserIds?: string[];
-  // Mock-Frame-7 (2026-06-12): output cá»¥ thá» bÃ n giao + nhiá»m vá»¥ riÃªng cho má»i collaborator
+  // Mock-Frame-7 (2026-06-12): output cụ thể bàn giao + nhiệm vụ riêng cho mỗi collaborator
   expectedDeliverable?: string | null;
   collaboratorRoles?: Record<string, string>;
   // ===== DIEU PHOI v2 =====
@@ -252,7 +252,7 @@ export interface TaskAttachment {
   uploadedAt: string;
   uploadedBy: string;
   uploadedByName: string;
-  downloadUrl?: string;       // chá» cÃ³ khi list (signed read URL)
+  downloadUrl?: string;       // chỉ có khi list (signed read URL)
 }
 
 export interface TaskComment {
@@ -348,7 +348,7 @@ export const tasksApi = {
     );
   },
 
-  /** Phase 12 â Recipient (assignee) yÃªu cáº§u creator bá» sung. Status: pending|in_progress â requested_revision. */
+  /** Phase 12 — Recipient (assignee) yêu cầu creator bổ sung. Status: pending|in_progress → requested_revision. */
   async requestRevision(id: string, message: string): Promise<{ ok: true }> {
     return jsonOrThrow<{ ok: true }>(
       await fetch(`/api/tasks/${id}/request-revision`, {
@@ -359,8 +359,8 @@ export const tasksApi = {
     );
   },
 
-  /** Nháº¯c viá»c ngÆ°á»i Äang táº¯c. Cooldown 4h + threshold 24h (admin/GÄ bypass).
-   *  Backend tá»± xÃ¡c Äá»nh target theo status (currentApprover hoáº·c assignee). */
+  /** Nhắc việc người đang tắc. Cooldown 4h + threshold 24h (admin/GĐ bypass).
+   *  Backend tự xác định target theo status (currentApprover hoặc assignee). */
   async nudge(id: string, message?: string): Promise<{ ok: true; stuckHours: number }> {
     return jsonOrThrow<{ ok: true; stuckHours: number }>(
       await fetch(`/api/tasks/${id}/nudge`, {
@@ -400,7 +400,7 @@ export const tasksApi = {
     )).rows;
   },
 
-  /** Multipart upload (server-side proxy, khÃ´ng cáº§n CORS bucket). */
+  /** Multipart upload (server-side proxy, không cần CORS bucket). */
   async uploadAttachment(id: string, file: File): Promise<void> {
     const form = new FormData();
     form.append('file', file);
@@ -408,7 +408,7 @@ export const tasksApi = {
       await fetch(`/api/tasks/${id}/attachments`, {
         method: 'POST',
         body: form,
-        // KHÃNG set Content-Type â browser tá»± add boundary cho multipart
+        // KHÔNG set Content-Type — browser tự add boundary cho multipart
       }),
     );
   },

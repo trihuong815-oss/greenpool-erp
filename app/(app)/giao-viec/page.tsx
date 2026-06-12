@@ -11,11 +11,11 @@ export default async function GiaoViecPage() {
   if (!canAccessRoute(profile.roleCode, 'giao-viec', profile.menuOverrides)) {
     return (
       <>
-        <AppTopBar title="ÃÂÃÂiÃÂ¡ÃÂ»ÃÂu phÃÂ¡ÃÂ»ÃÂi cÃÂÃÂ´ng viÃÂ¡ÃÂ»ÃÂc" icon="task" />
+        <AppTopBar title="Điều phối công việc" icon="task" />
         <div className="flex-1 flex items-center justify-center p-3 md:p-6 bg-slate-50">
           <div className="card text-center py-12 max-w-md">
-            <div className="text-5xl mb-4">ÃÂ°ÃÂÃÂÃÂ</div>
-            <div className="font-bold text-slate-800 text-lg mb-2">KhÃÂÃÂ´ng cÃÂÃÂ³ quyÃÂ¡ÃÂ»ÃÂn truy cÃÂ¡ÃÂºÃÂ­p</div>
+            <div className="text-5xl mb-4">🔒</div>
+            <div className="font-bold text-slate-800 text-lg mb-2">Không có quyền truy cập</div>
           </div>
         </div>
       </>
@@ -50,8 +50,8 @@ export default async function GiaoViecPage() {
   return (
     <>
       <AppTopBar
-        title="ÃÂÃÂiÃÂ¡ÃÂ»ÃÂu phÃÂ¡ÃÂ»ÃÂi cÃÂÃÂ´ng viÃÂ¡ÃÂ»ÃÂc"
-        subtitle="Workflow 3 cÃÂ¡ÃÂºÃÂ¥p ÃÂÃÂ· LiÃÂÃÂªn khÃÂ¡ÃÂ»ÃÂi ÃÂÃÂ· PhÃÂÃÂª duyÃÂ¡ÃÂ»ÃÂt tÃÂ¡ÃÂ»ÃÂ± ÃÂÃÂÃÂ¡ÃÂ»ÃÂng"
+        title="Điều phối công việc"
+        subtitle="Workflow 3 cấp · Liên khối · Phê duyệt tự động"
         icon="task"
       />
       <div className="flex-1 overflow-y-auto p-3 md:p-6 bg-slate-50">

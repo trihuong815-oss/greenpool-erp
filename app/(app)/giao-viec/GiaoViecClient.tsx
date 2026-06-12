@@ -22,9 +22,9 @@ import TaskDetailModal from './TaskDetailModal';
 type TabKey = 'all' | 'mine' | 'assigned-by-me' | 'cross-block' | 'pending-response' | 'pending-approval' | 'overdue' | 'bottleneck';
 
 const COORD_TYPE_LABEL: Record<string, string> = {
-  'dieu-phoi': 'Dieu phoi', 'ho-tro': 'Ho tro',
-  'de-xuat': 'De xuat', 'phe-duyet': 'Phe duyet', 'canh-bao': 'Canh bao',
-  'proposal': 'De xuat', 'assignment': 'Dieu phoi',
+  'dieu-phoi': 'Điều phối', 'ho-tro': 'Hỗ trợ',
+  'de-xuat': 'Đề xuất', 'phe-duyet': 'Phê duyệt', 'canh-bao': 'Cảnh báo',
+  'proposal': 'Đề xuất', 'assignment': 'Điều phối',
 };
 const COORD_TYPE_COLOR: Record<string, string> = {
   'dieu-phoi': 'bg-sky-100 text-sky-700', 'ho-tro': 'bg-indigo-100 text-indigo-700',
@@ -34,12 +34,12 @@ const COORD_TYPE_COLOR: Record<string, string> = {
 };
 
 const STATUS_LABEL: Record<string, string> = {
-  'khoi-tao': 'Khoi tao', 'tiep-nhan': 'Tiep nhan', 'dang-xu-ly': 'Dang xu ly',
-  'dang-phoi-hop': 'Dang phoi hop', 'cho-phan-hoi': 'Cho phan hoi',
-  'cho-phe-duyet': 'Cho phe duyet', 'hoan-thanh': 'Hoan thanh', 'dong-ho-so': 'Dong ho so',
+  'khoi-tao': 'Khởi tạo', 'tiep-nhan': 'Tiếp nhận', 'dang-xu-ly': 'Đang xử lý',
+  'dang-phoi-hop': 'Đang phối hợp', 'cho-phan-hoi': 'Chờ phản hồi',
+  'cho-phe-duyet': 'Chờ phê duyệt', 'hoan-thanh': 'Hoàn thành', 'dong-ho-so': 'Đóng hồ sơ',
   // Legacy
-  pending_approval: 'Cho duyet', pending: 'Cho lam', in_progress: 'Dang lam',
-  requested_revision: 'Yeu cau bo sung', done: 'Hoan thanh', rejected: 'Tu choi', cancelled: 'Huy',
+  pending_approval: 'Chờ duyệt', pending: 'Chờ làm', in_progress: 'Đang làm',
+  requested_revision: 'Yêu cầu bổ sung', done: 'Hoàn thành', rejected: 'Từ chối', cancelled: 'Huỷ',
 };
 const STATUS_COLOR: Record<string, string> = {
   'khoi-tao': 'bg-slate-100 text-slate-600 ring-slate-200',
@@ -61,7 +61,7 @@ const STATUS_COLOR: Record<string, string> = {
 const PRIORITY_DOT: Record<string, string> = {
   high: 'bg-rose-500', normal: 'bg-amber-400', low: 'bg-slate-300',
 };
-const PRIORITY_LABEL: Record<string, string> = { high: 'Cao', normal: 'Trung binh', low: 'Thap' };
+const PRIORITY_LABEL: Record<string, string> = { high: 'Cao', normal: 'Trung bình', low: 'Thấp' };
 const BLOCK_LABEL: Record<string, { label: string; bg: string }> = {
   KD: { label: 'KD', bg: 'bg-emerald-100 text-emerald-700' },
   VP: { label: 'VP', bg: 'bg-indigo-100 text-indigo-700' },
@@ -224,14 +224,14 @@ export default function GiaoViecClient({
   }, [allTasks]);
 
   const tabDef: { key: TabKey; label: string; badge?: number }[] = [
-    { key: 'all', label: 'Tat ca', badge: allTasks.length || undefined },
-    { key: 'mine', label: 'Toi phu trach' },
-    { key: 'assigned-by-me', label: 'Toi giao' },
-    ...(showCrossBlock ? [{ key: 'cross-block' as TabKey, label: 'Lien khoi', badge: kpi.crossBlock || undefined }] : []),
-    { key: 'pending-response', label: 'Cho phan hoi', badge: kpi.needAction || undefined },
-    { key: 'pending-approval', label: 'Cho duyet', badge: kpi.pendingApproval || undefined },
-    { key: 'overdue', label: 'Qua han', badge: kpi.overdue || undefined },
-    { key: 'bottleneck', label: 'Diem nghen', badge: kpi.bottleneck || undefined },
+    { key: 'all', label: 'Tất cả', badge: allTasks.length || undefined },
+    { key: 'mine', label: 'Tôi phụ trách' },
+    { key: 'assigned-by-me', label: 'Tôi giao' },
+    ...(showCrossBlock ? [{ key: 'cross-block' as TabKey, label: 'Liên khối', badge: kpi.crossBlock || undefined }] : []),
+    { key: 'pending-response', label: 'Chờ phản hồi', badge: kpi.needAction || undefined },
+    { key: 'pending-approval', label: 'Chờ duyệt', badge: kpi.pendingApproval || undefined },
+    { key: 'overdue', label: 'Quá hạn', badge: kpi.overdue || undefined },
+    { key: 'bottleneck', label: 'Điểm nghẽn', badge: kpi.bottleneck || undefined },
   ];
 
   const approvalCount = kpi.pendingApproval;
@@ -283,10 +283,10 @@ export default function GiaoViecClient({
             ) : (
               <div className="space-y-2">
                 {[
-                  { label: 'Cho duyet', count: kpi.pendingApproval, color: 'text-orange-600', tab: 'pending-approval' as TabKey },
-                  { label: 'Cho phan hoi', count: kpi.needAction - kpi.pendingApproval, color: 'text-amber-600', tab: 'pending-response' as TabKey },
-                  { label: 'Qua han', count: kpi.overdue, color: 'text-rose-600', tab: 'overdue' as TabKey },
-                  { label: 'Lien khoi', count: kpi.crossBlock, color: 'text-indigo-600', tab: 'cross-block' as TabKey },
+                  { label: 'Chờ duyệt', count: kpi.pendingApproval, color: 'text-orange-600', tab: 'pending-approval' as TabKey },
+                  { label: 'Chờ phản hồi', count: kpi.needAction - kpi.pendingApproval, color: 'text-amber-600', tab: 'pending-response' as TabKey },
+                  { label: 'Quá hạn', count: kpi.overdue, color: 'text-rose-600', tab: 'overdue' as TabKey },
+                  { label: 'Liên khối', count: kpi.crossBlock, color: 'text-indigo-600', tab: 'cross-block' as TabKey },
                 ].filter(r => r.count > 0).map(r => (
                   <button key={r.label} onClick={() => jumpToTab(r.tab)}
                     className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-white border border-slate-100 hover:border-rose-200 hover:bg-rose-50 transition text-left">
@@ -354,9 +354,9 @@ export default function GiaoViecClient({
             <div className="grid grid-cols-2 gap-2">
               {[
                 { label: 'Tong viec', val: kpi.crossBlock, color: 'text-indigo-700' },
-                { label: 'Dang xu ly', val: allTasks.filter(t => t.crossBlock && ['dang-xu-ly','dang-phoi-hop','in_progress'].includes(getTaskStatus(t))).length, color: 'text-sky-700' },
-                { label: 'Cho phan hoi', val: allTasks.filter(t => t.crossBlock && ['cho-phan-hoi','pending_approval','requested_revision'].includes(getTaskStatus(t))).length, color: 'text-amber-700' },
-                { label: 'Qua han', val: allTasks.filter(t => t.crossBlock && isOverdue(t)).length, color: 'text-rose-700' },
+                { label: 'Đang xử lý', val: allTasks.filter(t => t.crossBlock && ['dang-xu-ly','dang-phoi-hop','in_progress'].includes(getTaskStatus(t))).length, color: 'text-sky-700' },
+                { label: 'Chờ phản hồi', val: allTasks.filter(t => t.crossBlock && ['cho-phan-hoi','pending_approval','requested_revision'].includes(getTaskStatus(t))).length, color: 'text-amber-700' },
+                { label: 'Quá hạn', val: allTasks.filter(t => t.crossBlock && isOverdue(t)).length, color: 'text-rose-700' },
               ].map(item => (
                 <div key={item.label} className="bg-white rounded-lg border border-indigo-100 px-3 py-2 text-center">
                   <div className={`text-xl font-bold tabular-nums ${item.color}`}>{item.val}</div>
