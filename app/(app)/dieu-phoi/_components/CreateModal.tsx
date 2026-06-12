@@ -325,10 +325,13 @@ export default function CreateModal({
     const draft: CollaboratorDraft[] = [];
     const roles = t.collaboratorRoles ?? {};
     let idx = 0;
+    // Format unitId PHẢI dùng UPPERCASE prefix `DEPT:` / `BRANCH:` để khớp
+    // select option value. Lowercase 'dept:'/'facility:' chỉ dùng cho KEY của
+    // collaboratorRoles trên server.
     for (const d of (t.collaboratorDeptIds ?? [])) {
       draft.push({
         id: `prefill-d-${idx++}`,
-        unitId: `dept:${d}`,
+        unitId: `DEPT:${d}`,
         responsibleName: '',
         supportContent: roles[`dept:${d}`] ?? '',
         deadline: t.dueDate ?? '',
@@ -337,7 +340,7 @@ export default function CreateModal({
     for (const f of (t.collaboratorFacilityIds ?? [])) {
       draft.push({
         id: `prefill-f-${idx++}`,
-        unitId: `facility:${f}`,
+        unitId: `BRANCH:${f}`,
         responsibleName: '',
         supportContent: roles[`facility:${f}`] ?? '',
         deadline: t.dueDate ?? '',
