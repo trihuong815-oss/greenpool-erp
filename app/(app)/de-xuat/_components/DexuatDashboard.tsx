@@ -254,7 +254,7 @@ export default function DexuatDashboard({
           tone="sky"
         />
         <KpiCard
-          label="YCBS"
+          label="Cần bổ sung"
           value={stats.cardYCBS}
           icon={<Send size={18} />}
           tone="orange"
@@ -278,7 +278,7 @@ export default function DexuatDashboard({
           tone="rose"
         />
         <KpiCard
-          label="Quá SLA"
+          label="Quá hạn"
           value={stats.cardQuaSLA}
           icon={<Clock size={18} />}
           tone="rose-dark"
