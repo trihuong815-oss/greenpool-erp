@@ -9,7 +9,6 @@ import BranchBarChart from './_components/BranchBarChart';
 import BottleneckTable from './_components/BottleneckTable';
 import TopWatchList from './_components/TopWatchList';
 import ImportantNotiPanel from './_components/ImportantNotiPanel';
-import TodayAgenda from './_components/TodayAgenda';
 import CoordinationTable from './_components/CoordinationTable';
 import CreateModal from './_components/CreateModal';
 import DetailDrawer from './_components/DetailDrawer';
@@ -29,10 +28,8 @@ export default function DieuPhoiClient({ currentUserUid }: DieuPhoiClientProps) 
 
   return (
     <div className="max-w-screen-2xl mx-auto">
-      <div className="flex flex-col xl:flex-row gap-4">
-        {/* Cột main bên trái sidebar */}
-        <div className="flex-1 min-w-0 space-y-4">
-          {/* Filter strip — date range, khối, cơ sở, nút tạo mới */}
+      <div className="space-y-4">
+        {/* Filter strip — date range, khối, cơ sở, nút tạo mới */}
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2 flex-wrap">
               <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-sm">
@@ -87,12 +84,6 @@ export default function DieuPhoiClient({ currentUserUid }: DieuPhoiClientProps) 
             onRowClick={setSelected}
             currentUserUid={currentUserUid}
           />
-        </div>
-
-        {/* Aside phải — Lịch hôm nay (sticky trên desktop) */}
-        <aside className="w-full xl:w-[300px] xl:flex-shrink-0 xl:sticky xl:top-4 xl:self-start">
-          <TodayAgenda />
-        </aside>
       </div>
 
       {showCreate && <CreateModal open onClose={() => setShowCreate(false)} />}
