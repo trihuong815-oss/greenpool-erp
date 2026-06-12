@@ -64,10 +64,10 @@ const TABS: { key: TabKey; label: string; icon: any }[] = [
   { key: 'mine',             label: 'Tôi tạo',             icon: FilePlus2 },
   { key: 'pending_me',       label: 'Chờ tôi duyệt',       icon: UserCheck },
   { key: 'dang_xem_xet',     label: 'Đang xem xét',        icon: Clock },
-  { key: 'ycbs',             label: 'Yêu cầu bổ sung',     icon: AlertCircle },
+  { key: 'ycbs',             label: 'Cần bổ sung',         icon: AlertCircle },
   { key: 'da_duyet',         label: 'Đã duyệt',            icon: CheckCircle2 },
   { key: 'chuyen_dieu_phoi', label: 'Đã chuyển điều phối', icon: Send },
-  { key: 'qua_sla',          label: 'Quá SLA',             icon: AlarmClock },
+  { key: 'qua_sla',          label: 'Quá hạn',             icon: AlarmClock },
 ];
 
 const BLOCK_LABEL: Record<string, string> = {

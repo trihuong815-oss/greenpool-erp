@@ -8,11 +8,13 @@ export const CAN_CREATE_COORD = new Set([
 ]);
 
 export const CAN_CREATE_PROPOSAL = new Set([
+  'ADMIN', // role IT/quản trị hệ thống — full quyền action
   'GD_KD', 'GD_VP',
   'TP_KT', 'TP_DT', 'TP_MKT', 'TP_NS', 'TP_KE', 'TP_GS',
   'QLCS_HM', 'QLCS_TK', 'QLCS_CTT', 'QLCS_24NCT', 'QLCS_TT',
 ]);
 // CEO/Chủ tịch KHÔNG tự tạo đề xuất (xin ý kiến từ ai?)
+// ADMIN: được phép vì là role quản trị hệ thống (cần test + thao tác support).
 
 export function canCreateCoord(role: string): boolean {
   return CAN_CREATE_COORD.has(role);

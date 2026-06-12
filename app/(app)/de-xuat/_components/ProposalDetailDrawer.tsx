@@ -498,7 +498,7 @@ export default function ProposalDetailDrawer({
               )}
               {proposal.isOverdue && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold ring-1 bg-rose-50 text-rose-700 ring-rose-200">
-                  <AlertTriangle size={10} /> Quá SLA
+                  <AlertTriangle size={10} /> Quá hạn
                 </span>
               )}
             </div>
