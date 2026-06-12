@@ -118,7 +118,11 @@ export type CoordScope =
 
 export type Block = 'KD' | 'VP';
 
-export type BranchId = 'HM' | 'NCT24' | 'LD' | 'TT' | 'TK' | 'CG';
+// 5 cơ sở CHÍNH THỨC anh chốt 2026-06-12:
+//  HM = Hoàng Mai · NCT24 = 24 Nguyễn Cơ Thạch · TK = 20 Thuỵ Khuê
+//  TT = Thanh Trì · CTT = Cung Thể Thao Mỹ Đình
+//  (Trước đây tự thêm Linh Đàm + Cầu Giấy → SAI, đã bỏ.)
+export type BranchId = 'HM' | 'NCT24' | 'TK' | 'TT' | 'CTT';
 
 export type DeptId = 'MKT' | 'DT' | 'KT' | 'QLCS' | 'NS' | 'KE' | 'GS';
 
@@ -417,14 +421,13 @@ export const BLOCK_LABEL: Record<Block, string> = {
   VP: 'Văn phòng',
 };
 
-// Tên TẮT cho UI bảng theo SPEC: "GP HM/24NCT/LĐ/TT/TK/CG"
+// V6.3 (anh chốt 2026-06-12): viết ĐẦY ĐỦ tên 5 cơ sở chuẩn — dễ đọc hơn tắt.
 export const BRANCH_LABEL: Record<BranchId, string> = {
-  HM: 'GP HM',
-  NCT24: 'GP 24NCT',
-  LD: 'GP LĐ',
-  TT: 'GP TT',
-  TK: 'GP TK',
-  CG: 'GP CG',
+  HM:    'Hoàng Mai',
+  NCT24: '24 Nguyễn Cơ Thạch',
+  TK:    '20 Thuỵ Khuê',
+  TT:    'Thanh Trì',
+  CTT:   'Cung Thể Thao Mỹ Đình',
 };
 
 export const DEPT_LABEL: Record<DeptId, string> = {

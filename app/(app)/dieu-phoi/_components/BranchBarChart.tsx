@@ -7,13 +7,13 @@ import type { CoordTask, BranchId } from './types';
 interface Props { tasks: CoordTask[] }
 
 // 6 cơ sở — tên TẮT theo yêu cầu anh ("GP HM" thay "Green Pool Hoàng Mai")
+// V6.3: 5 cơ sở chuẩn anh chốt — viết đầy đủ tên (dễ đọc hơn tắt).
 const BRANCHES: { id: BranchId; name: string; color: string }[] = [
-  { id: 'HM',    name: 'GP HM',    color: '#3b82f6' },
-  { id: 'NCT24', name: 'GP 24NCT', color: '#f97316' },
-  { id: 'LD',    name: 'GP LĐ',    color: '#3b82f6' },
-  { id: 'TT',    name: 'GP TT',    color: '#f97316' },
-  { id: 'TK',    name: 'GP TK',    color: '#8b5cf6' },
-  { id: 'CG',    name: 'GP CG',    color: '#3b82f6' },
+  { id: 'HM',    name: 'Hoàng Mai',             color: '#3b82f6' },
+  { id: 'NCT24', name: '24 Nguyễn Cơ Thạch',    color: '#f97316' },
+  { id: 'TK',    name: '20 Thuỵ Khuê',          color: '#8b5cf6' },
+  { id: 'TT',    name: 'Thanh Trì',             color: '#10b981' },
+  { id: 'CTT',   name: 'Cung Thể Thao Mỹ Đình', color: '#f59e0b' },
 ];
 
 function isOverdue(t: CoordTask): boolean {

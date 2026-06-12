@@ -147,11 +147,12 @@ export const AVAILABLE_RELATED_UNITS: RelatedUnit[] = [
   { id: 'TP_MKT',    label: 'TP Marketing',   block: 'KD' },
   { id: 'TP_DT',     label: 'TP Đào tạo',     block: 'KD' },
   { id: 'TP_KT',     label: 'TP Kỹ thuật',    block: 'KD' },
-  { id: 'QLCS_HM',   label: 'QLCS Hoàng Mai', block: 'KD' },
-  { id: 'QLCS_TK',   label: 'QLCS Thụy Khuê', block: 'KD' },
-  { id: 'QLCS_CTT',  label: 'QLCS Công Trần Tâm', block: 'KD' },
-  { id: 'QLCS_24NCT',label: 'QLCS 24 NCT',    block: 'KD' },
-  { id: 'QLCS_TT',   label: 'QLCS Thanh Trì', block: 'KD' },
+  // V6.3: 5 cơ sở chuẩn — anh chốt 2026-06-12
+  { id: 'QLCS_HM',    label: 'QLCS Hoàng Mai',              block: 'KD' },
+  { id: 'QLCS_24NCT', label: 'QLCS 24 Nguyễn Cơ Thạch',     block: 'KD' },
+  { id: 'QLCS_TK',    label: 'QLCS 20 Thuỵ Khuê',           block: 'KD' },
+  { id: 'QLCS_TT',    label: 'QLCS Thanh Trì',              block: 'KD' },
+  { id: 'QLCS_CTT',   label: 'QLCS Cung Thể Thao Mỹ Đình',  block: 'KD' },
   // Khối Văn phòng
   { id: 'GD_VP',     label: 'GĐ Văn phòng',   block: 'VP' },
   { id: 'TP_NS',     label: 'TP Nhân sự',     block: 'VP' },

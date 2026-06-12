@@ -67,7 +67,7 @@ const STATUS_MAP: Record<string, CoordStatus> = {
   cancelled: 'dong_ho_so',
 };
 
-const BRANCH_IDS = new Set<string>(['HM', 'NCT24', 'LD', 'TT', 'TK', 'CG']);
+const BRANCH_IDS = new Set<string>(['HM', 'NCT24', 'TK', 'TT', 'CTT']);
 const DEPT_IDS = new Set<string>(['MKT', 'DT', 'KT', 'QLCS', 'NS', 'KE', 'GS']);
 
 // ============================================================

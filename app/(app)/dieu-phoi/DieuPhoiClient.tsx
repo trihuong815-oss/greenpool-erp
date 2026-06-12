@@ -127,7 +127,7 @@ export default function DieuPhoiClient({
   const handleCreate = useCallback(
     async (payload: CreatePayload) => {
       try {
-        const FACILITY_IDS = ['HM', 'NCT24', 'LD', 'TT', 'TK', 'CG'];
+        const FACILITY_IDS = ['HM', 'NCT24', 'TK', 'TT', 'CTT'];
         const ownerIsFacility =
           payload.ownerBlock === 'KD' && FACILITY_IDS.includes(payload.ownerUnitId);
         const collaboratorDeptIds: string[] = [];
@@ -254,7 +254,7 @@ export default function DieuPhoiClient({
   const handleUpdate = useCallback(
     async (taskId: string, payload: CreatePayload) => {
       try {
-        const FACILITY_IDS = ['HM', 'NCT24', 'LD', 'TT', 'TK', 'CG'];
+        const FACILITY_IDS = ['HM', 'NCT24', 'TK', 'TT', 'CTT'];
         const ownerIsFacility =
           payload.ownerBlock === 'KD' && FACILITY_IDS.includes(payload.ownerUnitId);
         const collaboratorDeptIds: string[] = [];

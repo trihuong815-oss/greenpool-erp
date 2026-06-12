@@ -68,7 +68,7 @@ const SEVERITIES_V4: { id: SeverityV4; label: string }[] = [
 ];
 
 const DEPT_IDS: DeptId[] = ['MKT', 'DT', 'KT', 'QLCS', 'NS', 'KE', 'GS'];
-const BRANCH_IDS: BranchId[] = ['HM', 'NCT24', 'LD', 'TT', 'TK', 'CG'];
+const BRANCH_IDS: BranchId[] = ['HM', 'NCT24', 'TK', 'TT', 'CTT'];
 const BLOCKS: Block[] = ['KD', 'VP'];
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -140,13 +140,12 @@ interface OwnerOption {
 }
 
 const OWNER_POOL: OwnerOption[] = [
-  // Khối KD — QLCS 6 cơ sở
-  { uid: 'qlcs-hm',    name: 'QLCS Hoàng Mai',  role: 'QLCS',    block: 'KD', unitId: 'HM' },
-  { uid: 'qlcs-nct24', name: 'QLCS 24 NCT',     role: 'QLCS',    block: 'KD', unitId: 'NCT24' },
-  { uid: 'qlcs-ld',    name: 'QLCS Linh Đàm',   role: 'QLCS',    block: 'KD', unitId: 'LD' },
-  { uid: 'qlcs-tt',    name: 'QLCS Thanh Trì',  role: 'QLCS',    block: 'KD', unitId: 'TT' },
-  { uid: 'qlcs-tk',    name: 'QLCS Thụy Khuê',  role: 'QLCS',    block: 'KD', unitId: 'TK' },
-  { uid: 'qlcs-cg',    name: 'QLCS Cầu Giấy',   role: 'QLCS',    block: 'KD', unitId: 'CG' },
+  // Khối KD — QLCS 5 cơ sở chính thức (anh chốt 2026-06-12)
+  { uid: 'qlcs-hm',    name: 'QLCS Hoàng Mai',              role: 'QLCS', block: 'KD', unitId: 'HM' },
+  { uid: 'qlcs-nct24', name: 'QLCS 24 Nguyễn Cơ Thạch',     role: 'QLCS', block: 'KD', unitId: 'NCT24' },
+  { uid: 'qlcs-tk',    name: 'QLCS 20 Thuỵ Khuê',           role: 'QLCS', block: 'KD', unitId: 'TK' },
+  { uid: 'qlcs-tt',    name: 'QLCS Thanh Trì',              role: 'QLCS', block: 'KD', unitId: 'TT' },
+  { uid: 'qlcs-ctt',   name: 'QLCS Cung Thể Thao Mỹ Đình',  role: 'QLCS', block: 'KD', unitId: 'CTT' },
   // Khối KD — TP
   { uid: 'tp-mkt',     name: 'TP Marketing',    role: 'TP_MKT',  block: 'KD', unitId: 'MKT' },
   { uid: 'tp-dt',      name: 'TP Đào tạo',      role: 'TP_DT',   block: 'KD', unitId: 'DT' },
@@ -625,7 +624,7 @@ export default function CreateModal({
                   type="text"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="VD: Mở lớp hè Linh Đàm"
+                  placeholder="VD: Mở lớp hè Hoàng Mai"
                   className={`w-full px-3 py-2 text-sm rounded-lg border outline-none ${
                     errors.title
                       ? 'border-rose-400 focus:ring-1 focus:ring-rose-400'

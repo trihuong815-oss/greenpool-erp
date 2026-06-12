@@ -625,7 +625,7 @@ export default function CreateProposalModal({
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="VD: Mở lớp hè Linh Đàm / Mua máy lọc mới / Tăng ngân sách Marketing tháng 7"
+              placeholder="VD: Mở lớp hè Hoàng Mai / Mua máy lọc mới / Tăng ngân sách Marketing tháng 7"
               className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
               maxLength={200}
             />
