@@ -261,3 +261,68 @@ export async function notifyTaskComment(
     data: { taskId: task.id, kind: 'task_comment' },
   }).catch(() => {});
 }
+
+/** V6.4 (2026-06-12): Chuyển trạng thái phần phối hợp.
+ *  - accept/submit: collab thông báo cho Owner (+ createdBy nếu khác).
+ *  - owner_accept/owner_reject: Owner thông báo cho người thuộc đơn vị collab + creator.
+ *  Truyền task (có ownerUid để route đúng) + actor + action label.
+ */
+export async function notifyCollabTransition(
+  task: TaskDoc & { ownerUid?: string | null; collabKind?: 'dept' | 'facility'; collabId?: string; collabLabel?: string },
+  actor: { uid: string; name: string },
+  action: 'accept' | 'submit' | 'owner_accept' | 'owner_reject',
+  extra?: { allDone?: boolean; reason?: string },
+): Promise<void> {
+  const recipients = new Set<string>();
+  const ownerOrCreator = task.ownerUid || task.createdBy;
+
+  if (action === 'accept' || action === 'submit') {
+    // Collab gửi → owner/creator nhận noti
+    if (ownerOrCreator && ownerOrCreator !== actor.uid) recipients.add(ownerOrCreator);
+    if (task.createdBy && task.createdBy !== actor.uid) recipients.add(task.createdBy);
+  } else {
+    // Owner duyệt/trả lại → người thuộc đơn vị collab nhận
+    try {
+      const db = getFirebaseAdminDb();
+      if (task.collabKind === 'dept' && task.collabId) {
+        const snap = await db.collection(COLLECTIONS.USERS)
+          .where('status', '==', 'active')
+          .where('departmentId', '==', task.collabId)
+          .limit(50).get();
+        snap.docs.forEach((d) => recipients.add(d.id));
+      } else if (task.collabKind === 'facility' && task.collabId) {
+        const snap = await db.collection(COLLECTIONS.USERS)
+          .where('status', '==', 'active')
+          .where('branchId', '==', task.collabId)
+          .limit(50).get();
+        snap.docs.forEach((d) => recipients.add(d.id));
+      }
+    } catch (e: any) {
+      console.warn('[notifyCollabTransition] resolve unit members:', e?.message);
+    }
+    if (task.createdBy && task.createdBy !== actor.uid) recipients.add(task.createdBy);
+  }
+  // Không gửi cho actor chính
+  recipients.delete(actor.uid);
+  if (recipients.size === 0) return;
+
+  const titles: Record<typeof action, string> = {
+    accept: `✓ ${actor.name} đã tiếp nhận phối hợp`,
+    submit: `📤 ${actor.name} đã gửi kết quả phối hợp`,
+    owner_accept: `✅ Owner đã chấp nhận phần phối hợp`,
+    owner_reject: `⛔ Owner đã trả lại phần phối hợp`,
+  };
+  const bodyText = action === 'owner_reject' && extra?.reason
+    ? `"${task.title}" (${task.collabLabel ?? ''}) — ${extra.reason.slice(0, 100)}`
+    : extra?.allDone
+    ? `"${task.title}" — tất cả phần phối hợp đã xong, chờ Owner xác nhận tổng`
+    : `"${task.title}" — ${task.collabLabel ?? ''}`;
+
+  await pushToUsers(Array.from(recipients), {
+    title: titles[action],
+    body: bodyText,
+    link: taskLink(task.id),
+    tag: `task-${task.id}-collab`,
+    data: { taskId: task.id, kind: `collab_${action}`, collabKey: `${task.collabKind}:${task.collabId}` },
+  }).catch(() => {});
+}

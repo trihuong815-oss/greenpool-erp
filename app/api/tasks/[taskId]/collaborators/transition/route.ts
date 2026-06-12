@@ -234,6 +234,30 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
       source: 'api',
     });
 
+    // V6.4: push FCM noti
+    try {
+      const mod = await import('@/lib/firebase/task-notifications');
+      await mod.notifyCollabTransition(
+        {
+          id: taskId, kind: data.kind, title: data.title,
+          createdBy: data.createdBy, createdByName: data.createdByName,
+          assigneeUserIds: data.assigneeUserIds ?? [],
+          assigneeDeptId: data.assigneeDeptId ?? null,
+          assigneeFacilityId: data.assigneeFacilityId ?? null,
+          status: (update.status ?? data.status) as string,
+          ownerUid: data.ownerUid ?? null,
+          collabKind: collab.kind,
+          collabId: collab.id,
+          collabLabel: collabKey,
+        },
+        { uid: caller.profile.uid, name: caller.actorName ?? '' },
+        action as 'accept' | 'submit' | 'owner_accept' | 'owner_reject',
+        { allDone, reason: newState.rejectionReason },
+      );
+    } catch (e: any) {
+      console.warn('[collab transition] notify fail:', e?.message);
+    }
+
     return NextResponse.json({ ok: true, status: next, taskStatus: update.status ?? data.status, allDone });
   } catch (e) {
     if (e instanceof UnauthorizedError) return NextResponse.json({ error: e.message }, { status: e.status });
