@@ -37,7 +37,7 @@ export default function DeptBarChart() {
         </button>
       </div>
 
-      <div className="grid grid-cols-[1fr_minmax(120px,180px)_60px_60px] gap-3 border-b border-slate-100 px-2 pb-2 text-[10px] uppercase tracking-wider text-slate-400">
+      <div className="grid grid-cols-[minmax(130px,200px)_1fr_60px_60px] gap-3 border-b border-slate-100 px-2 pb-2 text-[10px] uppercase tracking-wider text-slate-400">
         <div>Phòng ban</div>
         <div>% đúng hạn</div>
         <div className="text-center">Đang chờ</div>
@@ -48,7 +48,7 @@ export default function DeptBarChart() {
         {ROWS.map((r) => (
           <div
             key={r.name}
-            className="grid grid-cols-[1fr_minmax(120px,180px)_60px_60px] items-center gap-3 px-2 py-2 hover:bg-slate-50"
+            className="grid grid-cols-[minmax(130px,200px)_1fr_60px_60px] items-center gap-3 px-2 py-2 hover:bg-slate-50"
           >
             <div className="truncate text-sm font-medium text-slate-700">
               {r.name}

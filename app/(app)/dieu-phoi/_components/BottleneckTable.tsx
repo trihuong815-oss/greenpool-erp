@@ -30,7 +30,7 @@ export default function BottleneckTable() {
         </div>
       </div>
 
-      <div className="grid grid-cols-[1fr_70px_90px_1.2fr] gap-3 px-4 py-2 border-b border-slate-200 text-[10px] uppercase text-slate-400 tracking-wider">
+      <div className="grid grid-cols-[minmax(140px,1.2fr)_70px_90px_1.5fr] gap-3 px-4 py-2 border-b border-slate-200 text-[10px] uppercase text-slate-400 tracking-wider">
         <div>Người / Đơn vị</div>
         <div>Đang giữ</div>
         <div>Chờ lâu nhất</div>
@@ -41,7 +41,7 @@ export default function BottleneckTable() {
         {ROWS.map((row, idx) => (
           <div
             key={idx}
-            className="grid grid-cols-[1fr_70px_90px_1.2fr] gap-3 px-4 py-2.5 items-center hover:bg-slate-50 text-sm border-b border-slate-50 last:border-0"
+            className="grid grid-cols-[minmax(140px,1.2fr)_70px_90px_1.5fr] gap-3 px-4 py-2.5 items-center hover:bg-slate-50 text-sm border-b border-slate-50 last:border-0"
           >
             <div className="flex items-center gap-2 min-w-0">
               <span className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold flex items-center justify-center shrink-0">
