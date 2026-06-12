@@ -39,7 +39,7 @@ const MENU_SECTIONS: MenuSection[] = [
   {
     title: 'Điều hành',
     items: [
-      { route: 'giao-viec', label: 'Điều phối công việc', icon: ListTodo },
+      { route: 'dieu-phoi', label: 'Điều phối công việc', icon: ListTodo },
       { route: 'de-xuat',   label: 'Đề xuất',              icon: Inbox },
     ],
   },
@@ -181,7 +181,7 @@ export function Sidebar({ userName, userRole, roleCode, menuOverrides }: Sidebar
                         }`}
                       />
                       <span className="truncate">{item.label}</span>
-                      {item.route === 'giao-viec' && <TasksBadge roleCode={roleCode} />}
+                      {item.route === 'dieu-phoi' && <TasksBadge roleCode={roleCode} />}
                       {item.route === 'tin-nhan' && <ChatUnreadBadge />}
                       {item.route === 'checklist-v2' && <ChecklistBadge />}
                       {item.route === 'ky-thuat' && <TechWorkBadge />}
