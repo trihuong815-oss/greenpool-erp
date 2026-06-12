@@ -78,9 +78,19 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ taskId: s
       patch.severity = body.severity;
     }
     if (typeof body.coordType === 'string') patch.coordType = body.coordType;
-    if (typeof body.ownerUid === 'string') patch.ownerUid = body.ownerUid;
-    if (typeof body.ownerName === 'string') patch.ownerName = body.ownerName;
+    // V6.4 (2026-06-13): owner field — CHỈ creator hoặc CEO mới được chuyển ownership.
+    // Owner phụ trách (canUpdateTaskMeta cho phép sửa nội dung) KHÔNG được tự gán cho người khác.
+    const isCreatorOrCEO = data.createdBy === caller.profile.uid || caller.profile.role_code === 'CEO' || caller.profile.role_code === 'ADMIN';
+    if (typeof body.ownerUid === 'string') {
+      if (!isCreatorOrCEO) return NextResponse.json({ error: 'Chỉ người tạo hoặc CEO được chuyển chủ trì' }, { status: 403 });
+      patch.ownerUid = body.ownerUid;
+    }
+    if (typeof body.ownerName === 'string') {
+      if (!isCreatorOrCEO) return NextResponse.json({ error: 'Chỉ người tạo hoặc CEO được chuyển chủ trì' }, { status: 403 });
+      patch.ownerName = body.ownerName;
+    }
     if (typeof body.ownerBlock === 'string' && ['KD', 'VP'].includes(body.ownerBlock)) {
+      if (!isCreatorOrCEO) return NextResponse.json({ error: 'Chỉ người tạo hoặc CEO được chuyển chủ trì' }, { status: 403 });
       patch.ownerBlock = body.ownerBlock;
       patch.assigneeBlock = body.ownerBlock; // sync legacy field
     }

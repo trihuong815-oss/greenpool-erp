@@ -22,16 +22,22 @@ import { getFirebaseAdminDb } from '@/lib/firebase/admin';
 import { COLLECTIONS } from '@/lib/firebase/collections';
 import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-auth';
 
+// V6.4 (2026-06-13): TP role thực tế trong hệ thống (theo ROLE_BLOCK lib/permissions.ts).
+// Bỏ TP_QLCS ghost — không có trong ROLE_BLOCK. TP_DT/MKT/KT thuộc khối KD; TP_NS/KE/GS thuộc VP.
+const TP_KD = ['TP_DT', 'TP_MKT', 'TP_KT'];
+const TP_VP = ['TP_NS', 'TP_KE', 'TP_GS'];
+const ALL_QLCS = ['QLCS_HM', 'QLCS_24NCT', 'QLCS_TK', 'QLCS_TT', 'QLCS_CTT'];
+
 function targetRolesFor(callerRole: string, tier: 'peer' | 'senior'): string[] {
   if (tier === 'peer') {
     if (callerRole === 'GD_KD' || callerRole === 'GD_VP') return ['GD_KD', 'GD_VP'];
     if (callerRole.startsWith('TP_')) {
-      // Lấy tất cả TP — nhưng filter đơn giản: trả về 1 prefix match server-side
-      return ['TP_DT', 'TP_MKT', 'TP_NS', 'TP_KE', 'TP_GS', 'TP_KT', 'TP_QLCS'];
+      // Peer = TP cùng khối (KD ↔ KD, VP ↔ VP).
+      if (TP_KD.includes(callerRole)) return TP_KD;
+      if (TP_VP.includes(callerRole)) return TP_VP;
+      return [];
     }
-    if (callerRole.startsWith('QLCS_')) {
-      return ['QLCS_HM', 'QLCS_24NCT', 'QLCS_TK', 'QLCS_TT', 'QLCS_CTT'];
-    }
+    if (callerRole.startsWith('QLCS_')) return ALL_QLCS;
     if (callerRole === 'CEO' || callerRole === 'ADMIN') return [];
     return [];
   }
@@ -40,13 +46,13 @@ function targetRolesFor(callerRole: string, tier: 'peer' | 'senior'): string[] {
   if (callerRole === 'GD_KD' || callerRole === 'GD_VP') return ['CEO'];
   if (callerRole.startsWith('QLCS_')) return ['GD_KD'];
   if (callerRole.startsWith('TP_')) {
-    // TP_QLCS thuộc khối VP văn phòng + QLCS thuộc KD — simplify: lên GĐ KD (TP_QLCS quản QLCS),
-    // còn TP khác thì lên GD_VP (TP_NS/TP_KE/TP_GS/TP_DT/TP_MKT thuộc khối VP). TP_KT thuộc KD.
-    if (callerRole === 'TP_KT' || callerRole === 'TP_QLCS') return ['GD_KD'];
-    return ['GD_VP'];
+    // TP_KT thuộc KD → GD_KD. TP_DT/MKT thuộc KD nhưng module-wise lên GD_KD; TP_NS/KE/GS thuộc VP → GD_VP.
+    if (TP_KD.includes(callerRole)) return ['GD_KD'];
+    if (TP_VP.includes(callerRole)) return ['GD_VP'];
+    return [];
   }
-  // NV/GV — trả GĐ Khối tùy block (caller phải tự biết). Default cả 2.
-  return ['GD_KD', 'GD_VP'];
+  // NV/GV — không có trong canCreateProposal scope. Defensive default rỗng.
+  return [];
 }
 
 export async function GET(req: NextRequest) {

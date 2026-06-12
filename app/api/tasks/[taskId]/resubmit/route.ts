@@ -86,17 +86,22 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
       source: 'api',
     });
 
-    // Notify approver đầu chain
+    // Notify approver đầu chain — dùng helper riêng cho RESUBMIT (body chuẩn xác,
+    // KHÔNG nói "đã duyệt" như notifyTaskApproved).
     try {
-      await (await import('@/lib/firebase/task-notifications')).notifyTaskApproved({
-        id: taskId, kind: data.kind, title: data.title,
-        createdBy: data.createdBy, createdByName: data.createdByName,
-        assigneeUserIds: data.assigneeUserIds ?? [],
-        assigneeDeptId: data.assigneeDeptId ?? null,
-        assigneeFacilityId: data.assigneeFacilityId ?? null,
-        status: 'pending_approval',
-        currentApprover: chain[0],
-      }, caller.actorName);
+      await (await import('@/lib/firebase/task-notifications')).notifyTaskResubmitted(
+        {
+          id: taskId, kind: data.kind, title: data.title,
+          createdBy: data.createdBy, createdByName: data.createdByName,
+          assigneeUserIds: data.assigneeUserIds ?? [],
+          assigneeDeptId: data.assigneeDeptId ?? null,
+          assigneeFacilityId: data.assigneeFacilityId ?? null,
+          status: 'pending_approval',
+          currentApprover: chain[0],
+        },
+        { uid: caller.profile.uid, name: caller.actorName ?? '' },
+        note,
+      );
     } catch (e: any) {
       console.warn('[task resubmit] notify fail:', e?.message);
     }

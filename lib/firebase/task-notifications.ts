@@ -227,6 +227,26 @@ export async function notifyTaskAttachment(
   }).catch(() => {});
 }
 
+/** V6.4 (2026-06-13): creator gửi LẠI đề xuất bị reject (sau điều chỉnh).
+ *  Push tới currentApprover (chain[0] sau reset) — body khác notifyTaskApproved
+ *  (kia là "đã duyệt, đến lượt bạn"; đây là "đã sửa, mời duyệt lại").
+ */
+export async function notifyTaskResubmitted(
+  task: TaskDoc,
+  creator: { uid: string; name: string },
+  note: string,
+): Promise<void> {
+  const entry = task.currentApprover;
+  if (!entry) return;
+  await pushToApproverEntries([entry], {
+    title: `🔁 Đề xuất gửi lại — chờ bạn duyệt`,
+    body: `"${task.title}" — ${creator.name} đã điều chỉnh và gửi lại${note ? `: ${note.slice(0, 100)}` : ''}`,
+    link: taskLink(task.id),
+    tag: `task-${task.id}`,
+    data: { taskId: task.id, kind: 'task_resubmitted' },
+  }).catch(() => {});
+}
+
 /** Phase 12 — Recipient yêu cầu creator bổ sung đề xuất. Push creator. */
 export async function notifyTaskRevisionRequested(
   task: TaskDoc,
