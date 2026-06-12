@@ -68,26 +68,26 @@ export default function ImportantNotiPanel({ tasks }: Props) {
   }, [tasks]);
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-      <div className="bg-sky-50/60 px-4 py-2.5 border-b border-sky-100 flex items-center justify-between">
+    <div className="rounded-xl border border-slate-200/70 bg-white shadow-md ring-1 ring-slate-50 overflow-hidden">
+      <div className="bg-gradient-to-r from-sky-50 to-sky-50/40 px-4 py-2 border-b border-sky-100/70 flex items-center justify-between">
         <h3 className="text-[11px] font-bold uppercase tracking-wider text-sky-700">Thông báo quan trọng</h3>
-        <button type="button" className="text-xs font-medium text-emerald-600 hover:text-emerald-700">Xem tất cả</button>
+        <button type="button" className="text-[11px] font-medium text-emerald-600 hover:text-emerald-700 hover:underline">Xem tất cả</button>
       </div>
 
       {items.length === 0 ? (
-        <div className="py-8 text-center text-sm text-slate-400">Chưa có thông báo</div>
+        <div className="py-7 text-center text-xs text-slate-400">Chưa có thông báo</div>
       ) : (
         <div>
           {items.map((n) => {
             const Icon = n.icon;
             return (
-              <div key={n.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-slate-50 border-b border-slate-100 last:border-0 text-sm">
-                <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${BG[n.color]}`}>
-                  <Icon size={15} className={TXT[n.color]} />
+              <div key={n.id} className="flex items-center gap-2.5 px-3.5 py-2.5 hover:bg-slate-50/70 border-b border-slate-50 last:border-0 text-sm transition-colors">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm ring-1 ring-inset ring-white/40 ${BG[n.color]}`}>
+                  <Icon size={14} className={TXT[n.color]} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-[10px] text-slate-400 tabular-nums">{n.time}</div>
-                  <div className="text-sm font-medium text-slate-800 truncate">{n.title}</div>
+                  <div className="text-sm font-semibold text-slate-800 truncate">{n.title}</div>
                   <div className="text-xs text-slate-500 truncate">{n.sub}</div>
                 </div>
               </div>

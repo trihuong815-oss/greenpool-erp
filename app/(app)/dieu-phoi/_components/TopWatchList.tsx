@@ -93,14 +93,14 @@ export default function TopWatchList({ tasks }: Props) {
   [tasks]);
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-      <div className="bg-amber-50/60 px-4 py-2.5 border-b border-amber-100 flex items-center justify-between">
+    <div className="rounded-xl border border-slate-200/70 bg-white shadow-md ring-1 ring-slate-50 overflow-hidden">
+      <div className="bg-gradient-to-r from-amber-50 to-amber-50/40 px-4 py-2 border-b border-amber-100/70 flex items-center justify-between">
         <h3 className="text-[11px] font-bold uppercase tracking-wider text-amber-700">Top việc cần quan tâm</h3>
-        <button type="button" className="text-xs text-emerald-600 hover:text-emerald-700 hover:underline">Xem tất cả</button>
+        <button type="button" className="text-[11px] font-medium text-emerald-600 hover:text-emerald-700 hover:underline">Xem tất cả</button>
       </div>
 
       {items.length === 0 ? (
-        <div className="py-8 text-center text-sm text-slate-400">Chưa có việc cần ưu tiên</div>
+        <div className="py-7 text-center text-xs text-slate-400">Chưa có việc cần ưu tiên</div>
       ) : (
         <div>
           {items.map(({ t, days, meta }) => {
@@ -108,8 +108,8 @@ export default function TopWatchList({ tasks }: Props) {
             const khan = isKhanCap(t);
             const trongDiem = isTrongDiem(t);
             return (
-              <div key={t.id} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 border-b border-slate-100 last:border-0 transition-colors">
-                <div className={`rounded-lg p-2.5 ${meta.bg}`}><Icon size={18} className={meta.color} /></div>
+              <div key={t.id} className="flex items-center gap-2.5 px-3.5 py-2.5 hover:bg-slate-50/70 border-b border-slate-50 last:border-0 transition-colors">
+                <div className={`rounded-lg p-2 shadow-sm ring-1 ring-inset ring-white/40 ${meta.bg}`}><Icon size={16} className={meta.color} /></div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="font-medium text-sm text-slate-800 truncate">{t.title}</span>

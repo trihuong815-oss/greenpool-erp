@@ -207,29 +207,29 @@ export default function KpiBar({ tasks, currentUserUid }: KpiBarProps) {
         return (
           <div
             key={item.key}
-            className="rounded-xl border border-slate-200 bg-white p-4 transition hover:shadow-md"
+            className="rounded-xl border border-slate-200/70 bg-white p-3.5 shadow-md ring-1 ring-slate-50 transition hover:-translate-y-0.5 hover:shadow-lg"
           >
-            <div className="flex items-start gap-3">
-              <div className={`rounded-lg p-2.5 ${ICON_WRAP[item.accent]}`}>
-                <Icon size={20} className={ICON_COLOR[item.accent]} />
+            <div className="flex items-start gap-2.5">
+              <div className={`rounded-lg p-2 shadow-sm ring-1 ring-inset ring-white/40 ${ICON_WRAP[item.accent]}`}>
+                <Icon size={18} className={ICON_COLOR[item.accent]} />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium text-slate-700">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                   {item.label}
                 </div>
                 <div
-                  className={`mt-1 text-3xl font-bold tabular-nums ${COUNT_COLOR[item.accent]}`}
+                  className={`mt-0.5 text-2xl font-bold tabular-nums ${COUNT_COLOR[item.accent]}`}
                 >
                   {item.count}
                 </div>
-                <div className="mt-1 text-[11px] text-slate-400">
+                <div className="mt-0.5 text-[10px] text-slate-400">
                   {item.subtext}
                 </div>
               </div>
             </div>
             <button
               type="button"
-              className={`mt-2 inline-flex items-center gap-0.5 text-xs font-medium hover:underline ${LINK_COLOR[item.accent]}`}
+              className={`mt-1.5 inline-flex items-center gap-0.5 text-[11px] font-medium hover:underline ${LINK_COLOR[item.accent]}`}
             >
               Xem chi tiết <ChevronRight size={11} />
             </button>

@@ -619,56 +619,66 @@ export default function DieuPhoiClient({
 
   return (
     <div className="max-w-screen-2xl mx-auto">
-      <div className="space-y-4">
-        {/* Filter strip */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-sm">
-              <Calendar size={14} className="text-slate-400" />
-              <span className="tabular-nums">{new Date().toLocaleDateString('vi-VN')}</span>
-            </div>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-sm hover:bg-slate-50"
-            >
-              Tất cả khối <ChevronDown size={14} className="text-slate-400" />
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-sm hover:bg-slate-50"
-            >
-              Tất cả cơ sở <ChevronDown size={14} className="text-slate-400" />
-            </button>
-            <button
-              type="button"
-              onClick={reload}
-              className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-sm hover:bg-slate-50"
-              title="Tải lại"
-            >
-              <RefreshCw
-                size={14}
-                className={loading ? 'animate-spin text-slate-400' : 'text-slate-500'}
-              />
-            </button>
+      <div className="space-y-5">
+        {/* Page header — title + actions */}
+        <div className="flex flex-wrap items-end justify-between gap-3 pb-1">
+          <div>
+            <h1 className="text-lg font-bold text-slate-800 tracking-tight">Điều phối công việc</h1>
+            <p className="text-xs text-slate-500 mt-0.5">Theo dõi & điều phối nhiệm vụ liên phòng ban, liên cơ sở.</p>
           </div>
           <button
             type="button"
             onClick={() => canCreate && setShowCreate(true)}
             disabled={!canCreate}
             title={canCreate ? 'Tạo điều phối mới' : 'Bạn không có quyền tạo điều phối'}
-            className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg shadow-sm ${
+            className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold rounded-lg shadow-md ring-1 ring-inset transition ${
               canCreate
-                ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                : 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                ? 'bg-gradient-to-b from-emerald-500 to-emerald-600 text-white ring-emerald-400/30 hover:from-emerald-600 hover:to-emerald-700 hover:shadow-lg'
+                : 'bg-slate-200 text-slate-500 ring-slate-300/40 cursor-not-allowed'
             }`}
           >
             <Plus size={15} /> Tạo điều phối mới
-            <ChevronDown size={14} className="opacity-80" />
+            <ChevronDown size={13} className="opacity-80" />
           </button>
         </div>
 
+        {/* Filter bar — compact toolbar */}
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200/70 bg-white px-3 py-2 shadow-sm ring-1 ring-slate-50">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-50 text-xs text-slate-600">
+            <Calendar size={12} className="text-slate-400" />
+            <span className="tabular-nums font-medium">{new Date().toLocaleDateString('vi-VN')}</span>
+          </div>
+          <span className="h-4 w-px bg-slate-200" />
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-slate-200 bg-white text-xs text-slate-700 hover:bg-slate-50 transition"
+          >
+            Tất cả khối <ChevronDown size={12} className="text-slate-400" />
+          </button>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-slate-200 bg-white text-xs text-slate-700 hover:bg-slate-50 transition"
+          >
+            Tất cả cơ sở <ChevronDown size={12} className="text-slate-400" />
+          </button>
+          <div className="ml-auto">
+            <button
+              type="button"
+              onClick={reload}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-slate-200 bg-white text-xs text-slate-600 hover:bg-slate-50 transition"
+              title="Tải lại"
+            >
+              <RefreshCw
+                size={12}
+                className={loading ? 'animate-spin text-slate-400' : 'text-slate-500'}
+              />
+              <span className="hidden sm:inline">Tải lại</span>
+            </button>
+          </div>
+        </div>
+
         {error && (
-          <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700">
+          <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700 shadow-sm">
             ⚠ {error}
           </div>
         )}
@@ -679,25 +689,53 @@ export default function DieuPhoiClient({
           </div>
         ) : (
           <>
-            <KpiBar tasks={tasks} currentUserUid={currentUserUid} />
+            {/* Section: Tổng quan KPI */}
+            <section className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Tổng quan</span>
+                <span className="flex-1 h-px bg-gradient-to-r from-slate-200 to-transparent" />
+              </div>
+              <KpiBar tasks={tasks} currentUserUid={currentUserUid} />
+            </section>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <BlockDonut tasks={tasks} />
-              <DeptBarChart tasks={tasks} />
-              <BranchBarChart tasks={tasks} />
-            </div>
+            {/* Section: Phân tích */}
+            <section className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Phân tích</span>
+                <span className="flex-1 h-px bg-gradient-to-r from-slate-200 to-transparent" />
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <BlockDonut tasks={tasks} />
+                <DeptBarChart tasks={tasks} />
+                <BranchBarChart tasks={tasks} />
+              </div>
+            </section>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <BottleneckTable tasks={tasks} />
-              <TopWatchList tasks={tasks} />
-              <ImportantNotiPanel tasks={tasks} />
-            </div>
+            {/* Section: Theo dõi */}
+            <section className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Theo dõi</span>
+                <span className="flex-1 h-px bg-gradient-to-r from-slate-200 to-transparent" />
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <BottleneckTable tasks={tasks} />
+                <TopWatchList tasks={tasks} />
+                <ImportantNotiPanel tasks={tasks} />
+              </div>
+            </section>
 
-            <CoordinationTable
-              tasks={tasks}
-              onRowClick={setSelected}
-              currentUserUid={currentUserUid}
-            />
+            {/* Section: Danh sách điều phối */}
+            <section className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Danh sách điều phối</span>
+                <span className="flex-1 h-px bg-gradient-to-r from-slate-200 to-transparent" />
+              </div>
+              <CoordinationTable
+                tasks={tasks}
+                onRowClick={setSelected}
+                currentUserUid={currentUserUid}
+              />
+            </section>
           </>
         )}
       </div>

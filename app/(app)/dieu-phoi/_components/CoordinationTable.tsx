@@ -211,9 +211,9 @@ export default function CoordinationTable({
   const totalCount = counts.all;
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+    <div className="rounded-xl border border-slate-200/70 bg-white shadow-md ring-1 ring-slate-50 overflow-hidden">
       {/* Tabs row */}
-      <div className="border-b border-slate-200 overflow-x-auto">
+      <div className="border-b border-slate-200 overflow-x-auto bg-gradient-to-b from-slate-50/60 to-white">
         <div className="flex items-center gap-1 px-2">
           {tabKeys.map((key) => {
             const isActive = activeTab === key;
@@ -223,13 +223,13 @@ export default function CoordinationTable({
                 type="button"
                 onClick={() => setActiveTab(key)}
                 className={
-                  'px-4 py-3 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors ' +
+                  'px-3.5 py-2.5 text-xs whitespace-nowrap border-b-2 -mb-px transition-colors ' +
                   (isActive
-                    ? 'border-emerald-500 text-emerald-700 font-semibold'
+                    ? 'border-emerald-500 text-emerald-700 font-bold'
                     : 'border-transparent text-slate-600 hover:text-slate-800 font-medium')
                 }
               >
-                {TAB_LABEL[key]} ({counts[key]})
+                {TAB_LABEL[key]} <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[16px] px-1 rounded-full bg-slate-100 text-slate-600 text-[10px] font-semibold tabular-nums">{counts[key]}</span>
               </button>
             );
           })}
