@@ -128,6 +128,13 @@ export default function CoordinationTable({
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-slate-50 border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-500">
+              <th className="px-3 py-2.5 text-center w-10">
+                <input
+                  type="checkbox"
+                  className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 focus:ring-1"
+                  aria-label="Chọn tất cả"
+                />
+              </th>
               <th className="px-3 py-2.5 text-left font-medium w-10">#</th>
               <th className="px-3 py-2.5 text-left font-medium">Công việc</th>
               <th className="px-3 py-2.5 text-left font-medium w-24">Loại</th>
@@ -152,6 +159,13 @@ export default function CoordinationTable({
                   onClick={() => onRowClick(t)}
                   className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer"
                 >
+                  <td className="px-3 py-3 text-center align-top" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 focus:ring-1"
+                      aria-label={`Chọn ${t.title}`}
+                    />
+                  </td>
                   <td className="px-3 py-3 text-slate-400 tabular-nums align-top">
                     {idx + 1}
                   </td>
@@ -243,7 +257,7 @@ export default function CoordinationTable({
             {rows.length === 0 && (
               <tr>
                 <td
-                  colSpan={10}
+                  colSpan={11}
                   className="px-3 py-8 text-center text-sm text-slate-400"
                 >
                   Chưa có công việc điều phối nào.

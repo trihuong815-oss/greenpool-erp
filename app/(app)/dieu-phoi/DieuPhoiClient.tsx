@@ -60,6 +60,7 @@ export default function DieuPhoiClient({ currentUserUid }: DieuPhoiClientProps) 
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 shadow-sm"
             >
               <Plus size={15} /> Tạo điều phối mới
+              <ChevronDown size={14} className="opacity-80" />
             </button>
           </div>
 
