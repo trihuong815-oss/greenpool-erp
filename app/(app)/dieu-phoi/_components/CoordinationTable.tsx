@@ -30,22 +30,35 @@ type TabKey =
   | 'overdue'
   | 'bottleneck';
 
-interface TabDef {
-  key: TabKey;
-  label: string;
-  count: number;
+const TAB_LABEL: Record<TabKey, string> = {
+  all: 'Tất cả',
+  mine: 'Tôi phụ trách',
+  sent: 'Tôi giao',
+  cross: 'Liên khối',
+  waiting_resp: 'Chờ phản hồi',
+  waiting_appr: 'Chờ duyệt',
+  overdue: 'Quá hạn',
+  bottleneck: 'Điểm nghẽn',
+};
+
+function isPastDueISO(dueDate: string): boolean {
+  if (!dueDate) return false;
+  const due = new Date(`${dueDate}T23:59:59+07:00`).getTime();
+  return Number.isFinite(due) && due < Date.now();
 }
 
-const TABS: TabDef[] = [
-  { key: 'all', label: 'Tất cả', count: 120 },
-  { key: 'mine', label: 'Tôi phụ trách', count: 18 },
-  { key: 'sent', label: 'Tôi giao', count: 32 },
-  { key: 'cross', label: 'Liên khối', count: 12 },
-  { key: 'waiting_resp', label: 'Chờ phản hồi', count: 5 },
-  { key: 'waiting_appr', label: 'Chờ duyệt', count: 3 },
-  { key: 'overdue', label: 'Quá hạn', count: 2 },
-  { key: 'bottleneck', label: 'Điểm nghẽn', count: 9 },
-];
+function filterByTab(tasks: import('./types').CoordTask[], tab: TabKey, uid: string) {
+  switch (tab) {
+    case 'all':          return tasks;
+    case 'mine':         return tasks.filter((t) => t.ownerUid === uid);
+    case 'sent':         return tasks.filter((t) => t.createdByName && t.ownerUid !== uid);
+    case 'cross':        return tasks.filter((t) => t.scope === 'lien_khoi');
+    case 'waiting_resp': return tasks.filter((t) => t.status === 'cho_phan_hoi');
+    case 'waiting_appr': return tasks.filter((t) => t.status === 'cho_phe_duyet');
+    case 'overdue':      return tasks.filter((t) => isPastDueISO(t.dueDate) && t.status !== 'hoan_thanh' && t.status !== 'dong_ho_so');
+    case 'bottleneck':   return tasks.filter((t) => t.waitingForPerson && (Date.now() - new Date(t.waitingSince || t.createdAt).getTime()) > 24 * 3600_000);
+  }
+}
 
 /** Khởi tạo từ tên ngắn cho avatar pastel. */
 function initialsOf(name: string): string {
@@ -91,24 +104,36 @@ export default function CoordinationTable({
   onRowClick,
   currentUserUid: _currentUserUid,
 }: CoordinationTableProps) {
-  const [activeTab, setActiveTab] = useState<TabKey>('waiting_appr');
+  const [activeTab, setActiveTab] = useState<TabKey>('all');
 
-  const rows = useMemo(() => tasks.slice(0, 5), [tasks]);
+  // Compute count cho từng tab từ tasks thật
+  const tabKeys: TabKey[] = ['all', 'mine', 'sent', 'cross', 'waiting_resp', 'waiting_appr', 'overdue', 'bottleneck'];
+  const counts = useMemo(() => {
+    const out = {} as Record<TabKey, number>;
+    for (const k of tabKeys) out[k] = filterByTab(tasks, k, _currentUserUid).length;
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasks, _currentUserUid]);
 
-  const totalCount = TABS.find((t) => t.key === 'all')?.count ?? rows.length;
+  const filteredTasks = useMemo(
+    () => filterByTab(tasks, activeTab, _currentUserUid),
+    [tasks, activeTab, _currentUserUid],
+  );
+  const rows = filteredTasks.slice(0, 10);
+  const totalCount = counts.all;
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
       {/* Tabs row */}
       <div className="border-b border-slate-200 overflow-x-auto">
         <div className="flex items-center gap-1 px-2">
-          {TABS.map((tab) => {
-            const isActive = activeTab === tab.key;
+          {tabKeys.map((key) => {
+            const isActive = activeTab === key;
             return (
               <button
-                key={tab.key}
+                key={key}
                 type="button"
-                onClick={() => setActiveTab(tab.key)}
+                onClick={() => setActiveTab(key)}
                 className={
                   'px-4 py-3 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors ' +
                   (isActive
@@ -116,7 +141,7 @@ export default function CoordinationTable({
                     : 'border-transparent text-slate-600 hover:text-slate-800 font-medium')
                 }
               >
-                {tab.label} ({tab.count})
+                {TAB_LABEL[key]} ({counts[key]})
               </button>
             );
           })}

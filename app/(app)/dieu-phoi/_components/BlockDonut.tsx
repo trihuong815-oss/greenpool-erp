@@ -23,18 +23,11 @@ const CENTER = SIZE / 2;
 const LABEL_RADIUS = RADIUS; // tâm strok​e cho text % nằm giữa độ dày stroke
 
 export default function BlockDonut({ tasks }: Props) {
-  // Compute từ tasks; nếu quá ít (< 10) thì fallback mock 120/54/36/30 cho demo khớp ảnh
-  let total = tasks.length;
-  let kd = tasks.filter((t) => t.ownerBlock === 'KD' && t.scope !== 'lien_khoi').length;
-  let vp = tasks.filter((t) => t.ownerBlock === 'VP' && t.scope !== 'lien_khoi').length;
-  let cross = tasks.filter((t) => t.scope === 'lien_khoi').length;
-
-  if (total < 10) {
-    total = 120;
-    kd = 54;
-    vp = 36;
-    cross = 30;
-  }
+  // Compute thực từ tasks (đã bỏ fallback mock 120/54/36/30)
+  const total = tasks.length;
+  const kd = tasks.filter((t) => t.ownerBlock === 'KD' && t.scope !== 'lien_khoi').length;
+  const vp = tasks.filter((t) => t.ownerBlock === 'VP' && t.scope !== 'lien_khoi').length;
+  const cross = tasks.filter((t) => t.scope === 'lien_khoi').length;
 
   const safeTotal = total === 0 ? 1 : total;
   const segments: Segment[] = [

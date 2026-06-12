@@ -1,42 +1,49 @@
 'use client';
 
 import { ChevronDown } from 'lucide-react';
+import { useMemo } from 'react';
+import type { CoordTask, BranchId } from './types';
 
-type Row = {
-  name: string;
-  pct: number;
-  waiting: number;
-  overdue: number;
-  color: string;
-};
+interface Props { tasks: CoordTask[] }
 
-// Màu khớp mock — palette nhạt: blue-500 / orange-500 / violet-500
-const ROWS: Row[] = [
-  { name: 'Green Pool Hoàng Mai', pct: 75, waiting: 5, overdue: 1, color: '#3b82f6' },
-  { name: 'Green Pool 24 NCT', pct: 68, waiting: 4, overdue: 1, color: '#f97316' },
-  { name: 'Green Pool Linh Đàm', pct: 82, waiting: 6, overdue: 0, color: '#3b82f6' },
-  { name: 'Green Pool Thanh Trì', pct: 60, waiting: 3, overdue: 1, color: '#f97316' },
-  { name: 'Green Pool Thụy Khuê', pct: 55, waiting: 2, overdue: 0, color: '#8b5cf6' },
-  { name: 'Green Pool Cầu Giấy', pct: 78, waiting: 0, overdue: 0, color: '#3b82f6' },
+// 6 cơ sở — tên TẮT theo yêu cầu anh ("GP HM" thay "Green Pool Hoàng Mai")
+const BRANCHES: { id: BranchId; name: string; color: string }[] = [
+  { id: 'HM',    name: 'GP HM',    color: '#3b82f6' },
+  { id: 'NCT24', name: 'GP 24NCT', color: '#f97316' },
+  { id: 'LD',    name: 'GP LĐ',    color: '#3b82f6' },
+  { id: 'TT',    name: 'GP TT',    color: '#f97316' },
+  { id: 'TK',    name: 'GP TK',    color: '#8b5cf6' },
+  { id: 'CG',    name: 'GP CG',    color: '#3b82f6' },
 ];
 
-export default function BranchBarChart() {
+function isOverdue(t: CoordTask): boolean {
+  if (!t.dueDate) return false;
+  if (t.status === 'hoan_thanh' || t.status === 'dong_ho_so') return false;
+  return t.dueDate < new Date().toISOString().slice(0, 10);
+}
+
+export default function BranchBarChart({ tasks }: Props) {
+  const rows = useMemo(() => BRANCHES.map((b) => {
+    const ofBranch = tasks.filter((t) => t.branch === b.id);
+    const due = ofBranch.filter((t) => t.dueDate);
+    const completedOnTime = due.filter((t) =>
+      (t.status === 'hoan_thanh' || t.status === 'dong_ho_so') && !isOverdue(t)).length;
+    const pct = due.length === 0 ? 0 : Math.round(completedOnTime / due.length * 100);
+    const waiting = ofBranch.filter((t) => t.status === 'cho_phan_hoi' || t.status === 'cho_phe_duyet').length;
+    const overdue = ofBranch.filter(isOverdue).length;
+    return { ...b, pct, waiting, overdue, total: ofBranch.length };
+  }), [tasks]);
+
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-800">
-          Hiệu suất điều phối theo cơ sở
-        </h3>
-        <button
-          type="button"
-          className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
-        >
-          Tất cả cơ sở
-          <ChevronDown className="h-3 w-3" />
+        <h3 className="text-sm font-semibold text-slate-800">Hiệu suất điều phối theo cơ sở</h3>
+        <button type="button" className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50">
+          Tất cả cơ sở <ChevronDown className="h-3 w-3" />
         </button>
       </div>
 
-      <div className="grid grid-cols-[minmax(140px,210px)_1fr_60px_60px] gap-3 border-b border-slate-100 px-2 pb-2 text-[10px] uppercase tracking-wider text-slate-400">
+      <div className="grid grid-cols-[90px_1fr_70px_70px] gap-3 border-b border-slate-100 px-2 pb-2 text-[10px] uppercase tracking-wider text-slate-400">
         <div>Cơ sở</div>
         <div>% đúng hạn</div>
         <div className="text-center">Đang chờ</div>
@@ -44,33 +51,17 @@ export default function BranchBarChart() {
       </div>
 
       <div className="divide-y divide-slate-50">
-        {ROWS.map((r) => (
-          <div
-            key={r.name}
-            className="grid grid-cols-[minmax(140px,210px)_1fr_60px_60px] items-center gap-3 px-2 py-2 hover:bg-slate-50"
-          >
-            <div className="truncate text-sm font-medium text-slate-700">
-              {r.name}
-            </div>
+        {rows.map((r) => (
+          <div key={r.id} className="grid grid-cols-[90px_1fr_70px_70px] items-center gap-3 px-2 py-2 hover:bg-slate-50">
+            <div className="text-sm font-medium text-slate-700 truncate">{r.name}</div>
             <div className="flex items-center">
               <div className="mr-2 h-1.5 flex-1 rounded-full bg-slate-100">
-                <div
-                  className="h-full rounded-full"
-                  style={{ width: `${r.pct}%`, background: r.color }}
-                />
+                <div className="h-full rounded-full" style={{ width: `${r.pct}%`, background: r.color }} />
               </div>
-              <span className="w-10 text-right text-sm font-semibold tabular-nums text-slate-700">
-                {r.pct}%
-              </span>
+              <span className="w-10 text-right text-sm font-semibold tabular-nums text-slate-700">{r.pct}%</span>
             </div>
-            <div className="text-center text-sm tabular-nums text-slate-700">
-              {r.waiting}
-            </div>
-            <div
-              className={`text-center text-sm tabular-nums ${
-                r.overdue > 0 ? 'font-semibold text-rose-600' : 'text-slate-500'
-              }`}
-            >
+            <div className="text-center text-sm tabular-nums text-slate-700">{r.waiting}</div>
+            <div className={`text-center text-sm tabular-nums ${r.overdue > 0 ? 'font-semibold text-rose-600' : 'text-slate-500'}`}>
               {r.overdue}
             </div>
           </div>
