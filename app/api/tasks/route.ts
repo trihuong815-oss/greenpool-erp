@@ -662,9 +662,12 @@ export async function POST(req: NextRequest) {
       ownerName: typeof body?.ownerName === 'string' ? body.ownerName : null,
       ownerBlock: ['KD', 'VP'].includes(body?.ownerBlock) ? body.ownerBlock : null,
       // V6.4 (2026-06-12): trace link nếu task được tạo từ đề xuất đã duyệt.
-      // Client gửi meta: { fromProposalId } — đọc + persist để cross-link 2 module.
+      // Client gửi meta: { fromProposalId, fromProposalCode? } — persist 2 field tham chiếu.
       meta: (body?.meta && typeof body.meta === 'object' && typeof body.meta.fromProposalId === 'string')
-        ? { fromProposalId: body.meta.fromProposalId }
+        ? {
+            fromProposalId: body.meta.fromProposalId,
+            fromProposalCode: typeof body.meta.fromProposalCode === 'string' ? body.meta.fromProposalCode : null,
+          }
         : null,
       approvalChain,
       approvalsCompleted: [],

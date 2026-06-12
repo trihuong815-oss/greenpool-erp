@@ -92,11 +92,18 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
     const nextApproverDisplay = nextApprover
       ? await (await import('@/lib/firebase/approver-name')).resolveApproverName(nextApprover)
       : null;
+    // V6.4 (2026-06-12): khi đề xuất duyệt xong chain → gợi ý CTA tạo điều phối
+    // trong timeline; client sẽ render link "Tạo điều phối" nếu chưa có linkedCoordId.
+    const isFinalApproval = !nextApprover;
+    const isProposalDone = data.kind === 'proposal' && isFinalApproval;
+    const defaultBody = nextApproverDisplay
+      ? `Đã duyệt — chuyển ${nextApproverDisplay} duyệt tiếp`
+      : (isProposalDone ? 'Đã duyệt cuối — có thể tạo điều phối từ đề xuất này' : 'Đã duyệt');
     await ref.collection('comments').add({
       authorId: caller.profile.uid,
       authorName: caller.actorName,
       authorRole: caller.actorRole,
-      body: comment || (nextApproverDisplay ? `Đã duyệt — chuyển ${nextApproverDisplay} duyệt tiếp` : 'Đã duyệt'),
+      body: comment || defaultBody,
       kind: 'approval',
       createdAt: now,
     });

@@ -594,7 +594,18 @@ export function DeXuatClient(props: Props) {
           relatedUnits, // pass nguyên để adapter coord dùng nếu cần
         },
       };
-      await tasksApi.create(body);
+      const created = await tasksApi.create(body);
+      // V6.4 (2026-06-12): reverse link — ghi linkedCoordId vào proposal doc để
+      // proposal hiện "Đã tạo điều phối" + click nhảy được sang task. Không fail
+      // toàn flow nếu reverse PATCH lỗi (chỉ log).
+      try {
+        await tasksApi.update(p.id, {
+          meta: { linkedCoordId: created.id, linkedCoordAt: new Date().toISOString() },
+        } as any);
+      } catch (revErr: any) {
+        // eslint-disable-next-line no-console
+        console.warn('[de-xuat] reverse link failed:', revErr?.message);
+      }
       alert(`Đã tạo điều phối từ đề xuất ${p.code}. Đang chuyển sang module Điều phối...`);
       router.push('/dieu-phoi');
     } catch (e: any) {
