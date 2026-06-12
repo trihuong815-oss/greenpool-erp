@@ -351,6 +351,17 @@ export const tasksApi = {
     );
   },
 
+  // V6.4 (2026-06-12): creator gửi lại đề xuất bị reject — server reset chain
+  async resubmit(id: string, note?: string): Promise<{ ok: true; currentApprover: string }> {
+    return jsonOrThrow<{ ok: true; currentApprover: string }>(
+      await fetch(`/api/tasks/${id}/resubmit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note: note ?? '' }),
+      }),
+    );
+  },
+
   async updateStatus(
     id: string,
     input: { status: TaskStatus; progressPct?: number; comment?: string; expectedCompletionDate?: string },

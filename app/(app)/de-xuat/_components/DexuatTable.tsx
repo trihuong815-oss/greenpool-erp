@@ -173,6 +173,7 @@ export type ActionKey =
   | 'reject'
   | 'request_revision'
   | 'approve_and_create_coord'
+  | 'resubmit'
   | 'close';
 
 export interface DexuatTableProps {
@@ -495,6 +496,8 @@ function DexuatRow({ p, currentUserUid, currentUserRole, onRowClick, onAction }:
   const showApproveAndCoord = canApproveAndCreateCoord(p, currentUserUid, currentUserRole);
   const showClose = canClose(p, currentUserUid, currentUserRole);
   const highlightApproveCoord = p.status === 'da_phe_duyet';
+  // V6.4 (2026-06-12): creator có thể gửi lại đề xuất bị từ chối (server reset chain).
+  const showResubmit = p.status === 'tu_choi' && p.creatorUid === currentUserUid;
 
   function emit(a: ActionKey) {
     setMenuOpen(false);
@@ -681,6 +684,14 @@ function DexuatRow({ p, currentUserUid, currentUserRole, onRowClick, onAction }:
                   cls="text-rose-700"
                 />
               </>
+            )}
+            {showResubmit && (
+              <MenuItem
+                icon={RotateCcw}
+                label="Gửi lại sau điều chỉnh"
+                onClick={() => emit('resubmit')}
+                cls="text-emerald-700 font-semibold"
+              />
             )}
             {showClose && (
               <MenuItem

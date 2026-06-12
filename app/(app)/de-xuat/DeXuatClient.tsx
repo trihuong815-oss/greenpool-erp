@@ -519,6 +519,17 @@ export function DeXuatClient(props: Props) {
     }
   }, [refresh]);
 
+  /** V6.4 (2026-06-12): creator gửi lại đề xuất bị reject — server reset chain duyệt. */
+  const handleResubmit = useCallback(async (id: string, note?: string) => {
+    try {
+      await tasksApi.resubmit(id, note);
+      setSelected(null);
+      refresh();
+    } catch (e: any) {
+      alert(`Gửi lại thất bại: ${e?.message ?? 'lỗi không xác định'}`);
+    }
+  }, [refresh]);
+
   /** V6: đóng hồ sơ. V7 sẽ wire endpoint backend dedicated. */
   const handleCloseDossier = useCallback(async (id: string) => {
     // eslint-disable-next-line no-console
@@ -637,6 +648,14 @@ export function DeXuatClient(props: Props) {
       case 'approve_and_create_coord':
         handleApproveAndCreateCoord(id);
         break;
+      case 'resubmit': {
+        const note = prompt(
+          `Gửi lại đề xuất "${p.title}" sau khi điều chỉnh?\n\nNhập ghi chú (tuỳ chọn — mô tả đã sửa gì):`,
+          '',
+        );
+        if (note !== null) handleResubmit(id, note.trim());
+        break;
+      }
       case 'close':
         if (confirm(`Đóng hồ sơ đề xuất "${p.title}"?`)) handleCloseDossier(id);
         break;
@@ -647,6 +666,7 @@ export function DeXuatClient(props: Props) {
     handleRequestRevision,
     handleReject,
     handleApproveAndCreateCoord,
+    handleResubmit,
     handleCloseDossier,
   ]);
 
