@@ -23,11 +23,12 @@ interface AppShellProps {
   userName: string;
   userRole: string;
   roleCode: string;
+  avatarUrl?: string | null;
   menuOverrides?: Record<string, boolean>;
   children: React.ReactNode;
 }
 
-export function AppShell({ userName, userRole, roleCode, menuOverrides, children }: AppShellProps) {
+export function AppShell({ userName, userRole, roleCode, avatarUrl, menuOverrides, children }: AppShellProps) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
@@ -77,7 +78,7 @@ export function AppShell({ userName, userRole, roleCode, menuOverrides, children
       <div className="h-[var(--gp-vh,100dvh)] flex overflow-hidden pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
         {/* Desktop sidebar — fixed bên trái */}
         <div className="hidden md:flex">
-          <Sidebar userName={userName} userRole={userRole} roleCode={roleCode} menuOverrides={menuOverrides} />
+          <Sidebar userName={userName} userRole={userRole} roleCode={roleCode} avatarUrl={avatarUrl ?? null} menuOverrides={menuOverrides} />
         </div>
 
         {/* Mobile drawer overlay */}
@@ -95,7 +96,7 @@ export function AppShell({ userName, userRole, roleCode, menuOverrides, children
           }`}
           aria-hidden={!open}
         >
-          <Sidebar userName={userName} userRole={userRole} roleCode={roleCode} menuOverrides={menuOverrides} />
+          <Sidebar userName={userName} userRole={userRole} roleCode={roleCode} avatarUrl={avatarUrl ?? null} menuOverrides={menuOverrides} />
         </div>
 
         {/* Main content area */}

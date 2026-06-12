@@ -56,6 +56,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           userName={profile.displayName}
           userRole={profile.roleName ?? profile.roleCode}
           roleCode={profile.roleCode}
+          avatarUrl={profile.avatarUrl ?? null}
           menuOverrides={profile.menuOverrides}
         >
           {children}
