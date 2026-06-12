@@ -161,6 +161,16 @@ export async function GET(req: NextRequest) {
         queries.push(colRef.orderBy('createdAt', 'desc').limit(LIST_LIMIT).get());
       }
 
+      // Q6 (V6.4): owner trực tiếp — task có ownerUid === uid mà ko nằm trong assigneeUserIds
+      // index: ownerUid + createdAt
+      queries.push(
+        colRef
+          .where('ownerUid', '==', caller.profile.uid)
+          .orderBy('createdAt', 'desc')
+          .limit(LIST_LIMIT)
+          .get()
+      );
+
       const results = await Promise.all(queries);
       results.forEach((snap) => addDocs(snap.docs));
     } else {
@@ -174,6 +184,10 @@ export async function GET(req: NextRequest) {
       // Assigned to me (user)
       queries.push(
         colRef.where('assigneeUserIds', 'array-contains', caller.profile.uid).orderBy('createdAt', 'desc').limit(LIST_LIMIT).get()
+      );
+      // V6.4 (2026-06-12): Owner trực tiếp — task có ownerUid === uid
+      queries.push(
+        colRef.where('ownerUid', '==', caller.profile.uid).orderBy('createdAt', 'desc').limit(LIST_LIMIT).get()
       );
 
       if (isCEO(caller.profile)) {
@@ -647,6 +661,11 @@ export async function POST(req: NextRequest) {
       ownerUid: typeof body?.ownerUid === 'string' ? body.ownerUid : null,
       ownerName: typeof body?.ownerName === 'string' ? body.ownerName : null,
       ownerBlock: ['KD', 'VP'].includes(body?.ownerBlock) ? body.ownerBlock : null,
+      // V6.4 (2026-06-12): trace link nếu task được tạo từ đề xuất đã duyệt.
+      // Client gửi meta: { fromProposalId } — đọc + persist để cross-link 2 module.
+      meta: (body?.meta && typeof body.meta === 'object' && typeof body.meta.fromProposalId === 'string')
+        ? { fromProposalId: body.meta.fromProposalId }
+        : null,
       approvalChain,
       approvalsCompleted: [],
       currentApprover,

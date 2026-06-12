@@ -59,5 +59,7 @@ export function taskScopeFromDoc(d: Record<string, any>): TaskForScope {
     status: d.status,
     // Phase B.7 phase 2: bỏ approvalRequiredFrom — canApproveTask chỉ đọc currentApprover.
     currentApprover: d.currentApprover ?? null,
+    // V6.4 (2026-06-12): Owner phụ trách — dùng cho canReadTask + canUpdateTaskMeta
+    ownerUid: typeof d.ownerUid === 'string' ? d.ownerUid : null,
   };
 }

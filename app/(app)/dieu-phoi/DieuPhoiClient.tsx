@@ -301,8 +301,8 @@ export default function DieuPhoiClient({
           collaboratorRoles,
           goal: payload.objective || '',
           expectedDeliverable: payload.finalDeliverable || '',
-          // V6.2 fix: lưu deadline riêng cho từng collab (qua meta backward compat)
-          meta: { collaboratorDeadlines },
+          // V6.4 (2026-06-12): deadline RIÊNG per collab — gửi ở root để khớp PATCH handler
+          collaboratorDeadlines,
         } as any);
         setShowCreate(false);
         setEditingTask(null);

@@ -41,6 +41,8 @@ export interface TaskForScope {
   // Phase 12.5+ chain entry: 'user:UID' | 'role:GD_KD' (post B.7 phase 2: legacy
   // approvalRequiredFrom đã drop — backfill confirmed 0 docs phụ thuộc).
   currentApprover?: string | null;
+  // V6.4 (2026-06-12): Owner phụ trách (có thể khác createdBy — vd GĐKD tạo, QLCS là owner)
+  ownerUid?: string | null;
 }
 
 // Phase 12.5 (2026-06-03): mỗi approver trong chain có thể là user cụ thể hoặc role.
@@ -61,9 +63,11 @@ export function matchApprover(entry: string | null | undefined, uid: string, rol
 // NV/GV/TT: tasks mình tạo + được assign (direct user OR cùng dept/facility được giao)
 export function canReadTask(p: CallerProfile, t: TaskForScope): boolean {
   if (isCEO(p)) return true;
-  // Người tạo + người được assign trực tiếp luôn xem được (kể cả cross-block)
+  // Người tạo + người được assign trực tiếp + Owner phụ trách luôn xem được (kể cả cross-block)
   if (t.createdBy === p.uid) return true;
   if (t.assigneeUserIds.includes(p.uid)) return true;
+  // V6.4 (2026-06-12): Owner phụ trách — vd GĐKD tạo, QLCS là owner
+  if (t.ownerUid && t.ownerUid === p.uid) return true;
 
   const myBlock = getBlockOf(p.role_code);
   if (isGD(p)) {
@@ -213,10 +217,13 @@ export function canReopenTask(p: CallerProfile, t: TaskForScope): boolean {
 
 
 // ---- UPDATE METADATA (title, desc, priority, dueDate) ----
-// Chỉ creator + CEO mới được sửa nội dung — tránh GĐ Khối thay đổi đề xuất sau khi đã tạo.
+// Creator + Owner (phụ trách) + CEO. V6.4: Owner có quyền sửa task của mình
+// (đặc biệt khi GĐKD giao cho QLCS làm Owner, QLCS cần sửa được nội dung).
 export function canUpdateTaskMeta(p: CallerProfile, t: TaskForScope): boolean {
   if (isCEO(p)) return true;
-  return t.createdBy === p.uid;
+  if (t.createdBy === p.uid) return true;
+  if (t.ownerUid && t.ownerUid === p.uid) return true;
+  return false;
 }
 
 // ---- DELETE ----

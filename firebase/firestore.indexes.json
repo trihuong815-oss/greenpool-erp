@@ -39,6 +39,15 @@
       ]
     },
     {
+      "_comment": "V6.4 tasks: owner trực tiếp — where(ownerUid) orderBy(createdAt) — task có owner ≠ assignee",
+      "collectionGroup": "tasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "ownerUid", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "_comment": "tasks: assigned to me (user) — where(assigneeUserIds array-contains) orderBy(createdAt)",
       "collectionGroup": "tasks",
       "queryScope": "COLLECTION",
