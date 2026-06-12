@@ -15,6 +15,7 @@ import DetailDrawer from './_components/DetailDrawer';
 import { tasksApi } from '@/lib/services/tasks/api-client';
 import type { CoordTask } from './_components/types';
 import { adaptTask } from './_lib/adapter';
+import { canCreateCoord } from './_lib/permissions';
 
 interface DieuPhoiClientProps {
   currentUserUid: string;
@@ -22,7 +23,8 @@ interface DieuPhoiClientProps {
   currentUserRole: string;
 }
 
-export default function DieuPhoiClient({ currentUserUid }: DieuPhoiClientProps) {
+export default function DieuPhoiClient({ currentUserUid, currentUserRole }: DieuPhoiClientProps) {
+  const canCreate = canCreateCoord(currentUserRole);
   const [showCreate, setShowCreate] = useState(false);
   const [selected, setSelected] = useState<CoordTask | null>(null);
   const [tasks, setTasks] = useState<CoordTask[]>([]);
@@ -42,9 +44,42 @@ export default function DieuPhoiClient({ currentUserUid }: DieuPhoiClientProps) 
     return () => { cancelled = true; };
   }, [reloadKey]);
 
+  // V1: chỉ log + alert (chưa có API per-collab status).
+  // V2 sẽ wire vào endpoint riêng — vd PATCH /api/tasks/:id/collaborator/:collabId.
+  const handleAcceptCollab = useCallback((taskId: string, collabId: string) => {
+    console.log('[dieu-phoi] accept collab', { taskId, collabId });
+    alert('V1: Đã ghi nhận TIẾP NHẬN (chưa có API). V2 sẽ persist lên server.');
+  }, []);
+  const handleRejectCollab = useCallback((taskId: string, collabId: string, reason: string) => {
+    console.log('[dieu-phoi] reject collab', { taskId, collabId, reason });
+    alert(`V1: Đã ghi nhận TỪ CHỐI — lý do: "${reason}". V2 sẽ persist.`);
+  }, []);
+  const handleCompleteCollab = useCallback((taskId: string, collabId: string) => {
+    console.log('[dieu-phoi] complete collab', { taskId, collabId });
+    alert('V1: Đã ghi nhận HOÀN THÀNH (chưa có API). V2 sẽ persist.');
+  }, []);
+
   const handleCreate = useCallback(async (payload: CreatePayload) => {
     try {
-      // V1: map CreatePayload → TaskCreate body cũ /api/tasks
+      // V1 (transition): map CreateCoordPayload (V2 shape) → TaskCreate body cũ /api/tasks.
+      // collaborators[i].unitId có dạng 'DEPT:KE' | 'BRANCH:HM' → tách prefix.
+      const FACILITY_IDS = ['HM', 'NCT24', 'LD', 'TT', 'TK', 'CG'];
+      const ownerIsFacility = payload.ownerBlock === 'KD' && FACILITY_IDS.includes(payload.ownerDeptId);
+      const collaboratorDeptIds: string[] = [];
+      const collaboratorFacilityIds: string[] = [];
+      const collaboratorRoles: Record<string, string> = {};
+      for (const c of payload.collaborators) {
+        if (!c.unitId) continue;
+        const [prefix, rawId] = c.unitId.split(':');
+        if (!prefix || !rawId) continue;
+        if (prefix === 'DEPT') {
+          collaboratorDeptIds.push(rawId);
+          collaboratorRoles[`dept:${rawId}`] = c.supportContent;
+        } else if (prefix === 'BRANCH') {
+          collaboratorFacilityIds.push(rawId);
+          collaboratorRoles[`facility:${rawId}`] = c.supportContent;
+        }
+      }
       const body: any = {
         kind: payload.type === 'de_xuat' || payload.type === 'phe_duyet' ? 'proposal' : 'assignment',
         title: payload.title,
@@ -54,23 +89,20 @@ export default function DieuPhoiClient({ currentUserUid }: DieuPhoiClientProps) 
           payload.finalDeliverable ? `\n— Kết quả bàn giao: ${payload.finalDeliverable}` : '',
         ].filter(Boolean).join(''),
         priority: payload.priority,
-        dueDate: payload.deadline || null,
+        dueDate: payload.dueDate || null,
         assigneeBlock: payload.ownerBlock || 'KD',
-        assigneeDeptId: payload.ownerUnit && !['HM','NCT24','LD','TT','TK','CG'].includes(payload.ownerUnit) ? payload.ownerUnit : null,
-        assigneeFacilityId: ['HM','NCT24','LD','TT','TK','CG'].includes(payload.ownerUnit) ? payload.ownerUnit : null,
-        assigneeUserIds: [],
+        assigneeDeptId: ownerIsFacility ? null : payload.ownerDeptId || null,
+        assigneeFacilityId: ownerIsFacility ? payload.ownerDeptId : null,
+        assigneeUserIds: payload.ownerUid ? [payload.ownerUid] : [],
+        ownerUid: payload.ownerUid,
+        ownerName: payload.ownerName,
         goal: payload.objective || null,
         expectedDeliverable: payload.finalDeliverable || null,
-        collaboratorDeptIds: payload.collaborators.filter((c) => !['HM','NCT24','LD','TT','TK','CG'].includes(c.unit)).map((c) => c.unit).filter(Boolean),
-        collaboratorFacilityIds: payload.collaborators.filter((c) => ['HM','NCT24','LD','TT','TK','CG'].includes(c.unit)).map((c) => c.unit),
-        collaboratorRoles: Object.fromEntries(
-          payload.collaborators
-            .filter((c) => c.unit && c.supportContent)
-            .map((c) => {
-              const prefix = ['HM','NCT24','LD','TT','TK','CG'].includes(c.unit) ? 'facility' : 'dept';
-              return [`${prefix}:${c.unit}`, c.supportContent];
-            }),
-        ),
+        collaboratorDeptIds,
+        collaboratorFacilityIds,
+        collaboratorRoles,
+        approverUid: payload.approverUid ?? null,
+        approverName: payload.approverName ?? null,
       };
       await tasksApi.create(body);
       setShowCreate(false);
@@ -102,8 +134,14 @@ export default function DieuPhoiClient({ currentUserUid }: DieuPhoiClientProps) 
           </div>
           <button
             type="button"
-            onClick={() => setShowCreate(true)}
-            className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 shadow-sm"
+            onClick={() => canCreate && setShowCreate(true)}
+            disabled={!canCreate}
+            title={canCreate ? 'Tạo điều phối mới' : 'Bạn không có quyền tạo điều phối'}
+            className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg shadow-sm ${
+              canCreate
+                ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                : 'bg-slate-200 text-slate-500 cursor-not-allowed'
+            }`}
           >
             <Plus size={15} /> Tạo điều phối mới
             <ChevronDown size={14} className="opacity-80" />
@@ -146,7 +184,15 @@ export default function DieuPhoiClient({ currentUserUid }: DieuPhoiClientProps) 
       </div>
 
       {showCreate && <CreateModal open onClose={() => setShowCreate(false)} onCreate={handleCreate} />}
-      <DetailDrawer task={selected} onClose={() => setSelected(null)} />
+      <DetailDrawer
+        task={selected}
+        currentUserUid={currentUserUid}
+        currentUserRole={currentUserRole}
+        onClose={() => setSelected(null)}
+        onAcceptCollab={handleAcceptCollab}
+        onRejectCollab={handleRejectCollab}
+        onCompleteCollab={handleCompleteCollab}
+      />
     </div>
   );
 }

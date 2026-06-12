@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { X, Plus, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { X, Plus, Trash2, ChevronDown, ChevronRight, AlertCircle } from 'lucide-react';
 import {
   type CoordType,
   type CoordScope,
@@ -17,54 +17,134 @@ import {
   DEPT_LABEL,
 } from './types';
 
+// ────────────────────────────────────────────────────────────────────────────
+// Public payload — đúng theo Design Doc Phase 2 (Điều phối V2)
+// ────────────────────────────────────────────────────────────────────────────
+export interface CreateCoordCollaboratorPayload {
+  unitId: string;            // 'DEPT:KE' | 'BRANCH:HM'
+  unitName: string;          // label đã denormalize
+  responsibleName: string;   // Người phụ trách (V1 nhập tay, V2 user picker)
+  supportContent: string;    // Nội dung cần hỗ trợ
+  deliverable: string;       // Kết quả bàn giao
+  deadline: string;          // YYYY-MM-DD
+}
+
+export interface CreateCoordPayload {
+  title: string;
+  description: string;
+  type: CoordType;
+  scope: CoordScope;
+  priority: Priority;
+  dueDate: string;                 // deadline tổng — YYYY-MM-DD
+  ownerUid: string;                // BẮT BUỘC — id Owner duy nhất
+  ownerName: string;
+  ownerBlock: Block;
+  ownerDeptId: string;             // dept id (VP) hoặc facility id (KD)
+  collaborators: CreateCoordCollaboratorPayload[];
+  objective: string;
+  finalDeliverable: string;
+  approverUid?: string;            // bắt buộc khi type=phe_duyet hoặc scope=lien_khoi
+  approverName?: string;
+}
+
+// Tương thích ngược: vẫn export type CreatePayload alias
+export type CreatePayload = CreateCoordPayload;
+
 interface CreateModalProps {
   open: boolean;
   onClose: () => void;
-  onCreate?: (input: CreatePayload) => void;
+  onCreate?: (input: CreateCoordPayload) => void;
 }
 
-interface CollaboratorDraft {
-  id: string;
-  unit: string;
-  ownerName: string;
-  supportContent: string;
-  deliverable: string;
-  deadline: string;
-  status: 'chua_tiep_nhan' | 'dang_thuc_hien' | 'hoan_thanh';
-}
-
-export interface CreatePayload {
-  title: string;
-  description: string;
-  type: CoordType | '';
-  scope: CoordScope | '';
-  priority: Priority;
-  deadline: string;
-  ownerBlock: Block | '';
-  ownerUnit: string;
-  ownerName: string;
-  collaborators: CollaboratorDraft[];
-  objective: string;
-  finalDeliverable: string;
-  approverName: string;
-  approvalDeadline: string;
-  approvalNote: string;
-}
-
+// ────────────────────────────────────────────────────────────────────────────
+// Constants
+// ────────────────────────────────────────────────────────────────────────────
 const COORD_TYPES: CoordType[] = ['dieu_phoi', 'ho_tro', 'de_xuat', 'phe_duyet', 'canh_bao'];
-const COORD_SCOPES: CoordScope[] = ['noi_bo_phong', 'noi_bo_khoi', 'lien_khoi', 'lien_co_so', 'du_an'];
+const COORD_SCOPES: CoordScope[] = ['noi_bo_phong', 'lien_phong', 'lien_co_so', 'lien_khoi', 'chien_luoc'];
 const PRIORITIES: Priority[] = ['low', 'normal', 'high'];
 const BLOCKS: Block[] = ['KD', 'VP'];
 const DEPT_IDS: DeptId[] = ['MKT', 'DT', 'KT', 'QLCS', 'NS', 'KE', 'GS'];
 const BRANCH_IDS: BranchId[] = ['HM', 'NCT24', 'LD', 'TT', 'TK', 'CG'];
 
-const COLLAB_STATUS_LABEL: Record<CollaboratorDraft['status'], string> = {
-  chua_tiep_nhan: 'Chưa tiếp nhận',
-  dang_thuc_hien: 'Đang thực hiện',
-  hoan_thanh: 'Hoàn thành',
-};
+// Owner pool (mock V1 — V2 sẽ thay bằng users theo phòng/role)
+interface OwnerOption {
+  uid: string;
+  name: string;
+  role: string;        // 'TP_DT' | 'TP_KT' | 'QLCS' | 'GD_KD' | 'GD_VP' | ...
+  block: Block;
+  unitId: string;      // dept id (VP) hoặc branch id (KD)
+}
 
+const OWNER_POOL: OwnerOption[] = [
+  // Khối KD — Cơ sở (QLCS)
+  { uid: 'qlcs-hm',    name: 'QLCS Hoàng Mai',        role: 'QLCS', block: 'KD', unitId: 'HM' },
+  { uid: 'qlcs-nct24', name: 'QLCS 24 NCT',           role: 'QLCS', block: 'KD', unitId: 'NCT24' },
+  { uid: 'qlcs-ld',    name: 'QLCS Linh Đàm',         role: 'QLCS', block: 'KD', unitId: 'LD' },
+  { uid: 'qlcs-tt',    name: 'QLCS Thanh Trì',        role: 'QLCS', block: 'KD', unitId: 'TT' },
+  { uid: 'qlcs-tk',    name: 'QLCS Thụy Khuê',        role: 'QLCS', block: 'KD', unitId: 'TK' },
+  { uid: 'qlcs-cg',    name: 'QLCS Cầu Giấy',         role: 'QLCS', block: 'KD', unitId: 'CG' },
+  // Khối KD — TP
+  { uid: 'tp-mkt',     name: 'TP Marketing',          role: 'TP_MKT', block: 'KD', unitId: 'MKT' },
+  { uid: 'tp-dt',      name: 'TP Đào tạo',            role: 'TP_DT',  block: 'KD', unitId: 'DT' },
+  { uid: 'tp-kt',      name: 'TP Kỹ thuật',           role: 'TP_KT',  block: 'KD', unitId: 'KT' },
+  { uid: 'tp-qlcs',    name: 'TP QLCS',               role: 'TP_QLCS',block: 'KD', unitId: 'QLCS' },
+  // Khối VP
+  { uid: 'tp-ns',      name: 'TP Nhân sự',            role: 'TP_NS',  block: 'VP', unitId: 'NS' },
+  { uid: 'tp-ke',      name: 'TP Kế toán',            role: 'TP_KE',  block: 'VP', unitId: 'KE' },
+  { uid: 'tp-gs',      name: 'TP Giám sát',           role: 'TP_GS',  block: 'VP', unitId: 'GS' },
+  // GĐ
+  { uid: 'gd-kd',      name: 'Giám đốc Kinh doanh',   role: 'GD_KD',  block: 'KD', unitId: 'DT' },
+  { uid: 'gd-vp',      name: 'Giám đốc Văn phòng',    role: 'GD_VP',  block: 'VP', unitId: 'NS' },
+];
+
+// Người duyệt (TP/GĐ/CEO) — V1 mock
+interface ApproverOption {
+  uid: string;
+  name: string;
+  role: string;
+}
+const APPROVER_POOL: ApproverOption[] = [
+  { uid: 'tp-dt',  name: 'TP Đào tạo',          role: 'TP' },
+  { uid: 'tp-kt',  name: 'TP Kỹ thuật',         role: 'TP' },
+  { uid: 'tp-mkt', name: 'TP Marketing',        role: 'TP' },
+  { uid: 'tp-ns',  name: 'TP Nhân sự',          role: 'TP' },
+  { uid: 'tp-ke',  name: 'TP Kế toán',          role: 'TP' },
+  { uid: 'gd-kd',  name: 'Giám đốc Kinh doanh', role: 'GD' },
+  { uid: 'gd-vp',  name: 'Giám đốc Văn phòng',  role: 'GD' },
+  { uid: 'ceo',    name: 'CEO',                 role: 'CEO' },
+];
+
+// ────────────────────────────────────────────────────────────────────────────
+// Local types
+// ────────────────────────────────────────────────────────────────────────────
+interface CollaboratorDraft {
+  id: string;
+  unitId: string;             // 'DEPT:KE' | 'BRANCH:HM'
+  responsibleName: string;
+  supportContent: string;
+  deliverable: string;
+  deadline: string;
+  status: 'chua_tiep_nhan';   // default cố định khi tạo
+}
+
+function unitLabel(unitId: string): string {
+  if (!unitId) return '';
+  if (unitId.startsWith('DEPT:')) {
+    const d = unitId.slice(5) as DeptId;
+    return DEPT_LABEL[d] ?? d;
+  }
+  if (unitId.startsWith('BRANCH:')) {
+    const b = unitId.slice(7) as BranchId;
+    return BRANCH_LABEL[b] ?? b;
+  }
+  return unitId;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Component
+// ────────────────────────────────────────────────────────────────────────────
 export default function CreateModal({ open, onClose, onCreate }: CreateModalProps) {
+  // Section 1 — Thông tin chung
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [type, setType] = useState<CoordType | ''>('');
@@ -72,19 +152,35 @@ export default function CreateModal({ open, onClose, onCreate }: CreateModalProp
   const [priority, setPriority] = useState<Priority>('normal');
   const [deadline, setDeadline] = useState('');
 
+  // Section 2 — Owner (DUY NHẤT)
   const [ownerBlock, setOwnerBlock] = useState<Block | ''>('');
-  const [ownerUnit, setOwnerUnit] = useState('');
-  const [ownerName, setOwnerName] = useState('');
+  const [ownerUid, setOwnerUid] = useState('');
 
+  // Section 3 — Đơn vị phối hợp
   const [collaborators, setCollaborators] = useState<CollaboratorDraft[]>([]);
 
+  // Section 4 — Mục tiêu + Kết quả
   const [objective, setObjective] = useState('');
   const [finalDeliverable, setFinalDeliverable] = useState('');
 
+  // Section 5 — Luồng duyệt
   const [showApproval, setShowApproval] = useState(false);
-  const [approverName, setApproverName] = useState('');
-  const [approvalDeadline, setApprovalDeadline] = useState('');
-  const [approvalNote, setApprovalNote] = useState('');
+  const [approverUid, setApproverUid] = useState('');
+
+  // Errors hiển thị inline
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const ownerOptions = useMemo(
+    () => OWNER_POOL.filter((o) => !ownerBlock || o.block === ownerBlock),
+    [ownerBlock],
+  );
+  const selectedOwner = useMemo(
+    () => OWNER_POOL.find((o) => o.uid === ownerUid) ?? null,
+    [ownerUid],
+  );
+
+  // Approval bắt buộc khi type=phe_duyet hoặc scope=lien_khoi
+  const approvalMandatory = type === 'phe_duyet' || scope === 'lien_khoi';
 
   if (!open) return null;
 
@@ -93,8 +189,8 @@ export default function CreateModal({ open, onClose, onCreate }: CreateModalProp
       ...prev,
       {
         id: `c-${Date.now()}-${prev.length}`,
-        unit: '',
-        ownerName: '',
+        unitId: '',
+        responsibleName: '',
         supportContent: '',
         deliverable: '',
         deadline: '',
@@ -102,11 +198,9 @@ export default function CreateModal({ open, onClose, onCreate }: CreateModalProp
       },
     ]);
   }
-
   function updateCollaborator(id: string, patch: Partial<CollaboratorDraft>) {
     setCollaborators((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
   }
-
   function removeCollaborator(id: string) {
     setCollaborators((prev) => prev.filter((c) => c.id !== id));
   }
@@ -119,67 +213,89 @@ export default function CreateModal({ open, onClose, onCreate }: CreateModalProp
     setPriority('normal');
     setDeadline('');
     setOwnerBlock('');
-    setOwnerUnit('');
-    setOwnerName('');
+    setOwnerUid('');
     setCollaborators([]);
     setObjective('');
     setFinalDeliverable('');
     setShowApproval(false);
-    setApproverName('');
-    setApprovalDeadline('');
-    setApprovalNote('');
+    setApproverUid('');
+    setErrors({});
   }
-
   function handleClose() {
     resetForm();
     onClose();
   }
 
+  function validate(): Record<string, string> {
+    const e: Record<string, string> = {};
+    if (title.trim().length < 3) e.title = 'Tiêu đề phải có ít nhất 3 ký tự.';
+    if (!type) e.type = 'Vui lòng chọn loại điều phối.';
+    if (!scope) e.scope = 'Vui lòng chọn phạm vi điều phối.';
+    if (!priority) e.priority = 'Vui lòng chọn mức độ ưu tiên.';
+    if (!deadline) e.deadline = 'Vui lòng chọn deadline tổng.';
+    if (!ownerBlock) e.ownerBlock = 'Vui lòng chọn Khối của Owner.';
+    if (!ownerUid) e.ownerUid = 'Vui lòng chọn DUY NHẤT 1 Owner chịu KPI.';
+    if (collaborators.length === 0) {
+      e.collaborators = 'Phải có ít nhất 1 đơn vị phối hợp.';
+    } else {
+      collaborators.forEach((c, idx) => {
+        if (!c.unitId)          e[`collab-${idx}-unit`]      = 'Chọn đơn vị.';
+        if (!c.responsibleName.trim()) e[`collab-${idx}-resp`] = 'Nhập người phụ trách.';
+        if (!c.supportContent.trim()) e[`collab-${idx}-content`] = 'Nhập nội dung cần hỗ trợ.';
+        if (!c.deliverable.trim())    e[`collab-${idx}-deliv`]   = 'Nhập kết quả bàn giao.';
+        if (!c.deadline)              e[`collab-${idx}-deadline`]= 'Chọn deadline riêng.';
+      });
+    }
+    if (approvalMandatory && !approverUid) {
+      e.approverUid = 'Loại/Phạm vi này bắt buộc chọn người duyệt cấp cuối.';
+    }
+    return e;
+  }
+
   function submit() {
-    if (!title.trim()) {
-      alert('Vui lòng nhập tiêu đề điều phối.');
+    const e = validate();
+    setErrors(e);
+    if (Object.keys(e).length > 0) {
+      // Mở section duyệt nếu lỗi nằm ở đó
+      if (e.approverUid) setShowApproval(true);
       return;
     }
-    if (!type) {
-      alert('Vui lòng chọn loại điều phối.');
-      return;
-    }
-    if (!scope) {
-      alert('Vui lòng chọn phạm vi điều phối.');
-      return;
-    }
-    if (!ownerName.trim()) {
-      alert('Vui lòng nhập người chủ trì (owner).');
-      return;
-    }
-    const payload: CreatePayload = {
+    if (!selectedOwner) return;
+
+    const approver = approverUid ? APPROVER_POOL.find((a) => a.uid === approverUid) : undefined;
+
+    const payload: CreateCoordPayload = {
       title: title.trim(),
       description: description.trim(),
-      type,
-      scope,
+      type: type as CoordType,
+      scope: scope as CoordScope,
       priority,
-      deadline,
-      ownerBlock,
-      ownerUnit,
-      ownerName: ownerName.trim(),
-      collaborators,
+      dueDate: deadline,
+      ownerUid: selectedOwner.uid,
+      ownerName: selectedOwner.name,
+      ownerBlock: selectedOwner.block,
+      ownerDeptId: selectedOwner.unitId,
+      collaborators: collaborators.map((c) => ({
+        unitId: c.unitId,
+        unitName: unitLabel(c.unitId),
+        responsibleName: c.responsibleName.trim(),
+        supportContent: c.supportContent.trim(),
+        deliverable: c.deliverable.trim(),
+        deadline: c.deadline,
+      })),
       objective: objective.trim(),
       finalDeliverable: finalDeliverable.trim(),
-      approverName: approverName.trim(),
-      approvalDeadline,
-      approvalNote: approvalNote.trim(),
+      approverUid: approver?.uid,
+      approverName: approver?.name,
     };
     onCreate?.(payload);
     resetForm();
     onClose();
   }
 
-  const ownerUnits = ownerBlock === 'KD' ? BRANCH_IDS : DEPT_IDS;
-  const ownerUnitLabel = (id: string) =>
-    ownerBlock === 'KD'
-      ? BRANCH_LABEL[id as BranchId] ?? id
-      : DEPT_LABEL[id as DeptId] ?? id;
-
+  // ──────────────────────────────────────────────────────────────────────────
+  // Render
+  // ──────────────────────────────────────────────────────────────────────────
   return (
     <div
       className="fixed inset-0 z-50 bg-slate-900/50 flex items-start justify-center p-4 overflow-y-auto"
@@ -194,7 +310,7 @@ export default function CreateModal({ open, onClose, onCreate }: CreateModalProp
           <div>
             <h2 className="text-base font-bold text-slate-800">Tạo điều phối mới</h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Khởi tạo một điều phối liên khối · phòng ban · cơ sở
+              Khởi tạo điều phối liên khối · phòng ban · cơ sở (1 Owner duy nhất chịu KPI cuối cùng)
             </p>
           </div>
           <button
@@ -212,7 +328,7 @@ export default function CreateModal({ open, onClose, onCreate }: CreateModalProp
           {/* Section 1 — Thông tin chung */}
           <section>
             <h3 className="text-xs uppercase tracking-wider text-slate-500 mb-3 font-semibold">
-              Thông tin chung
+              1. Thông tin chung
             </h3>
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
@@ -224,14 +340,15 @@ export default function CreateModal({ open, onClose, onCreate }: CreateModalProp
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="VD: Mở lớp hè Linh Đàm"
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                  className={`w-full px-3 py-2 text-sm rounded-lg border outline-none ${
+                    errors.title ? 'border-rose-400 focus:ring-1 focus:ring-rose-400' : 'border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500'
+                  }`}
                 />
+                {errors.title && <p className="text-[11px] text-rose-600 mt-1">{errors.title}</p>}
               </div>
 
               <div className="col-span-2">
-                <label className="block text-xs font-medium text-slate-600 mb-1">
-                  Mô tả
-                </label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Mô tả</label>
                 <textarea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
@@ -261,6 +378,7 @@ export default function CreateModal({ open, onClose, onCreate }: CreateModalProp
                     </button>
                   ))}
                 </div>
+                {errors.type && <p className="text-[11px] text-rose-600 mt-1">{errors.type}</p>}
               </div>
 
               <div className="col-span-2">
@@ -283,11 +401,12 @@ export default function CreateModal({ open, onClose, onCreate }: CreateModalProp
                     </button>
                   ))}
                 </div>
+                {errors.scope && <p className="text-[11px] text-rose-600 mt-1">{errors.scope}</p>}
               </div>
 
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1.5">
-                  Mức độ ưu tiên
+                  Mức độ ưu tiên <span className="text-rose-500">*</span>
                 </label>
                 <div className="flex flex-wrap gap-1.5">
                   {PRIORITIES.map((p) => (
@@ -309,27 +428,38 @@ export default function CreateModal({ open, onClose, onCreate }: CreateModalProp
 
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">
-                  Deadline tổng
+                  Deadline tổng <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="date"
                   value={deadline}
                   onChange={(e) => setDeadline(e.target.value)}
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                  className={`w-full px-3 py-2 text-sm rounded-lg border outline-none ${
+                    errors.deadline ? 'border-rose-400 focus:ring-1 focus:ring-rose-400' : 'border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500'
+                  }`}
                 />
+                {errors.deadline && <p className="text-[11px] text-rose-600 mt-1">{errors.deadline}</p>}
               </div>
             </div>
           </section>
 
-          {/* Section 2 — Chủ trì */}
+          {/* Section 2 — Owner DUY NHẤT */}
           <section>
-            <h3 className="text-xs uppercase tracking-wider text-slate-500 mb-3 font-semibold">
-              Chủ trì
+            <h3 className="text-xs uppercase tracking-wider text-slate-500 mb-2 font-semibold">
+              2. Owner (DUY NHẤT)
             </h3>
+            <div className="flex items-start gap-2 mb-3 px-3 py-2 rounded-lg bg-amber-50 border border-amber-200">
+              <AlertCircle size={14} className="text-amber-600 mt-0.5 shrink-0" />
+              <p className="text-[11px] text-amber-800 leading-relaxed">
+                Mỗi điều phối chỉ có <strong>1 Owner duy nhất</strong> chịu KPI cuối cùng.
+                Owner là người nhận deadline tổng, không thể chia sẻ trách nhiệm.
+              </p>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
                 <label className="block text-xs font-medium text-slate-600 mb-1.5">
-                  Khối chủ trì
+                  Khối Owner <span className="text-rose-500">*</span>
                 </label>
                 <div className="flex gap-1.5">
                   {BLOCKS.map((b) => (
@@ -338,7 +468,7 @@ export default function CreateModal({ open, onClose, onCreate }: CreateModalProp
                       type="button"
                       onClick={() => {
                         setOwnerBlock(b);
-                        setOwnerUnit('');
+                        setOwnerUid('');
                       }}
                       className={`px-3 py-1.5 text-xs rounded-lg border transition ${
                         ownerBlock === b
@@ -350,49 +480,66 @@ export default function CreateModal({ open, onClose, onCreate }: CreateModalProp
                     </button>
                   ))}
                 </div>
+                {errors.ownerBlock && <p className="text-[11px] text-rose-600 mt-1">{errors.ownerBlock}</p>}
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">
-                  Đơn vị chủ trì
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-slate-600 mb-1.5">
+                  Chọn Owner <span className="text-rose-500">*</span>
+                  <span className="text-slate-400 font-normal"> (1 người — radio)</span>
                 </label>
-                <select
-                  value={ownerUnit}
-                  onChange={(e) => setOwnerUnit(e.target.value)}
-                  disabled={!ownerBlock}
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none bg-white disabled:bg-slate-50 disabled:text-slate-400"
-                >
-                  <option value="">
-                    {ownerBlock ? '-- Chọn đơn vị --' : 'Chọn khối trước'}
-                  </option>
-                  {ownerUnits.map((u) => (
-                    <option key={u} value={u}>
-                      {ownerUnitLabel(u)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">
-                  Owner <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={ownerName}
-                  onChange={(e) => setOwnerName(e.target.value)}
-                  placeholder="VD: Nguyễn Văn A"
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
-                />
+                {!ownerBlock ? (
+                  <div className="text-xs text-slate-500 italic px-3 py-3 bg-slate-50 rounded-lg border border-dashed border-slate-200">
+                    Vui lòng chọn Khối trước.
+                  </div>
+                ) : ownerOptions.length === 0 ? (
+                  <div className="text-xs text-slate-500 italic px-3 py-3 bg-slate-50 rounded-lg border border-dashed border-slate-200">
+                    Không có ứng viên nào trong Khối này.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-1.5 max-h-56 overflow-y-auto pr-1">
+                    {ownerOptions.map((o) => {
+                      const active = ownerUid === o.uid;
+                      return (
+                        <label
+                          key={o.uid}
+                          className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition ${
+                            active
+                              ? 'bg-emerald-50 border-emerald-500 ring-1 ring-emerald-500'
+                              : 'bg-white border-slate-200 hover:border-emerald-300'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="ownerUid"
+                            value={o.uid}
+                            checked={active}
+                            onChange={() => setOwnerUid(o.uid)}
+                            className="text-emerald-600 focus:ring-emerald-500"
+                          />
+                          <div className="min-w-0">
+                            <div className="text-xs font-semibold text-slate-800 truncate">{o.name}</div>
+                            <div className="text-[10px] text-slate-500 truncate">
+                              {o.role} · {o.block === 'KD'
+                                ? BRANCH_LABEL[o.unitId as BranchId] ?? DEPT_LABEL[o.unitId as DeptId] ?? o.unitId
+                                : DEPT_LABEL[o.unitId as DeptId] ?? o.unitId}
+                            </div>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+                {errors.ownerUid && <p className="text-[11px] text-rose-600 mt-1">{errors.ownerUid}</p>}
               </div>
             </div>
           </section>
 
           {/* Section 3 — Đơn vị phối hợp */}
           <section>
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-2">
               <h3 className="text-xs uppercase tracking-wider text-slate-500 font-semibold">
-                Đơn vị phối hợp
+                3. Đơn vị phối hợp <span className="text-rose-500 normal-case">*</span>
               </h3>
               <button
                 type="button"
@@ -403,22 +550,29 @@ export default function CreateModal({ open, onClose, onCreate }: CreateModalProp
                 Thêm đơn vị phối hợp
               </button>
             </div>
+            <p className="text-[11px] text-slate-500 mb-2">
+              Mỗi đơn vị bắt buộc đủ <strong>5 trường</strong>: Đơn vị · Người phụ trách · Nội dung cần hỗ trợ · Kết quả bàn giao · Deadline riêng.
+            </p>
 
             {collaborators.length === 0 && (
-              <div className="text-xs text-slate-500 italic px-3 py-4 bg-slate-50 rounded-lg border border-dashed border-slate-200 text-center">
-                Chưa có đơn vị phối hợp. Bấm "+ Thêm đơn vị phối hợp" để thêm.
+              <div className={`text-xs italic px-3 py-4 rounded-lg border border-dashed text-center ${
+                errors.collaborators
+                  ? 'border-rose-300 bg-rose-50 text-rose-700'
+                  : 'border-slate-200 bg-slate-50 text-slate-500'
+              }`}>
+                {errors.collaborators ?? 'Chưa có đơn vị phối hợp. Bấm "+ Thêm đơn vị phối hợp" để thêm.'}
               </div>
             )}
 
             <div className="space-y-3">
               {collaborators.map((c, idx) => (
-                <div
-                  key={c.id}
-                  className="rounded-lg border border-slate-200 bg-slate-50 p-3"
-                >
+                <div key={c.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-semibold text-slate-700">
                       Đơn vị phối hợp #{idx + 1}
+                      <span className="ml-2 text-[10px] font-normal text-slate-500">
+                        Trạng thái mặc định: Chưa tiếp nhận
+                      </span>
                     </span>
                     <button
                       type="button"
@@ -432,12 +586,14 @@ export default function CreateModal({ open, onClose, onCreate }: CreateModalProp
                   <div className="grid grid-cols-2 gap-2.5">
                     <div>
                       <label className="block text-[11px] font-medium text-slate-600 mb-1">
-                        Đơn vị
+                        Đơn vị <span className="text-rose-500">*</span>
                       </label>
                       <select
-                        value={c.unit}
-                        onChange={(e) => updateCollaborator(c.id, { unit: e.target.value })}
-                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                        value={c.unitId}
+                        onChange={(e) => updateCollaborator(c.id, { unitId: e.target.value })}
+                        className={`w-full px-2.5 py-1.5 text-xs rounded-lg border bg-white outline-none ${
+                          errors[`collab-${idx}-unit`] ? 'border-rose-400' : 'border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500'
+                        }`}
                       >
                         <option value="">-- Chọn đơn vị --</option>
                         <optgroup label="Phòng ban (VP)">
@@ -455,83 +611,76 @@ export default function CreateModal({ open, onClose, onCreate }: CreateModalProp
                           ))}
                         </optgroup>
                       </select>
+                      {errors[`collab-${idx}-unit`] && (
+                        <p className="text-[10px] text-rose-600 mt-0.5">{errors[`collab-${idx}-unit`]}</p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-[11px] font-medium text-slate-600 mb-1">
-                        Người phụ trách
+                        Người phụ trách <span className="text-rose-500">*</span>
                       </label>
                       <input
                         type="text"
-                        value={c.ownerName}
-                        onChange={(e) =>
-                          updateCollaborator(c.id, { ownerName: e.target.value })
-                        }
-                        placeholder="Họ tên người phụ trách"
-                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                        value={c.responsibleName}
+                        onChange={(e) => updateCollaborator(c.id, { responsibleName: e.target.value })}
+                        placeholder="VD: TP Marketing / Nguyễn Văn A"
+                        className={`w-full px-2.5 py-1.5 text-xs rounded-lg border bg-white outline-none ${
+                          errors[`collab-${idx}-resp`] ? 'border-rose-400' : 'border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500'
+                        }`}
                       />
+                      {errors[`collab-${idx}-resp`] && (
+                        <p className="text-[10px] text-rose-600 mt-0.5">{errors[`collab-${idx}-resp`]}</p>
+                      )}
                     </div>
                     <div className="col-span-2">
                       <label className="block text-[11px] font-medium text-slate-600 mb-1">
-                        Nội dung cần hỗ trợ
+                        Nội dung cần hỗ trợ <span className="text-rose-500">*</span>
                       </label>
-                      <input
-                        type="text"
+                      <textarea
                         value={c.supportContent}
-                        onChange={(e) =>
-                          updateCollaborator(c.id, { supportContent: e.target.value })
-                        }
-                        placeholder="VD: Banner tuyển sinh"
-                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                        onChange={(e) => updateCollaborator(c.id, { supportContent: e.target.value })}
+                        rows={2}
+                        placeholder="VD: Thiết kế banner tuyển sinh khoá hè"
+                        className={`w-full px-2.5 py-1.5 text-xs rounded-lg border bg-white outline-none resize-none ${
+                          errors[`collab-${idx}-content`] ? 'border-rose-400' : 'border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500'
+                        }`}
                       />
+                      {errors[`collab-${idx}-content`] && (
+                        <p className="text-[10px] text-rose-600 mt-0.5">{errors[`collab-${idx}-content`]}</p>
+                      )}
                     </div>
                     <div className="col-span-2">
                       <label className="block text-[11px] font-medium text-slate-600 mb-1">
-                        Kết quả bàn giao
+                        Kết quả bàn giao <span className="text-rose-500">*</span>
                       </label>
                       <input
                         type="text"
                         value={c.deliverable}
-                        onChange={(e) =>
-                          updateCollaborator(c.id, { deliverable: e.target.value })
-                        }
-                        placeholder="VD: File thiết kế banner hoàn thiện"
-                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                        onChange={(e) => updateCollaborator(c.id, { deliverable: e.target.value })}
+                        placeholder="VD: Banner hoàn chỉnh PSD + JPG"
+                        className={`w-full px-2.5 py-1.5 text-xs rounded-lg border bg-white outline-none ${
+                          errors[`collab-${idx}-deliv`] ? 'border-rose-400' : 'border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500'
+                        }`}
                       />
+                      {errors[`collab-${idx}-deliv`] && (
+                        <p className="text-[10px] text-rose-600 mt-0.5">{errors[`collab-${idx}-deliv`]}</p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-[11px] font-medium text-slate-600 mb-1">
-                        Deadline riêng
+                        Deadline riêng <span className="text-rose-500">*</span>
                       </label>
                       <input
                         type="date"
                         value={c.deadline}
-                        onChange={(e) =>
-                          updateCollaborator(c.id, { deadline: e.target.value })
-                        }
-                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                        onChange={(e) => updateCollaborator(c.id, { deadline: e.target.value })}
+                        className={`w-full px-2.5 py-1.5 text-xs rounded-lg border bg-white outline-none ${
+                          errors[`collab-${idx}-deadline`] ? 'border-rose-400' : 'border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500'
+                        }`}
                       />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-medium text-slate-600 mb-1">
-                        Trạng thái riêng
-                      </label>
-                      <select
-                        value={c.status}
-                        onChange={(e) =>
-                          updateCollaborator(c.id, {
-                            status: e.target.value as CollaboratorDraft['status'],
-                          })
-                        }
-                        className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
-                      >
-                        {(Object.keys(COLLAB_STATUS_LABEL) as CollaboratorDraft['status'][]).map(
-                          (s) => (
-                            <option key={s} value={s}>
-                              {COLLAB_STATUS_LABEL[s]}
-                            </option>
-                          ),
-                        )}
-                      </select>
+                      {errors[`collab-${idx}-deadline`] && (
+                        <p className="text-[10px] text-rose-600 mt-0.5">{errors[`collab-${idx}-deadline`]}</p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -539,94 +688,88 @@ export default function CreateModal({ open, onClose, onCreate }: CreateModalProp
             </div>
           </section>
 
-          {/* Section 4 — Kết quả cần đạt */}
+          {/* Section 4 — Mục tiêu + Kết quả bàn giao cuối cùng */}
           <section>
             <h3 className="text-xs uppercase tracking-wider text-slate-500 mb-3 font-semibold">
-              Kết quả cần đạt
+              4. Mục tiêu &amp; Kết quả bàn giao cuối cùng
             </h3>
             <div className="grid grid-cols-1 gap-3">
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">
                   Mục tiêu công việc
                 </label>
-                <input
-                  type="text"
+                <textarea
                   value={objective}
                   onChange={(e) => setObjective(e.target.value)}
-                  placeholder="VD: Mở lớp học hè quy mô 60 học viên"
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                  rows={2}
+                  placeholder="VD: Mở lớp học hè quy mô 60 học viên trong tháng 7"
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none resize-none"
                 />
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">
                   Kết quả bàn giao cuối cùng
                 </label>
-                <input
-                  type="text"
+                <textarea
                   value={finalDeliverable}
                   onChange={(e) => setFinalDeliverable(e.target.value)}
-                  placeholder="VD: Báo cáo tổng kết khoá học hè"
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                  rows={2}
+                  placeholder="VD: Báo cáo tổng kết khoá hè + danh sách học viên + doanh thu thực thu"
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none resize-none"
                 />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">
-                  File đính kèm
-                </label>
-                <div className="px-3 py-3 text-xs text-slate-500 italic rounded-lg border border-dashed border-slate-300 bg-slate-50 text-center">
-                  Chưa hỗ trợ V1
-                </div>
               </div>
             </div>
           </section>
 
-          {/* Section 5 — Luồng duyệt (collapsible) */}
+          {/* Section 5 — Luồng duyệt */}
           <section>
             <button
               type="button"
               onClick={() => setShowApproval((v) => !v)}
               className="w-full flex items-center justify-between text-xs uppercase tracking-wider text-slate-500 font-semibold mb-3 hover:text-slate-700"
             >
-              <span>Luồng duyệt (tuỳ chọn)</span>
-              {showApproval ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              <span>
+                5. Luồng duyệt {approvalMandatory ? (
+                  <span className="text-rose-500 normal-case font-bold">* (bắt buộc với Loại/Phạm vi đã chọn)</span>
+                ) : (
+                  <span className="text-slate-400 normal-case font-normal">(tuỳ chọn)</span>
+                )}
+              </span>
+              {showApproval || approvalMandatory ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
             </button>
-            {showApproval && (
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    Người duyệt
-                  </label>
-                  <input
-                    type="text"
-                    value={approverName}
-                    onChange={(e) => setApproverName(e.target.value)}
-                    placeholder="VD: Phạm Thanh Tùng / CEO"
-                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    Hạn duyệt
-                  </label>
-                  <input
-                    type="date"
-                    value={approvalDeadline}
-                    onChange={(e) => setApprovalDeadline(e.target.value)}
-                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-xs font-medium text-slate-600 mb-1">
-                    Ghi chú duyệt
-                  </label>
-                  <textarea
-                    value={approvalNote}
-                    onChange={(e) => setApprovalNote(e.target.value)}
-                    rows={2}
-                    placeholder="Ghi chú dành cho người duyệt"
-                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none resize-none"
-                  />
-                </div>
+
+            {(showApproval || approvalMandatory) && (
+              <div className="space-y-2">
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  Người duyệt cấp cuối {approvalMandatory && <span className="text-rose-500">*</span>}
+                </label>
+                <select
+                  value={approverUid}
+                  onChange={(e) => setApproverUid(e.target.value)}
+                  className={`w-full px-3 py-2 text-sm rounded-lg border bg-white outline-none ${
+                    errors.approverUid ? 'border-rose-400' : 'border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500'
+                  }`}
+                >
+                  <option value="">-- Chọn người duyệt --</option>
+                  <optgroup label="Trưởng phòng">
+                    {APPROVER_POOL.filter((a) => a.role === 'TP').map((a) => (
+                      <option key={a.uid} value={a.uid}>{a.name}</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Giám đốc">
+                    {APPROVER_POOL.filter((a) => a.role === 'GD').map((a) => (
+                      <option key={a.uid} value={a.uid}>{a.name}</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="CEO">
+                    {APPROVER_POOL.filter((a) => a.role === 'CEO').map((a) => (
+                      <option key={a.uid} value={a.uid}>{a.name}</option>
+                    ))}
+                  </optgroup>
+                </select>
+                {errors.approverUid && (
+                  <p className="text-[11px] text-rose-600 mt-1">{errors.approverUid}</p>
+                )}
               </div>
             )}
           </section>
