@@ -19,13 +19,7 @@ interface KpiBarProps {
 type AccentKey = 'rose' | 'sky' | 'amber' | 'violet' | 'rose-strong';
 
 // Static class maps so Tailwind JIT/purge can detect every utility.
-const ACCENT_BAR: Record<AccentKey, string> = {
-  rose: 'bg-rose-500',
-  sky: 'bg-sky-500',
-  amber: 'bg-amber-500',
-  violet: 'bg-violet-500',
-  'rose-strong': 'bg-rose-600',
-};
+// 2026-06-12: bỏ ACCENT_BAR — mock card không có accent strip 4px bên trái.
 
 const ICON_WRAP: Record<AccentKey, string> = {
   rose: 'bg-rose-50',
@@ -151,11 +145,8 @@ export default function KpiBar({ tasks, currentUserUid }: KpiBarProps) {
         return (
           <div
             key={item.key}
-            className="relative overflow-hidden rounded-xl border border-slate-200 bg-white p-4 transition hover:shadow-md"
+            className="rounded-xl border border-slate-200 bg-white p-4 transition hover:shadow-md"
           >
-            <div
-              className={`absolute left-0 top-0 bottom-0 w-1 ${ACCENT_BAR[item.accent]}`}
-            />
             <div className="flex items-start gap-3">
               <div className={`rounded-lg p-2.5 ${ICON_WRAP[item.accent]}`}>
                 <Icon size={20} className={ICON_COLOR[item.accent]} />

@@ -10,14 +10,15 @@ type Row = {
   color: string;
 };
 
+// Màu theo mock — palette nhạt: blue-500 / emerald-500 / orange-500 / violet-500
 const ROWS: Row[] = [
-  { name: 'TP Đào tạo', pct: 70, waiting: 6, overdue: 1, color: '#1e40af' },
-  { name: 'Marketing', pct: 60, waiting: 5, overdue: 1, color: '#059669' },
-  { name: 'Quản lý cơ sở (QLCS)', pct: 80, waiting: 7, overdue: 0, color: '#ea580c' },
+  { name: 'TP Đào tạo', pct: 70, waiting: 6, overdue: 1, color: '#3b82f6' },
+  { name: 'Marketing', pct: 60, waiting: 5, overdue: 1, color: '#10b981' },
+  { name: 'Quản lý cơ sở (QLCS)', pct: 80, waiting: 7, overdue: 0, color: '#f97316' },
   { name: 'Nhân sự', pct: 50, waiting: 4, overdue: 0, color: '#8b5cf6' },
-  { name: 'Kế toán', pct: 70, waiting: 5, overdue: 1, color: '#1e40af' },
-  { name: 'Giám sát', pct: 60, waiting: 6, overdue: 0, color: '#059669' },
-  { name: 'Kỹ thuật', pct: 85, waiting: 3, overdue: 0, color: '#ea580c' },
+  { name: 'Kế toán', pct: 70, waiting: 5, overdue: 1, color: '#3b82f6' },
+  { name: 'Giám sát', pct: 60, waiting: 6, overdue: 0, color: '#10b981' },
+  { name: 'Kỹ thuật', pct: 85, waiting: 3, overdue: 0, color: '#f97316' },
 ];
 
 export default function DeptBarChart() {
@@ -59,10 +60,7 @@ export default function DeptBarChart() {
                   style={{ width: `${r.pct}%`, background: r.color }}
                 />
               </div>
-              <span
-                className="w-10 text-right text-sm font-semibold tabular-nums"
-                style={{ color: r.color }}
-              >
+              <span className="w-10 text-right text-sm font-semibold tabular-nums text-slate-700">
                 {r.pct}%
               </span>
             </div>

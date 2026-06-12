@@ -13,12 +13,14 @@ interface Segment {
   hex: string;
 }
 
-// SVG donut config
-const SIZE = 180;
-const STROKE = 24;
+// SVG donut config — màu sáng khớp mock: blue-500 / emerald-500 / orange-500.
+// Strokewidth dày hơn (32) để có chỗ render % text trắng trên segment.
+const SIZE = 200;
+const STROKE = 36;
 const RADIUS = (SIZE - STROKE) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 const CENTER = SIZE / 2;
+const LABEL_RADIUS = RADIUS; // tâm strok​e cho text % nằm giữa độ dày stroke
 
 export default function BlockDonut({ tasks }: Props) {
   // Compute từ tasks; nếu quá ít (< 10) thì fallback mock 120/54/36/30 cho demo khớp ảnh
@@ -40,32 +42,41 @@ export default function BlockDonut({ tasks }: Props) {
       name: 'Khối Kinh doanh',
       count: kd,
       pct: Math.round((kd / safeTotal) * 100),
-      hex: '#1e40af',
+      hex: '#3b82f6', // blue-500 sáng theo mock
     },
     {
       name: 'Khối Văn phòng',
       count: vp,
       pct: Math.round((vp / safeTotal) * 100),
-      hex: '#059669',
+      hex: '#10b981', // emerald-500
     },
     {
       name: 'Liên khối',
       count: cross,
       pct: Math.round((cross / safeTotal) * 100),
-      hex: '#ea580c',
+      hex: '#f97316', // orange-500
     },
   ];
 
-  // Build stroke-dasharray segments — bắt đầu từ 12h, đi theo chiều kim đồng hồ
+  // Build stroke-dasharray segments + tính midAngle (radian) để đặt % text TRẮNG
+  // trên giữa segment (xoay -90° lúc render → bù lại trong tính tọa độ).
   let cumulative = 0;
   const arcs = segments.map((seg) => {
     const dashLen = (seg.count / safeTotal) * CIRCUMFERENCE;
     const dashOffset = -cumulative;
+    // midPct = vị trí giữa segment (0..1) theo chu vi từ 12h chiều kim đồng hồ
+    const midPct = (cumulative + dashLen / 2) / CIRCUMFERENCE;
+    // Quy đổi sang radian: 12h = -π/2; CW → +. Sau khi SVG xoay -90°, dùng:
+    const angle = midPct * 2 * Math.PI - Math.PI / 2;
+    const labelX = CENTER + LABEL_RADIUS * Math.cos(angle);
+    const labelY = CENTER + LABEL_RADIUS * Math.sin(angle);
     cumulative += dashLen;
     return {
       ...seg,
       dashArray: `${dashLen} ${CIRCUMFERENCE - dashLen}`,
       dashOffset,
+      labelX,
+      labelY,
     };
   });
 
@@ -105,6 +116,22 @@ export default function BlockDonut({ tasks }: Props) {
                 strokeDashoffset={arc.dashOffset}
                 strokeLinecap="butt"
               />
+            ))}
+            {/* % text trắng in trên mỗi segment (xoay ngược 90° để text đứng) */}
+            {arcs.map((arc, idx) => arc.pct >= 8 && (
+              <text
+                key={`label-${idx}`}
+                x={arc.labelX}
+                y={arc.labelY}
+                fill="white"
+                fontSize={14}
+                fontWeight={700}
+                textAnchor="middle"
+                dominantBaseline="central"
+                style={{ transform: `rotate(90deg)`, transformOrigin: `${arc.labelX}px ${arc.labelY}px` }}
+              >
+                {arc.pct}%
+              </text>
             ))}
           </svg>
 

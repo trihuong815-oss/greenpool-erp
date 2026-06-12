@@ -10,13 +10,14 @@ type Row = {
   color: string;
 };
 
+// Màu khớp mock — palette nhạt: blue-500 / orange-500 / violet-500
 const ROWS: Row[] = [
-  { name: 'Green Pool Hoàng Mai', pct: 75, waiting: 5, overdue: 1, color: '#1e40af' },
-  { name: 'Green Pool 24 NCT', pct: 68, waiting: 4, overdue: 1, color: '#ea580c' },
-  { name: 'Green Pool Linh Đàm', pct: 82, waiting: 6, overdue: 0, color: '#1e40af' },
-  { name: 'Green Pool Thanh Trì', pct: 60, waiting: 3, overdue: 1, color: '#ea580c' },
+  { name: 'Green Pool Hoàng Mai', pct: 75, waiting: 5, overdue: 1, color: '#3b82f6' },
+  { name: 'Green Pool 24 NCT', pct: 68, waiting: 4, overdue: 1, color: '#f97316' },
+  { name: 'Green Pool Linh Đàm', pct: 82, waiting: 6, overdue: 0, color: '#3b82f6' },
+  { name: 'Green Pool Thanh Trì', pct: 60, waiting: 3, overdue: 1, color: '#f97316' },
   { name: 'Green Pool Thụy Khuê', pct: 55, waiting: 2, overdue: 0, color: '#8b5cf6' },
-  { name: 'Green Pool Cầu Giấy', pct: 78, waiting: 0, overdue: 0, color: '#1e40af' },
+  { name: 'Green Pool Cầu Giấy', pct: 78, waiting: 0, overdue: 0, color: '#3b82f6' },
 ];
 
 export default function BranchBarChart() {
@@ -58,10 +59,7 @@ export default function BranchBarChart() {
                   style={{ width: `${r.pct}%`, background: r.color }}
                 />
               </div>
-              <span
-                className="w-10 text-right text-sm font-semibold tabular-nums"
-                style={{ color: r.color }}
-              >
+              <span className="w-10 text-right text-sm font-semibold tabular-nums text-slate-700">
                 {r.pct}%
               </span>
             </div>
