@@ -1,22 +1,18 @@
 'use client';
 
-// /de-xuat V5 — DexuatTable (OVERWRITE)
-// SPEC V5 chốt 2026-06-12:
-//   - 8 tabs (đổi label V3: "YCBS" → "Cần bổ sung", "Quá SLA" → "Quá hạn")
-//   - Filter row: search + 3 select (kind · priority · phạm vi target block)
-//   - Bảng 11 cột (KHÔNG còn cột "Tạo ĐP?" — thay bằng cột "Sau duyệt" 3 trạng thái)
-//   - Cột Tiêu đề có badge "Khẩn" khi priority='khan_cap' / 'urgent'
-//   - Cột Phạm vi ảnh hưởng: chip list từ affectedScopes (V5 multi-select) hoặc fallback V3 (relatedBlock/Dept/Branch)
-//   - Cột "Sau duyệt":
-//        • postApprovalDecision='chi_phe_duyet'           → "Chỉ phê duyệt"        (slate)
-//        • postApprovalDecision='de_nghi_tao_dieu_phoi'   → "Đề nghị tạo ĐP"      (amber)
-//        • linkedCoordTaskId                              → "✓ Đã chuyển ĐP"     (emerald + link/tooltip)
-//   - SLA: compute từ updatedAt + SLA_HOURS theo roleCode approver hiện tại
-//   - Dropdown 6 hành động:
-//        Xem chi tiết · Duyệt · Từ chối · Yêu cầu bổ sung
-//        · **Duyệt & Tạo điều phối** (highlight emerald nếu status='da_phe_duyet') · Đóng hồ sơ
-//   - Pagination footer giữ V3
-// Tái sử dụng ProposalV3 (alias ProposalV5) + label/color maps trong ./types.
+// /de-xuat V6 — DexuatTable (OVERWRITE SIMPLIFIED)
+// SPEC V6 chốt 2026-06-12:
+//   - 7 tabs (bỏ "Quá hạn" V5 — SLA chỉ là filter visual trên cột SLA)
+//   - Filter row GỌN: search + select Loại (BỎ priority + target block filter V5)
+//   - Bảng 8 cột theo SPEC V6:
+//        Mã · Tên đề xuất · Loại · Người tạo · Người duyệt hiện tại · SLA · Trạng thái · Hành động
+//     (BỎ cột "Phạm vi ảnh hưởng" + "Giá trị" + "Sau duyệt" của V5)
+//   - Dropdown 4 mục SPEC V6:
+//        Xem chi tiết · Duyệt · Duyệt & Tạo điều phối (nổi bật emerald)
+//        · Từ chối / Yêu cầu bổ sung / Đóng hồ sơ (tùy quyền)
+//   - SLA: compute như V5
+//   - Pagination footer giữ pattern V5
+// Tái sử dụng ProposalV5 (alias Proposal) + label/color maps trong ./types.
 // KHÔNG đụng /giao-viec /dieu-phoi /doanh-so /checklist.
 
 import { useMemo, useState, useEffect, useRef } from 'react';
@@ -29,7 +25,6 @@ import {
   AlertCircle,
   CheckCircle2,
   Send,
-  AlarmClock,
   MoreHorizontal,
   Eye,
   ThumbsUp,
@@ -39,7 +34,6 @@ import {
   Archive,
   ChevronLeft,
   ChevronRight,
-  Flame,
 } from 'lucide-react';
 import {
   PROPOSAL_STATUS_LABEL,
@@ -50,21 +44,10 @@ import {
   type ProposalKind,
   type ProposalV5,
   type ApproverStep,
-  type ScopeTarget,
-  type AfterApproval,
 } from './types';
 
 // ──────────────────────────────────────────────────────────────────────────────
-// V5 helpers
-// ──────────────────────────────────────────────────────────────────────────────
-// V5 priority: binh_thuong / quan_trong / khan_cap
-type AnyPriority = string;
-
-// V5 target block scope filter
-type TargetBlockFilter = 'all' | 'KD' | 'VP' | 'both';
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Tabs (V5 labels)
+// Tabs V6 — 7 tabs (bỏ "Quá hạn" V5)
 // ──────────────────────────────────────────────────────────────────────────────
 type TabKey =
   | 'all'
@@ -73,8 +56,7 @@ type TabKey =
   | 'dang_xem_xet'
   | 'ycbs'
   | 'da_duyet'
-  | 'chuyen_dieu_phoi'
-  | 'qua_sla';
+  | 'chuyen_dieu_phoi';
 
 const TABS: { key: TabKey; label: string; icon: any }[] = [
   { key: 'all',              label: 'Tất cả',              icon: Inbox },
@@ -83,71 +65,8 @@ const TABS: { key: TabKey; label: string; icon: any }[] = [
   { key: 'dang_xem_xet',     label: 'Đang xem xét',        icon: Clock },
   { key: 'ycbs',             label: 'Cần bổ sung',         icon: AlertCircle },
   { key: 'da_duyet',         label: 'Đã duyệt',            icon: CheckCircle2 },
-  { key: 'chuyen_dieu_phoi', label: 'Đã chuyển điều phối', icon: Send },
-  { key: 'qua_sla',          label: 'Quá hạn',             icon: AlarmClock },
+  { key: 'chuyen_dieu_phoi', label: 'Đã tạo điều phối',    icon: Send },
 ];
-
-// ──────────────────────────────────────────────────────────────────────────────
-// V5 Priority helpers
-// ──────────────────────────────────────────────────────────────────────────────
-const PRIORITY_OPTIONS: { value: string; label: string }[] = [
-  { value: 'binh_thuong', label: 'Bình thường' },
-  { value: 'quan_trong',  label: 'Quan trọng' },
-  { value: 'khan_cap',    label: 'Khẩn cấp' },
-];
-
-function isUrgent(priority: AnyPriority | undefined): boolean {
-  if (!priority) return false;
-  const p = String(priority).toLowerCase();
-  return p === 'khan_cap' || p === 'urgent';
-}
-
-// V5 (binh_thuong/quan_trong/khan_cap) vs V3 (low/normal/high/urgent)
-function priorityMatches(p: ProposalV5, filter: string): boolean {
-  if (filter === 'all') return true;
-  const raw = String(p.priority || '').toLowerCase();
-  if (filter === 'khan_cap')  return raw === 'khan_cap'  || raw === 'urgent';
-  if (filter === 'quan_trong') return raw === 'quan_trong' || raw === 'high';
-  if (filter === 'binh_thuong') return raw === 'binh_thuong' || raw === 'normal' || raw === 'low' || raw === '';
-  return raw === filter;
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Affected scopes (V5 multi-select)
-// ──────────────────────────────────────────────────────────────────────────────
-// Ưu tiên scopeTargets (đã có label đẹp). Nếu rỗng, dựng từ relatedBlocks/Depts/Facilities.
-function getAffectedScopes(p: ProposalV5): ScopeTarget[] {
-  if (Array.isArray(p.scopeTargets) && p.scopeTargets.length > 0) return p.scopeTargets;
-
-  const out: ScopeTarget[] = [];
-  for (const b of p.relatedBlocks ?? []) {
-    const label = b === 'KD' ? 'Khối Kinh doanh' : 'Khối Văn phòng';
-    out.push({ type: 'block', id: b, label });
-  }
-  for (const d of p.relatedDepts ?? []) out.push({ type: 'dept', id: d, label: d });
-  for (const f of p.relatedFacilities ?? []) out.push({ type: 'facility', id: f, label: f });
-  return out;
-}
-
-function scopeMatchesTargetBlock(p: ProposalV5, target: TargetBlockFilter): boolean {
-  if (target === 'all') return true;
-  const blocks = new Set<string>(p.relatedBlocks ?? []);
-  if (target === 'KD') return blocks.has('KD');
-  if (target === 'VP') return blocks.has('VP');
-  if (target === 'both') return p.isCrossBlock || (blocks.has('KD') && blocks.has('VP'));
-  return true;
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Format helpers
-// ──────────────────────────────────────────────────────────────────────────────
-function formatVNDRaw(value: number | undefined | null): string {
-  if (value == null || isNaN(value as number)) return '—';
-  if (value === 0) return '0 đ';
-  if (value >= 1_000_000_000) return (value / 1_000_000_000).toFixed(2) + ' Tỷ';
-  if (value >= 1_000_000) return (value / 1_000_000).toFixed(1).replace(/\.0$/, '') + ' Tr';
-  return value.toLocaleString('vi-VN') + ' đ';
-}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // SLA — tính từ updatedAt + slaHours theo role approver hiện tại
@@ -205,8 +124,6 @@ function tabsContaining(p: ProposalV5): TabKey[] {
   if (p.status === 'yeu_cau_bo_sung') tabs.push('ycbs');
   if (p.status === 'da_phe_duyet') tabs.push('da_duyet');
   if (p.status === 'chuyen_dieu_phoi') tabs.push('chuyen_dieu_phoi');
-  const sla = computeSLA(p);
-  if (sla?.overdue) tabs.push('qua_sla');
   return tabs;
 }
 
@@ -220,8 +137,6 @@ function canApprove(p: ProposalV5, uid: string): boolean {
   );
 }
 function canApproveAndCreateCoord(p: ProposalV5, uid: string, role: string): boolean {
-  // Có thể gộp ngay khi đang là approver cuối (sẽ chuyển sang da_phe_duyet)
-  // hoặc proposal đã da_phe_duyet và chưa có linkedCoordTaskId
   const r = (role || '').toUpperCase();
   const isPrivileged =
     p.creatorUid === uid ||
@@ -231,7 +146,6 @@ function canApproveAndCreateCoord(p: ProposalV5, uid: string, role: string): boo
     r.includes('QLCS');
   if (p.status === 'da_phe_duyet' && !p.linkedCoordTaskId && isPrivileged) return true;
   if (canApprove(p, uid)) {
-    // approver bước cuối có thể gộp
     const isLastStep = p.approverIdx >= p.approverChain.length - 1;
     return isLastStep && isPrivileged;
   }
@@ -251,47 +165,7 @@ function canClose(p: ProposalV5, uid: string, role: string): boolean {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// V5 — Sau duyệt badge
-// ──────────────────────────────────────────────────────────────────────────────
-function getPostApproval(p: ProposalV5): {
-  kind: 'chi_phe_duyet' | 'de_nghi_tao_dieu_phoi' | 'da_chuyen_dp' | 'none';
-  label: string;
-  cls: string;
-  taskCode?: string;
-} {
-  if (p.linkedCoordTaskId) {
-    return {
-      kind: 'da_chuyen_dp',
-      label: '✓ Đã chuyển ĐP',
-      cls: 'bg-emerald-100 text-emerald-700 ring-emerald-200',
-      taskCode: p.linkedCoordTaskCode,
-    };
-  }
-  // V5 field: afterApproval
-  const dec: AfterApproval | undefined = p.afterApproval;
-  if (dec === 'chi_phe_duyet') {
-    return {
-      kind: 'chi_phe_duyet',
-      label: 'Chỉ phê duyệt',
-      cls: 'bg-slate-100 text-slate-600 ring-slate-200',
-    };
-  }
-  if (dec === 'de_nghi_tao_dieu_phoi') {
-    return {
-      kind: 'de_nghi_tao_dieu_phoi',
-      label: 'Đề nghị tạo ĐP',
-      cls: 'bg-amber-100 text-amber-700 ring-amber-200',
-    };
-  }
-  return {
-    kind: 'none',
-    label: '—',
-    cls: 'text-slate-400',
-  };
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Props (V5)
+// Props (V6)
 // ──────────────────────────────────────────────────────────────────────────────
 export type ActionKey =
   | 'view'
@@ -318,8 +192,6 @@ function DexuatTable(props: DexuatTableProps) {
   const [tab, setTab] = useState<TabKey>('all');
   const [keyword, setKeyword] = useState('');
   const [filterKind, setFilterKind] = useState<'all' | ProposalKind>('all');
-  const [filterPriority, setFilterPriority] = useState<string>('all');
-  const [filterTargetBlock, setFilterTargetBlock] = useState<TargetBlockFilter>('all');
 
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(20);
@@ -334,7 +206,6 @@ function DexuatTable(props: DexuatTableProps) {
       ycbs: 0,
       da_duyet: 0,
       chuyen_dieu_phoi: 0,
-      qua_sla: 0,
     };
     for (const p of proposals) {
       const tabs = tabsContaining(p);
@@ -350,7 +221,7 @@ function DexuatTable(props: DexuatTableProps) {
     return c;
   }, [proposals, currentUserUid]);
 
-  // ── Filter pipeline ──────────────────────────────────────────────────────
+  // ── Filter pipeline (V6 GỌN) ─────────────────────────────────────────────
   const filtered = useMemo(() => {
     const kw = keyword.trim().toLowerCase();
     return proposals.filter((p) => {
@@ -367,10 +238,8 @@ function DexuatTable(props: DexuatTableProps) {
         const tabs = tabsContaining(p);
         if (!tabs.includes(tab)) return false;
       }
-      // Filters
+      // Filter loại
       if (filterKind !== 'all' && p.kind !== filterKind) return false;
-      if (!priorityMatches(p, filterPriority)) return false;
-      if (!scopeMatchesTargetBlock(p, filterTargetBlock)) return false;
       // Keyword
       if (kw) {
         const hay = `${p.title} ${p.code} ${p.creatorName}`.toLowerCase();
@@ -378,12 +247,12 @@ function DexuatTable(props: DexuatTableProps) {
       }
       return true;
     });
-  }, [proposals, tab, filterKind, filterPriority, filterTargetBlock, keyword, currentUserUid]);
+  }, [proposals, tab, filterKind, keyword, currentUserUid]);
 
   // Reset page khi filter đổi
   useEffect(() => {
     setPage(1);
-  }, [tab, filterKind, filterPriority, filterTargetBlock, keyword]);
+  }, [tab, filterKind, keyword]);
 
   const totalPage = Math.max(1, Math.ceil(filtered.length / perPage));
   const safePage = Math.min(page, totalPage);
@@ -394,7 +263,7 @@ function DexuatTable(props: DexuatTableProps) {
 
   return (
     <div className="space-y-3">
-      {/* ── Tabs row ────────────────────────────────────────────────────────── */}
+      {/* ── Tabs row (7 tabs V6) ────────────────────────────────────────────── */}
       <div className="flex items-center gap-1 border-b border-slate-200 overflow-x-auto -mx-3 px-3 md:mx-0 md:px-0">
         {TABS.map(({ key, label, icon: Icon }) => {
           const active = tab === key;
@@ -424,7 +293,7 @@ function DexuatTable(props: DexuatTableProps) {
         })}
       </div>
 
-      {/* ── Filter row (V5: search · kind · priority · target block) ────────── */}
+      {/* ── Filter row GỌN V6: search + Loại ────────────────────────────────── */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[220px] max-w-md">
           <Search size={14} className="absolute left-2.5 top-2.5 text-slate-400" />
@@ -448,53 +317,28 @@ function DexuatTable(props: DexuatTableProps) {
             </option>
           ))}
         </select>
-        <select
-          value={filterPriority}
-          onChange={(e) => setFilterPriority(e.target.value)}
-          className="text-sm border border-slate-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:border-emerald-500"
-        >
-          <option value="all">Tất cả ưu tiên</option>
-          {PRIORITY_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-        <select
-          value={filterTargetBlock}
-          onChange={(e) => setFilterTargetBlock(e.target.value as TargetBlockFilter)}
-          className="text-sm border border-slate-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:border-emerald-500"
-        >
-          <option value="all">Tất cả phạm vi</option>
-          <option value="KD">Khối Kinh doanh</option>
-          <option value="VP">Khối Văn phòng</option>
-          <option value="both">Cả 2 / Liên khối</option>
-        </select>
       </div>
 
-      {/* ── Bảng 11 cột ─────────────────────────────────────────────────────── */}
+      {/* ── Bảng 8 cột V6 ───────────────────────────────────────────────────── */}
       <section className="rounded-xl bg-white border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 sticky top-0 z-10">
               <tr className="text-left border-b border-slate-200 text-[11px] font-semibold text-slate-600 uppercase tracking-wider">
                 <th className="px-3 py-2.5">Mã</th>
-                <th className="px-3 py-2.5">Tiêu đề</th>
+                <th className="px-3 py-2.5">Tên đề xuất</th>
                 <th className="px-3 py-2.5">Loại</th>
                 <th className="px-3 py-2.5">Người tạo</th>
-                <th className="px-3 py-2.5">Phạm vi ảnh hưởng</th>
                 <th className="px-3 py-2.5">Người duyệt hiện tại</th>
-                <th className="px-3 py-2.5 text-right">Giá trị</th>
                 <th className="px-3 py-2.5">SLA</th>
                 <th className="px-3 py-2.5">Trạng thái</th>
-                <th className="px-3 py-2.5">Sau duyệt</th>
                 <th className="px-1 py-2.5 text-center">Hành động</th>
               </tr>
             </thead>
             <tbody>
               {paged.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="py-12 text-center text-sm text-slate-500">
+                  <td colSpan={8} className="py-12 text-center text-sm text-slate-500">
                     Không có đề xuất nào khớp bộ lọc.
                   </td>
                 </tr>
@@ -514,7 +358,7 @@ function DexuatTable(props: DexuatTableProps) {
           </table>
         </div>
 
-        {/* ── Pagination footer (giữ V3) ────────────────────────────────────── */}
+        {/* ── Pagination footer (giữ pattern V5) ──────────────────────────── */}
         {filtered.length > 0 && (
           <div className="flex items-center justify-between gap-3 px-3 py-2 border-t border-slate-200 bg-slate-50 text-xs text-slate-600 flex-wrap">
             <div>
@@ -590,7 +434,7 @@ function DexuatTable(props: DexuatTableProps) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Row component
+// Row component (V6 — 8 cột)
 // ──────────────────────────────────────────────────────────────────────────────
 interface RowProps {
   p: ProposalV5;
@@ -615,9 +459,8 @@ function DexuatRow({ p, currentUserUid, currentUserRole, onRowClick, onAction }:
   const currStep: ApproverStep | undefined = p.approverChain[p.approverIdx];
   const sla = computeSLA(p);
   const overdue = !!sla?.overdue;
-  const urgent = isUrgent(p.priority);
 
-  // Avatar initials (2 ký tự cuối)
+  // Avatar initials (2 ký tự đầu của 2 từ cuối)
   const initials =
     (currStep?.name ?? '?')
       .split(/\s+/)
@@ -645,14 +488,6 @@ function DexuatRow({ p, currentUserUid, currentUserRole, onRowClick, onAction }:
     }
   }
 
-  // Phạm vi ảnh hưởng — V5 multi-select chip list
-  const scopes = getAffectedScopes(p);
-  const visibleScopes = scopes.slice(0, 2);
-  const extraCount = scopes.length - visibleScopes.length;
-
-  // Sau duyệt badge
-  const postApproval = getPostApproval(p);
-
   // Visibility các action
   const showApprove = canApprove(p, currentUserUid);
   const showApproveAndCoord = canApproveAndCreateCoord(p, currentUserUid, currentUserRole);
@@ -671,29 +506,22 @@ function DexuatRow({ p, currentUserUid, currentUserRole, onRowClick, onAction }:
         overdue ? 'bg-rose-50/40' : ''
       }`}
     >
-      {/* Mã */}
+      {/* 1. Mã */}
       <td className="px-3 py-2.5 text-[10px] text-slate-400 tabular-nums whitespace-nowrap">
         {p.code}
       </td>
 
-      {/* Tiêu đề + badge Khẩn */}
+      {/* 2. Tên đề xuất */}
       <td className="px-3 py-2.5">
-        <div className="flex items-center gap-1.5 max-w-[280px]">
-          <span className="font-medium text-slate-800 truncate" title={p.title}>
-            {p.title}
-          </span>
-          {urgent && (
-            <span
-              className="inline-flex items-center gap-0.5 shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 ring-1 ring-rose-200"
-              title="Ưu tiên khẩn cấp"
-            >
-              <Flame size={10} /> Khẩn
-            </span>
-          )}
-        </div>
+        <span
+          className="font-medium text-slate-800 truncate block max-w-[300px]"
+          title={p.title}
+        >
+          {p.title}
+        </span>
       </td>
 
-      {/* Loại */}
+      {/* 3. Loại */}
       <td className="px-3 py-2.5">
         <span
           className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ring-1 ${
@@ -704,40 +532,17 @@ function DexuatRow({ p, currentUserUid, currentUserRole, onRowClick, onAction }:
         </span>
       </td>
 
-      {/* Người tạo */}
-      <td className="px-3 py-2.5 text-slate-700 whitespace-nowrap">{p.creatorName}</td>
-
-      {/* Phạm vi ảnh hưởng — chip list + "+N đơn vị" */}
-      <td className="px-3 py-2.5">
-        {scopes.length === 0 ? (
-          <span className="text-slate-400 text-[12px]">—</span>
-        ) : (
-          <div className="flex items-center gap-1 flex-wrap max-w-[220px]">
-            {visibleScopes.map((s, i) => (
-              <span
-                key={`${s.type}-${s.id}-${i}`}
-                className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-700 ring-1 ring-slate-200 truncate max-w-[100px]"
-                title={s.label}
-              >
-                {s.label}
-              </span>
-            ))}
-            {extraCount > 0 && (
-              <span
-                className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
-                title={scopes
-                  .slice(2)
-                  .map((s) => s.label)
-                  .join(', ')}
-              >
-                +{extraCount} đơn vị
-              </span>
-            )}
-          </div>
-        )}
+      {/* 4. Người tạo (tên + role nhỏ) */}
+      <td className="px-3 py-2.5 whitespace-nowrap">
+        <div className="flex flex-col leading-tight">
+          <span className="text-slate-700 text-[13px]">{p.creatorName}</span>
+          {p.creatorRole && (
+            <span className="text-slate-400 text-[10px]">{p.creatorRole}</span>
+          )}
+        </div>
       </td>
 
-      {/* Người duyệt hiện tại */}
+      {/* 5. Người duyệt hiện tại */}
       <td className="px-3 py-2.5">
         {currStep ? (
           <div className="flex items-center gap-2">
@@ -756,19 +561,10 @@ function DexuatRow({ p, currentUserUid, currentUserRole, onRowClick, onAction }:
         )}
       </td>
 
-      {/* Giá trị */}
-      <td
-        className={`px-3 py-2.5 text-right tabular-nums whitespace-nowrap ${
-          (p.estimatedCost ?? 0) > 50_000_000 ? 'text-rose-600 font-semibold' : 'text-slate-700'
-        }`}
-      >
-        {formatVNDRaw(p.estimatedCost)}
-      </td>
-
-      {/* SLA */}
+      {/* 6. SLA */}
       <td className={`px-3 py-2.5 whitespace-nowrap text-[12px] ${slaCls}`}>{slaLabel}</td>
 
-      {/* Trạng thái */}
+      {/* 7. Trạng thái */}
       <td className="px-3 py-2.5">
         <span
           className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${
@@ -779,25 +575,7 @@ function DexuatRow({ p, currentUserUid, currentUserRole, onRowClick, onAction }:
         </span>
       </td>
 
-      {/* Sau duyệt */}
-      <td className="px-3 py-2.5">
-        {postApproval.kind === 'none' ? (
-          <span className="text-slate-400 text-[12px]">—</span>
-        ) : (
-          <span
-            className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ring-1 ${postApproval.cls}`}
-            title={
-              postApproval.taskCode
-                ? `Đã chuyển điều phối: ${postApproval.taskCode}`
-                : postApproval.label
-            }
-          >
-            {postApproval.label}
-          </span>
-        )}
-      </td>
-
-      {/* Hành động */}
+      {/* 8. Hành động — dropdown 4 mục V6 */}
       <td className="px-1 py-2.5 text-center relative" onClick={(e) => e.stopPropagation()}>
         <button
           onClick={() => setMenuOpen((x) => !x)}
@@ -814,26 +592,12 @@ function DexuatRow({ p, currentUserUid, currentUserRole, onRowClick, onAction }:
           >
             <MenuItem icon={Eye} label="Xem chi tiết" onClick={() => emit('view')} />
             {showApprove && (
-              <>
-                <MenuItem
-                  icon={ThumbsUp}
-                  label="Duyệt"
-                  onClick={() => emit('approve')}
-                  cls="text-emerald-700"
-                />
-                <MenuItem
-                  icon={XCircle}
-                  label="Từ chối"
-                  onClick={() => emit('reject')}
-                  cls="text-rose-700"
-                />
-                <MenuItem
-                  icon={RotateCcw}
-                  label="Yêu cầu bổ sung"
-                  onClick={() => emit('request_revision')}
-                  cls="text-amber-700"
-                />
-              </>
+              <MenuItem
+                icon={ThumbsUp}
+                label="Duyệt"
+                onClick={() => emit('approve')}
+                cls="text-emerald-700"
+              />
             )}
             {showApproveAndCoord && (
               <MenuItem
@@ -843,10 +607,26 @@ function DexuatRow({ p, currentUserUid, currentUserRole, onRowClick, onAction }:
                 cls={
                   highlightApproveCoord
                     ? 'text-white bg-emerald-600 hover:bg-emerald-700 font-semibold'
-                    : 'text-emerald-700'
+                    : 'text-emerald-700 font-semibold'
                 }
                 highlight={highlightApproveCoord}
               />
+            )}
+            {showApprove && (
+              <>
+                <MenuItem
+                  icon={RotateCcw}
+                  label="Yêu cầu bổ sung"
+                  onClick={() => emit('request_revision')}
+                  cls="text-amber-700"
+                />
+                <MenuItem
+                  icon={XCircle}
+                  label="Từ chối"
+                  onClick={() => emit('reject')}
+                  cls="text-rose-700"
+                />
+              </>
             )}
             {showClose && (
               <MenuItem

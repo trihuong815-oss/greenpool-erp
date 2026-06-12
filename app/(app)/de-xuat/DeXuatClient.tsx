@@ -1,46 +1,55 @@
 'use client';
 
-// /de-xuat V5 — anh chốt 2026-06-12:
-//   - Trang là composite: DexuatDashboard (V5) + DexuatTable (V5) + ProposalDetailDrawer (V5).
-//   - Modal tạo dùng CreateProposalModal V5 (5 block + 5 câu hỏi guide + auto chain
-//     suggest theo loại/ưu tiên/ngưỡng tài chính/phạm vi ảnh hưởng + accordion "Sau duyệt").
-//   - 8 trạng thái V5 (BỎ dong_y_nguyen_tac so với V3):
-//     nhap → da_gui → dang_xem_xet → yeu_cau_bo_sung → da_phe_duyet / tu_choi →
-//     chuyen_dieu_phoi → dong_ho_so.
-//   - V1 vẫn reuse collection `tasks` (kind='proposal'). Adapter map Task → ProposalV5
-//     cho cả table và drawer.
-//   - Action V5 (6): view / approve / reject / request_revision /
-//     approve_and_create_coord / close.
-//   - Convert: tạo task `kind='assignment'` mới với meta.fromProposalId rồi
-//     router.push('/dieu-phoi').
-//   - "Đóng hồ sơ" V1 alert + console.log (V6 sẽ wire endpoint backend).
+// /de-xuat V6 — INTEGRATION CLIENT — anh chốt 2026-06-12.
+//
+// Nguyên tắc V6:
+//   "Tạo đề xuất dưới 1 phút" · "Tối đa 5 trường nhập liệu" ·
+//   "Không có dữ liệu dư thừa" ·
+//   "Cho phép mở rộng workflow trong tương lai mà không sửa code" ·
+//   "UI đồng bộ module Điều phối hiện tại".
+//
+// Trang là composite:
+//   DexuatDashboard V6 (7 KPI + 1 Donut)
+//   + DexuatTable V6 (7 tabs + 8 cột + dropdown 4 action)
+//   + CreateProposalModal V6 (5 trường nhập)
+//   + ProposalDetailDrawer V6 (5 section + 4 nút duyệt).
+//
+// 7 trạng thái V6 (storage value vẫn 'chuyen_dieu_phoi' để tương thích data
+// cũ; label V6 hiển thị "Đã tạo điều phối"):
+//   nhap → da_gui → dang_xem_xet → yeu_cau_bo_sung → da_phe_duyet / tu_choi →
+//   chuyen_dieu_phoi → dong_ho_so.
+//
+// Reuse collection `tasks` (kind='proposal'). Adapter map Task → ProposalV6
+// (alias = ProposalV5 trong types V6) cho cả table + drawer + dashboard.
+//
+// 6 handler V6:
+//   handleCreate (V6 payload — 5 trường) / handleApprove / handleReject /
+//   handleRequestRevision / handleApproveAndCreateCoord / handleCloseDossier.
+// "Đóng hồ sơ" V1 alert + console.log (V7 sẽ wire endpoint backend).
+// Convert: tạo task `kind='assignment'` mới với meta.fromProposalId + .fromProposalCode
+// rồi router.push('/dieu-phoi'). KHÔNG map Owner/KPI/Deadline (xác định tại Điều phối).
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, Plus, RefreshCw } from 'lucide-react';
 import { tasksApi, type Task } from '@/lib/services/tasks/api-client';
 import DexuatDashboard, {
-  type ProposalV5 as DashboardProposalV5,
+  type ProposalV6 as DashboardProposalV6,
 } from './_components/DexuatDashboard';
 import DexuatTable, { type ActionKey } from './_components/DexuatTable';
 import CreateProposalModal, {
-  type CreateProposalPayloadV5,
+  type CreateProposalPayloadV6,
 } from './_components/CreateProposalModal';
 import ProposalDetailDrawer, {
   type ProposalV2,
   type ProposalApproverV2,
   type ApproverStepStatus,
-  type ProposalScopeItem,
 } from './_components/ProposalDetailDrawer';
 import type {
   ProposalKind,
-  Priority,
   ProposalStatus,
-  ProposalSource,
-  ProposalV5,
+  ProposalV6,
   ApproverStep,
-  ScopeTarget,
-  AfterApproval,
 } from './_components/types';
 import { ROLE_BLOCK } from '@/lib/permissions';
 import { canCreateProposal } from '../dieu-phoi/_lib/permissions';
@@ -50,7 +59,10 @@ import { canCreateProposal } from '../dieu-phoi/_lib/permissions';
 // ──────────────────────────────────────────────────────────────────────────────
 interface Department { id: string; name: string; blockId: 'KD' | 'VP' | null; }
 interface Branch { id: string; name: string; }
-interface UserLite { id: string; name: string; roleId: string; branchId: string | null; departmentId: string | null; }
+interface UserLite {
+  id: string; name: string; roleId: string;
+  branchId: string | null; departmentId: string | null;
+}
 
 interface Props {
   currentUserId: string;
@@ -69,16 +81,16 @@ interface Props {
 function resolveBlockOfRole(role: string): 'KD' | 'VP' {
   const b = ROLE_BLOCK[role];
   if (b === 'VP') return 'VP';
-  // 'all' (ADMIN/CEO) hoặc undefined → mặc định KD
+  // 'all' (ADMIN/CEO/CHU_TICH) hoặc undefined → mặc định KD
   return 'KD';
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Adapter — Task → ProposalV5
+// Adapter — Task → ProposalV6
 // ──────────────────────────────────────────────────────────────────────────────
 
-/** Map Task.status → 8 trạng thái V5 (BỎ dong_y_nguyen_tac). */
-function mapStatusV5(t: Task): ProposalStatus {
+/** Map Task.status → 8 trạng thái V6 (giữ storage 'chuyen_dieu_phoi'). */
+function mapStatusV6(t: Task): ProposalStatus {
   const meta = ((t as any).meta ?? {}) as Record<string, unknown>;
   if (meta.closed === true) return 'dong_ho_so';
   if (meta.linkedCoordId) return 'chuyen_dieu_phoi';
@@ -99,11 +111,11 @@ function mapStatusV5(t: Task): ProposalStatus {
   }
 }
 
-/** Map kind ghi trong meta (V5 mới) → 5 ProposalKind V5.
+/** Map kind ghi trong meta (V6 mới) → 5 ProposalKind V6.
  *  V3 cũ (nhan_su/mkt_kd/tai_chinh) → fallback: van_hanh/cai_tien/dau_tu. */
-function mapKindV5(t: Task): ProposalKind {
+function mapKindV6(t: Task): ProposalKind {
   const meta = ((t as any).meta ?? {}) as Record<string, unknown>;
-  const raw = meta.proposalKindV5 ?? meta.proposalKindV3;
+  const raw = meta.proposalKindV6 ?? meta.proposalKindV5 ?? meta.proposalKindV3;
   if (typeof raw === 'string') {
     switch (raw) {
       case 'van_hanh':
@@ -112,7 +124,7 @@ function mapKindV5(t: Task): ProposalKind {
       case 'chien_luoc':
       case 'khan_cap':
         return raw;
-      // V3 alias → V5
+      // V3 alias → V6
       case 'nhan_su': return 'van_hanh';
       case 'mkt_kd':  return 'cai_tien';
       case 'tai_chinh': return 'dau_tu';
@@ -123,96 +135,8 @@ function mapKindV5(t: Task): ProposalKind {
   return 'van_hanh';
 }
 
-/** Map Task.priority (low/normal/high/urgent) → 3 Priority V5. */
-function mapPriorityV5(t: Task): Priority {
-  switch (t.priority) {
-    case 'urgent': return 'khan_cap';
-    case 'high':   return 'quan_trong';
-    case 'low':
-    case 'normal':
-    default:       return 'binh_thuong';
-  }
-}
-
-/** Đọc source V5 từ meta, mặc định "phat_sinh". */
-function mapSourceV5(t: Task): ProposalSource {
-  const meta = ((t as any).meta ?? {}) as Record<string, unknown>;
-  const src = meta.source;
-  if (
-    src === 'phat_sinh' || src === 'kpi' || src === 'hop' ||
-    src === 'ceo_giao' || src === 'khach_hang_phan_anh' || src === 'khac'
-  ) return src;
-  return 'phat_sinh';
-}
-
-/** Đọc afterApproval V5 từ meta. */
-function mapAfterApprovalV5(t: Task): AfterApproval | undefined {
-  const meta = ((t as any).meta ?? {}) as Record<string, unknown>;
-  if (meta.afterApproval === 'chi_phe_duyet' || meta.afterApproval === 'de_nghi_tao_dieu_phoi') {
-    return meta.afterApproval;
-  }
-  // Backward-compat V3: createCoordAfter=true → de_nghi_tao_dieu_phoi
-  if (meta.createCoordAfter === true) return 'de_nghi_tao_dieu_phoi';
-  return undefined;
-}
-
-/** Đọc scopeTargets V5 từ meta. Nếu chưa có → suy luận từ assigneeBlock/Dept/Facility. */
-function mapScopeTargetsV5(t: Task): ScopeTarget[] {
-  const meta = ((t as any).meta ?? {}) as Record<string, unknown>;
-  const raw = meta.scopeTargets;
-  if (Array.isArray(raw)) {
-    return raw
-      .filter((x: any): x is { type: string; id: string; label?: string } =>
-        x && typeof x === 'object' && typeof x.type === 'string' && typeof x.id === 'string')
-      .map((x: any): ScopeTarget => ({
-        type:
-          x.type === 'dept' || x.type === 'facility' || x.type === 'role' || x.type === 'block'
-            ? x.type
-            : 'dept',
-        id: x.id,
-        label: typeof x.label === 'string' ? x.label : x.id,
-      }));
-  }
-  // Fallback: dựng từ assignee
-  const out: ScopeTarget[] = [];
-  if (t.assigneeBlock) {
-    out.push({
-      type: 'block',
-      id: t.assigneeBlock,
-      label: t.assigneeBlock === 'KD' ? 'Khối Kinh doanh' : 'Khối Văn phòng',
-    });
-  }
-  if (t.assigneeDeptId) out.push({ type: 'dept', id: t.assigneeDeptId, label: t.assigneeDeptId });
-  if (t.assigneeFacilityId) out.push({ type: 'facility', id: t.assigneeFacilityId, label: t.assigneeFacilityId });
-  return out;
-}
-
-/** Suy luận relatedBlocks / isCrossBlock từ scopeTargets. */
-function computeRelatedBlocks(targets: ScopeTarget[], fallback: 'KD' | 'VP'): {
-  blocks: Array<'KD' | 'VP'>;
-  isCross: boolean;
-} {
-  let hasKD = false;
-  let hasVP = false;
-  for (const t of targets) {
-    if (t.type === 'block') {
-      if (t.id === 'KD') hasKD = true;
-      if (t.id === 'VP') hasVP = true;
-    }
-  }
-  if (!hasKD && !hasVP) {
-    // fallback theo block của assignee/creator
-    if (fallback === 'VP') hasVP = true;
-    else hasKD = true;
-  }
-  const blocks: Array<'KD' | 'VP'> = [];
-  if (hasKD) blocks.push('KD');
-  if (hasVP) blocks.push('VP');
-  return { blocks, isCross: hasKD && hasVP };
-}
-
-/** Build approverChain V5 (uid + roleCode + decision history). */
-function buildApproverChainV5(t: Task, users: UserLite[]): {
+/** Build approverChain V6 (uid + roleCode + decision history). */
+function buildApproverChainV6(t: Task, users: UserLite[]): {
   chain: ApproverStep[];
   idx: number;
 } {
@@ -277,29 +201,27 @@ function buildApproverChainV5(t: Task, users: UserLite[]): {
   return { chain, idx: activeIdx };
 }
 
-/** Adapter chính — Task → ProposalV5. */
-function adaptTaskToProposalV5(t: Task, users: UserLite[]): ProposalV5 {
+/** Adapter chính — Task → ProposalV6. */
+function adaptTaskToProposalV6(t: Task, users: UserLite[]): ProposalV6 {
   const yyyy = (t.createdAt ?? '').slice(0, 4) || new Date().getFullYear().toString();
   const code = `DX-${yyyy}-${t.id.slice(0, 4).toUpperCase()}`;
   const meta = ((t as any).meta ?? {}) as Record<string, any>;
-  const { chain, idx } = buildApproverChainV5(t, users);
+  const { chain, idx } = buildApproverChainV6(t, users);
 
-  const scopeTargets = mapScopeTargetsV5(t);
   const creatorBlock: 'KD' | 'VP' = t.createdByBlock === 'VP' ? 'VP' : 'KD';
-  const { blocks: relatedBlocks, isCross } = computeRelatedBlocks(scopeTargets, creatorBlock);
 
-  const relatedDepts: string[] = scopeTargets
-    .filter((s) => s.type === 'dept')
-    .map((s) => s.id);
-  const relatedFacilities: string[] = scopeTargets
-    .filter((s) => s.type === 'facility')
-    .map((s) => s.id);
+  // V6 reason: ưu tiên meta.reason mới; fallback V5 problemStatement; cuối là description
+  const reason =
+    (typeof meta.reason === 'string' && meta.reason) ||
+    (typeof meta.problemStatement === 'string' && meta.problemStatement) ||
+    (typeof t.description === 'string' && t.description) ||
+    undefined;
 
   return {
     // Standard
     id: t.id,
     code,
-    status: mapStatusV5(t),
+    status: mapStatusV6(t),
     creatorUid: t.createdBy,
     creatorName: t.createdByName ?? '',
     creatorRole: t.createdByRole ?? '',
@@ -307,60 +229,12 @@ function adaptTaskToProposalV5(t: Task, users: UserLite[]): ProposalV5 {
     createdAt: t.createdAt,
     updatedAt: t.updatedAt ?? t.createdAt,
 
-    // Block 1
+    // 5 trường nhập V6
     title: t.title,
-    kind: mapKindV5(t),
-    priority: mapPriorityV5(t),
-    source: mapSourceV5(t),
+    kind: mapKindV6(t),
+    reason,
     estimatedCost: t.estimatedCost ?? undefined,
-
-    // Block 2
-    currentSituation: typeof meta.currentSituation === 'string' ? meta.currentSituation : undefined,
-    problemStatement: typeof meta.problemStatement === 'string' ? meta.problemStatement : undefined,
-    evidence: typeof meta.evidence === 'string' ? meta.evidence : undefined,
     attachments: [],
-
-    // Block 3
-    proposedSolution:
-      typeof meta.proposedSolution === 'string' ? meta.proposedSolution : t.description ?? undefined,
-    scopeTargets,
-    decisionRequested:
-      typeof meta.decisionRequested === 'string' ? meta.decisionRequested : undefined,
-
-    // Block 4
-    expectedBenefit: typeof meta.expectedBenefit === 'string' ? meta.expectedBenefit : undefined,
-    riskIfNot: typeof meta.riskIfNot === 'string' ? meta.riskIfNot : undefined,
-    expectedResult:
-      typeof meta.expectedResult === 'string'
-        ? meta.expectedResult
-        : typeof meta.expectedDeliverable === 'string'
-          ? meta.expectedDeliverable
-          : t.expectedDeliverable ?? undefined,
-
-    // Block 5
-    afterApproval: mapAfterApprovalV5(t),
-    suggestedOwnerUid:
-      typeof meta.suggestedOwnerUid === 'string' ? meta.suggestedOwnerUid : undefined,
-    suggestedOwnerName:
-      typeof meta.suggestedOwnerName === 'string'
-        ? meta.suggestedOwnerName
-        : typeof meta.expectedOwnerName === 'string'
-          ? meta.expectedOwnerName
-          : undefined,
-    suggestedDeadline:
-      typeof meta.suggestedDeadline === 'string'
-        ? meta.suggestedDeadline
-        : typeof meta.expectedDeadline === 'string'
-          ? meta.expectedDeadline
-          : t.dueDate ?? undefined,
-    deploymentNote:
-      typeof meta.deploymentNote === 'string' ? meta.deploymentNote : undefined,
-
-    // Auto-computed
-    relatedBlocks,
-    relatedDepts,
-    relatedFacilities,
-    isCrossBlock: isCross,
 
     // Approver
     approverChain: chain,
@@ -369,14 +243,22 @@ function adaptTaskToProposalV5(t: Task, users: UserLite[]): ProposalV5 {
     // Linked coord
     linkedCoordTaskId: typeof meta.linkedCoordId === 'string' ? meta.linkedCoordId : undefined,
     linkedCoordTaskCode: typeof meta.linkedCoordCode === 'string' ? meta.linkedCoordCode : undefined,
+
+    // ═══ LEGACY V5 FIELDS — giữ shape để sibling chưa migrate không vỡ ═══
+    priority: 'binh_thuong',
+    source: 'phat_sinh',
+    scopeTargets: [],
+    relatedBlocks: [creatorBlock],
+    relatedDepts: [],
+    relatedFacilities: [],
+    isCrossBlock: false,
   };
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Adapter — ProposalV5 → Dashboard shape
-// (Dashboard tự định nghĩa shape riêng: approverChain: string[] + approverHistory)
+// Adapter — ProposalV6 → Dashboard shape
 // ──────────────────────────────────────────────────────────────────────────────
-function adaptProposalToDashboard(p: ProposalV5): DashboardProposalV5 {
+function adaptProposalToDashboard(p: ProposalV6): DashboardProposalV6 {
   const chainTokens: string[] = p.approverChain.map((s) => {
     if (s.uid) return `user:${s.uid}`;
     if (s.roleCode) return `role:${s.roleCode}`;
@@ -388,31 +270,10 @@ function adaptProposalToDashboard(p: ProposalV5): DashboardProposalV5 {
     title: p.title,
     kind: p.kind,
     status: p.status,
-    priority: p.priority,
-    scopeTargets: p.scopeTargets.map((s) => ({
-      id: `${s.type}:${s.id}`,
-      label: s.label,
-      kind:
-        s.type === 'dept' ? 'tp'
-        : s.type === 'facility' ? 'facility'
-        : s.type === 'block' ? 'block'
-        : 'tp',
-    })),
-    relatedBlocks: p.relatedBlocks,
     creatorUid: p.creatorUid,
     creatorName: p.creatorName,
     approverChain: chainTokens,
     approverIdx: p.approverIdx,
-    approverHistory: p.approverChain
-      .filter((s) => !!s.decidedAt)
-      .map((s) => ({
-        uid: s.uid,
-        roleCode: s.roleCode,
-        name: s.name,
-        decidedAt: s.decidedAt,
-        decision: s.decision,
-        notes: s.notes,
-      })),
     estimatedCost: p.estimatedCost,
     createdAt: p.createdAt,
     updatedAt: p.updatedAt ?? p.createdAt,
@@ -420,9 +281,9 @@ function adaptProposalToDashboard(p: ProposalV5): DashboardProposalV5 {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Adapter — ProposalV5 → ProposalV2 (drawer prop)
+// Adapter — ProposalV6 → ProposalV2 (drawer prop)
 // ──────────────────────────────────────────────────────────────────────────────
-function approverStepStatus(p: ProposalV5, idx: number): ApproverStepStatus {
+function approverStepStatus(p: ProposalV6, idx: number): ApproverStepStatus {
   const s = p.approverChain[idx];
   if (!s) return 'cho_tiep';
   if (s.decision === 'approved') return 'da_duyet';
@@ -437,18 +298,7 @@ function approverStepStatus(p: ProposalV5, idx: number): ApproverStepStatus {
   return 'cho_tiep';
 }
 
-function scopeKindForDrawer(t: ScopeTarget): ProposalScopeItem['kind'] {
-  if (t.type === 'block') return 'khoi';
-  if (t.type === 'facility') return 'co_so';
-  // dept/role → TP/QLCS (đơn giản hoá: dept = TP)
-  if (t.type === 'dept') {
-    if (t.id.toUpperCase().startsWith('QLCS')) return 'QLCS';
-    return 'TP';
-  }
-  return 'TP';
-}
-
-function adaptProposalToDrawer(p: ProposalV5): ProposalV2 {
+function adaptProposalToDrawer(p: ProposalV6): ProposalV2 {
   const approverChainV2: ProposalApproverV2[] = p.approverChain.map((s, idx) => ({
     id: `step-${idx}`,
     uid: s.uid ?? '',
@@ -457,23 +307,17 @@ function adaptProposalToDrawer(p: ProposalV5): ProposalV2 {
     status: approverStepStatus(p, idx),
     decidedAt: s.decidedAt,
     note: s.notes,
-  }));
-
-  const scopeItems: ProposalScopeItem[] = p.scopeTargets.map((s) => ({
-    kind: scopeKindForDrawer(s),
-    id: s.id,
-    label: s.label,
+    reason: s.reason,
   }));
 
   return {
     id: p.id,
     code: p.code,
     title: p.title,
-    description: p.proposedSolution ?? p.problemStatement ?? '',
+    description: p.reason ?? '',
     kind: p.kind,
     status: p.status,
     estimatedCost: p.estimatedCost ?? null,
-    deadline: p.suggestedDeadline,
     creatorUid: p.creatorUid,
     creatorName: p.creatorName,
     creatorRole: p.creatorRole,
@@ -482,32 +326,8 @@ function adaptProposalToDrawer(p: ProposalV5): ProposalV2 {
     attachments: [],
     linkedCoordTaskId: p.linkedCoordTaskId,
     linkedCoordTaskCode: p.linkedCoordTaskCode,
-    // V5 priority
-    priority: p.priority,
-    relatedBlock: p.isCrossBlock
-      ? 'lien_khoi'
-      : p.relatedBlocks[0] === 'VP'
-        ? 'VP'
-        : 'KD',
-    relatedDept: p.relatedDepts[0],
-    relatedBranch: p.relatedFacilities[0],
-    currentSituation: p.currentSituation,
-    problemStatement: p.problemStatement,
-    evidence: p.evidence,
-    proposedSolution: p.proposedSolution,
-    expectedBenefit: p.expectedBenefit,
-    riskIfNot: p.riskIfNot,
-    createCoordAfter: p.afterApproval === 'de_nghi_tao_dieu_phoi',
-    expectedOwner: p.suggestedOwnerName,
-    expectedDeadline: p.suggestedDeadline,
-    expectedDeliverable: p.expectedResult,
-    // V5 mở rộng
-    scopeItems,
-    autoRelatedBlocks: p.relatedBlocks,
-    isCrossBlock: p.isCrossBlock,
-    decisionNeeded: p.decisionRequested,
-    expectedResult: p.expectedResult,
-    source: p.source,
+    // V6 reason
+    reason: p.reason,
   };
 }
 
@@ -526,7 +346,7 @@ export function DeXuatClient(props: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [selected, setSelected] = useState<ProposalV5 | null>(null);
+  const [selected, setSelected] = useState<ProposalV6 | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const refresh = useCallback(() => setReloadKey((k) => k + 1), []);
 
@@ -547,91 +367,61 @@ export function DeXuatClient(props: Props) {
     const taskIdParam = searchParams.get('taskId') ?? searchParams.get('id');
     if (!taskIdParam) return;
     tasksApi.get(taskIdParam)
-      .then((t) => { if (t.kind === 'proposal') setSelected(adaptTaskToProposalV5(t, users)); })
+      .then((t) => { if (t.kind === 'proposal') setSelected(adaptTaskToProposalV6(t, users)); })
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
   // ── Adapt list ────────────────────────────────────────────────────────────
-  const proposals: ProposalV5[] = useMemo(
-    () => tasks.map((t) => adaptTaskToProposalV5(t, users)),
+  const proposals: ProposalV6[] = useMemo(
+    () => tasks.map((t) => adaptTaskToProposalV6(t, users)),
     [tasks, users],
   );
 
-  const dashboardProposals: DashboardProposalV5[] = useMemo(
+  const dashboardProposals: DashboardProposalV6[] = useMemo(
     () => proposals.map(adaptProposalToDashboard),
     [proposals],
   );
 
-  // ── Handlers ──────────────────────────────────────────────────────────────
-  const handleCreateV5 = useCallback(async (payload: CreateProposalPayloadV5) => {
+  // ── Handlers V6 ───────────────────────────────────────────────────────────
+
+  /** V6: tạo đề xuất từ payload 5-trường-nhập của CreateProposalModal V6. */
+  const handleCreate = useCallback(async (payload: CreateProposalPayloadV6) => {
     try {
-      // approverUserIds: V5 chain do hệ thống resolve theo role (CHƯA gắn user thật).
-      // Backend approval bước-bằng-role chưa được wire trong tasksApi → để rỗng.
-      // V6 sẽ: enrich resolvedApproverChain → user thật (qua role→user mapping) trước khi gửi.
+      // Map ngược sang TaskCreate V2:
+      //   title    → title
+      //   kind     → meta.proposalKindV6 (+ proposalType nếu dau_tu)
+      //   reason   → description (server cần)
+      //   estimatedCost → estimatedCost (chỉ khi dau_tu)
+      // approverUserIds V6 chưa resolve → để rỗng (V7 sẽ wire bước-by-role).
       const approverUserIds: string[] = [];
 
-      // proposalType V2 mapping: kind 'dau_tu' (hoặc có cost) → 'tai_chinh', còn lại 'van_hanh'.
-      const isCostBound = payload.kind === 'dau_tu' || (payload.estimatedCost ?? 0) > 0;
-      const proposalTypeV2 = isCostBound ? 'tai_chinh' : 'van_hanh';
-      const financialGroup = isCostBound ? 'chi_khac' : null;
-
-      // Priority V5 → V2 (low/normal/high/urgent)
-      const priorityV2 = payload.priority === 'khan_cap'
-        ? 'urgent'
-        : payload.priority === 'quan_trong'
-          ? 'high'
-          : 'normal';
-
-      // assigneeBlock: KD ưu tiên; cross → KD (server không có 'cross' literal)
-      const assigneeBlock: 'KD' | 'VP' = payload.resolvedBlock === 'VP' ? 'VP' : 'KD';
+      const isInvestment = payload.kind === 'dau_tu';
+      const proposalTypeV2 = isInvestment ? 'tai_chinh' : 'van_hanh';
+      const financialGroup = isInvestment ? 'chi_khac' : null;
 
       const body: any = {
         kind: 'proposal',
         title: payload.title,
-        description: payload.proposedSolution || payload.problemStatement || '',
-        priority: priorityV2,
-        dueDate: payload.suggestedDeadline || null,
-        assigneeBlock,
+        description: payload.reason ?? '',
+        priority: 'normal',
+        dueDate: null,
+        assigneeBlock: currentUserBlock,
         assigneeUserIds: [currentUserId],
         proposalType: proposalTypeV2,
         financialGroup,
-        estimatedCost: payload.estimatedCost ?? null,
+        estimatedCost: isInvestment ? (payload.estimatedCost ?? null) : null,
         approverUserIds,
-        expectedDeliverable:
-          payload.afterApproval === 'de_nghi_tao_dieu_phoi'
-            ? (payload.expectedResult || payload.deploymentNote || null)
-            : (payload.expectedResult || null),
-        // Meta lưu các trường V5 chưa có chỗ trong schema V2.
+        expectedDeliverable: null,
+        // Meta lưu các trường V6 + reverse-compat sang V5.
         meta: {
-          proposalKindV5: payload.kind,
-          priorityV5: payload.priority,
-          source: payload.source,
-          currentSituation: payload.currentSituation,
-          problemStatement: payload.problemStatement,
-          evidence: payload.evidence,
-          proposedSolution: payload.proposedSolution,
-          decisionRequested: payload.decisionRequested,
-          scopeTargets: payload.scopeTargets.map((t) => ({
-            type:
-              t.kind === 'co_so' ? 'facility'
-              : t.kind === 'khoi' ? 'block'
-              : 'dept',
-            id: t.id.split(':').slice(1).join(':') || t.id,
-            label: t.label,
-          })),
-          resolvedBlock: payload.resolvedBlock,
-          isCrossBlock: payload.isCrossBlock,
+          proposalKindV6: payload.kind,
+          reason: payload.reason,
           resolvedApproverChain: payload.resolvedApproverChain,
-          expectedBenefit: payload.expectedBenefit,
-          riskIfNot: payload.riskIfNot,
-          expectedResult: payload.expectedResult,
-          afterApproval: payload.afterApproval,
-          suggestedOwnerUid: payload.suggestedOwnerUid,
-          suggestedOwnerName: payload.suggestedOwnerName,
-          suggestedDeadline: payload.suggestedDeadline,
-          deploymentNote: payload.deploymentNote,
           draftStatus: payload.status, // 'nhap' | 'da_gui'
+          // V5 reverse-compat (cho adapter chỗ khác đọc)
+          proposalKindV5: payload.kind,
+          problemStatement: payload.reason,
         },
       };
       await tasksApi.create(body);
@@ -640,12 +430,12 @@ export function DeXuatClient(props: Props) {
     } catch (e: any) {
       alert(`Tạo đề xuất thất bại: ${e?.message ?? 'lỗi không xác định'}`);
     }
-  }, [currentUserId, refresh]);
+  }, [currentUserId, currentUserBlock, refresh]);
 
   const handleApprove = useCallback(async (id: string, note?: string) => {
     try {
       // eslint-disable-next-line no-console
-      console.log('[de-xuat] approve', { id, note });
+      console.log('[de-xuat V6] approve', { id, note });
       await tasksApi.approve(id, note);
       setSelected(null);
       refresh();
@@ -657,7 +447,7 @@ export function DeXuatClient(props: Props) {
   const handleRequestRevision = useCallback(async (id: string, reason: string) => {
     try {
       // eslint-disable-next-line no-console
-      console.log('[de-xuat] request_revision', { id, reason });
+      console.log('[de-xuat V6] request_revision', { id, reason });
       await tasksApi.requestRevision(id, reason);
       setSelected(null);
       refresh();
@@ -669,7 +459,7 @@ export function DeXuatClient(props: Props) {
   const handleReject = useCallback(async (id: string, reason: string) => {
     try {
       // eslint-disable-next-line no-console
-      console.log('[de-xuat] reject', { id, reason });
+      console.log('[de-xuat V6] reject', { id, reason });
       await tasksApi.reject(id, reason);
       setSelected(null);
       refresh();
@@ -678,41 +468,53 @@ export function DeXuatClient(props: Props) {
     }
   }, [refresh]);
 
+  /** V6: đóng hồ sơ. V7 sẽ wire endpoint backend dedicated. */
   const handleCloseDossier = useCallback(async (id: string) => {
-    // V6 backend sẽ có endpoint dedicated. V5-MVP: alert + log.
     // eslint-disable-next-line no-console
-    console.log('[de-xuat] close_dossier', { id });
-    alert('Đóng hồ sơ — V6 sẽ wire endpoint backend. Đề xuất đã được đánh dấu để theo dõi.');
+    console.log('[de-xuat V6] close_dossier', { id });
+    alert(
+      'Đóng hồ sơ — V7 sẽ wire endpoint backend.\n' +
+      'Đề xuất đã được đánh dấu để theo dõi.',
+    );
     setSelected(null);
   }, []);
 
-  const handleConvertToCoord = useCallback(async (id: string) => {
+  /** V6: Duyệt & Tạo điều phối — gộp 2 action.
+   *  Nếu đề xuất còn đang chờ duyệt → approve trước, sau đó tạo task coord. */
+  const handleApproveAndCreateCoord = useCallback(async (id: string) => {
     const p = proposals.find((x) => x.id === id);
     if (!p) return;
-    if (!confirm('Tạo điều phối từ đề xuất này? Hệ thống sẽ copy nội dung sang module Điều phối.')) return;
+    if (!confirm(
+      `Phê duyệt và tạo điều phối từ đề xuất "${p.title}"?\n\n` +
+      'Hệ thống sẽ chuyển trạng thái sang "Đã tạo điều phối" và mở /dieu-phoi.',
+    )) return;
     try {
-      const block: 'KD' | 'VP' = p.relatedBlocks.includes('KD') ? 'KD' : 'VP';
-      const priorityV2 = p.priority === 'khan_cap'
-        ? 'urgent'
-        : p.priority === 'quan_trong'
-          ? 'high'
-          : 'normal';
+      // 1. Approve trước nếu còn đang chờ
+      if (
+        p.status === 'da_gui' ||
+        p.status === 'dang_xem_xet' ||
+        p.status === 'yeu_cau_bo_sung'
+      ) {
+        // eslint-disable-next-line no-console
+        console.log('[de-xuat V6] approve before create_coord', { id });
+        await tasksApi.approve(id);
+      }
+      // 2. Tạo task coord assignment với meta tham chiếu
+      //    SPEC: CHỈ map 4 field — title / reason→description / file / mã tham chiếu.
+      //    KHÔNG map Owner/KPI/Deadline (xác định tại Điều phối).
       const body: any = {
         kind: 'assignment',
         title: p.title,
         description: [
-          p.proposedSolution ? `Giải pháp: ${p.proposedSolution}` : '',
-          p.scopeTargets.length > 0
-            ? `Phạm vi: ${p.scopeTargets.map((s) => s.label).join(' · ')}`
-            : '',
+          p.reason ?? '',
           `Sinh từ đề xuất ${p.code}`,
         ].filter(Boolean).join('\n\n'),
-        priority: priorityV2,
-        dueDate: p.suggestedDeadline || null,
-        assigneeBlock: block,
-        assigneeUserIds: p.suggestedOwnerUid ? [p.suggestedOwnerUid] : [],
-        goal: p.expectedBenefit || null,
-        expectedDeliverable: p.expectedResult || null,
+        priority: 'normal',
+        dueDate: null,
+        assigneeBlock: p.creatorBlock,
+        assigneeUserIds: [],
+        goal: null,
+        expectedDeliverable: null,
         meta: {
           fromProposalId: p.id,
           fromProposalCode: p.code,
@@ -722,27 +524,9 @@ export function DeXuatClient(props: Props) {
       alert(`Đã tạo điều phối từ đề xuất ${p.code}. Đang chuyển sang module Điều phối...`);
       router.push('/dieu-phoi');
     } catch (e: any) {
-      alert(`Tạo điều phối thất bại: ${e?.message ?? 'lỗi không xác định'}`);
-    }
-  }, [proposals, router]);
-
-  /** "Duyệt & Tạo điều phối" — gộp 2 action. Nếu chưa duyệt thì approve trước. */
-  const handleApproveAndCreateCoord = useCallback(async (id: string) => {
-    const p = proposals.find((x) => x.id === id);
-    if (!p) return;
-    if (!confirm(`Duyệt và tạo điều phối từ đề xuất "${p.title}"?`)) return;
-    try {
-      if (p.status === 'da_gui' || p.status === 'dang_xem_xet' || p.status === 'yeu_cau_bo_sung') {
-        // eslint-disable-next-line no-console
-        console.log('[de-xuat] approve before create_coord', { id });
-        await tasksApi.approve(id);
-      }
-      // Sau khi approve, dùng cùng flow convert
-      await handleConvertToCoord(id);
-    } catch (e: any) {
       alert(`Duyệt & Tạo điều phối thất bại: ${e?.message ?? 'lỗi không xác định'}`);
     }
-  }, [proposals, handleConvertToCoord]);
+  }, [proposals, router]);
 
   // ── Action dispatcher từ DexuatTable ──────────────────────────────────────
   const handleTableAction = useCallback((action: ActionKey, id: string) => {
@@ -783,7 +567,9 @@ export function DeXuatClient(props: Props) {
 
   // ── Render ────────────────────────────────────────────────────────────────
   const totalCount = proposals.length;
-  const todayStr = new Date().toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' });
+  const todayStr = new Date().toLocaleDateString('vi-VN', {
+    weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric',
+  });
 
   return (
     <div className="max-w-screen-2xl mx-auto space-y-4">
@@ -830,14 +616,14 @@ export function DeXuatClient(props: Props) {
         </div>
       ) : (
         <>
-          {/* Dashboard V5 — 7 KPI + 3 biểu đồ + bảng điểm nghẽn */}
+          {/* Dashboard V6 — 7 KPI + 1 Donut "Cơ cấu theo loại" */}
           <DexuatDashboard
             proposals={dashboardProposals}
             currentUserUid={currentUserId}
             currentUserRole={currentUserRole}
           />
 
-          {/* Table V5 — 11 cột + cột "Sau duyệt" + 6 action */}
+          {/* Table V6 — 7 tabs + 8 cột + dropdown 4 action */}
           <DexuatTable
             proposals={proposals}
             currentUserUid={currentUserId}
@@ -848,12 +634,12 @@ export function DeXuatClient(props: Props) {
         </>
       )}
 
-      {/* Create modal V5 */}
+      {/* Create modal V6 — 5 trường nhập */}
       {showCreate && (
         <CreateProposalModal
           open
           onClose={() => setShowCreate(false)}
-          onSubmitV5={handleCreateV5}
+          onSubmitV6={handleCreate}
           users={users.map((u) => ({ id: u.id, name: u.name, roleId: u.roleId }))}
           currentUserRole={currentUserRole}
           currentUserName={currentUserName}
@@ -861,7 +647,7 @@ export function DeXuatClient(props: Props) {
         />
       )}
 
-      {/* Detail drawer V5 */}
+      {/* Detail drawer V6 — 5 section + 4 nút duyệt */}
       {selected && (
         <ProposalDetailDrawer
           proposal={adaptProposalToDrawer(selected)}
@@ -871,7 +657,7 @@ export function DeXuatClient(props: Props) {
           onApprove={handleApprove}
           onReject={handleReject}
           onRequestRevision={handleRequestRevision}
-          onConvertToCoord={handleConvertToCoord}
+          onApproveAndCreateCoord={handleApproveAndCreateCoord}
           onCloseDossier={handleCloseDossier}
         />
       )}

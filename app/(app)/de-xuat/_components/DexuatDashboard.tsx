@@ -1,62 +1,52 @@
 'use client';
 
-// Dashboard /de-xuat V5 — 7 KPI · 3 biểu đồ · bảng điểm nghẽn
-// Tiếng Việt CÓ DẤU đầy đủ. Tailwind only. Không phụ thuộc thư viện chart ngoài.
-//
-// Tầng 1 — 7 KPI: Chờ tôi quyết · Tôi tạo · Đang xem xét · Yêu cầu bổ sung
-//                · Đã phê duyệt · Đã chuyển điều phối · Quá SLA
-// Tầng 2 — 3 biểu đồ:
-//   A) Cơ cấu theo loại (Donut: 5 loại V5)
-//   B) Đề xuất theo đơn vị ảnh hưởng (horizontal bar — Top 8)
-//   C) Thời gian duyệt TB theo người duyệt (horizontal bar — Top 5)
-// Tầng 3 — Bảng "Điểm nghẽn đề xuất" (Top 5)
+// Dashboard /de-xuat V6 — SIMPLIFIED
+// Layout 2 tầng:
+//   Tầng 1 — 7 KPI cards: Chờ tôi duyệt · Đang xem xét · YCBS
+//            · Đã phê duyệt · Đã tạo điều phối · Từ chối · Quá SLA
+//   Tầng 2 — 1 Donut "Cơ cấu đề xuất theo loại" (5 loại V6)
+// BỎ so với V5: card "Tôi tạo" · bar "Đơn vị ảnh hưởng"
+//             · bar "Thời gian duyệt TB" · bảng "Điểm nghẽn"
+// Tiếng Việt CÓ DẤU đầy đủ. Tailwind only. Không phụ thuộc chart lib.
 
 import { useMemo } from 'react';
 import {
-  FileEdit,
+  AlertCircle,
   Eye,
   Send,
   CheckCircle2,
   ArrowRightCircle,
+  XCircle,
   Clock,
-  AlertCircle,
 } from 'lucide-react';
 
 // ───────────────────────────────────────────────────────────────
-// Types V5 — định nghĩa cục bộ để dashboard self-contained.
-// 5 loại mới: van_hanh · cai_tien · dau_tu · chien_luoc · khan_cap
-// 8 status: nhap · da_gui · dang_xem_xet · yeu_cau_bo_sung
-//          · da_phe_duyet · tu_choi · chuyen_dieu_phoi · dong_ho_so
+// Types V6 — định nghĩa cục bộ để dashboard self-contained.
+// 5 loại: van_hanh · cai_tien · dau_tu · chien_luoc · khan_cap
+// 7 status V6: nhap · da_gui · dang_xem_xet · yeu_cau_bo_sung
+//            · da_phe_duyet · da_tao_dieu_phoi · dong_ho_so (+ tu_choi)
 // ───────────────────────────────────────────────────────────────
 
-type ProposalKindV5 =
+export type ProposalKindV6 =
   | 'van_hanh'
   | 'cai_tien'
   | 'dau_tu'
   | 'chien_luoc'
   | 'khan_cap';
 
-type ProposalStatusV5 =
+export type ProposalStatusV6 =
   | 'nhap'
   | 'da_gui'
   | 'dang_xem_xet'
   | 'yeu_cau_bo_sung'
   | 'da_phe_duyet'
-  | 'tu_choi'
+  | 'da_tao_dieu_phoi'
+  // Backward compat alias V5: chuyen_dieu_phoi === da_tao_dieu_phoi
   | 'chuyen_dieu_phoi'
-  | 'dong_ho_so';
+  | 'dong_ho_so'
+  | 'tu_choi';
 
-type PriorityV5 = 'binh_thuong' | 'quan_trong' | 'khan_cap';
-
-// Phạm vi ảnh hưởng multi-select: TP/QLCS/cơ sở/khối
-// scopeTargets item: 'tp:KE' | 'qlcs:HM' | 'facility:HM' | 'block:KD' | 'block:VP'
-export interface ScopeTarget {
-  id: string;     // ví dụ 'facility:HM'
-  label: string;  // ví dụ 'Cơ sở Hai Mặt'
-  kind?: 'tp' | 'qlcs' | 'facility' | 'block';
-}
-
-export interface ApproverStepV5 {
+export interface ApproverStepV6 {
   uid?: string;
   roleCode?: string;
   name: string;
@@ -65,33 +55,35 @@ export interface ApproverStepV5 {
   notes?: string;
 }
 
-export interface ProposalV5 {
+export interface ProposalV6 {
   id: string;
   code: string;
   title: string;
-  kind: ProposalKindV5;
-  status: ProposalStatusV5;
-  priority?: PriorityV5;
-
-  // Phạm vi ảnh hưởng MULTI-SELECT + AUTO khối liên quan
-  scopeTargets?: ScopeTarget[];
-  relatedBlocks?: ('KD' | 'VP')[]; // suy luận từ scopeTargets
+  kind: ProposalKindV6;
+  status: ProposalStatusV6;
 
   creatorUid: string;
   creatorName?: string;
 
-  // Chuỗi duyệt: items dạng "user:UID" hoặc "role:CODE"
-  approverChain: string[];
+  // Chuỗi duyệt: items dạng "user:UID" hoặc "role:CODE", hoặc ApproverStep
+  approverChain: Array<string | ApproverStepV6>;
   approverIdx: number;
-  approverHistory: ApproverStepV5[];
 
   estimatedCost?: number;
   createdAt: string;
   updatedAt: string;
+
+  // ─── Backward-compat fields (V5 legacy, dashboard V6 KHÔNG dùng) ─────────
+  // Giữ optional để adapter cũ trong DeXuatClient (truyền priority/scopeTargets
+  // /relatedBlocks/approverHistory) vẫn typecheck. V6 dashboard bỏ qua hết.
+  priority?: string;
+  scopeTargets?: Array<{ id: string; label: string; kind?: string }>;
+  relatedBlocks?: Array<'KD' | 'VP'>;
+  approverHistory?: ApproverStepV6[];
 }
 
 interface Props {
-  proposals: ProposalV5[];
+  proposals: ProposalV6[];
   currentUserUid: string;
   currentUserRole: string;
 }
@@ -101,12 +93,10 @@ interface Props {
 // ───────────────────────────────────────────────────────────────
 const SLA_HOURS: Record<string, number> = {
   TP: 48,
-  GD_KD: 72,
-  GD_VP: 72,
+  GD: 72,
   CEO: 96,
   CT: 96,
   YCBS: 48,
-  KHAN: 24,
 };
 
 function getSlaHoursForStep(step: string | undefined): number {
@@ -114,7 +104,7 @@ function getSlaHoursForStep(step: string | undefined): number {
   const s = step.toUpperCase();
   if (s.includes('CEO')) return SLA_HOURS.CEO;
   if (s.includes('CT') || s.includes('CHU_TICH')) return SLA_HOURS.CT;
-  if (s.includes('GD') || s.includes('GĐ')) return SLA_HOURS.GD_KD;
+  if (s.includes('GD') || s.includes('GĐ')) return SLA_HOURS.GD;
   return SLA_HOURS.TP;
 }
 
@@ -124,22 +114,29 @@ function hoursDiff(fromIso: string, toMs: number): number {
   return (toMs - from) / 3_600_000;
 }
 
-function isPending(s: ProposalStatusV5): boolean {
+function isPending(s: ProposalStatusV6): boolean {
   return s === 'da_gui' || s === 'dang_xem_xet' || s === 'yeu_cau_bo_sung';
 }
 
-function isProposalOverdue(p: ProposalV5, nowMs: number): boolean {
+function getApproverToken(
+  item: string | ApproverStepV6 | undefined
+): string | undefined {
+  if (!item) return undefined;
+  if (typeof item === 'string') return item;
+  if (item.uid) return `user:${item.uid}`;
+  if (item.roleCode) return `role:${item.roleCode}`;
+  return undefined;
+}
+
+function isProposalOverdue(p: ProposalV6, nowMs: number): boolean {
   if (!isPending(p.status)) return false;
-  const currentStep = p.approverChain[p.approverIdx];
-  // Ưu tiên khẩn cấp rút SLA xuống 24h
-  const baseSla = getSlaHoursForStep(currentStep);
-  const slaH = p.priority === 'khan_cap' ? Math.min(baseSla, SLA_HOURS.KHAN) : baseSla;
+  const token = getApproverToken(p.approverChain[p.approverIdx]);
+  const slaH = getSlaHoursForStep(token);
   return hoursDiff(p.updatedAt || p.createdAt, nowMs) > slaH;
 }
 
 // ───────────────────────────────────────────────────────────────
 // Helpers cho approver chain
-// approverChain item dạng "user:UID" hoặc "role:CODE"
 // ───────────────────────────────────────────────────────────────
 function parseApprover(token: string | undefined): {
   kind: 'user' | 'role' | 'unknown';
@@ -151,27 +148,28 @@ function parseApprover(token: string | undefined): {
   return { kind: 'unknown', value: token };
 }
 
-function isCurrentApprover(p: ProposalV5, uid: string, role: string): boolean {
+function isCurrentApprover(p: ProposalV6, uid: string, role: string): boolean {
   if (!isPending(p.status)) return false;
-  const cur = parseApprover(p.approverChain[p.approverIdx]);
+  const token = getApproverToken(p.approverChain[p.approverIdx]);
+  const cur = parseApprover(token);
   if (cur.kind === 'user') return cur.value === uid;
   if (cur.kind === 'role') return cur.value === role;
   return false;
 }
 
 // ───────────────────────────────────────────────────────────────
-// Màu theo loại đề xuất V5 (donut + legend)
-// Vận hành sky · Cải tiến emerald · Đầu tư amber · Chiến lược rose · Khẩn cấp orange
+// Màu theo loại đề xuất V6 (donut + legend) — theo SPEC
+// Vận hành sky · Cải tiến emerald · Đầu tư amber · Chiến lược violet · Khẩn cấp rose
 // ───────────────────────────────────────────────────────────────
-const KIND_COLOR: Record<ProposalKindV5, string> = {
+const KIND_COLOR: Record<ProposalKindV6, string> = {
   van_hanh: '#0ea5e9', // sky-500
   cai_tien: '#10b981', // emerald-500
   dau_tu: '#f59e0b', // amber-500
-  chien_luoc: '#f43f5e', // rose-500
-  khan_cap: '#f97316', // orange-500
+  chien_luoc: '#8b5cf6', // violet-500
+  khan_cap: '#f43f5e', // rose-500
 };
 
-const KIND_LABEL: Record<ProposalKindV5, string> = {
+const KIND_LABEL: Record<ProposalKindV6, string> = {
   van_hanh: 'Vận hành',
   cai_tien: 'Cải tiến',
   dau_tu: 'Đầu tư',
@@ -190,7 +188,7 @@ export default function DexuatDashboard({
   const nowMs = Date.now();
 
   const stats = useMemo(() => {
-    const kindCount: Record<ProposalKindV5, number> = {
+    const kindCount: Record<ProposalKindV6, number> = {
       van_hanh: 0,
       cai_tien: 0,
       dau_tu: 0,
@@ -199,94 +197,24 @@ export default function DexuatDashboard({
     };
 
     let cardCho = 0;
-    let cardToiTao = 0;
     let cardDangXX = 0;
     let cardYCBS = 0;
     let cardDuyet = 0;
     let cardDP = 0;
+    let cardTuChoi = 0;
     let cardQuaSLA = 0;
-
-    // Thời gian duyệt TB theo người duyệt
-    type ApproverAgg = { name: string; totalHours: number; count: number };
-    const approverTime = new Map<string, ApproverAgg>();
-
-    // Đề xuất theo đơn vị ảnh hưởng (scopeTargets)
-    type ScopeAgg = { id: string; label: string; count: number };
-    const scopeAgg = new Map<string, ScopeAgg>();
-
-    // Điểm nghẽn — gom theo người duyệt hiện tại
-    type Bottleneck = {
-      key: string;
-      name: string;
-      holding: number;
-      longestHours: number;
-      kinds: Set<ProposalKindV5>;
-    };
-    const bottleneck = new Map<string, Bottleneck>();
 
     for (const p of proposals) {
       if (kindCount[p.kind] !== undefined) kindCount[p.kind] += 1;
 
       if (isCurrentApprover(p, currentUserUid, currentUserRole)) cardCho += 1;
-      if (p.creatorUid === currentUserUid) cardToiTao += 1;
       if (p.status === 'dang_xem_xet') cardDangXX += 1;
       if (p.status === 'yeu_cau_bo_sung') cardYCBS += 1;
       if (p.status === 'da_phe_duyet') cardDuyet += 1;
-      if (p.status === 'chuyen_dieu_phoi') cardDP += 1;
+      if (p.status === 'da_tao_dieu_phoi' || p.status === 'chuyen_dieu_phoi')
+        cardDP += 1;
+      if (p.status === 'tu_choi') cardTuChoi += 1;
       if (isProposalOverdue(p, nowMs)) cardQuaSLA += 1;
-
-      // Aggregate scopeTargets
-      for (const t of p.scopeTargets || []) {
-        if (!t || !t.id) continue;
-        const cur = scopeAgg.get(t.id) || { id: t.id, label: t.label || t.id, count: 0 };
-        cur.count += 1;
-        scopeAgg.set(t.id, cur);
-      }
-
-      // Thời gian duyệt TB từ approverHistory (gap giữa decidedAt liên tiếp)
-      let prevAt = p.createdAt;
-      for (const h of p.approverHistory || []) {
-        if (!h.decidedAt || !h.name) {
-          if (h.decidedAt) prevAt = h.decidedAt;
-          continue;
-        }
-        const dur = hoursDiff(prevAt, new Date(h.decidedAt).getTime());
-        if (dur >= 0 && Number.isFinite(dur)) {
-          const cur =
-            approverTime.get(h.name) || { name: h.name, totalHours: 0, count: 0 };
-          cur.totalHours += dur;
-          cur.count += 1;
-          approverTime.set(h.name, cur);
-        }
-        prevAt = h.decidedAt;
-      }
-
-      // Điểm nghẽn — proposal còn pending
-      if (isPending(p.status)) {
-        const tok = p.approverChain[p.approverIdx];
-        const parsed = parseApprover(tok);
-        const key = tok || 'unknown';
-        const name =
-          parsed.kind === 'user'
-            ? `Người duyệt #${parsed.value.slice(0, 6)}`
-            : parsed.kind === 'role'
-              ? parsed.value
-              : 'Chưa xác định';
-        const waitedH = hoursDiff(p.updatedAt || p.createdAt, nowMs);
-        const cur =
-          bottleneck.get(key) ||
-          {
-            key,
-            name,
-            holding: 0,
-            longestHours: 0,
-            kinds: new Set<ProposalKindV5>(),
-          };
-        cur.holding += 1;
-        if (waitedH > cur.longestHours) cur.longestHours = waitedH;
-        cur.kinds.add(p.kind);
-        bottleneck.set(key, cur);
-      }
     }
 
     const totalKind =
@@ -296,36 +224,16 @@ export default function DexuatDashboard({
       kindCount.chien_luoc +
       kindCount.khan_cap;
 
-    const scopeTop = Array.from(scopeAgg.values())
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 8);
-
-    const approverTop = Array.from(approverTime.values())
-      .map((a) => ({
-        name: a.name,
-        avgH: a.count > 0 ? a.totalHours / a.count : 0,
-        count: a.count,
-      }))
-      .sort((a, b) => b.avgH - a.avgH)
-      .slice(0, 5);
-
-    const bottleneckTop = Array.from(bottleneck.values())
-      .sort((a, b) => b.holding - a.holding || b.longestHours - a.longestHours)
-      .slice(0, 5);
-
     return {
       cardCho,
-      cardToiTao,
       cardDangXX,
       cardYCBS,
       cardDuyet,
       cardDP,
+      cardTuChoi,
       cardQuaSLA,
       kindCount,
       totalKind,
-      scopeTop,
-      approverTop,
-      bottleneckTop,
     };
   }, [proposals, currentUserUid, currentUserRole, nowMs]);
 
@@ -334,217 +242,94 @@ export default function DexuatDashboard({
       {/* Tầng 1 — 7 KPI cards */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
         <KpiCard
-          label="Chờ tôi quyết"
+          label="Chờ tôi duyệt"
           value={stats.cardCho}
-          icon={<AlertCircle className="h-4 w-4" />}
+          icon={<AlertCircle size={18} />}
           tone="amber"
-          sub="Đến lượt duyệt"
-        />
-        <KpiCard
-          label="Tôi tạo"
-          value={stats.cardToiTao}
-          icon={<FileEdit className="h-4 w-4" />}
-          tone="sky"
-          sub="Tổng do tôi gửi"
         />
         <KpiCard
           label="Đang xem xét"
           value={stats.cardDangXX}
-          icon={<Eye className="h-4 w-4" />}
+          icon={<Eye size={18} />}
           tone="sky"
-          sub="Đang trong luồng"
         />
         <KpiCard
-          label="Yêu cầu bổ sung"
+          label="YCBS"
           value={stats.cardYCBS}
-          icon={<Send className="h-4 w-4" />}
+          icon={<Send size={18} />}
           tone="orange"
-          sub="Cần chỉnh sửa"
         />
         <KpiCard
           label="Đã phê duyệt"
           value={stats.cardDuyet}
-          icon={<CheckCircle2 className="h-4 w-4" />}
+          icon={<CheckCircle2 size={18} />}
           tone="emerald"
-          sub="Sẵn sàng triển khai"
         />
         <KpiCard
-          label="Đã chuyển điều phối"
+          label="Đã tạo điều phối"
           value={stats.cardDP}
-          icon={<ArrowRightCircle className="h-4 w-4" />}
+          icon={<ArrowRightCircle size={18} />}
           tone="violet"
-          sub="Đã tạo task ĐP"
+        />
+        <KpiCard
+          label="Từ chối"
+          value={stats.cardTuChoi}
+          icon={<XCircle size={18} />}
+          tone="rose"
         />
         <KpiCard
           label="Quá SLA"
           value={stats.cardQuaSLA}
-          icon={<Clock className="h-4 w-4" />}
+          icon={<Clock size={18} />}
           tone="rose-dark"
-          sub="Vượt thời hạn"
         />
       </div>
 
-      {/* Tầng 2 — 3 biểu đồ */}
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-        {/* A) Donut theo loại */}
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <h3 className="mb-3 text-sm font-semibold text-slate-700">Cơ cấu theo loại</h3>
-          <div className="flex items-center gap-4">
+      {/* Tầng 2 — Donut "Cơ cấu đề xuất theo loại" */}
+      <div className="rounded-xl border border-slate-200 bg-white p-5">
+        <h3 className="mb-4 text-sm font-semibold text-slate-700">
+          Cơ cấu đề xuất theo loại
+        </h3>
+        <div className="grid grid-cols-1 items-center gap-6 lg:grid-cols-2">
+          <div className="flex justify-center lg:justify-start">
             <DonutChart
-              segments={(Object.keys(stats.kindCount) as ProposalKindV5[]).map((k) => ({
-                value: stats.kindCount[k],
-                color: KIND_COLOR[k],
-                label: KIND_LABEL[k],
-              }))}
+              segments={(Object.keys(stats.kindCount) as ProposalKindV6[]).map(
+                (k) => ({
+                  value: stats.kindCount[k],
+                  color: KIND_COLOR[k],
+                  label: KIND_LABEL[k],
+                })
+              )}
               total={stats.totalKind}
             />
-            <ul className="flex-1 space-y-1.5 text-xs">
-              {(Object.keys(stats.kindCount) as ProposalKindV5[]).map((k) => (
-                <li key={k} className="flex items-center gap-2">
+          </div>
+          <ul className="space-y-2.5 text-sm">
+            {(Object.keys(stats.kindCount) as ProposalKindV6[]).map((k) => {
+              const c = stats.kindCount[k];
+              const pct =
+                stats.totalKind > 0
+                  ? Math.round((c / stats.totalKind) * 100)
+                  : 0;
+              return (
+                <li key={k} className="flex items-center gap-3">
                   <span
-                    className="h-2.5 w-2.5 rounded-sm"
+                    className="h-3 w-3 rounded-sm"
                     style={{ backgroundColor: KIND_COLOR[k] }}
                   />
-                  <span className="flex-1 truncate text-slate-600">{KIND_LABEL[k]}</span>
-                  <span className="font-semibold tabular-nums text-slate-800">
-                    {stats.kindCount[k]}
+                  <span className="flex-1 truncate text-slate-700">
+                    {KIND_LABEL[k]}
+                  </span>
+                  <span className="tabular-nums font-semibold text-slate-800">
+                    {c}
+                  </span>
+                  <span className="w-12 text-right text-xs tabular-nums text-slate-500">
+                    {pct}%
                   </span>
                 </li>
-              ))}
-            </ul>
-          </div>
+              );
+            })}
+          </ul>
         </div>
-
-        {/* B) Đề xuất theo đơn vị ảnh hưởng — Top 8 horizontal bar */}
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <h3 className="mb-3 text-sm font-semibold text-slate-700">
-            Đơn vị bị ảnh hưởng nhiều nhất
-          </h3>
-          {stats.scopeTop.length === 0 ? (
-            <p className="py-6 text-center text-xs text-slate-400">
-              Chưa có dữ liệu phạm vi ảnh hưởng
-            </p>
-          ) : (
-            <ul className="space-y-2">
-              {(() => {
-                const maxC = Math.max(...stats.scopeTop.map((s) => s.count), 1);
-                return stats.scopeTop.map((s) => {
-                  const pct = Math.round((s.count / maxC) * 100);
-                  return (
-                    <li key={s.id}>
-                      <div className="mb-1 flex items-center justify-between text-xs">
-                        <span className="truncate font-medium text-slate-700">
-                          {s.label}
-                        </span>
-                        <span className="tabular-nums text-slate-500">{s.count}</span>
-                      </div>
-                      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
-                        <div
-                          className="h-full bg-emerald-500 transition-all"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    </li>
-                  );
-                });
-              })()}
-            </ul>
-          )}
-        </div>
-
-        {/* C) Thời gian duyệt TB theo người duyệt — Top 5 */}
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <h3 className="mb-3 text-sm font-semibold text-slate-700">
-            Thời gian duyệt TB theo người duyệt
-          </h3>
-          {stats.approverTop.length === 0 ? (
-            <p className="py-6 text-center text-xs text-slate-400">
-              Chưa có lịch sử duyệt
-            </p>
-          ) : (
-            <ul className="space-y-2.5">
-              {(() => {
-                const maxAvg = Math.max(...stats.approverTop.map((a) => a.avgH), 1);
-                return stats.approverTop.map((a) => {
-                  const pct = Math.round((a.avgH / maxAvg) * 100);
-                  return (
-                    <li key={a.name}>
-                      <div className="mb-1 flex items-center justify-between text-xs">
-                        <span className="truncate font-medium text-slate-700">{a.name}</span>
-                        <span className="tabular-nums text-slate-500">
-                          {a.avgH.toFixed(1)}h · {a.count} lượt
-                        </span>
-                      </div>
-                      <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
-                        <div
-                          className="h-full bg-amber-500 transition-all"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    </li>
-                  );
-                });
-              })()}
-            </ul>
-          )}
-        </div>
-      </div>
-
-      {/* Tầng 3 — Bảng điểm nghẽn */}
-      <div className="overflow-hidden rounded-xl border border-rose-200 bg-white">
-        <div className="border-b border-rose-200 bg-rose-50/60 px-4 py-2.5">
-          <h3 className="text-sm font-semibold text-rose-800">Điểm nghẽn đề xuất</h3>
-          <p className="text-[11px] text-rose-700/80">
-            Người duyệt đang giữ nhiều đề xuất nhất / chờ lâu nhất
-          </p>
-        </div>
-        {stats.bottleneckTop.length === 0 ? (
-          <p className="py-8 text-center text-sm text-emerald-600">
-            ✓ Không có điểm nghẽn — luồng duyệt đang thông suốt
-          </p>
-        ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-              <tr>
-                <th className="px-4 py-2 text-left font-semibold">Người duyệt hiện tại</th>
-                <th className="px-4 py-2 text-right font-semibold">Số đề xuất đang giữ</th>
-                <th className="px-4 py-2 text-right font-semibold">Chờ lâu nhất</th>
-                <th className="px-4 py-2 text-left font-semibold">Loại đề xuất đang chờ</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {stats.bottleneckTop.map((b) => (
-                <tr key={b.key} className="hover:bg-slate-50/60">
-                  <td className="px-4 py-2 font-medium text-slate-800">{b.name}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">
-                    <span className="inline-flex min-w-[2rem] justify-center rounded-md bg-rose-50 px-2 py-0.5 font-semibold text-rose-700">
-                      {b.holding}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2 text-right tabular-nums text-slate-700">
-                    {formatHoursToDays(b.longestHours)}
-                  </td>
-                  <td className="px-4 py-2">
-                    <div className="flex flex-wrap gap-1">
-                      {Array.from(b.kinds).map((k) => (
-                        <span
-                          key={k}
-                          className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-1.5 py-0.5 text-[11px] text-slate-700"
-                        >
-                          <span
-                            className="h-1.5 w-1.5 rounded-full"
-                            style={{ backgroundColor: KIND_COLOR[k] }}
-                          />
-                          {KIND_LABEL[k]}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
       </div>
     </div>
   );
@@ -554,15 +339,15 @@ export default function DexuatDashboard({
 // Sub-components
 // ───────────────────────────────────────────────────────────────
 
-type Tone = 'amber' | 'sky' | 'orange' | 'emerald' | 'rose' | 'violet' | 'rose-dark';
+type Tone = 'amber' | 'sky' | 'orange' | 'emerald' | 'violet' | 'rose' | 'rose-dark';
 
 const TONE_STYLES: Record<Tone, { bg: string; text: string; ring: string }> = {
   amber: { bg: 'bg-amber-50', text: 'text-amber-700', ring: 'ring-amber-200' },
   sky: { bg: 'bg-sky-50', text: 'text-sky-700', ring: 'ring-sky-200' },
   orange: { bg: 'bg-orange-50', text: 'text-orange-700', ring: 'ring-orange-200' },
   emerald: { bg: 'bg-emerald-50', text: 'text-emerald-700', ring: 'ring-emerald-200' },
-  rose: { bg: 'bg-rose-50', text: 'text-rose-700', ring: 'ring-rose-200' },
   violet: { bg: 'bg-violet-50', text: 'text-violet-700', ring: 'ring-violet-200' },
+  rose: { bg: 'bg-rose-50', text: 'text-rose-700', ring: 'ring-rose-200' },
   'rose-dark': { bg: 'bg-rose-100', text: 'text-rose-800', ring: 'ring-rose-300' },
 };
 
@@ -571,29 +356,24 @@ function KpiCard({
   value,
   icon,
   tone,
-  sub,
 }: {
   label: string;
   value: number;
   icon: React.ReactNode;
   tone: Tone;
-  sub?: string;
 }) {
   const t = TONE_STYLES[tone];
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-3 transition hover:shadow-md">
-      <div className="mb-1.5 flex items-center justify-between">
+      <div className="mb-2 flex items-center justify-between">
         <span
-          className={`inline-flex h-7 w-7 items-center justify-center rounded-lg ${t.bg} ${t.text} ring-1 ${t.ring}`}
+          className={`inline-flex h-8 w-8 items-center justify-center rounded-lg ${t.bg} ${t.text} ring-1 ${t.ring}`}
         >
           {icon}
         </span>
       </div>
-      <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
-        {label}
-      </p>
-      <p className={`mt-0.5 text-2xl font-bold tabular-nums ${t.text}`}>{value}</p>
-      {sub && <p className="mt-0.5 truncate text-[10px] text-slate-400">{sub}</p>}
+      <p className="text-sm font-medium text-slate-600">{label}</p>
+      <p className={`mt-1 text-2xl font-bold tabular-nums ${t.text}`}>{value}</p>
     </div>
   );
 }
@@ -605,9 +385,9 @@ function DonutChart({
   segments: { value: number; color: string; label: string }[];
   total: number;
 }) {
-  const size = 120;
-  const radius = 50;
-  const stroke = 18;
+  const size = 220;
+  const radius = 88;
+  const stroke = 32;
   const cx = size / 2;
   const cy = size / 2;
   const circ = 2 * Math.PI * radius;
@@ -628,9 +408,9 @@ function DonutChart({
           y={cy}
           textAnchor="middle"
           dominantBaseline="central"
-          className="fill-slate-400 text-[10px]"
+          className="fill-slate-400 text-sm"
         >
-          Chưa có
+          Chưa có dữ liệu
         </text>
       </svg>
     );
@@ -670,19 +450,19 @@ function DonutChart({
       })}
       <text
         x={cx}
-        y={cy - 4}
+        y={cy - 8}
         textAnchor="middle"
         dominantBaseline="central"
-        className="fill-slate-800 text-base font-bold"
+        className="fill-slate-800 text-3xl font-bold"
       >
         {total}
       </text>
       <text
         x={cx}
-        y={cy + 12}
+        y={cy + 18}
         textAnchor="middle"
         dominantBaseline="central"
-        className="fill-slate-500 text-[10px]"
+        className="fill-slate-500 text-xs"
       >
         đề xuất
       </text>
@@ -690,16 +470,11 @@ function DonutChart({
   );
 }
 
-function formatHoursToDays(h: number): string {
-  if (!Number.isFinite(h) || h < 0) return '—';
-  if (h < 24) return `${h.toFixed(1)} giờ`;
-  const days = h / 24;
-  return `${days.toFixed(1)} ngày`;
-}
-
 // ───────────────────────────────────────────────────────────────
-// Backward-compat alias — adapter cũ (DeXuatClient V3) vẫn import
-// `ProposalV3` từ file này. Sẽ remove khi DeXuatClient migrate V5.
+// Backward-compat alias — adapter cũ (DeXuatClient V3/V5) vẫn import
+// `ProposalV3` / `ProposalV5` từ file này. Giữ alias để build không vỡ.
 // ───────────────────────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-export type ProposalV3 = ProposalV5;
+export type ProposalV3 = ProposalV6;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export type ProposalV5 = ProposalV6;

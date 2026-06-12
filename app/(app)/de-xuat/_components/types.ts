@@ -1,15 +1,33 @@
-// Đề xuất V5 — types theo SPEC anh chốt 2026-06-12
-// Workflow 8 trạng thái: Nháp → Đã gửi → Đang xem xét → Yêu cầu bổ sung
-//   → Đã phê duyệt / Từ chối → Chuyển điều phối → Đóng hồ sơ
-// 5 ProposalKind mới: van_hanh · cai_tien · dau_tu · chien_luoc · khan_cap
-// 3 Priority: binh_thuong · quan_trong · khan_cap
-// 6 ProposalSource: phat_sinh · kpi · hop · ceo_giao · khach_hang_phan_anh · khac
-// Phạm vi ảnh hưởng MULTI-SELECT (dept/facility/role/block) → AUTO suy luận liên khối
-// Hiệu quả kỳ vọng = textarea expectedResult (KHÔNG dùng KPI multi-row)
-// Sau duyệt = 2 option: chi_phe_duyet | de_nghi_tao_dieu_phoi
-// Giữ alias `Proposal = ProposalV5` để code khác trong /de-xuat import được.
+// Đề xuất V6 — types theo SPEC chốt 2026-06-12
+// ──────────────────────────────────────────────────────────────────────────
+// MINIMAL: form CreateProposalModal V6 chỉ còn 5 trường nhập
+//   title / kind / reason / estimatedCost? (khi kind='dau_tu') / attachments?
+// BỎ khỏi UI form: priority / source / scopeTargets / currentSituation /
+// problemStatement / evidence / proposedSolution / decisionRequested /
+// expectedBenefit / riskIfNot / expectedResult / afterApproval /
+// suggestedOwner* / deploymentNote / relatedBlocks / relatedDepts /
+// relatedFacilities / isCrossBlock.
+//
+// LƯU Ý BACKWARD COMPAT: các sibling V5 (DexuatTable / DexuatDashboard /
+// ProposalDetailDrawer / CreateProposalModal / DeXuatClient) chưa migrate
+// sang V6. Để KHÔNG vỡ build:
+//   - giữ alias type: Priority / ProposalSource / ScopeTarget /
+//     ScopeTargetType / AfterApproval / ProposalAttachment / ApproverStep
+//   - giữ field V5 trên ProposalV6 với CÙNG cardinality cũ (required /
+//     optional) để adapter Task→ProposalV5 trong DeXuatClient compile được
+//   - giữ alias ProposalV5 / ProposalV3 / Proposal = ProposalV6
+//   - giữ storage status `'chuyen_dieu_phoi'` (label V6 hiển thị
+//     "Đã tạo điều phối"). Constant STATUS_DA_TAO_DIEU_PHOI cho code mới.
+//
+// Quy ước: Tiếng Việt CÓ DẤU. Default tone đồng bộ /dieu-phoi.
 
-// ============ 8 ProposalStatus V5 (bỏ dong_y_nguyen_tac từ V3) ============
+// ────────────────────────────────────────────────────────────────────────────
+// V6 STATUS — 7 trạng thái chính + 'tu_choi' = 8 literal
+// ────────────────────────────────────────────────────────────────────────────
+// SPEC V6: Nháp · Đã gửi · Đang xem xét · Yêu cầu bổ sung · Đã phê duyệt ·
+//          Đã tạo điều phối · Đóng hồ sơ (+ Từ chối).
+// Storage value vẫn 'chuyen_dieu_phoi' để tương thích data cũ + sibling V5.
+// UI label đã đổi sang "Đã tạo điều phối" theo SPEC V6 (xem PROPOSAL_STATUS_LABEL).
 export type ProposalStatus =
   | 'nhap'
   | 'da_gui'
@@ -17,12 +35,16 @@ export type ProposalStatus =
   | 'yeu_cau_bo_sung'
   | 'da_phe_duyet'
   | 'tu_choi'
-  | 'chuyen_dieu_phoi'
+  | 'chuyen_dieu_phoi' // SPEC V6 label: "Đã tạo điều phối"
   | 'dong_ho_so';
 
-// ============ 5 ProposalKind V5 (đổi từ V3) ============
-// V3 cũ: van_hanh / nhan_su / mkt_kd / tai_chinh / chien_luoc
-// V5 mới: van_hanh / cai_tien / dau_tu / chien_luoc / khan_cap
+/** SPEC V6: tên trạng thái "Đã tạo điều phối" cho code V6 mới reference.
+ *  Runtime value vẫn = 'chuyen_dieu_phoi' để tương thích storage + sibling V5. */
+export const STATUS_DA_TAO_DIEU_PHOI: ProposalStatus = 'chuyen_dieu_phoi';
+
+// ────────────────────────────────────────────────────────────────────────────
+// V6 KIND — 5 loại mặc định, Admin có thể thêm/sửa/xoá qua Cài đặt
+// ────────────────────────────────────────────────────────────────────────────
 export type ProposalKind =
   | 'van_hanh'
   | 'cai_tien'
@@ -30,10 +52,13 @@ export type ProposalKind =
   | 'chien_luoc'
   | 'khan_cap';
 
-// ============ 3 Priority V5 (V3 4 cấp low/normal/high/urgent → V5 3 cấp) ============
+// ────────────────────────────────────────────────────────────────────────────
+// Legacy V5 type aliases — giữ để sibling V5 chưa migrate vẫn import được
+// ────────────────────────────────────────────────────────────────────────────
+/** @deprecated V6 form không còn dùng priority */
 export type Priority = 'binh_thuong' | 'quan_trong' | 'khan_cap';
 
-// ============ 6 ProposalSource V5 ============
+/** @deprecated V6 form không còn dùng source */
 export type ProposalSource =
   | 'phat_sinh'
   | 'kpi'
@@ -42,42 +67,75 @@ export type ProposalSource =
   | 'khach_hang_phan_anh'
   | 'khac';
 
-// ============ Scope target — multi-select phạm vi ảnh hưởng ============
+/** @deprecated V6 form không còn multi-select scope */
 export type ScopeTargetType = 'dept' | 'facility' | 'role' | 'block';
 
+/** @deprecated V6 form không còn multi-select scope */
 export interface ScopeTarget {
   type: ScopeTargetType;
-  // id chuẩn: 'MKT' | 'HM' | 'TP_DT' | 'KD' | 'VP' …
   id: string;
-  // label hiển thị: 'TP Marketing' | 'GP HM' | …
   label: string;
 }
 
-// ============ After approval — 2 option accordion sau khi duyệt ============
+/** @deprecated V6 thay bằng nút "Duyệt & Tạo điều phối" trong drawer */
 export type AfterApproval = 'chi_phe_duyet' | 'de_nghi_tao_dieu_phoi';
 
-// ============ Attachment ============
+// ────────────────────────────────────────────────────────────────────────────
+// Attachment + Approver chain
+// ────────────────────────────────────────────────────────────────────────────
 export interface ProposalAttachment {
   name: string;
   url?: string;
   size?: number;
 }
 
-// ============ Approver chain step ============
 export interface ApproverStep {
   uid?: string;
   roleCode?: string;
   name: string;
+  reason?: string; // V6: lý do hệ thống gán bước này (rule match)
   decidedAt?: string;
   decision?: 'approved' | 'rejected' | 'requested_revision';
   notes?: string;
 }
 
-// ============ ProposalV5 — 5 block ============
-export interface ProposalV5 {
-  // ----- Standard -----
+// ────────────────────────────────────────────────────────────────────────────
+// V6 Workflow Engine — Cài đặt → Workflow Đề xuất
+// ────────────────────────────────────────────────────────────────────────────
+// 4 tầng tài chính theo SPEC V6
+//   nho 0-50M · tb 50-200M · lon 200-500M · dac_biet >500M
+export type BudgetTier = 'nho' | 'tb' | 'lon' | 'dac_biet';
+
+// 3 luồng duyệt mặc định
+//   A: GĐ khối
+//   B: GĐ khối → CEO
+//   C: GĐ khối → CEO → Chủ tịch
+export type ChainTemplateKey = 'A' | 'B' | 'C';
+
+// Rule IF...THEN tối giản (V6)
+export interface WorkflowRule {
   id: string;
-  code: string;
+  // điều kiện
+  ifKind?: ProposalKind[];
+  ifBudgetTier?: BudgetTier[];
+  ifCreatorBlock?: ('KD' | 'VP')[];
+  // hành động
+  thenChain: ChainTemplateKey;
+  thenNote?: string;
+  priority: number; // rule có priority cao hơn match trước
+  enabled: boolean;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// V6 ProposalV6 — 5 trường nhập V6 + standard meta + legacy V5 (giữ shape)
+// ────────────────────────────────────────────────────────────────────────────
+// Cardinality của các field LEGACY V5 giữ NGUYÊN như V5 cũ (required /
+// optional) để adapter Task→ProposalV5 trong DeXuatClient compile được mà
+// không phải sửa sibling. Form V6 đơn giản chỉ KHÔNG nhập các field này nữa.
+export interface ProposalV6 {
+  // ───── Standard meta ─────
+  id: string;
+  code: string; // DX-YYYY-XXXX
   status: ProposalStatus;
   creatorUid: string;
   creatorName: string;
@@ -86,55 +144,80 @@ export interface ProposalV5 {
   createdAt: string;
   updatedAt?: string;
 
-  // ----- Block 1: Thông tin chung -----
-  title: string;
-  kind: ProposalKind;
-  priority: Priority;
-  source: ProposalSource;
-  estimatedCost?: number;
-
-  // ----- Block 2: Hiện trạng / Vấn đề -----
-  currentSituation?: string;
-  problemStatement?: string;
-  evidence?: string;
+  // ───── 5 trường nhập V6 ─────
+  title: string;            // BẮT BUỘC
+  kind: ProposalKind;       // BẮT BUỘC
+  /** V6: textarea "Lý do" — gộp hiện trạng + vấn đề + giải pháp.
+   *  Optional ở type level để adapter Task→V5 legacy không phải set. */
+  reason?: string;
+  estimatedCost?: number;   // CHỈ hiện khi kind='dau_tu'
   attachments: ProposalAttachment[];
 
-  // ----- Block 3: Giải pháp đề xuất -----
-  proposedSolution?: string;
-  // Phạm vi ảnh hưởng (multi-select; có thể trống nếu nội bộ)
-  scopeTargets: ScopeTarget[];
-  decisionRequested?: string;
-
-  // ----- Block 4: Hiệu quả & rủi ro -----
-  expectedBenefit?: string;
-  riskIfNot?: string;
-  // textarea "Kết quả kỳ vọng" — KHÔNG dùng KPI multi-row
-  expectedResult?: string;
-
-  // ----- Block 5: Sau duyệt (accordion 2 option) -----
-  afterApproval?: AfterApproval;
-  suggestedOwnerUid?: string;
-  suggestedOwnerName?: string;
-  suggestedDeadline?: string;
-  deploymentNote?: string;
-
-  // ----- AUTO computed từ scopeTargets (server hoặc client adapter) -----
-  relatedBlocks: Array<'KD' | 'VP'>;
-  relatedDepts: string[];
-  relatedFacilities: string[];
-  isCrossBlock: boolean;
-
-  // ----- Approver -----
+  // ───── Approver (auto từ Workflow Engine V6) ─────
   approverChain: ApproverStep[];
   approverIdx: number;
 
-  // ----- Linked coordination task -----
+  // ───── Liên kết điều phối (sau khi convert) ─────
   linkedCoordTaskId?: string;
   linkedCoordTaskCode?: string;
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // LEGACY V5 FIELDS — giữ cardinality như V5 cũ cho sibling chưa migrate.
+  // V6 form CreateProposalModal sẽ KHÔNG ghi các field này nữa.
+  // ═══════════════════════════════════════════════════════════════════════
+  /** @deprecated V5 only */
+  priority: Priority;
+  /** @deprecated V5 only */
+  source: ProposalSource;
+  /** @deprecated V5 — gộp vào `reason` */
+  currentSituation?: string;
+  /** @deprecated V5 — gộp vào `reason` */
+  problemStatement?: string;
+  /** @deprecated V5 — file đính kèm thay textarea */
+  evidence?: string;
+  /** @deprecated V5 — gộp vào `reason` */
+  proposedSolution?: string;
+  /** @deprecated V5 — bỏ multi-select scope */
+  scopeTargets: ScopeTarget[];
+  /** @deprecated V5 only */
+  decisionRequested?: string;
+  /** @deprecated V5 only */
+  expectedBenefit?: string;
+  /** @deprecated V5 only */
+  riskIfNot?: string;
+  /** @deprecated V5 only */
+  expectedResult?: string;
+  /** @deprecated V5 — thay bằng nút "Duyệt & Tạo điều phối" */
+  afterApproval?: AfterApproval;
+  /** @deprecated V5 — xác định tại Điều phối */
+  suggestedOwnerUid?: string;
+  /** @deprecated V5 — xác định tại Điều phối */
+  suggestedOwnerName?: string;
+  /** @deprecated V5 — xác định tại Điều phối */
+  suggestedDeadline?: string;
+  /** @deprecated V5 — xác định tại Điều phối */
+  deploymentNote?: string;
+  /** @deprecated V5 — suy luận thay vì lưu */
+  relatedBlocks: Array<'KD' | 'VP'>;
+  /** @deprecated V5 — suy luận thay vì lưu */
+  relatedDepts: string[];
+  /** @deprecated V5 — suy luận thay vì lưu */
+  relatedFacilities: string[];
+  /** @deprecated V5 — suy luận thay vì lưu */
+  isCrossBlock: boolean;
 }
 
-// ============ Labels CÓ DẤU ============
+// ────────────────────────────────────────────────────────────────────────────
+// Backward compat alias — ProposalV5 / ProposalV3 / Proposal = ProposalV6
+// ────────────────────────────────────────────────────────────────────────────
+export type ProposalV5 = ProposalV6;
+export type ProposalV3 = ProposalV6;
+export type Proposal = ProposalV6;
 
+// ────────────────────────────────────────────────────────────────────────────
+// Labels CÓ DẤU + COLOR — đồng bộ /dieu-phoi
+// ────────────────────────────────────────────────────────────────────────────
+// SPEC V6: label "Đã tạo điều phối" (storage value vẫn 'chuyen_dieu_phoi').
 export const PROPOSAL_STATUS_LABEL: Record<ProposalStatus, string> = {
   nhap: 'Nháp',
   da_gui: 'Đã gửi',
@@ -142,26 +225,27 @@ export const PROPOSAL_STATUS_LABEL: Record<ProposalStatus, string> = {
   yeu_cau_bo_sung: 'Yêu cầu bổ sung',
   da_phe_duyet: 'Đã phê duyệt',
   tu_choi: 'Từ chối',
-  chuyen_dieu_phoi: 'Đã chuyển điều phối',
+  chuyen_dieu_phoi: 'Đã tạo điều phối',
   dong_ho_so: 'Đóng hồ sơ',
 };
 
-// Màu theo SPEC:
-//   - cam (amber/orange): chờ duyệt / yêu cầu bổ sung
-//   - xanh dương (sky): đang xử lý
-//   - emerald: đã phê duyệt
-//   - tím (violet): chuyển điều phối / chiến lược
-//   - rose: từ chối / quá SLA
-//   - slate: nháp / đóng hồ sơ
+// Tone V6 đồng bộ /dieu-phoi:
+//   slate: nháp / đóng hồ sơ
+//   amber: đã gửi
+//   sky: đang xem xét
+//   orange: yêu cầu bổ sung
+//   emerald: đã phê duyệt
+//   violet: đã tạo điều phối / chiến lược
+//   rose: từ chối / quá SLA
 export const PROPOSAL_STATUS_COLOR: Record<ProposalStatus, string> = {
-  nhap: 'bg-slate-100 text-slate-700',
-  da_gui: 'bg-amber-100 text-amber-700',
-  dang_xem_xet: 'bg-sky-100 text-sky-700',
-  yeu_cau_bo_sung: 'bg-orange-100 text-orange-700',
-  da_phe_duyet: 'bg-emerald-100 text-emerald-800',
-  tu_choi: 'bg-rose-100 text-rose-700',
-  chuyen_dieu_phoi: 'bg-violet-100 text-violet-800',
-  dong_ho_so: 'bg-slate-200 text-slate-600',
+  nhap: 'bg-slate-100 text-slate-700 ring-slate-200',
+  da_gui: 'bg-amber-50 text-amber-700 ring-amber-200',
+  dang_xem_xet: 'bg-sky-50 text-sky-700 ring-sky-200',
+  yeu_cau_bo_sung: 'bg-orange-50 text-orange-700 ring-orange-200',
+  da_phe_duyet: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+  tu_choi: 'bg-rose-50 text-rose-700 ring-rose-200',
+  chuyen_dieu_phoi: 'bg-violet-50 text-violet-700 ring-violet-200',
+  dong_ho_so: 'bg-slate-100 text-slate-600 ring-slate-200',
 };
 
 export const PROPOSAL_KIND_LABEL: Record<ProposalKind, string> = {
@@ -180,18 +264,24 @@ export const PROPOSAL_KIND_COLOR: Record<ProposalKind, string> = {
   khan_cap: 'bg-rose-50 text-rose-700 ring-rose-200',
 };
 
+// ────────────────────────────────────────────────────────────────────────────
+// Legacy V5 label maps — giữ cho sibling V5 chưa migrate
+// ────────────────────────────────────────────────────────────────────────────
+/** @deprecated V5 only */
 export const PRIORITY_LABEL: Record<Priority, string> = {
   binh_thuong: 'Bình thường',
   quan_trong: 'Quan trọng',
   khan_cap: 'Khẩn cấp',
 };
 
+/** @deprecated V5 only */
 export const PRIORITY_COLOR: Record<Priority, string> = {
-  binh_thuong: 'bg-slate-100 text-slate-700',
-  quan_trong: 'bg-amber-100 text-amber-700',
-  khan_cap: 'bg-rose-100 text-rose-700',
+  binh_thuong: 'bg-slate-100 text-slate-700 ring-slate-200',
+  quan_trong: 'bg-amber-50 text-amber-700 ring-amber-200',
+  khan_cap: 'bg-rose-50 text-rose-700 ring-rose-200',
 };
 
+/** @deprecated V5 only */
 export const SOURCE_LABEL: Record<ProposalSource, string> = {
   phat_sinh: 'Phát sinh',
   kpi: 'KPI',
@@ -201,23 +291,23 @@ export const SOURCE_LABEL: Record<ProposalSource, string> = {
   khac: 'Khác',
 };
 
+/** @deprecated V5 only */
 export const AFTER_APPROVAL_LABEL: Record<AfterApproval, string> = {
   chi_phe_duyet: 'Chỉ phê duyệt',
   de_nghi_tao_dieu_phoi: 'Đề nghị tạo điều phối',
 };
 
-// SLA theo cấp duyệt (giờ)
+// ────────────────────────────────────────────────────────────────────────────
+// SLA per role (giờ) — đồng bộ /dieu-phoi
+// V6 thêm chu_tich (cấp Chủ tịch) + ycbs. Giữ legacy bo_sung (= ycbs).
+// ────────────────────────────────────────────────────────────────────────────
 export const SLA_HOURS = {
   tp: 48,
   gd: 72,
   ceo: 96,
-  bo_sung: 48,
+  chu_tich: 120,
+  ycbs: 48,
   khan: 24,
+  // legacy V5 alias (= ycbs)
+  bo_sung: 48,
 };
-
-// ============ Backward compat alias ============
-// Các file CreateProposalModal/Drawer/Table/Dashboard/Client trong /de-xuat
-// đã import `Proposal` / `ProposalV3` — giữ alias để build không vỡ
-// trong khi các file còn lại đang được migrate sang V5.
-export type Proposal = ProposalV5;
-export type ProposalV3 = ProposalV5;
