@@ -14,11 +14,17 @@ function initialsOf(name: string): string {
   return name.split(' ').slice(-2).map((s) => s[0] ?? '').join('').toUpperCase().slice(0, 2);
 }
 
-function stuckDays(t: CoordTask): number {
+function stuckHours(t: CoordTask): number {
   if (!t.waitingSince) return 0;
   const since = new Date(t.waitingSince).getTime();
   if (!Number.isFinite(since)) return 0;
-  return Math.max(0, (Date.now() - since) / 86_400_000);
+  return Math.max(0, (Date.now() - since) / 3_600_000);
+}
+
+/** V6.4 (2026-06-13): format giờ chờ — <1h hiển thị "<1h", còn lại làm tròn int + "h". */
+function formatHours(h: number): string {
+  if (h < 1) return '<1h';
+  return `${Math.round(h)}h`;
 }
 
 /** V4: computeWaitingFor — trả về { person, unit, content } cho mỗi task. */
@@ -63,19 +69,19 @@ export default function BottleneckTable({ tasks }: Props) {
   const rows = useMemo(() => {
     const stuckTasks = tasks.filter(isWaitingTask);
     // Group theo person; fallback group theo unit nếu person rỗng/—
-    const groups = new Map<string, { holding: number; maxDays: number; sample: CoordTask; unit: string; content: string }>();
+    const groups = new Map<string, { holding: number; maxHours: number; sample: CoordTask; unit: string; content: string }>();
     for (const t of stuckTasks) {
       const w = computeWaitingFor(t);
       const key = w.person && w.person !== '—' ? w.person : w.unit;
       if (!key || key === '—') continue;
-      const days = stuckDays(t);
+      const hours = stuckHours(t);
       const cur = groups.get(key);
       if (!cur) {
-        groups.set(key, { holding: 1, maxDays: days, sample: t, unit: w.unit, content: w.content });
+        groups.set(key, { holding: 1, maxHours: hours, sample: t, unit: w.unit, content: w.content });
       } else {
         cur.holding += 1;
-        if (days > cur.maxDays) {
-          cur.maxDays = days;
+        if (hours > cur.maxHours) {
+          cur.maxHours = hours;
           cur.sample = t;
           cur.content = w.content;
         }
@@ -83,7 +89,7 @@ export default function BottleneckTable({ tasks }: Props) {
     }
     return Array.from(groups.entries())
       .map(([name, g]) => ({ name, ...g }))
-      .sort((a, b) => b.holding - a.holding || b.maxDays - a.maxDays)
+      .sort((a, b) => b.holding - a.holding || b.maxHours - a.maxHours)
       .slice(0, 5);
   }, [tasks]);
 
@@ -119,7 +125,7 @@ export default function BottleneckTable({ tasks }: Props) {
                 </div>
               </div>
               <div className="text-center tabular-nums text-slate-700 font-medium">{row.holding}</div>
-              <div className="text-right text-rose-600 font-semibold tabular-nums">{row.maxDays.toFixed(1)}d</div>
+              <div className="text-right text-rose-600 font-semibold tabular-nums">{formatHours(row.maxHours)}</div>
               <div className="text-slate-600 truncate text-xs" title={row.content || row.sample.title}>{row.content || row.sample.title}</div>
             </div>
           ))}
