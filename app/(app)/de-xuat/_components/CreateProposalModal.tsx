@@ -202,22 +202,28 @@ export interface ProposalAttachmentDraftV6 {
   url?: string;
 }
 
-/** Payload V6 minimal — đúng SPEC 5 trường nhập + V6+ relatedUnits. */
+/** V6.5 (2026-06-13) — anh chốt redesign module Đề xuất.
+ *  Form gọn theo phân biệt nature support/governance. */
 export interface CreateProposalPayloadV6 {
   status: 'nhap' | 'da_gui';
-  // 5 trường nhập
+  // 5 trường nhập cơ bản
   title: string;
   kind: ProposalKindV5;
   reason: string;
-  estimatedCost?: number;
+  /** V6.5: tính chất đề xuất — radio bắt buộc */
+  nature: 'support' | 'governance';
+  /** V6.5: đơn vị nhận đề xuất (uid) — bắt buộc */
+  recipientUnitUid?: string;
+  recipientUnitName?: string;
   attachments?: ProposalAttachmentDraftV6[];
-  // V6+ Đơn vị liên quan (multi-select) + auto scope
-  relatedUnits?: { id: string; label: string; block: 'KD' | 'VP' }[];
-  unitsScope?: 'trong_khoi' | 'lien_khoi';
-  // V6.4 (2026-06-12): người nhận đề xuất — UID cụ thể (server cần để build chain).
-  recipientTier?: 'peer' | 'senior';
-  recipientUid?: string;
-  recipientName?: string;
+  // CHỈ khi nature='governance'
+  /** V6.5: lãnh đạo cần phê duyệt (uid) — bắt buộc governance */
+  recipientLeaderUid?: string;
+  recipientLeaderName?: string;
+  /** V6.5: có phát sinh tài chính? — chỉ governance */
+  hasFinancial?: boolean;
+  /** V6.5: bắt buộc nếu hasFinancial=true */
+  estimatedCost?: number;
   // Auto computed (read-only client preview)
   resolvedApproverChain?: ResolvedStep[];
 }
@@ -411,6 +417,12 @@ export default function CreateProposalModal({
   const [recipientOptions, setRecipientOptions] = useState<Array<{ uid: string; displayName: string; roleCode: string; roleName: string; block?: 'KD' | 'VP' | 'top' }>>([]);
   const [loadingRecipients, setLoadingRecipients] = useState(false);
 
+  // V6.5 (2026-06-13) anh redesign: nature support/governance + leader + financial
+  const [nature, setNature] = useState<'support' | 'governance'>('support');
+  const [leaderUid, setLeaderUid] = useState('');
+  const [leaderName, setLeaderName] = useState('');
+  const [hasFinancial, setHasFinancial] = useState(false);
+
   // Fetch candidate list 1 lần khi mở modal (server tự xác định theo role caller)
   useEffect(() => {
     if (!open) return;
@@ -449,12 +461,24 @@ export default function CreateProposalModal({
     setRelatedUnitIds(
       Array.isArray(p.relatedUnits) ? p.relatedUnits.map((u: any) => u.id) : [],
     );
-    // V6.4: pre-fill recipient nếu có
-    const uid = (p as any).recipientUid;
+    // V6.4: pre-fill recipient (đơn vị nhận) nếu có
+    const uid = (p as any).recipientUnitUid ?? (p as any).recipientUid;
     if (typeof uid === 'string') {
       setRecipientUid(uid);
-      setRecipientName(typeof (p as any).recipientName === 'string' ? (p as any).recipientName : '');
+      setRecipientName(
+        typeof (p as any).recipientUnitName === 'string' ? (p as any).recipientUnitName :
+        typeof (p as any).recipientName === 'string' ? (p as any).recipientName : '',
+      );
     }
+    // V6.5 pre-fill nature + leader + financial
+    const n = (p as any).nature;
+    if (n === 'support' || n === 'governance') setNature(n);
+    const luid = (p as any).recipientLeaderUid;
+    if (typeof luid === 'string') {
+      setLeaderUid(luid);
+      setLeaderName(typeof (p as any).recipientLeaderName === 'string' ? (p as any).recipientLeaderName : '');
+    }
+    if (typeof (p as any).hasFinancial === 'boolean') setHasFinancial((p as any).hasFinancial);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialProposal?.id]);
 
@@ -512,6 +536,11 @@ export default function CreateProposalModal({
     setRelatedUnitIds([]);
     setRecipientUid('');
     setRecipientName('');
+    // V6.5 reset
+    setNature('support');
+    setLeaderUid('');
+    setLeaderName('');
+    setHasFinancial(false);
   }
 
   function handleClose() {
@@ -528,27 +557,41 @@ export default function CreateProposalModal({
     const r = reason.trim();
     if (!r) return 'Vui lòng nhập lý do đề xuất.';
     if (r.length < 10) return 'Lý do đề xuất tối thiểu 10 ký tự.';
-    if (estimatedCostStr.trim() && (estimatedCostNum ?? 0) <= 0) {
-      return 'Giá trị dự kiến phải lớn hơn 0.';
+    if (!recipientUid) return 'Vui lòng chọn đơn vị nhận đề xuất.';
+    // V6.5 governance validate
+    if (nature === 'governance') {
+      if (!leaderUid) return 'Vui lòng chọn lãnh đạo cần phê duyệt.';
+      if (hasFinancial) {
+        if (!estimatedCostStr.trim() || (estimatedCostNum ?? 0) <= 0) {
+          return 'Vui lòng nhập giá trị dự kiến (>0).';
+        }
+      }
+    } else {
+      // support nature
+      if (estimatedCostStr.trim() && (estimatedCostNum ?? 0) <= 0) {
+        return 'Giá trị dự kiến phải lớn hơn 0.';
+      }
     }
-    if (!recipientUid) return 'Vui lòng chọn người nhận đề xuất.';
     return null;
   }
 
   function buildPayloadV6(status: 'nhap' | 'da_gui'): CreateProposalPayloadV6 {
+    const isGov = nature === 'governance';
     return {
       status,
       title: title.trim(),
       kind: kind as ProposalKindV5,
       reason: reason.trim(),
-      estimatedCost: kind === 'du_an' ? estimatedCostNum : undefined,
+      nature,
+      recipientUnitUid: recipientUid || undefined,
+      recipientUnitName: recipientName || undefined,
       attachments: attachments.length ? attachments : undefined,
-      // V6+ Đơn vị liên quan + auto scope
-      relatedUnits: relatedUnits.length ? relatedUnits : undefined,
-      unitsScope: relatedUnits.length ? unitsScope : undefined,
-      // V6.4: chọn người nhận cụ thể (UID) — không còn tier
-      recipientUid: recipientUid || undefined,
-      recipientName: recipientName || undefined,
+      // governance fields (P1.2): leader + hasFinancial + estimatedCost
+      recipientLeaderUid: isGov ? (leaderUid || undefined) : undefined,
+      recipientLeaderName: isGov ? (leaderName || undefined) : undefined,
+      hasFinancial: isGov ? hasFinancial : false,
+      estimatedCost: (isGov && hasFinancial) ? estimatedCostNum
+        : (kind === 'du_an' ? estimatedCostNum : undefined),
       resolvedApproverChain: resolvedChain,
     };
   }
@@ -726,7 +769,40 @@ export default function CreateProposalModal({
             </div>
           </div>
 
-          {/* 3 — Lý do đề xuất */}
+          {/* 3 — Tính chất đề xuất (V6.5 anh chốt 2026-06-13) */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+              Tính chất đề xuất <span className="text-rose-500">*</span>
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setNature('support')}
+                className={`text-left rounded-lg border-2 px-3 py-2 transition ${
+                  nature === 'support'
+                    ? 'border-emerald-500 bg-emerald-50'
+                    : 'border-slate-200 hover:border-emerald-300'
+                }`}
+              >
+                <div className="text-sm font-semibold text-slate-800">Hỗ trợ công việc</div>
+                <div className="text-[11px] text-slate-500 mt-0.5">Nhờ đơn vị khác hỗ trợ — không cần duyệt lãnh đạo</div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setNature('governance')}
+                className={`text-left rounded-lg border-2 px-3 py-2 transition ${
+                  nature === 'governance'
+                    ? 'border-emerald-500 bg-emerald-50'
+                    : 'border-slate-200 hover:border-emerald-300'
+                }`}
+              >
+                <div className="text-sm font-semibold text-slate-800">Đề xuất quản trị</div>
+                <div className="text-[11px] text-slate-500 mt-0.5">Cần lãnh đạo phê duyệt (chi phí, mua sắm, đầu tư, đổi quy trình…)</div>
+              </button>
+            </div>
+          </div>
+
+          {/* 4 — Lý do đề xuất */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1.5">
               Lý do đề xuất <span className="text-rose-500">*</span>
@@ -747,32 +823,61 @@ export default function CreateProposalModal({
             </p>
           </div>
 
-          {/* 4 — Giá trị dự kiến (chỉ hiện khi kind = dau_tu) */}
-          {kind === 'du_an' && (
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Giá trị dự kiến (VNĐ)
-                <span className="ml-1 text-[10px] font-normal text-slate-400">
-                  (chỉ áp dụng cho đề xuất Đầu tư)
-                </span>
-              </label>
-              <input
-                type="text"
-                inputMode="numeric"
-                value={estimatedCostStr}
-                onChange={(e) => setEstimatedCostStr(e.target.value)}
-                placeholder="VD: 20.000.000 / 150.000.000 / 500.000.000"
-                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none tabular-nums"
-              />
-              {estimatedCostNum !== undefined && (
-                <p className="text-[11px] text-emerald-700 mt-1">
-                  ≈ {formatVND(estimatedCostNum)}
-                </p>
+          {/* V6.5 (2026-06-13): Conditional governance — Lãnh đạo + Có phát sinh tài chính */}
+          {nature === 'governance' && (
+            <>
+              {/* Có phát sinh tài chính? */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  Có phát sinh tài chính? <span className="text-rose-500">*</span>
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setHasFinancial(false)}
+                    className={`flex-1 rounded-lg border-2 px-3 py-2 text-sm font-medium transition ${
+                      !hasFinancial ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-600 hover:border-emerald-300'
+                    }`}
+                  >Không</button>
+                  <button
+                    type="button"
+                    onClick={() => setHasFinancial(true)}
+                    className={`flex-1 rounded-lg border-2 px-3 py-2 text-sm font-medium transition ${
+                      hasFinancial ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-600 hover:border-emerald-300'
+                    }`}
+                  >Có</button>
+                </div>
+              </div>
+
+              {/* Giá trị dự kiến — chỉ khi hasFinancial=true */}
+              {hasFinancial && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                    Giá trị dự kiến (VNĐ) <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={estimatedCostStr}
+                    onChange={(e) => setEstimatedCostStr(e.target.value)}
+                    placeholder="VD: 20.000.000 / 150.000.000 / 500.000.000"
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none tabular-nums"
+                  />
+                  {estimatedCostNum !== undefined && (
+                    <p className="text-[11px] text-emerald-700 mt-1">≈ {formatVND(estimatedCostNum)}</p>
+                  )}
+                  <p className="text-[11px] text-slate-500 mt-1 italic">
+                    Hệ thống sẽ tự chèn cấp duyệt cao hơn theo phân cấp tài chính
+                    (≤5tr · 5–50tr · 50–200tr · ≥200tr).
+                  </p>
+                </div>
               )}
-            </div>
+            </>
           )}
 
-          {/* V6+ — Đơn vị liên quan (multi-select) + auto tag Trong khối / Liên khối */}
+          {/* V6.5 (2026-06-13): "Đơn vị liên quan" ĐÃ BỎ — anh chốt form đề xuất gọn,
+              không có khái niệm Trong khối/Liên khối ở form tạo. Server tự xác định scope. */}
+          {false && (
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1.5">
               Đơn vị liên quan
@@ -852,6 +957,7 @@ export default function CreateProposalModal({
               </span>
             </div>
           </div>
+          )}
 
           {/* 5 — File đính kèm (V6.4: upload thực Firebase Storage) */}
           <div>
@@ -922,10 +1028,12 @@ export default function CreateProposalModal({
             </div>
           </div>
 
-          {/* V6.4 (2026-06-13) anh chốt cuối: bỏ chip Cấp trên/Ngang cấp — chỉ 1 dropdown đối tượng gửi. */}
+          {/* V6.5 (2026-06-13) anh redesign: "Đơn vị nhận đề xuất" — đơn vị sẽ nhận / thực hiện hỗ trợ.
+              Cho support: là người thực hiện cuối chain.
+              Cho governance: là context — leader sẽ duyệt. */}
           <section className="rounded-lg border border-slate-200 bg-white px-4 py-3">
             <label className="block text-xs font-semibold text-slate-700 mb-2">
-              Gửi đề xuất tới <span className="text-rose-500">*</span>
+              Đơn vị nhận đề xuất <span className="text-rose-500">*</span>
             </label>
             <select
               value={recipientUid}
@@ -984,9 +1092,44 @@ export default function CreateProposalModal({
               })()}
             </select>
             <p className="text-[11px] text-slate-500 mt-1.5 italic">
-              Người được chọn sẽ là cấp đầu tiên duyệt. Hệ thống tự bổ sung các cấp tiếp theo dựa trên luồng duyệt gợi ý bên dưới.
+              {nature === 'support'
+                ? 'Đơn vị này sẽ trực tiếp nhận và hỗ trợ — không cần duyệt lãnh đạo.'
+                : 'Đơn vị nhận đề xuất (context — sẽ triển khai sau khi lãnh đạo phê duyệt).'}
             </p>
           </section>
+
+          {/* V6.5: Lãnh đạo phê duyệt — CHỈ governance */}
+          {nature === 'governance' && (
+            <section className="rounded-lg border border-amber-200 bg-amber-50/40 px-4 py-3">
+              <label className="block text-xs font-semibold text-slate-700 mb-2">
+                Lãnh đạo cần phê duyệt <span className="text-rose-500">*</span>
+              </label>
+              <select
+                value={leaderUid}
+                onChange={(e) => {
+                  const uid = e.target.value;
+                  setLeaderUid(uid);
+                  const opt = recipientOptions.find((o) => o.uid === uid);
+                  setLeaderName(opt?.displayName ?? '');
+                }}
+                disabled={loadingRecipients}
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+              >
+                <option value="">— Chọn lãnh đạo phê duyệt —</option>
+                {recipientOptions
+                  .filter((o) => ['GD_KD', 'GD_VP', 'CEO', 'CHU_TICH'].includes(o.roleCode))
+                  .map((o) => (
+                    <option key={o.uid} value={o.uid}>
+                      {o.displayName} · {o.roleName || o.roleCode}
+                    </option>
+                  ))}
+              </select>
+              <p className="text-[11px] text-slate-500 mt-1.5 italic">
+                Hệ thống sẽ tự chèn GĐ Khối của bạn nếu cần (TP/QLCS không được vượt cấp lên CEO/Chủ tịch).
+                Nếu giá trị vượt ngưỡng tài chính, cấp duyệt cao hơn sẽ được chèn tự động.
+              </p>
+            </section>
+          )}
 
           {/* Luồng duyệt gợi ý — READ-ONLY */}
           <section className="rounded-lg border border-emerald-200 bg-emerald-50/60 px-4 py-3">

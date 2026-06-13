@@ -661,6 +661,17 @@ export async function POST(req: NextRequest) {
       // Phase 12.9 (2026-06-04): proposal tier (peer/senior) + recipient uid
       recipientTier,
       recipientUid: recipientUidResolved,
+      // V6.5 (2026-06-13) anh redesign: nature + leader + financial flags
+      nature: (body?.meta?.nature === 'support' || body?.meta?.nature === 'governance')
+        ? body.meta.nature
+        : null,
+      recipientLeaderUid: typeof body?.meta?.recipientLeaderUid === 'string'
+        ? body.meta.recipientLeaderUid
+        : null,
+      recipientLeaderName: typeof body?.meta?.recipientLeaderName === 'string'
+        ? body.meta.recipientLeaderName
+        : null,
+      hasFinancial: body?.meta?.hasFinancial === true,
       expectedCompletionDate: null,
       // Mock-Frame-7 (2026-06-12)
       goal,

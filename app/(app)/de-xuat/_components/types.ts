@@ -214,11 +214,25 @@ export interface ProposalV6 {
   /** V6: textarea "Lý do" — gộp hiện trạng + vấn đề + giải pháp.
    *  Optional ở type level để adapter Task→V5 legacy không phải set. */
   reason?: string;
-  estimatedCost?: number;   // CHỈ hiện khi kind='dau_tu'
+  /** V6.5 (2026-06-13) — anh redesign module Đề xuất:
+   *  - support: Hỗ trợ công việc → workflow ngắn = chỉ đến đơn vị nhận
+   *  - governance: Đề xuất quản trị → workflow có lãnh đạo phê duyệt + auto-extend theo budget tier */
+  nature?: 'support' | 'governance';
+  /** V6.5: Có phát sinh tài chính? (chỉ governance). Nếu true → estimatedCost bắt buộc */
+  hasFinancial?: boolean;
+  estimatedCost?: number;   // V6.5: CHỈ hiện khi hasFinancial=true (governance)
   attachments: ProposalAttachment[];
-  /** V6+: Đơn vị liên quan (multi-select). Auto detect Trong/Liên khối. */
+  /** V6.5: đơn vị nhận đề xuất (uid).
+   *  - support: là người sẽ thực hiện hỗ trợ → cuối chain
+   *  - governance: là đơn vị context (sẽ implement sau khi duyệt) */
+  recipientUnitUid?: string;
+  recipientUnitName?: string;
+  /** V6.5: lãnh đạo phê duyệt (uid) — CHỈ governance — cuối chain trước khi extend theo budget tier */
+  recipientLeaderUid?: string;
+  recipientLeaderName?: string;
+  /** @deprecated V6.5: bỏ relatedUnits + unitsScope, giữ optional cho data cũ */
   relatedUnits?: RelatedUnit[];
-  /** V6+ auto computed (KHÔNG cho user chọn). */
+  /** @deprecated */
   unitsScope?: UnitsScope;
 
   // ───── Approver (auto từ Workflow Engine V6) ─────

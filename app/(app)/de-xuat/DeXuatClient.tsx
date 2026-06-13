@@ -430,19 +430,23 @@ export function DeXuatClient(props: Props) {
         estimatedCost: isInvestment ? (payload.estimatedCost ?? null) : null,
         approverUserIds,
         expectedDeliverable: null,
-        // V6.4 (2026-06-12): người nhận đề xuất (UID) — server cần để build chain.
-        recipientTier: payload.recipientTier ?? 'senior',
-        recipientUid: payload.recipientUid,
-        // Meta lưu các trường V6 + V6+ relatedUnits + reverse-compat sang V5.
+        // V6.5 (2026-06-13) anh redesign: nature + recipient unit/leader.
+        // recipientUid (legacy server contract) tạm map = recipientUnitUid để
+        // server build chain. P1.3 sẽ refactor server logic theo nature thật sự.
+        recipientUid: payload.recipientUnitUid,
         meta: {
           proposalKindV6: payload.kind,
           reason: payload.reason,
           resolvedApproverChain: payload.resolvedApproverChain,
           draftStatus: payload.status, // 'nhap' | 'da_gui'
-          // V6+ Đơn vị liên quan + auto scope
-          relatedUnits: payload.relatedUnits ?? [],
-          unitsScope: payload.unitsScope,
-          // V5 reverse-compat (cho adapter chỗ khác đọc)
+          // V6.5 fields
+          nature: payload.nature,
+          recipientUnitUid: payload.recipientUnitUid ?? null,
+          recipientUnitName: payload.recipientUnitName ?? null,
+          recipientLeaderUid: payload.recipientLeaderUid ?? null,
+          recipientLeaderName: payload.recipientLeaderName ?? null,
+          hasFinancial: payload.hasFinancial ?? false,
+          // V5 reverse-compat
           proposalKindV5: payload.kind,
           problemStatement: payload.reason,
         },
@@ -477,9 +481,13 @@ export function DeXuatClient(props: Props) {
             proposalKindV6: payload.kind,
             reason: payload.reason,
             resolvedApproverChain: payload.resolvedApproverChain,
-            relatedUnits: payload.relatedUnits ?? [],
-            unitsScope: payload.unitsScope,
-            estimatedCost: isInvestment ? (payload.estimatedCost ?? null) : null,
+            nature: payload.nature,
+            recipientUnitUid: payload.recipientUnitUid ?? null,
+            recipientUnitName: payload.recipientUnitName ?? null,
+            recipientLeaderUid: payload.recipientLeaderUid ?? null,
+            recipientLeaderName: payload.recipientLeaderName ?? null,
+            hasFinancial: payload.hasFinancial ?? false,
+            estimatedCost: payload.hasFinancial ? (payload.estimatedCost ?? null) : (isInvestment ? (payload.estimatedCost ?? null) : null),
           },
         });
         setShowCreate(false);
