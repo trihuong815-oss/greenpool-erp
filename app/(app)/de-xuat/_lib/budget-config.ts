@@ -45,12 +45,8 @@ export function suggestApproverChain(input: SuggestInput): SuggestedStep[] {
   const tier = getBudgetTier(estimatedCost);
   const out: SuggestedStep[] = [];
 
-  // chien_luoc luôn lên CEO + Chủ tịch (nếu cần)
-  if (kind === 'chien_luoc') {
-    out.push({ roleCode: creatorBlock === 'KD' ? 'GD_KD' : 'GD_VP', label: `GĐ ${creatorBlock === 'KD' ? 'Kinh doanh' : 'Văn phòng'}`, reason: 'Khối liên quan' });
-    out.push({ roleCode: 'CEO', label: 'CEO', reason: 'Đề xuất chiến lược' });
-    return out;
-  }
+  // V6.4 (2026-06-13): 3 kind cũ (dau_tu/chien_luoc/khan_cap) đã xoá khỏi form tạo.
+  // Mọi rule giờ dựa trên: van_hanh / du_an / cai_tien + budget tier.
 
   // tier LARGE (>50M) → GĐ khối + GĐ VP + CEO
   if (tier === 'LARGE') {
@@ -75,23 +71,18 @@ export function suggestApproverChain(input: SuggestInput): SuggestedStep[] {
     return out;
   }
 
-  // tier NO_COST — theo loại nghiệp vụ V5
-  if (kind === 'khan_cap') {
-    out.push({ roleCode: creatorBlock === 'KD' ? 'GD_KD' : 'GD_VP', label: `GĐ ${creatorBlock === 'KD' ? 'Kinh doanh' : 'Văn phòng'}`, reason: 'Phụ trách khối' });
-    out.push({ roleCode: 'CEO', label: 'CEO', reason: 'Mức khẩn cấp — CEO duyệt' });
-    return out;
-  }
+  // tier NO_COST — theo 3 loại mới
   if (kind === 'cai_tien') {
     out.push({ roleCode: creatorBlock === 'KD' ? 'GD_KD' : 'GD_VP', label: `GĐ ${creatorBlock === 'KD' ? 'Kinh doanh' : 'Văn phòng'}`, reason: 'Đề xuất cải tiến — GĐ khối duyệt' });
     return out;
   }
-  if (kind === 'dau_tu') {
-    // Đầu tư không có cost → vẫn phải có TP Kế toán xác nhận + GĐ VP duyệt
-    out.push({ roleCode: 'TP_KE', label: 'TP Kế toán', reason: 'Kiểm tra ngân sách đầu tư' });
+  if (kind === 'du_an') {
+    // Dự án không có cost cũng vẫn cần TP Kế toán xác nhận + GĐ VP duyệt
+    out.push({ roleCode: 'TP_KE', label: 'TP Kế toán', reason: 'Kiểm tra ngân sách dự án' });
     out.push({ roleCode: 'GD_VP', label: 'GĐ Văn phòng', reason: 'Phụ trách tài chính' });
     return out;
   }
-  // van_hanh — TP nghiệp vụ liên quan + GĐ khối nếu cross-dept
+  // van_hanh — GĐ khối duyệt
   out.push({ roleCode: creatorBlock === 'KD' ? 'GD_KD' : 'GD_VP', label: `GĐ ${creatorBlock === 'KD' ? 'Kinh doanh' : 'Văn phòng'}`, reason: 'Owner nghiệp vụ vận hành' });
   return out;
 }

@@ -113,27 +113,29 @@ function mapStatusV6(t: Task): ProposalStatus {
   }
 }
 
-/** Map kind ghi trong meta (V6 mới) → 5 ProposalKind V6.
- *  V3 cũ (nhan_su/mkt_kd/tai_chinh) → fallback: van_hanh/cai_tien/dau_tu. */
+/** V6.4 (2026-06-13): map kind → 3 ProposalKind chính thức (van_hanh/du_an/cai_tien).
+ *  3 kind cũ (dau_tu/chien_luoc/khan_cap) đã xoá khỏi form — fallback về du_an/van_hanh. */
 function mapKindV6(t: Task): ProposalKind {
   const meta = ((t as any).meta ?? {}) as Record<string, unknown>;
   const raw = meta.proposalKindV6 ?? meta.proposalKindV5 ?? meta.proposalKindV3;
   if (typeof raw === 'string') {
     switch (raw) {
       case 'van_hanh':
+      case 'du_an':
       case 'cai_tien':
-      case 'dau_tu':
-      case 'chien_luoc':
-      case 'khan_cap':
         return raw;
+      // Legacy V6 cũ → map sang V6.4
+      case 'dau_tu':     return 'du_an';     // Đầu tư → Dự án
+      case 'chien_luoc': return 'du_an';     // Chiến lược → Dự án
+      case 'khan_cap':   return 'van_hanh';  // Khẩn cấp → Vận hành
       // V3 alias → V6
-      case 'nhan_su': return 'van_hanh';
-      case 'mkt_kd':  return 'cai_tien';
-      case 'tai_chinh': return 'dau_tu';
+      case 'nhan_su':    return 'van_hanh';
+      case 'mkt_kd':     return 'cai_tien';
+      case 'tai_chinh':  return 'du_an';
     }
   }
   // Fallback theo proposalType V2
-  if (t.proposalType === 'tai_chinh') return 'dau_tu';
+  if (t.proposalType === 'tai_chinh') return 'du_an';
   return 'van_hanh';
 }
 
@@ -410,7 +412,7 @@ export function DeXuatClient(props: Props) {
       // approverUserIds V6 chưa resolve → để rỗng (V7 sẽ wire bước-by-role).
       const approverUserIds: string[] = [];
 
-      const isInvestment = payload.kind === 'dau_tu';
+      const isInvestment = payload.kind === 'du_an';
       const proposalTypeV2 = isInvestment ? 'tai_chinh' : 'van_hanh';
       const financialGroup = isInvestment ? 'chi_khac' : null;
 
@@ -465,7 +467,7 @@ export function DeXuatClient(props: Props) {
   const handleUpdate = useCallback(
     async (proposalId: string, payload: CreateProposalPayloadV6) => {
       try {
-        const isInvestment = payload.kind === 'dau_tu';
+        const isInvestment = payload.kind === 'du_an';
         await tasksApi.update(proposalId, {
           title: payload.title,
           description: payload.reason ?? '',

@@ -46,14 +46,11 @@ export const STATUS_DA_TAO_DIEU_PHOI: ProposalStatus = 'chuyen_dieu_phoi';
 // V6 KIND — 5 loại mặc định, Admin có thể thêm/sửa/xoá qua Cài đặt
 // ────────────────────────────────────────────────────────────────────────────
 export type ProposalKind =
-  // V6.4 (2026-06-13) anh chốt: form chỉ còn 3 loại — Vận hành / Dự án / Cải tiến.
+  // V6.4 (2026-06-13) anh chốt 3 loại chính thức — Vận hành / Dự án / Cải tiến.
+  // 3 loại cũ (dau_tu/chien_luoc/khan_cap) đã xoá hoàn toàn — verify Firestore 0 docs liên quan.
   | 'van_hanh'
   | 'du_an'
-  | 'cai_tien'
-  // Legacy (KHÔNG hiện trong form tạo nữa — chỉ giữ để render proposal cũ trên Firestore).
-  | 'dau_tu'
-  | 'chien_luoc'
-  | 'khan_cap';
+  | 'cai_tien';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Legacy V5 type aliases — giữ để sibling V5 chưa migrate vẫn import được
@@ -323,19 +320,12 @@ export const PROPOSAL_KIND_LABEL: Record<ProposalKind, string> = {
   van_hanh: 'Vận hành',
   du_an: 'Dự án',
   cai_tien: 'Cải tiến',
-  // Legacy (giữ label để proposal cũ trên Firestore vẫn render đúng)
-  dau_tu: 'Đầu tư',
-  chien_luoc: 'Chiến lược',
-  khan_cap: 'Khẩn cấp',
 };
 
 export const PROPOSAL_KIND_COLOR: Record<ProposalKind, string> = {
   van_hanh: 'bg-sky-50 text-sky-700 ring-sky-200',
   du_an: 'bg-violet-50 text-violet-700 ring-violet-200',
   cai_tien: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-  dau_tu: 'bg-amber-50 text-amber-700 ring-amber-200',
-  chien_luoc: 'bg-violet-50 text-violet-700 ring-violet-200',
-  khan_cap: 'bg-rose-50 text-rose-700 ring-rose-200',
 };
 
 // ────────────────────────────────────────────────────────────────────────────

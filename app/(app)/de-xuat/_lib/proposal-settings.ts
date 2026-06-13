@@ -87,18 +87,16 @@ export const DEFAULT_SETTINGS: ProposalSettings = {
     },
   ],
   rules: [
-    // Đầu tư nhỏ → GĐ khối
-    { id: 'r-dau-tu-nho', ifKind: ['dau_tu' as ProposalKind], ifBudgetTier: ['nho'], chainTemplateId: 'gd_khoi' },
-    // Đầu tư trung bình → GĐ khối → CEO
-    { id: 'r-dau-tu-tb', ifKind: ['dau_tu' as ProposalKind], ifBudgetTier: ['trung_binh'], chainTemplateId: 'gd_ceo' },
-    // Đầu tư lớn/đặc biệt → GĐ khối → CEO → Chủ tịch
-    { id: 'r-dau-tu-lon', ifKind: ['dau_tu' as ProposalKind], ifBudgetTier: ['lon', 'dac_biet'], chainTemplateId: 'gd_ceo_chu_tich' },
-    // Chiến lược → CEO → Chủ tịch
-    { id: 'r-chien-luoc', ifKind: ['chien_luoc'], chainTemplateId: 'ceo_chu_tich' },
-    // Khẩn cấp → CEO
-    { id: 'r-khan-cap', ifKind: ['khan_cap' as ProposalKind], chainTemplateId: 'ceo_only' },
-    // Vận hành + Cải tiến → GĐ khối
-    { id: 'r-vh-ct', ifKind: ['van_hanh', 'cai_tien' as ProposalKind], chainTemplateId: 'gd_khoi' },
+    // V6.4 (2026-06-13): 3 loại chính thức — Vận hành / Dự án / Cải tiến.
+    // 3 loại cũ (dau_tu/chien_luoc/khan_cap) đã xoá khỏi form.
+    // Dự án nhỏ → GĐ khối
+    { id: 'r-du-an-nho', ifKind: ['du_an'], ifBudgetTier: ['nho'], chainTemplateId: 'gd_khoi' },
+    // Dự án trung bình → GĐ khối → CEO
+    { id: 'r-du-an-tb', ifKind: ['du_an'], ifBudgetTier: ['trung_binh'], chainTemplateId: 'gd_ceo' },
+    // Dự án lớn/đặc biệt → GĐ khối → CEO → Chủ tịch
+    { id: 'r-du-an-lon', ifKind: ['du_an'], ifBudgetTier: ['lon', 'dac_biet'], chainTemplateId: 'gd_ceo_chu_tich' },
+    // Vận hành + Cải tiến → GĐ khối (không quan tâm budget tier)
+    { id: 'r-vh-ct', ifKind: ['van_hanh', 'cai_tien'], chainTemplateId: 'gd_khoi' },
   ],
 };
 

@@ -28,14 +28,10 @@ import {
 // ───────────────────────────────────────────────────────────────
 
 export type ProposalKindV6 =
-  // V6.4 (2026-06-13) anh chốt 3 loại form mới
+  // V6.4 (2026-06-13) anh chốt 3 loại form mới — đã verify 0 doc legacy trên Firestore.
   | 'van_hanh'
   | 'du_an'
-  | 'cai_tien'
-  // Legacy (data cũ trên Firestore)
-  | 'dau_tu'
-  | 'chien_luoc'
-  | 'khan_cap';
+  | 'cai_tien';
 
 export type ProposalStatusV6 =
   | 'nhap'
@@ -166,21 +162,14 @@ function isCurrentApprover(p: ProposalV6, uid: string, role: string): boolean {
 // ───────────────────────────────────────────────────────────────
 const KIND_COLOR: Record<ProposalKindV6, string> = {
   van_hanh: '#0ea5e9',  // sky-500
-  du_an: '#8b5cf6',     // violet-500 (V6.4 mới)
+  du_an: '#8b5cf6',     // violet-500
   cai_tien: '#10b981',  // emerald-500
-  // Legacy
-  dau_tu: '#f59e0b',    // amber-500
-  chien_luoc: '#a78bfa',
-  khan_cap: '#f43f5e',  // rose-500
 };
 
 const KIND_LABEL: Record<ProposalKindV6, string> = {
   van_hanh: 'Vận hành',
   du_an: 'Dự án',
   cai_tien: 'Cải tiến',
-  dau_tu: 'Đầu tư',
-  chien_luoc: 'Chiến lược',
-  khan_cap: 'Khẩn cấp',
 };
 
 // ───────────────────────────────────────────────────────────────
@@ -196,7 +185,6 @@ export default function DexuatDashboard({
   const stats = useMemo(() => {
     const kindCount: Record<ProposalKindV6, number> = {
       van_hanh: 0, du_an: 0, cai_tien: 0,
-      dau_tu: 0, chien_luoc: 0, khan_cap: 0, // legacy
     };
 
     let cardCho = 0;
@@ -222,10 +210,8 @@ export default function DexuatDashboard({
 
     const totalKind =
       kindCount.van_hanh +
-      kindCount.cai_tien +
-      kindCount.dau_tu +
-      kindCount.chien_luoc +
-      kindCount.khan_cap;
+      kindCount.du_an +
+      kindCount.cai_tien;
 
     return {
       cardCho,

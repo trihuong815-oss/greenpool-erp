@@ -12,7 +12,7 @@
 //   1) Tên đề xuất *
 //   2) Loại đề xuất * (5 default: Vận hành/Cải tiến/Đầu tư/Chiến lược/Khẩn cấp)
 //   3) Lý do đề xuất *
-//   4) Giá trị dự kiến (VNĐ) — CHỈ HIỆN khi (kind === 'du_an' || kind === 'dau_tu')
+//   4) Giá trị dự kiến (VNĐ) — CHỈ HIỆN khi kind === 'du_an'
 //   5) File đính kèm (placeholder upload)
 //
 // Block "Luồng duyệt gợi ý" hiển thị NGAY sau khi user chọn kind + cost
@@ -54,14 +54,11 @@ import {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type ProposalKindV5 =
-  // V6.4 (2026-06-13) anh chốt 3 loại — Vận hành / Dự án / Cải tiến
+  // V6.4 (2026-06-13) anh chốt 3 loại — Vận hành / Dự án / Cải tiến.
+  // 3 loại cũ đã xoá (verify 0 doc Firestore).
   | 'van_hanh'
   | 'du_an'
-  | 'cai_tien'
-  // Legacy (proposal cũ trên Firestore)
-  | 'dau_tu'
-  | 'chien_luoc'
-  | 'khan_cap';
+  | 'cai_tien';
 
 export type ProposalPriorityV5 = 'binh_thuong' | 'quan_trong' | 'khan_cap';
 
@@ -337,12 +334,9 @@ function v6ToV5(
 // V5 → V3 (giữ cho callsite cũ)
 function kindV5ToV3(k: ProposalKindV5): ProposalKindV3 {
   switch (k) {
-    case 'van_hanh':   return 'van_hanh';
-    case 'du_an':      return 'tai_chinh'; // V6.4 — Dự án thường có chi phí → V3 'tai_chinh'
-    case 'cai_tien':   return 'van_hanh';
-    case 'dau_tu':     return 'tai_chinh';
-    case 'chien_luoc': return 'chien_luoc';
-    case 'khan_cap':   return 'van_hanh';
+    case 'van_hanh': return 'van_hanh';
+    case 'du_an':    return 'tai_chinh'; // V6.4 — Dự án có chi phí → V3 'tai_chinh'
+    case 'cai_tien': return 'van_hanh';
   }
 }
 
@@ -504,7 +498,7 @@ export default function CreateProposalModal({
     if (!kind) return '';
     const parts: string[] = [];
     parts.push('Loại: ' + (KIND_V6_OPTIONS.find((k) => k.key === kind)?.label ?? kind));
-    if ((kind === 'du_an' || kind === 'dau_tu') && estimatedCostNum) {
+    if (kind === 'du_an' && estimatedCostNum) {
       parts.push('Giá trị: ' + formatVND(estimatedCostNum));
     }
     return parts.join(' · ');
@@ -552,7 +546,7 @@ export default function CreateProposalModal({
       title: title.trim(),
       kind: kind as ProposalKindV5,
       reason: reason.trim(),
-      estimatedCost: (kind === 'du_an' || kind === 'dau_tu') ? estimatedCostNum : undefined,
+      estimatedCost: kind === 'du_an' ? estimatedCostNum : undefined,
       attachments: attachments.length ? attachments : undefined,
       // V6+ Đơn vị liên quan + auto scope
       relatedUnits: relatedUnits.length ? relatedUnits : undefined,
@@ -731,7 +725,7 @@ export default function CreateProposalModal({
           </div>
 
           {/* 4 — Giá trị dự kiến (chỉ hiện khi kind = dau_tu) */}
-          {(kind === 'du_an' || kind === 'dau_tu') && (
+          {kind === 'du_an' && (
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                 Giá trị dự kiến (VNĐ)

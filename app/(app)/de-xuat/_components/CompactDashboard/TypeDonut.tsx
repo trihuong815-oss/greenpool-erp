@@ -24,22 +24,16 @@ interface Seg {
 }
 
 // V6.4 (2026-06-13) anh chốt 3 loại — Vận hành / Dự án / Cải tiến.
-// Giữ 3 legacy (dau_tu / chien_luoc / khan_cap) để render proposal cũ trên Firestore.
 const TYPE_META: Record<ProposalKind, { name: string; hex: string; hexLight: string; gradId: string }> = {
   van_hanh: { name: 'Vận hành', hex: '#3b82f6', hexLight: '#60a5fa', gradId: 'td-vh' },
   du_an: { name: 'Dự án', hex: '#8b5cf6', hexLight: '#a78bfa', gradId: 'td-da' },
   cai_tien: { name: 'Cải tiến', hex: '#10b981', hexLight: '#34d399', gradId: 'td-ct' },
-  // Legacy
-  dau_tu: { name: 'Đầu tư', hex: '#f59e0b', hexLight: '#fbbf24', gradId: 'td-dt' },
-  chien_luoc: { name: 'Chiến lược', hex: '#a78bfa', hexLight: '#c4b5fd', gradId: 'td-cl' },
-  khan_cap: { name: 'Khẩn cấp', hex: '#e11d48', hexLight: '#fb7185', gradId: 'td-kc' },
 };
 
 export default function TypeDonut({ proposals, currentUserUid }: Props) {
   const buckets = useMemo(() => {
     const out: Record<ProposalKind, number> = {
       van_hanh: 0, du_an: 0, cai_tien: 0,
-      dau_tu: 0, chien_luoc: 0, khan_cap: 0, // legacy
     };
     for (const p of proposals) {
       if (p.creatorUid !== currentUserUid) continue;
