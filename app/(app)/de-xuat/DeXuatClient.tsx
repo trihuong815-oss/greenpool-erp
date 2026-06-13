@@ -241,6 +241,20 @@ function adaptTaskToProposalV6(t: Task, users: UserLite[]): ProposalV6 {
     estimatedCost: t.estimatedCost ?? undefined,
     attachments: [],
 
+    // V6.5 (2026-06-14): đọc 4 field redesign — ưu tiên ROOT (server persist) → fallback meta.
+    nature: ((t as any).nature === 'support' || (t as any).nature === 'governance')
+      ? (t as any).nature
+      : (meta.nature === 'support' || meta.nature === 'governance' ? meta.nature : undefined),
+    recipientUnitUid: typeof (t as any).recipientUid === 'string' ? (t as any).recipientUid
+      : (typeof meta.recipientUnitUid === 'string' ? meta.recipientUnitUid : undefined),
+    recipientUnitName: typeof (t as any).recipientUnitName === 'string' ? (t as any).recipientUnitName
+      : (typeof meta.recipientUnitName === 'string' ? meta.recipientUnitName : undefined),
+    recipientLeaderUid: typeof (t as any).recipientLeaderUid === 'string' ? (t as any).recipientLeaderUid
+      : (typeof meta.recipientLeaderUid === 'string' ? meta.recipientLeaderUid : undefined),
+    recipientLeaderName: typeof (t as any).recipientLeaderName === 'string' ? (t as any).recipientLeaderName
+      : (typeof meta.recipientLeaderName === 'string' ? meta.recipientLeaderName : undefined),
+    hasFinancial: (t as any).hasFinancial === true || meta.hasFinancial === true,
+
     // Approver
     approverChain: chain,
     approverIdx: idx,
@@ -342,7 +356,12 @@ function adaptProposalToDrawer(p: ProposalV6): ProposalV2 {
     linkedCoordTaskCode: p.linkedCoordTaskCode,
     // V6 reason
     reason: p.reason,
-  };
+    // V6.5 (2026-06-14): pass nature/leader/financial cho drawer hiển thị section "Cấu hình quản trị"
+    nature: p.nature,
+    recipientUnitName: p.recipientUnitName,
+    recipientLeaderName: p.recipientLeaderName,
+    hasFinancial: p.hasFinancial,
+  } as ProposalV2;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

@@ -77,21 +77,38 @@ export default function ProposalCard({ proposal, onTap }: Props) {
         }>
           {PROPOSAL_KIND_LABEL[kind] ?? kind}
         </span>
-        <span className={
-          'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ' +
-          (proposal.unitsScope === 'lien_khoi'
-            ? 'bg-violet-50 text-violet-700 ring-violet-200'
-            : 'bg-emerald-50 text-emerald-700 ring-emerald-200')
-        }>
-          {proposal.unitsScope === 'lien_khoi' ? 'Liên khối' : 'Trong khối'}
-        </span>
+        {/* V6.5 (2026-06-14): tag nature thay vì unitsScope cũ */}
+        {proposal.nature && (
+          <span className={
+            'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ' +
+            (proposal.nature === 'governance'
+              ? 'bg-amber-50 text-amber-700 ring-amber-200'
+              : 'bg-sky-50 text-sky-700 ring-sky-200')
+          }>
+            {proposal.nature === 'governance' ? '⚙️ Quản trị' : '🤝 Hỗ trợ'}
+          </span>
+        )}
       </div>
 
-      {/* Người duyệt hiện tại */}
-      <div className="flex items-center gap-2 text-sm">
-        <UserCheck size={14} className="text-slate-400 shrink-0" />
-        <span className="text-slate-500">Người duyệt:</span>
-        <span className="text-slate-800 font-medium truncate">{currentApproverDisplay(proposal)}</span>
+      {/* V6.5 (2026-06-14): Hiện đầy đủ đơn vị nhận + lãnh đạo phê duyệt + người duyệt hiện tại */}
+      <div className="space-y-1 text-sm">
+        {proposal.recipientUnitName && (
+          <div className="flex items-center gap-2">
+            <span className="text-slate-500 text-xs">📨 Đơn vị nhận:</span>
+            <span className="text-slate-800 font-medium truncate">{proposal.recipientUnitName}</span>
+          </div>
+        )}
+        {proposal.nature === 'governance' && proposal.recipientLeaderName && (
+          <div className="flex items-center gap-2">
+            <span className="text-slate-500 text-xs">⚙️ Lãnh đạo duyệt:</span>
+            <span className="text-slate-800 font-medium truncate">{proposal.recipientLeaderName}</span>
+          </div>
+        )}
+        <div className="flex items-center gap-2">
+          <UserCheck size={14} className="text-slate-400 shrink-0" />
+          <span className="text-slate-500 text-xs">Người duyệt hiện tại:</span>
+          <span className="text-slate-800 font-medium truncate">{currentApproverDisplay(proposal)}</span>
+        </div>
       </div>
 
       {/* Footer — SLA + Status */}

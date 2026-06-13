@@ -163,12 +163,17 @@ export default function CompactProposalTable({ proposals, currentUserUid, onRowC
                     <div className="font-medium text-slate-800">{p.title}</div>
                     <div className="text-[10px] text-slate-400 mt-0.5">#{p.code}</div>
                     <div className="flex flex-wrap gap-1 mt-1">
-                      <span className={
-                        'inline-flex items-center rounded px-1.5 py-0 text-[10px] font-medium ring-1 ring-inset ' +
-                        (p.unitsScope === 'lien_khoi' ? 'bg-orange-50 text-orange-700 ring-orange-200' : 'bg-slate-50 text-slate-600 ring-slate-200')
-                      }>
-                        {p.unitsScope === 'lien_khoi' ? 'Liên khối' : 'Trong khối'}
-                      </span>
+                      {/* V6.5: tag nature thay unitsScope */}
+                      {p.nature && (
+                        <span className={
+                          'inline-flex items-center rounded px-1.5 py-0 text-[10px] font-medium ring-1 ring-inset ' +
+                          (p.nature === 'governance'
+                            ? 'bg-amber-50 text-amber-700 ring-amber-200'
+                            : 'bg-sky-50 text-sky-700 ring-sky-200')
+                        }>
+                          {p.nature === 'governance' ? 'Quản trị' : 'Hỗ trợ'}
+                        </span>
+                      )}
                     </div>
                   </td>
                   {/* Loại */}
@@ -180,9 +185,23 @@ export default function CompactProposalTable({ proposals, currentUserUid, onRowC
                       {PROPOSAL_KIND_LABEL[kind] ?? kind}
                     </span>
                   </td>
-                  {/* Người duyệt hiện tại */}
-                  <td className="px-3 py-3 align-top text-sm text-slate-700 truncate">
-                    {currentApproverDisplay(p)}
+                  {/* V6.5 (2026-06-14): hiện đầy đủ đơn vị nhận + lãnh đạo + người duyệt hiện tại */}
+                  <td className="px-3 py-3 align-top text-xs space-y-0.5">
+                    {p.recipientUnitName && (
+                      <div className="truncate">
+                        <span className="text-slate-400">Đv nhận:</span>{' '}
+                        <span className="text-slate-700">{p.recipientUnitName}</span>
+                      </div>
+                    )}
+                    {p.nature === 'governance' && p.recipientLeaderName && (
+                      <div className="truncate">
+                        <span className="text-slate-400">Lãnh đạo:</span>{' '}
+                        <span className="text-slate-700 font-medium">{p.recipientLeaderName}</span>
+                      </div>
+                    )}
+                    <div className="truncate text-slate-700">
+                      <span className="text-slate-400">Đang duyệt:</span> {currentApproverDisplay(p)}
+                    </div>
                   </td>
                   {/* SLA */}
                   <td className={`px-3 py-3 align-top text-xs tabular-nums ${sla.color}`}>

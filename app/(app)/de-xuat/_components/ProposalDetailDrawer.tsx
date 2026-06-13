@@ -152,6 +152,11 @@ export interface ProposalV2 {
   attachments?: ProposalAttachment[];
   linkedCoordTaskId?: string;
   linkedCoordTaskCode?: string;
+  // V6.5 (2026-06-14): cấu hình quản trị
+  nature?: 'support' | 'governance';
+  recipientUnitName?: string;
+  recipientLeaderName?: string;
+  hasFinancial?: boolean;
 
   // ── Field V3/V5 (giữ để không vỡ caller — V6 không render) ──
   priority?: ProposalPriority;
@@ -581,6 +586,13 @@ export default function ProposalDetailDrawer({
               <Field label="Mã" value={proposal.code} />
               <Field label="Tên đề xuất" value={proposal.title} />
               <Field label="Loại" value={KIND_LABEL[proposal.kind]} />
+              {/* V6.5 (2026-06-14): Tính chất đề xuất */}
+              {proposal.nature && (
+                <Field
+                  label="Tính chất"
+                  value={proposal.nature === 'governance' ? '⚙️ Đề xuất quản trị' : '🤝 Hỗ trợ công việc'}
+                />
+              )}
               <Field
                 label="Người tạo"
                 value={
@@ -593,7 +605,19 @@ export default function ProposalDetailDrawer({
                 label="Trạng thái"
                 value={STATUS_LABEL[proposal.status]}
               />
-              {proposal.estimatedCost != null && (
+              {proposal.recipientUnitName && (
+                <Field label="Đơn vị nhận" value={proposal.recipientUnitName} />
+              )}
+              {proposal.nature === 'governance' && proposal.recipientLeaderName && (
+                <Field label="Lãnh đạo phê duyệt" value={proposal.recipientLeaderName} />
+              )}
+              {proposal.nature === 'governance' && (
+                <Field
+                  label="Có phát sinh TC"
+                  value={proposal.hasFinancial ? 'Có' : 'Không'}
+                />
+              )}
+              {proposal.estimatedCost != null && proposal.estimatedCost > 0 && (
                 <Field
                   label="Giá trị dự kiến"
                   value={formatVnd(proposal.estimatedCost)}

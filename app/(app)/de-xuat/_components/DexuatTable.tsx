@@ -579,43 +579,60 @@ function DexuatRow({ p, currentUserUid, currentUserRole, onRowClick, onAction }:
         })()}
       </td>
 
-      {/* 4c. Tag khối (Trong khối / Liên khối — auto từ unitsScope) */}
+      {/* 4c. V6.5 (2026-06-14): Tag tính chất (Quản trị / Hỗ trợ) thay unitsScope cũ */}
       <td className="px-3 py-2.5">
         {(() => {
-          const scope = (p as any).unitsScope as 'trong_khoi' | 'lien_khoi' | undefined;
-          if (!scope) return <span className="text-slate-300 text-xs">—</span>;
-          if (scope === 'lien_khoi') {
+          const nature = (p as any).nature as 'support' | 'governance' | undefined;
+          if (!nature) {
+            // Fallback unitsScope cho data cũ
+            const scope = (p as any).unitsScope as 'trong_khoi' | 'lien_khoi' | undefined;
+            if (!scope) return <span className="text-slate-300 text-xs">—</span>;
             return (
-              <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-violet-100 text-violet-800 ring-1 ring-violet-200">
-                🔗 Liên khối
+              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold ring-1 ${
+                scope === 'lien_khoi' ? 'bg-violet-100 text-violet-800 ring-violet-200' : 'bg-emerald-100 text-emerald-800 ring-emerald-200'
+              }`}>
+                {scope === 'lien_khoi' ? '🔗 Liên khối' : '✓ Trong khối'}
               </span>
             );
           }
           return (
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200">
-              ✓ Trong khối
+            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold ring-1 ${
+              nature === 'governance' ? 'bg-amber-100 text-amber-800 ring-amber-200' : 'bg-sky-100 text-sky-800 ring-sky-200'
+            }`}>
+              {nature === 'governance' ? '⚙️ Quản trị' : '🤝 Hỗ trợ'}
             </span>
           );
         })()}
       </td>
 
-      {/* 5. Người duyệt hiện tại */}
+      {/* 5. V6.5: Đơn vị nhận + Lãnh đạo + Người duyệt hiện tại — gộp 1 cột */}
       <td className="px-3 py-2.5">
-        {currStep ? (
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold flex items-center justify-center shrink-0">
-              {initials}
+        <div className="text-[11px] space-y-0.5 max-w-[180px]">
+          {(p as any).recipientUnitName && (
+            <div className="truncate" title={`Đơn vị nhận: ${(p as any).recipientUnitName}`}>
+              <span className="text-slate-400">Nhận:</span>{' '}
+              <span className="text-slate-700">{(p as any).recipientUnitName}</span>
             </div>
-            <span
-              className="text-slate-700 text-[12px] truncate max-w-[140px]"
-              title={currStep.name}
-            >
-              {currStep.name}
-            </span>
-          </div>
-        ) : (
-          <span className="text-slate-400 text-[12px]">—</span>
-        )}
+          )}
+          {(p as any).nature === 'governance' && (p as any).recipientLeaderName && (
+            <div className="truncate" title={`Lãnh đạo: ${(p as any).recipientLeaderName}`}>
+              <span className="text-slate-400">Lãnh đạo:</span>{' '}
+              <span className="text-slate-700 font-medium">{(p as any).recipientLeaderName}</span>
+            </div>
+          )}
+          {currStep ? (
+            <div className="flex items-center gap-1.5 pt-0.5">
+              <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 text-[9px] font-bold flex items-center justify-center shrink-0">
+                {initials}
+              </div>
+              <span className="text-emerald-700 font-medium truncate text-[11px]" title={currStep.name}>
+                {currStep.name}
+              </span>
+            </div>
+          ) : (
+            <div className="text-slate-400">— chờ —</div>
+          )}
+        </div>
       </td>
 
       {/* 6. SLA */}
