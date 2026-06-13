@@ -33,6 +33,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, Plus, RefreshCw } from 'lucide-react';
 import { tasksApi, type Task } from '@/lib/services/tasks/api-client';
+import { isTP, isQLCS } from '@/lib/auth/roles';
+import CompactDashboard from './_components/CompactDashboard';
 import DexuatDashboard, {
   type ProposalV6 as DashboardProposalV6,
 } from './_components/DexuatDashboard';
@@ -722,9 +724,17 @@ export function DeXuatClient(props: Props) {
         <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
           {error}
         </div>
+      ) : isTP(currentUserRole) || isQLCS(currentUserRole) ? (
+        /* V6.4 (2026-06-13): Dashboard COMPACT cho TP/QLCS — gộp dashboard + bảng vào 1 component.
+           Spec anh chốt: 5 KPI cá nhân hoá + 2 widget (Donut loại + Hiệu suất) + bảng 5 cột + 5 tabs. */
+        <CompactDashboard
+          proposals={proposals}
+          currentUserUid={currentUserId}
+          onRowClick={setSelected}
+        />
       ) : (
         <>
-          {/* Dashboard V6 — 7 KPI + 1 Donut "Cơ cấu theo loại" */}
+          {/* Dashboard V6 — 7 KPI + 1 Donut "Cơ cấu theo loại" (cho GD/CEO/CHU_TICH) */}
           <DexuatDashboard
             proposals={dashboardProposals}
             currentUserUid={currentUserId}

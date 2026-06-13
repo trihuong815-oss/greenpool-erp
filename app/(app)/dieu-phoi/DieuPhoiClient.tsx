@@ -17,12 +17,14 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Calendar, ChevronDown, Loader2, Plus, RefreshCw } from 'lucide-react';
+import { isTP, isQLCS } from '@/lib/auth/roles';
 import KpiBar from './_components/KpiBar';
 import BlockDonut from './_components/BlockDonut';
 import DeptBarChart from './_components/DeptBarChart';
 import BranchBarChart from './_components/BranchBarChart';
 import BottleneckTable from './_components/BottleneckTable';
 import TopWatchList from './_components/TopWatchList';
+import CompactDashboard from './_components/CompactDashboard';
 import ImportantNotiPanel from './_components/ImportantNotiPanel';
 import CoordinationTable from './_components/CoordinationTable';
 import CreateModal, { type CreatePayload } from './_components/CreateModal';
@@ -46,6 +48,9 @@ interface DieuPhoiClientProps {
   currentUserUid: string;
   currentUserName: string;
   currentUserRole: string;
+  // V6.4 (2026-06-13): cần để compact dashboard biết user thuộc dept/facility nào.
+  currentUserDeptId?: string | null;
+  currentUserFacilityId?: string | null;
 }
 
 /**
@@ -77,9 +82,18 @@ function patchCollab(
 export default function DieuPhoiClient({
   currentUserUid,
   currentUserName,
+  currentUserDeptId = null,
+  currentUserFacilityId = null,
   currentUserRole,
 }: DieuPhoiClientProps) {
   const canCreate = canCreateCoord(currentUserRole);
+  // V6.4 (2026-06-13): detect role để chọn dashboard variant.
+  // TP_* / QLCS_* → CompactDashboard (gọn, cá nhân hoá, không có analytics hệ thống).
+  // GD/CEO/CHU_TICH/ADMIN → giữ dashboard đầy đủ.
+  const isCompactRole = isTP(currentUserRole) || isQLCS(currentUserRole);
+  const unitLabel = isQLCS(currentUserRole) ? `QLCS ${currentUserFacilityId ?? ''}`.trim()
+    : isTP(currentUserRole) ? (currentUserName || 'phòng tôi')
+    : 'đơn vị tôi';
   const [showCreate, setShowCreate] = useState(false);
   /** V6.2: task đang được sửa (null = chế độ tạo mới). */
   const [editingTask, setEditingTask] = useState<CoordTask | null>(null);
@@ -645,6 +659,17 @@ export default function DieuPhoiClient({
           <div className="py-16 flex items-center justify-center text-slate-400">
             <Loader2 className="animate-spin mr-2" size={18} /> Đang tải dữ liệu điều phối…
           </div>
+        ) : isCompactRole ? (
+          /* V6.4 (2026-06-13): Dashboard COMPACT cho TP/QLCS — ẩn phân tích hệ thống.
+             Spec anh chốt: 5 KPI cá nhân + 2 widget phân tích + bảng 6 cột + 5 tabs. */
+          <CompactDashboard
+            tasks={tasks}
+            currentUserUid={currentUserUid}
+            currentUserDeptId={currentUserDeptId}
+            currentUserFacilityId={currentUserFacilityId}
+            unitLabel={unitLabel}
+            onRowClick={setSelected}
+          />
         ) : (
           <>
             {/* Section: Tổng quan KPI */}

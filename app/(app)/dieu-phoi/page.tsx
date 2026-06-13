@@ -34,6 +34,8 @@ export default async function Page() {
           currentUserUid={profile.id}
           currentUserName={profile.displayName}
           currentUserRole={profile.roleCode}
+          currentUserDeptId={profile.departmentId ?? null}
+          currentUserFacilityId={profile.branchId ?? null}
         />
       </div>
     </>
