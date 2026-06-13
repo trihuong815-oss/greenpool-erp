@@ -30,49 +30,28 @@ const ALL_QLCS = ['QLCS_HM', 'QLCS_24NCT', 'QLCS_TK', 'QLCS_TT', 'QLCS_CTT'];
 
 const ALL_TP = [...TP_KD, ...TP_VP];
 
-// V6.4 (2026-06-13): mở rộng "Đề xuất gửi tới" — anh chốt:
-//   Trong khối / liên khối đều cho user được gửi tới ĐẦY ĐỦ danh sách phù hợp.
-//   - QLCS / TP gửi → peer = all TP/QLCS (cả 2 khối), senior = GD_KD + GD_VP
-//     (KHÔNG phân biệt khối — vì có thể đề xuất liên khối / xin phối hợp ngang)
-//   - GD_KD / GD_VP gửi → peer = GD khối còn lại, senior = CEO + CHU_TICH
-//   - CEO gửi → senior = CHU_TICH
-//   - CHU_TICH = đỉnh tuyệt đối, không có ai
-function targetRolesFor(callerRole: string, tier: 'peer' | 'senior'): string[] {
-  if (tier === 'peer') {
-    // GD: peer = GD khối còn lại (chỉ 1 GD)
-    if (callerRole === 'GD_KD') return ['GD_VP'];
-    if (callerRole === 'GD_VP') return ['GD_KD'];
-    // TP: peer = TẤT CẢ TP (cả 2 khối) — anh mở rộng cho liên khối
-    if (callerRole.startsWith('TP_')) {
-      return ALL_TP.filter((r) => r !== callerRole);
-    }
-    // QLCS: peer = TẤT CẢ QLCS khác
-    if (callerRole.startsWith('QLCS_')) {
-      return ALL_QLCS.filter((r) => r !== callerRole);
-    }
-    if (callerRole === 'CEO' || callerRole === 'CHU_TICH' || callerRole === 'ADMIN') return [];
-    return [];
-  }
-  // senior
+// V6.4 (2026-06-13) anh chốt cuối: bỏ phân biệt peer/senior — 1 list duy nhất.
+//   - TP / QLCS gửi → list = GD_KD + GD_VP + TẤT CẢ TP + TẤT CẢ QLCS (trừ caller)
+//   - GD_KD / GD_VP gửi → list = GD khối còn lại + CEO + CHU_TICH
+//   - CEO gửi → list = CHU_TICH
+//   - CHU_TICH = đỉnh, không có ai
+function targetRolesFor(callerRole: string): string[] {
   if (callerRole === 'CHU_TICH' || callerRole === 'ADMIN') return [];
   if (callerRole === 'CEO') return ['CHU_TICH'];
-  // GD: senior = CEO + CHU_TICH (anh mở rộng)
-  if (callerRole === 'GD_KD' || callerRole === 'GD_VP') return ['CEO', 'CHU_TICH'];
-  // QLCS / TP: senior = cả 2 GD (anh mở rộng — gửi xin duyệt liên khối)
-  if (callerRole.startsWith('QLCS_')) return ['GD_KD', 'GD_VP'];
-  if (callerRole.startsWith('TP_')) return ['GD_KD', 'GD_VP'];
+  if (callerRole === 'GD_KD') return ['GD_VP', 'CEO', 'CHU_TICH'];
+  if (callerRole === 'GD_VP') return ['GD_KD', 'CEO', 'CHU_TICH'];
+  // TP / QLCS: cả 2 GD + tất cả TP + tất cả QLCS (trừ caller)
+  if (callerRole.startsWith('TP_') || callerRole.startsWith('QLCS_')) {
+    return ['GD_KD', 'GD_VP', ...ALL_TP, ...ALL_QLCS].filter((r) => r !== callerRole);
+  }
   return [];
 }
 
-export async function GET(req: NextRequest) {
+export async function GET(_req: NextRequest) {
   try {
     const caller = await getAuthedCaller();
-    const tier = req.nextUrl.searchParams.get('tier');
-    if (tier !== 'peer' && tier !== 'senior') {
-      return NextResponse.json({ error: "tier phải là 'peer' hoặc 'senior'" }, { status: 400 });
-    }
-
-    const targetRoles = targetRolesFor(caller.profile.role_code, tier);
+    // V6.4 (2026-06-13) anh chốt cuối: bỏ param tier — chỉ 1 list duy nhất theo caller role.
+    const targetRoles = targetRolesFor(caller.profile.role_code);
     if (targetRoles.length === 0) {
       return NextResponse.json({ items: [] });
     }
@@ -80,30 +59,32 @@ export async function GET(req: NextRequest) {
     const db = getFirebaseAdminDb();
     const items: Array<{ uid: string; displayName: string; roleCode: string; roleName: string; branchId: string | null }> = [];
 
-    // Firestore field tên là `roleId` (value = roleCode string vd 'GD_KD').
-    // "in" tối đa 30 phần tử — ở đây tối đa 7 nên 1 query đủ.
-    const snap = await db.collection(COLLECTIONS.USERS)
-      .where('roleId', 'in', targetRoles)
-      .get();
-
-    for (const doc of snap.docs) {
-      const d = doc.data();
-      if (d.status === 'inactive' || d.disabled === true) continue;
-      if (doc.id === caller.profile.uid) continue; // không tự đề xuất cho mình
-      items.push({
-        uid: doc.id,
-        displayName: typeof d.displayName === 'string' ? d.displayName : '(chưa đặt tên)',
-        roleCode: typeof d.roleId === 'string' ? d.roleId : '',
-        roleName: typeof d.roleName === 'string' ? d.roleName : (d.roleId ?? ''),
-        branchId: typeof d.branchId === 'string' ? d.branchId : null,
-      });
+    // Firestore "in" cap 30 phần tử. TP+QLCS+2 GD có thể >30 sau này → batch chia.
+    const BATCH = 30;
+    const seen = new Set<string>();
+    for (let i = 0; i < targetRoles.length; i += BATCH) {
+      const batch = targetRoles.slice(i, i + BATCH);
+      const snap = await db.collection(COLLECTIONS.USERS)
+        .where('roleId', 'in', batch)
+        .get();
+      for (const doc of snap.docs) {
+        if (seen.has(doc.id)) continue;
+        seen.add(doc.id);
+        const d = doc.data();
+        if (d.status === 'inactive' || d.disabled === true) continue;
+        if (doc.id === caller.profile.uid) continue;
+        items.push({
+          uid: doc.id,
+          displayName: typeof d.displayName === 'string' ? d.displayName : '(chưa đặt tên)',
+          roleCode: typeof d.roleId === 'string' ? d.roleId : '',
+          roleName: typeof d.roleName === 'string' ? d.roleName : (d.roleId ?? ''),
+          branchId: typeof d.branchId === 'string' ? d.branchId : null,
+        });
+      }
     }
-
-    // Sort theo role + tên
     items.sort((a, b) =>
       a.roleCode.localeCompare(b.roleCode) || a.displayName.localeCompare(b.displayName, 'vi'),
     );
-
     return NextResponse.json({ items });
   } catch (e) {
     if (e instanceof UnauthorizedError) return NextResponse.json({ error: e.message }, { status: e.status });

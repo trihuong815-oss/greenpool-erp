@@ -405,25 +405,23 @@ export default function CreateProposalModal({
   const [attachments, setAttachments] = useState<ProposalAttachmentDraftV6[]>([]);
   // V6+ Đơn vị liên quan multi-select
   const [relatedUnitIds, setRelatedUnitIds] = useState<string[]>([]);
-  // V6.4 (2026-06-12): chọn người nhận đề xuất cụ thể (UID)
-  const [recipientTier, setRecipientTier] = useState<'peer' | 'senior'>('senior');
+  // V6.4 (2026-06-13) anh chốt cuối: bỏ chip Cấp trên/Ngang cấp — 1 dropdown duy nhất.
   const [recipientUid, setRecipientUid] = useState('');
   const [recipientName, setRecipientName] = useState('');
   const [recipientOptions, setRecipientOptions] = useState<Array<{ uid: string; displayName: string; roleCode: string; roleName: string }>>([]);
   const [loadingRecipients, setLoadingRecipients] = useState(false);
 
-  // Fetch candidate list khi đổi tier
+  // Fetch candidate list 1 lần khi mở modal (server tự xác định theo role caller)
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     setLoadingRecipients(true);
-    fetch(`/api/proposals/recipients?tier=${recipientTier}`)
+    fetch('/api/proposals/recipients')
       .then((r) => r.json())
       .then((j) => {
         if (cancelled) return;
         const items = Array.isArray(j?.items) ? j.items : [];
         setRecipientOptions(items);
-        // Nếu UID hiện tại không còn trong list → reset
         if (recipientUid && !items.some((x: any) => x.uid === recipientUid)) {
           setRecipientUid('');
           setRecipientName('');
@@ -437,7 +435,7 @@ export default function CreateProposalModal({
       });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, recipientTier]);
+  }, [open]);
 
   // V6.2: pre-fill state khi mở mode edit
   useEffect(() => {
@@ -452,8 +450,6 @@ export default function CreateProposalModal({
       Array.isArray(p.relatedUnits) ? p.relatedUnits.map((u: any) => u.id) : [],
     );
     // V6.4: pre-fill recipient nếu có
-    const tier = (p as any).recipientTier;
-    if (tier === 'peer' || tier === 'senior') setRecipientTier(tier);
     const uid = (p as any).recipientUid;
     if (typeof uid === 'string') {
       setRecipientUid(uid);
@@ -516,7 +512,6 @@ export default function CreateProposalModal({
     setRelatedUnitIds([]);
     setRecipientUid('');
     setRecipientName('');
-    // KHÔNG reset recipientTier — giữ tier user chọn để UX mượt khi tạo đề xuất kế tiếp.
   }
 
   function handleClose() {
@@ -551,8 +546,7 @@ export default function CreateProposalModal({
       // V6+ Đơn vị liên quan + auto scope
       relatedUnits: relatedUnits.length ? relatedUnits : undefined,
       unitsScope: relatedUnits.length ? unitsScope : undefined,
-      // V6.4: chọn người nhận cụ thể (UID)
-      recipientTier,
+      // V6.4: chọn người nhận cụ thể (UID) — không còn tier
       recipientUid: recipientUid || undefined,
       recipientName: recipientName || undefined,
       resolvedApproverChain: resolvedChain,
@@ -883,38 +877,11 @@ export default function CreateProposalModal({
             </div>
           </div>
 
-          {/* V6.4 (2026-06-12): Chọn người nhận đề xuất — UID cụ thể */}
+          {/* V6.4 (2026-06-13) anh chốt cuối: bỏ chip Cấp trên/Ngang cấp — chỉ 1 dropdown đối tượng gửi. */}
           <section className="rounded-lg border border-slate-200 bg-white px-4 py-3">
             <label className="block text-xs font-semibold text-slate-700 mb-2">
               Gửi đề xuất tới <span className="text-rose-500">*</span>
             </label>
-            <div className="flex flex-wrap items-center gap-2 mb-2">
-              <span className="text-[11px] text-slate-500">Cấp:</span>
-              <div className="inline-flex rounded-md ring-1 ring-slate-200 overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setRecipientTier('senior')}
-                  className={`px-3 py-1 text-xs font-medium ${
-                    recipientTier === 'senior'
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-white text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  Cấp trên
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRecipientTier('peer')}
-                  className={`px-3 py-1 text-xs font-medium border-l border-slate-200 ${
-                    recipientTier === 'peer'
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-white text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  Ngang cấp
-                </button>
-              </div>
-            </div>
             <select
               value={recipientUid}
               onChange={(e) => {

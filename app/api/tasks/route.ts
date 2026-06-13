@@ -508,19 +508,16 @@ export async function POST(req: NextRequest) {
       approvalChain = [currentApprover];
     }
 
-    // Phase 12.9 (2026-06-04): proposal flow đơn giản hoá — 2 tier: peer / senior.
-    //   - peer = ngang cấp; senior = cấp trên trực tiếp
-    //   - Client chọn recipientUid trực tiếp → server build chain = [recipientUid] (1 cấp).
-    //   - canCreateProposal đã check ở đầu hàm.
-    let recipientTier: string | null = null;
+    // V6.4 (2026-06-13) anh chốt cuối: bỏ phân biệt peer/senior — chỉ validate recipientRole
+    // hợp lệ theo creatorRole (khớp với /api/proposals/recipients targetRolesFor).
+    //   TP / QLCS gửi → recipient ∈ {GD_KD, GD_VP, all TP, all QLCS} (trừ caller)
+    //   GD_KD gửi    → recipient ∈ {GD_VP, CEO, CHU_TICH}
+    //   GD_VP gửi    → recipient ∈ {GD_KD, CEO, CHU_TICH}
+    //   CEO gửi      → recipient = CHU_TICH
+    //   ADMIN gửi    → recipient ∈ {GD_KD, GD_VP, CEO, CHU_TICH}
+    let recipientTier: string | null = null; // giữ name để build chain bên dưới (deprecated)
     let recipientUidResolved: string | null = null;
     if (kind === 'proposal') {
-      const VALID_TIER = new Set(['peer', 'senior']);
-      recipientTier = typeof body?.recipientTier === 'string' && VALID_TIER.has(body.recipientTier)
-        ? body.recipientTier : null;
-      if (!recipientTier) {
-        return NextResponse.json({ error: 'recipientTier bắt buộc (peer/senior)' }, { status: 400 });
-      }
       const recipientUid = typeof body?.recipientUid === 'string' ? body.recipientUid : '';
       if (!recipientUid) {
         return NextResponse.json({ error: 'Chọn người nhận đề xuất' }, { status: 400 });
@@ -528,7 +525,6 @@ export async function POST(req: NextRequest) {
       if (recipientUid === caller.profile.uid) {
         return NextResponse.json({ error: 'Không tự đề xuất cho chính mình' }, { status: 400 });
       }
-      // Validate recipient tồn tại + match tier theo role creator
       const db = getFirebaseAdminDb();
       const recipientDoc = await db.collection(COLLECTIONS.USERS).doc(recipientUid).get();
       if (!recipientDoc.exists) {
@@ -540,57 +536,38 @@ export async function POST(req: NextRequest) {
       }
       const recipientRole: string = recipientData.roleId ?? '';
       const creatorRole = caller.profile.role_code;
-      const isCreatorAdmin = creatorRole === 'ADMIN';
       const isCreatorGD = creatorRole === 'GD_KD' || creatorRole === 'GD_VP';
       const isCreatorTpQlcs = creatorRole.startsWith('TP_') || creatorRole.startsWith('QLCS_');
-      const TP_QLCS_PEER = new Set([
-        'TP_KT','TP_DT','TP_MKT','TP_GS','TP_KE','TP_NS',
-        'QLCS_HM','QLCS_TK','QLCS_CTT','QLCS_24NCT','QLCS_TT',
-      ]);
-      // Validate tier match (anh chốt 2026-06-05: ADMIN tách khỏi CEO)
-      if (isCreatorAdmin) {
-        // ADMIN: ngang cấp = GD_KD/GD_VP, cấp trên = CEO
-        if (recipientTier === 'peer' && recipientRole !== 'GD_KD' && recipientRole !== 'GD_VP') {
-          return NextResponse.json({ error: 'Người nhận ngang cấp ADMIN phải là GĐ Khối' }, { status: 400 });
-        }
-        if (recipientTier === 'senior' && recipientRole !== 'CEO') {
-          return NextResponse.json({ error: 'Người nhận cấp trên ADMIN phải là CEO/Chủ tịch' }, { status: 400 });
-        }
+
+      // Build allowed set theo creator role (đồng bộ /api/proposals/recipients)
+      const ALL_TP_ROLES = new Set(['TP_KT','TP_DT','TP_MKT','TP_GS','TP_KE','TP_NS']);
+      const ALL_QLCS_ROLES = new Set(['QLCS_HM','QLCS_TK','QLCS_CTT','QLCS_24NCT','QLCS_TT']);
+      const allowed = new Set<string>();
+      if (creatorRole === 'ADMIN') {
+        ['GD_KD','GD_VP','CEO','CHU_TICH'].forEach((r) => allowed.add(r));
+      } else if (creatorRole === 'CEO') {
+        allowed.add('CHU_TICH');
       } else if (isCreatorGD) {
-        const expectedPeerGd = creatorRole === 'GD_KD' ? 'GD_VP' : 'GD_KD';
-        if (recipientTier === 'peer' && recipientRole !== expectedPeerGd) {
-          return NextResponse.json({ error: 'Người nhận ngang cấp phải là GĐ khối còn lại' }, { status: 400 });
-        }
-        // GĐ cấp trên = CEO (KHÔNG gồm ADMIN — anh chốt 2026-06-05 ADMIN dưới CEO)
-        if (recipientTier === 'senior' && recipientRole !== 'CEO') {
-          return NextResponse.json({ error: 'Người nhận cấp trên phải là CEO/Chủ tịch' }, { status: 400 });
-        }
+        allowed.add(creatorRole === 'GD_KD' ? 'GD_VP' : 'GD_KD');
+        allowed.add('CEO'); allowed.add('CHU_TICH');
       } else if (isCreatorTpQlcs) {
-        // Phase 12.9.4 (anh chốt 2026-06-06): cho phép LIÊN KHỐI cho TP/QLCS.
-        // Validate role hợp lệ, không filter khối ở đây. Server sẽ tự chèn GĐ khối creator vào chain
-        // nếu recipient cross-block (xem build chain bên dưới).
-        if (recipientTier === 'peer' && !TP_QLCS_PEER.has(recipientRole)) {
-          return NextResponse.json({ error: 'Người nhận ngang cấp phải là TP/QLCS' }, { status: 400 });
-        }
-        // Phase 12.9.5: senior = GD_KD / GD_VP. Cho phép ADMIN khi slot GD_KD trống
-        // (anh đảm nhiệm GĐKD thực tế dưới role ADMIN — đồng bộ với UI).
-        if (recipientTier === 'senior'
-          && recipientRole !== 'GD_KD'
-          && recipientRole !== 'GD_VP'
-          && recipientRole !== 'ADMIN') {
-          return NextResponse.json({ error: 'Người nhận cấp trên phải là GĐ Khối' }, { status: 400 });
-        }
-        if (recipientTier === 'senior' && recipientRole === 'ADMIN') {
-          // Chỉ chấp nhận ADMIN nếu thực sự không có user GD_KD nào
-          const gdKdSnap = await db.collection(COLLECTIONS.USERS).where('roleId', '==', 'GD_KD').limit(1).get();
-          if (!gdKdSnap.empty) {
-            return NextResponse.json({ error: 'Phải chọn GĐ Khối, không phải ADMIN' }, { status: 400 });
-          }
-        }
+        ['GD_KD','GD_VP'].forEach((r) => allowed.add(r));
+        ALL_TP_ROLES.forEach((r) => allowed.add(r));
+        ALL_QLCS_ROLES.forEach((r) => allowed.add(r));
+        allowed.delete(creatorRole); // trừ chính caller
       } else {
         return NextResponse.json({ error: 'Vai trò không được dùng module này' }, { status: 403 });
       }
+      if (!allowed.has(recipientRole)) {
+        return NextResponse.json({
+          error: `Người nhận role '${recipientRole}' không hợp lệ với người gửi '${creatorRole}'`,
+        }, { status: 400 });
+      }
       recipientUidResolved = recipientUid;
+      // V6.4: derive recipientTier để build chain bên dưới — peer nếu recipient cùng/dưới cấp, senior nếu cấp trên.
+      const isSeniorRecipient = recipientRole === 'CEO' || recipientRole === 'CHU_TICH'
+        || (isCreatorTpQlcs && (recipientRole === 'GD_KD' || recipientRole === 'GD_VP'));
+      recipientTier = isSeniorRecipient ? 'senior' : 'peer';
       // Phase 12.9.5 (anh chốt 2026-06-06): luồng liên khối FULL =
       //   [GĐ khối creator] → [GĐ khối recipient] → [recipient TP/QLCS]
       // Nếu recipient CHÍNH là một trong 2 GĐ → KHÔNG chèn lần 2 (tránh trùng).
