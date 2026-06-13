@@ -28,32 +28,39 @@ const TP_KD = ['TP_DT', 'TP_MKT', 'TP_KT'];
 const TP_VP = ['TP_NS', 'TP_KE', 'TP_GS'];
 const ALL_QLCS = ['QLCS_HM', 'QLCS_24NCT', 'QLCS_TK', 'QLCS_TT', 'QLCS_CTT'];
 
+const ALL_TP = [...TP_KD, ...TP_VP];
+
+// V6.4 (2026-06-13): mở rộng "Đề xuất gửi tới" — anh chốt:
+//   Trong khối / liên khối đều cho user được gửi tới ĐẦY ĐỦ danh sách phù hợp.
+//   - QLCS / TP gửi → peer = all TP/QLCS (cả 2 khối), senior = GD_KD + GD_VP
+//     (KHÔNG phân biệt khối — vì có thể đề xuất liên khối / xin phối hợp ngang)
+//   - GD_KD / GD_VP gửi → peer = GD khối còn lại, senior = CEO + CHU_TICH
+//   - CEO gửi → senior = CHU_TICH
+//   - CHU_TICH = đỉnh tuyệt đối, không có ai
 function targetRolesFor(callerRole: string, tier: 'peer' | 'senior'): string[] {
   if (tier === 'peer') {
-    if (callerRole === 'GD_KD' || callerRole === 'GD_VP') return ['GD_KD', 'GD_VP'];
+    // GD: peer = GD khối còn lại (chỉ 1 GD)
+    if (callerRole === 'GD_KD') return ['GD_VP'];
+    if (callerRole === 'GD_VP') return ['GD_KD'];
+    // TP: peer = TẤT CẢ TP (cả 2 khối) — anh mở rộng cho liên khối
     if (callerRole.startsWith('TP_')) {
-      // Peer = TP cùng khối (KD ↔ KD, VP ↔ VP).
-      if (TP_KD.includes(callerRole)) return TP_KD;
-      if (TP_VP.includes(callerRole)) return TP_VP;
-      return [];
+      return ALL_TP.filter((r) => r !== callerRole);
     }
-    if (callerRole.startsWith('QLCS_')) return ALL_QLCS;
-    // CEO, CHU_TICH, ADMIN — đỉnh quản trị, không có peer.
+    // QLCS: peer = TẤT CẢ QLCS khác
+    if (callerRole.startsWith('QLCS_')) {
+      return ALL_QLCS.filter((r) => r !== callerRole);
+    }
     if (callerRole === 'CEO' || callerRole === 'CHU_TICH' || callerRole === 'ADMIN') return [];
     return [];
   }
   // senior
-  if (callerRole === 'CHU_TICH' || callerRole === 'ADMIN') return []; // đỉnh tuyệt đối
-  if (callerRole === 'CEO') return ['CHU_TICH']; // V6.4 (2026-06-13): CEO → CHU_TICH
-  if (callerRole === 'GD_KD' || callerRole === 'GD_VP') return ['CEO'];
-  if (callerRole.startsWith('QLCS_')) return ['GD_KD'];
-  if (callerRole.startsWith('TP_')) {
-    // TP_KT thuộc KD → GD_KD. TP_DT/MKT thuộc KD → GD_KD; TP_NS/KE/GS thuộc VP → GD_VP.
-    if (TP_KD.includes(callerRole)) return ['GD_KD'];
-    if (TP_VP.includes(callerRole)) return ['GD_VP'];
-    return [];
-  }
-  // NV/GV — không có trong canCreateProposal scope. Defensive default rỗng.
+  if (callerRole === 'CHU_TICH' || callerRole === 'ADMIN') return [];
+  if (callerRole === 'CEO') return ['CHU_TICH'];
+  // GD: senior = CEO + CHU_TICH (anh mở rộng)
+  if (callerRole === 'GD_KD' || callerRole === 'GD_VP') return ['CEO', 'CHU_TICH'];
+  // QLCS / TP: senior = cả 2 GD (anh mở rộng — gửi xin duyệt liên khối)
+  if (callerRole.startsWith('QLCS_')) return ['GD_KD', 'GD_VP'];
+  if (callerRole.startsWith('TP_')) return ['GD_KD', 'GD_VP'];
   return [];
 }
 
