@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { AlertTriangle, CheckCircle, CheckCircle2, MessageSquare } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { CoordTask } from './types';
+import { todayHN, formatTimeHN } from '@/lib/dates';
 
 interface Props { tasks: CoordTask[] }
 
@@ -28,7 +29,7 @@ const TXT: Record<NotiColor, string> = {
 function isOverdue(t: CoordTask): boolean {
   if (!t.dueDate) return false;
   if (t.status === 'hoan_thanh' || t.status === 'dong_ho_so') return false;
-  return t.dueDate < new Date().toISOString().slice(0, 10);
+  return t.dueDate < todayHN();
 }
 
 export default function ImportantNotiPanel({ tasks }: Props) {
@@ -36,7 +37,7 @@ export default function ImportantNotiPanel({ tasks }: Props) {
     const list: NotiItem[] = [];
     for (const t of tasks) {
       const ts = new Date(t.waitingSince || t.createdAt || Date.now()).getTime();
-      const time = new Date(ts).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+      const time = formatTimeHN(new Date(ts).toISOString());
       if (isOverdue(t)) {
         const days = Math.max(1, Math.round((Date.now() - new Date(t.dueDate).getTime()) / 86_400_000));
         list.push({

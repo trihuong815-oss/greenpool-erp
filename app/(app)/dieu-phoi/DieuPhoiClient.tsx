@@ -630,7 +630,7 @@ export default function DieuPhoiClient({
         <div className="hidden md:flex flex-wrap items-center gap-2 rounded-xl border border-slate-200/70 bg-white px-3 py-2 shadow-sm ring-1 ring-slate-50">
           <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-50 text-xs text-slate-600">
             <Calendar size={12} className="text-slate-400" />
-            <span className="tabular-nums font-medium">{new Date().toLocaleDateString('vi-VN')}</span>
+            <span className="tabular-nums font-medium">{new Date().toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</span>
           </div>
           <span className="h-4 w-px bg-slate-200" />
           <button

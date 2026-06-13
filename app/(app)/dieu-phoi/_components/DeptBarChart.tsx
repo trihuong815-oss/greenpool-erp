@@ -3,6 +3,7 @@
 import { ChevronDown } from 'lucide-react';
 import { useMemo } from 'react';
 import type { CoordTask, DeptId } from './types';
+import { todayHN } from '@/lib/dates';
 
 interface Props { tasks: CoordTask[] }
 
@@ -19,7 +20,7 @@ const DEPTS: { id: DeptId; name: string; color: string; colorLight: string }[] =
 function isOverdue(t: CoordTask): boolean {
   if (!t.dueDate) return false;
   if (t.status === 'hoan_thanh' || t.status === 'dong_ho_so') return false;
-  return t.dueDate < new Date().toISOString().slice(0, 10);
+  return t.dueDate < todayHN();
 }
 
 export default function DeptBarChart({ tasks }: Props) {

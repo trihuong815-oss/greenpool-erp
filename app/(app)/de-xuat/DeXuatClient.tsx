@@ -682,6 +682,7 @@ export function DeXuatClient(props: Props) {
   // ── Render ────────────────────────────────────────────────────────────────
   const totalCount = proposals.length;
   const todayStr = new Date().toLocaleDateString('vi-VN', {
+    timeZone: 'Asia/Ho_Chi_Minh',
     weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric',
   });
 

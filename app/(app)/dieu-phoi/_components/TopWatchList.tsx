@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import { ClipboardList, Users, FileText, AlertTriangle } from 'lucide-react';
 import type { CoordTask } from './types';
+import { todayHN } from '@/lib/dates';
 
 // ============================================================
 // V4 SPEC — Sort theo công thức weight:
@@ -27,7 +28,7 @@ function stuckHours(t: CoordTask): number {
 function isOverdue(t: CoordTask): boolean {
   if (!t.dueDate) return false;
   if (t.status === 'hoan_thanh' || t.status === 'dong_ho_so') return false;
-  return t.dueDate < new Date().toISOString().slice(0, 10);
+  return t.dueDate < todayHN();
 }
 
 /** V4: Severity — đọc field optional, fallback priority high → khẩn cấp. */
