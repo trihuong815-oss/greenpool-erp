@@ -563,6 +563,12 @@ export function DeXuatClient(props: Props) {
   const handleApproveAndCreateCoord = useCallback(async (id: string) => {
     const p = proposals.find((x) => x.id === id);
     if (!p) return;
+    // V6.5 (2026-06-13): chống tạo trùng — nếu đã có linkedCoordTaskId thì cảnh báo.
+    if (p.linkedCoordTaskId) {
+      alert(`Đề xuất ${p.code} đã được tạo điều phối: ${p.linkedCoordTaskCode ?? p.linkedCoordTaskId}.\nMở module Điều phối để xem.`);
+      router.push(`/dieu-phoi?taskId=${encodeURIComponent(p.linkedCoordTaskId)}`);
+      return;
+    }
     if (!confirm(
       `Phê duyệt và tạo điều phối từ đề xuất "${p.title}"?\n\n` +
       'Hệ thống sẽ chuyển trạng thái sang "Đã tạo điều phối" và mở /dieu-phoi.',
@@ -605,6 +611,10 @@ export function DeXuatClient(props: Props) {
         description: [
           p.reason ?? '',
           `Sinh từ đề xuất ${p.code}`,
+          // V6.5 (2026-06-13): include giá trị nếu có
+          typeof p.estimatedCost === 'number' && p.estimatedCost > 0
+            ? `Giá trị dự kiến: ${p.estimatedCost.toLocaleString('vi-VN')} đ`
+            : '',
         ].filter(Boolean).join('\n\n'),
         priority: 'normal',
         dueDate: null,
@@ -616,19 +626,24 @@ export function DeXuatClient(props: Props) {
         collaboratorDeptIds,
         collaboratorFacilityIds,
         collaboratorRoles,
+        // V6.5: estimatedCost từ proposal map sang task (anh chốt: tự động lấy giá trị)
+        estimatedCost: typeof p.estimatedCost === 'number' ? p.estimatedCost : null,
         meta: {
           fromProposalId: p.id,
           fromProposalCode: p.code,
+          fromProposalCost: p.estimatedCost ?? null,
           relatedUnits, // pass nguyên để adapter coord dùng nếu cần
         },
       };
       const created = await tasksApi.create(body);
-      // V6.4 (2026-06-12): reverse link — ghi linkedCoordId vào proposal doc để
-      // proposal hiện "Đã tạo điều phối" + click nhảy được sang task. Không fail
-      // toàn flow nếu reverse PATCH lỗi (chỉ log).
+      // V6.4 reverse link → P3.4 (2026-06-13): thêm linkedCoordCode để adapter hiển thị code đẹp.
       try {
         await tasksApi.update(p.id, {
-          meta: { linkedCoordId: created.id, linkedCoordAt: new Date().toISOString() },
+          meta: {
+            linkedCoordId: created.id,
+            linkedCoordCode: (created as any).code ?? null,
+            linkedCoordAt: new Date().toISOString(),
+          },
         } as any);
       } catch (revErr: any) {
         // eslint-disable-next-line no-console

@@ -137,17 +137,17 @@ function canApprove(p: ProposalV5, uid: string): boolean {
   );
 }
 function canApproveAndCreateCoord(p: ProposalV5, uid: string, role: string): boolean {
+  // V6.5 (2026-06-13) anh chốt: CHỈ GĐKD và GĐVP được tạo điều phối từ đề xuất đã duyệt.
+  // Spec VIII — Đề xuất là nơi xin quyết định, Điều phối là nơi triển khai → 2 GĐ khối quản lý.
   const r = (role || '').toUpperCase();
-  const isPrivileged =
-    p.creatorUid === uid ||
-    r.includes('GD') ||
-    r.includes('GĐ') ||
-    r.includes('CEO') ||
-    r.includes('QLCS');
-  if (p.status === 'da_phe_duyet' && !p.linkedCoordTaskId && isPrivileged) return true;
+  const isGdKhoi = r === 'GD_KD' || r === 'GD_VP';
+  if (!isGdKhoi) return false;
+  if (p.linkedCoordTaskId) return false; // đã tạo rồi, không cho tạo trùng
+  if (p.status === 'da_phe_duyet') return true;
+  // Cho phép tạo ở cấp duyệt cuối (1-click duyệt + tạo coord)
   if (canApprove(p, uid)) {
     const isLastStep = p.approverIdx >= p.approverChain.length - 1;
-    return isLastStep && isPrivileged;
+    return isLastStep;
   }
   return false;
 }
