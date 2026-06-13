@@ -375,9 +375,10 @@ export function DeXuatClient(props: Props) {
     return () => { cancelled = true; };
   }, [reloadKey]);
 
-  // ── Deep-link ?taskId / ?id → mở drawer ───────────────────────────────────
+  // ── Deep-link ?proposalId / ?taskId / ?id → mở drawer ─────────────────────
+  // V6.4 (2026-06-13): thêm `?proposalId` (deeplink chuẩn từ notification noti).
   useEffect(() => {
-    const taskIdParam = searchParams.get('taskId') ?? searchParams.get('id');
+    const taskIdParam = searchParams.get('proposalId') ?? searchParams.get('taskId') ?? searchParams.get('id');
     if (!taskIdParam) return;
     tasksApi.get(taskIdParam)
       .then((t) => { if (t.kind === 'proposal') setSelected(adaptTaskToProposalV6(t, users)); })

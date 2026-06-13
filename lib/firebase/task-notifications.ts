@@ -49,7 +49,13 @@ async function resolveAssigneeUids(task: TaskDoc): Promise<string[]> {
   return Array.from(new Set(uids));
 }
 
-function taskLink(taskId: string): string {
+// V6.4 (2026-06-13): deeplink đúng module theo kind.
+//   kind='proposal'   → /de-xuat?proposalId=X (mở drawer trong DeXuatClient)
+//   kind='assignment' → /dieu-phoi?taskId=X (mở drawer trong DieuPhoiClient)
+// /giao-viec là route cũ (V3 trước migration) — giữ fallback nếu kind không xác định.
+function taskLink(taskId: string, kind?: TaskDoc['kind']): string {
+  if (kind === 'proposal') return `/de-xuat?proposalId=${encodeURIComponent(taskId)}`;
+  if (kind === 'assignment') return `/dieu-phoi?taskId=${encodeURIComponent(taskId)}`;
   return `/giao-viec?taskId=${encodeURIComponent(taskId)}`;
 }
 
@@ -61,7 +67,7 @@ function kindLabel(kind: TaskDoc['kind']): string {
  *  Phase 13.14 (2026-06-06): hỗ trợ chain Phase 12.5+ — currentApprover dạng "user:UID" | "role:RC".
  *  Trước đây chỉ check approvalRequiredFrom (null cho proposal mới) → bỏ sót noti approver. */
 export async function notifyTaskCreated(task: TaskDoc): Promise<void> {
-  const link = taskLink(task.id);
+  const link = taskLink(task.id, task.kind);
   if (task.status === 'pending_approval') {
     // Phase 13.15 — BUG #N5 fix: assignment cross-block có approvalRequiredFrom (role) nhưng
     // có thể không có currentApprover. Resolve theo thứ tự:
@@ -107,7 +113,7 @@ export async function notifyTaskCreated(task: TaskDoc): Promise<void> {
  *  - Cuối chain (status='pending'): push creator + assignees.
  */
 export async function notifyTaskApproved(task: TaskDoc, approverName: string): Promise<void> {
-  const link = taskLink(task.id);
+  const link = taskLink(task.id, task.kind);
   // Phase 13.14: hỗ trợ chain Phase 12.5+ — chấp nhận cả currentApprover (user:UID/role:RC) lẫn legacy.
   const nextEntry = task.currentApprover || task.approvalRequiredFrom;
   const isStillPending = task.status === 'pending_approval' && nextEntry;
@@ -162,7 +168,7 @@ export async function notifyTaskRejected(task: TaskDoc, rejecterName: string, re
   await pushToUsers(filtered, {
     title: `❌ ${kindLabel(task.kind)} bị từ chối`,
     body: `"${task.title}" — ${rejecterName}: ${reason.slice(0, 80)}`,
-    link: taskLink(task.id),
+    link: taskLink(task.id, task.kind),
     tag: `task-${task.id}`,
     data: { taskId: task.id, kind: 'task_rejected' },
   }).catch(() => {});
@@ -202,7 +208,7 @@ export async function notifyTaskStatusChanged(
   await pushToUsers(targets, {
     title: `${label}: ${task.title}`,
     body: `${actor.name} cập nhật trạng thái`,
-    link: taskLink(task.id),
+    link: taskLink(task.id, task.kind),
     tag: `task-${task.id}`,
     data: { taskId: task.id, kind: 'task_status', status: newStatus },
   }).catch(() => {});
@@ -221,7 +227,7 @@ export async function notifyTaskAttachment(
   await pushToUsers(filtered, {
     title: `📎 ${uploader.name} đính file`,
     body: `"${task.title}" — ${fileName.slice(0, 80)}`,
-    link: taskLink(task.id),
+    link: taskLink(task.id, task.kind),
     tag: `task-${task.id}`,
     data: { taskId: task.id, kind: 'task_attachment' },
   }).catch(() => {});
@@ -241,7 +247,7 @@ export async function notifyTaskResubmitted(
   await pushToApproverEntries([entry], {
     title: `🔁 Đề xuất gửi lại — chờ bạn duyệt`,
     body: `"${task.title}" — ${creator.name} đã điều chỉnh và gửi lại${note ? `: ${note.slice(0, 100)}` : ''}`,
-    link: taskLink(task.id),
+    link: taskLink(task.id, task.kind),
     tag: `task-${task.id}`,
     data: { taskId: task.id, kind: 'task_resubmitted' },
   }).catch(() => {});
@@ -257,7 +263,7 @@ export async function notifyTaskRevisionRequested(
   await pushToUsers([task.createdBy], {
     title: `⚠️ ${requester.name} yêu cầu bổ sung`,
     body: `"${task.title}" — ${message.slice(0, 100)}`,
-    link: taskLink(task.id),
+    link: taskLink(task.id, task.kind),
     tag: `task-${task.id}`,
     data: { taskId: task.id, kind: 'task_revision_requested' },
   }).catch(() => {});
@@ -276,7 +282,7 @@ export async function notifyTaskComment(
   await pushToUsers(filtered, {
     title: `💬 ${commenter.name} bình luận`,
     body: `"${task.title}": ${body.slice(0, 100)}`,
-    link: taskLink(task.id),
+    link: taskLink(task.id, task.kind),
     tag: `task-${task.id}`,
     data: { taskId: task.id, kind: 'task_comment' },
   }).catch(() => {});
@@ -341,7 +347,7 @@ export async function notifyCollabTransition(
   await pushToUsers(Array.from(recipients), {
     title: titles[action],
     body: bodyText,
-    link: taskLink(task.id),
+    link: taskLink(task.id, task.kind),
     tag: `task-${task.id}-collab`,
     data: { taskId: task.id, kind: `collab_${action}`, collabKey: `${task.collabKind}:${task.collabId}` },
   }).catch(() => {});

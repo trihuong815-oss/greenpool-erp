@@ -9,7 +9,8 @@ import {
   Users, DollarSign, FileBarChart, GraduationCap, Megaphone, Settings, LogOut, UserCog, Wrench, KeyRound, X, Briefcase, ShieldCheck, Search,
   type LucideIcon,
 } from 'lucide-react';
-import { TasksBadge } from './TasksBadge';
+import { DispatchBadge } from './DispatchBadge';
+import { ProposalsBadge } from './ProposalsBadge';
 import { ChatUnreadBadge } from './ChatUnreadBadge';
 import { ChecklistBadge } from './ChecklistBadge';
 import { TechWorkBadge } from './TechWorkBadge';
@@ -182,7 +183,8 @@ export function Sidebar({ userName, userRole, roleCode, avatarUrl, menuOverrides
                         }`}
                       />
                       <span className="truncate">{item.label}</span>
-                      {item.route === 'dieu-phoi' && <TasksBadge roleCode={roleCode} />}
+                      {item.route === 'dieu-phoi' && <DispatchBadge />}
+                      {item.route === 'de-xuat' && <ProposalsBadge />}
                       {item.route === 'tin-nhan' && <ChatUnreadBadge />}
                       {item.route === 'checklist-v2' && <ChecklistBadge />}
                       {item.route === 'ky-thuat' && <TechWorkBadge />}

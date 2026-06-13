@@ -34,8 +34,14 @@ interface NotiCounts {
   techTask: number;
   checklist: number;
 
+  // V6.4 (2026-06-13): TÁCH counter theo module (spec anh chốt sidebar 2 badge riêng).
+  //   proposals = kind='proposal' chờ tôi (approval HOẶC assigned mode)
+  //   dispatch  = kind='assignment' chờ tôi (approval HOẶC assigned mode)
+  proposals: number;
+  dispatch: number;
+
   // Derived (cho UI hiển thị từng mục sidebar)
-  tasks: number;        // = tasksApproval + tasksAssigned (mục "Giao việc")
+  tasks: number;        // = proposals + dispatch (backward compat — mục "Giao việc" cũ)
   techWork: number;     // = techProposal + techTask (mục "Kỹ thuật vận hành")
 
   // Totals
@@ -54,6 +60,7 @@ const NotiCountsContext = createContext<NotiCounts | null>(null);
 
 const DEFAULT_VALUE: NotiCounts = {
   chat: 0, tasksApproval: 0, tasksAssigned: 0, techProposal: 0, techTask: 0, checklist: 0,
+  proposals: 0, dispatch: 0,
   tasks: 0, techWork: 0, totalNonChat: 0, total: 0,
   items: [], loading: false, refresh: () => {},
 };
@@ -71,6 +78,9 @@ export function NotiCountsProvider({ children }: { children: ReactNode }) {
   const [techProposal, setTechProposal] = useState(0);
   const [techTask, setTechTask] = useState(0);
   const [checklist, setChecklist] = useState(0);
+  // V6.4 (2026-06-13): TÁCH counter theo module — spec sidebar 2 badge riêng.
+  const [proposalsCount, setProposalsCount] = useState(0);
+  const [dispatchCount, setDispatchCount] = useState(0);
   const [bizItems, setBizItems] = useState<NotiItem[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -127,19 +137,27 @@ export function NotiCountsProvider({ children }: { children: ReactNode }) {
   // ─── Business endpoints poll (60s + visibility) ───
   const fetchBiz = useCallback(async () => {
     setLoading(true);
-    type Job = { source: NotiSource; url: string; parse: (j: any) => { count: number; items: NotiItem[] } };
+    type Job = { source: NotiSource; url: string; parse: (j: any) => { count: number; propCount?: number; dispCount?: number; items: NotiItem[] } };
     const jobs: Job[] = [
       { source: 'approval', url: '/api/tasks?mode=pending_approval',
         parse: (j) => {
           const rows = Array.isArray(j?.rows) ? j.rows : [];
+          let propCount = 0, dispCount = 0;
+          for (const t of rows) {
+            if (t.kind === 'proposal') propCount += 1;
+            else dispCount += 1;
+          }
           return {
-            count: rows.length,
+            count: rows.length, propCount, dispCount,
             items: rows.slice(0, 10).map((t: any) => ({
               id: `appr-${t.id}`, source: 'approval' as NotiSource,
               title: t.title ?? '(không tên)',
               subtitle: `${t.kind === 'proposal' ? '📥 Đề xuất' : '📌 Giao việc'} từ ${t.createdByName ?? '?'}`,
               time: t.createdAt,
-              link: `/giao-viec?taskId=${encodeURIComponent(t.id)}`,
+              // V6.4 (2026-06-13): deeplink đúng module theo kind.
+              link: t.kind === 'proposal'
+                ? `/de-xuat?proposalId=${encodeURIComponent(t.id)}`
+                : `/dieu-phoi?taskId=${encodeURIComponent(t.id)}`,
             })),
           };
         },
@@ -147,14 +165,21 @@ export function NotiCountsProvider({ children }: { children: ReactNode }) {
       { source: 'assigned', url: '/api/tasks?mode=assigned&status=pending&onlyMine=1',
         parse: (j) => {
           const rows = Array.isArray(j?.rows) ? j.rows : [];
+          let propCount = 0, dispCount = 0;
+          for (const t of rows) {
+            if (t.kind === 'proposal') propCount += 1;
+            else dispCount += 1;
+          }
           return {
-            count: rows.length,
+            count: rows.length, propCount, dispCount,
             items: rows.slice(0, 10).map((t: any) => ({
               id: `asgn-${t.id}`, source: 'assigned' as NotiSource,
               title: t.title ?? '(không tên)',
               subtitle: `Từ ${t.createdByName ?? '?'}`,
               time: t.createdAt,
-              link: `/giao-viec?taskId=${encodeURIComponent(t.id)}`,
+              link: t.kind === 'proposal'
+                ? `/de-xuat?proposalId=${encodeURIComponent(t.id)}`
+                : `/dieu-phoi?taskId=${encodeURIComponent(t.id)}`,
             })),
           };
         },
@@ -212,12 +237,24 @@ export function NotiCountsProvider({ children }: { children: ReactNode }) {
       return { source: j.source, ...j.parse(data) };
     }));
     const collected: NotiItem[] = [];
+    // V6.4 (2026-06-13): accumulate proposals + dispatch từ 2 source (approval + assigned)
+    let propSum = 0, dispSum = 0;
+    let hasApprovalSuccess = false, hasAssignedSuccess = false;
     results.forEach((r, i) => {
       if (r.status === 'fulfilled') {
-        const { source, count, items } = r.value;
+        const { source, count, propCount, dispCount, items } = r.value;
         collected.push(...items);
-        if (source === 'approval') setTasksApproval(count);
-        else if (source === 'assigned') setTasksAssigned(count);
+        if (source === 'approval') {
+          setTasksApproval(count);
+          propSum += propCount ?? 0;
+          dispSum += dispCount ?? 0;
+          hasApprovalSuccess = true;
+        } else if (source === 'assigned') {
+          setTasksAssigned(count);
+          propSum += propCount ?? 0;
+          dispSum += dispCount ?? 0;
+          hasAssignedSuccess = true;
+        }
         else if (source === 'kt_proposal') setTechProposal(count);
         else if (source === 'kt_task') setTechTask(count);
         else if (source === 'checklist') setChecklist(count);
@@ -226,6 +263,12 @@ export function NotiCountsProvider({ children }: { children: ReactNode }) {
         console.warn(`[NotiCounts] ${jobs[i].source} fail:`, (r.reason as any)?.message ?? r.reason);
       }
     });
+    // Chỉ update khi CẢ approval và assigned thành công (tránh half-state).
+    // Một source fail → giữ count cũ để tránh badge nhảy về 0 sai lệch.
+    if (hasApprovalSuccess && hasAssignedSuccess) {
+      setProposalsCount(propSum);
+      setDispatchCount(dispSum);
+    }
     collected.sort((a, b) => (b.time ?? '').localeCompare(a.time ?? ''));
     setBizItems(collected);
     setLoading(false);
@@ -266,6 +309,8 @@ export function NotiCountsProvider({ children }: { children: ReactNode }) {
         setTechProposal(0);
         setTechTask(0);
         setChecklist(0);
+        setProposalsCount(0);
+        setDispatchCount(0);
         setBizItems([]);
         prevUid = newUid;
         if (newUid) {
@@ -278,7 +323,11 @@ export function NotiCountsProvider({ children }: { children: ReactNode }) {
 
   // ─── Derived values + memo ───
   const value = useMemo<NotiCounts>(() => {
-    const tasks = tasksApproval + tasksAssigned;
+    // V6.4 (2026-06-13): proposals + dispatch là source-of-truth mới.
+    // tasks = proposals + dispatch (backward compat cho callsite cũ).
+    const proposals = proposalsCount;
+    const dispatch = dispatchCount;
+    const tasks = proposals + dispatch;
     const techWork = techProposal + techTask;
     const totalNonChat = tasks + techWork + checklist;
     const total = totalNonChat + chat;
@@ -286,11 +335,12 @@ export function NotiCountsProvider({ children }: { children: ReactNode }) {
     const items = [...chatItems, ...bizItems].sort((a, b) => (b.time ?? '').localeCompare(a.time ?? ''));
     return {
       chat, tasksApproval, tasksAssigned, techProposal, techTask, checklist,
+      proposals, dispatch,
       tasks, techWork, totalNonChat, total, items,
       loading,
       refresh: fetchBiz,
     };
-  }, [chat, chatItems, tasksApproval, tasksAssigned, techProposal, techTask, checklist, bizItems, loading, fetchBiz]);
+  }, [chat, chatItems, tasksApproval, tasksAssigned, techProposal, techTask, checklist, proposalsCount, dispatchCount, bizItems, loading, fetchBiz]);
 
   // ─── App badge OS + SW sync ───
   useEffect(() => {

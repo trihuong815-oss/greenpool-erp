@@ -16,6 +16,7 @@
 // ============================================================
 
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Calendar, ChevronDown, Loader2, Plus, RefreshCw } from 'lucide-react';
 import { isTP, isQLCS } from '@/lib/auth/roles';
 import KpiBar from './_components/KpiBar';
@@ -124,6 +125,16 @@ export default function DieuPhoiClient({
       cancelled = true;
     };
   }, [reloadKey]);
+
+  // V6.4 (2026-06-13): deeplink ?taskId=X — click notification mở drawer cụ thể.
+  // Run sau khi tasks load xong; chỉ open 1 lần (deps có tasks.length, không có searchParams ref).
+  const searchParams = useSearchParams();
+  const deeplinkTaskId = searchParams?.get('taskId') ?? null;
+  useEffect(() => {
+    if (!deeplinkTaskId || tasks.length === 0) return;
+    const found = tasks.find((t) => t.id === deeplinkTaskId);
+    if (found) setSelected(found);
+  }, [deeplinkTaskId, tasks]);
 
   // Helper: cập nhật 1 task vào state + cập nhật selected drawer.
   const applyTaskUpdate = useCallback((next: CoordTask) => {
