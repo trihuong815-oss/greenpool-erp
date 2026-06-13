@@ -564,25 +564,29 @@ export async function POST(req: NextRequest) {
         }, { status: 400 });
       }
       recipientUidResolved = recipientUid;
-      // V6.4: derive recipientTier để build chain bên dưới — peer nếu recipient cùng/dưới cấp, senior nếu cấp trên.
-      const isSeniorRecipient = recipientRole === 'CEO' || recipientRole === 'CHU_TICH'
-        || (isCreatorTpQlcs && (recipientRole === 'GD_KD' || recipientRole === 'GD_VP'));
-      recipientTier = isSeniorRecipient ? 'senior' : 'peer';
-      // Phase 12.9.5 (anh chốt 2026-06-06): luồng liên khối FULL =
-      //   [GĐ khối creator] → [GĐ khối recipient] → [recipient TP/QLCS]
-      // Nếu recipient CHÍNH là một trong 2 GĐ → KHÔNG chèn lần 2 (tránh trùng).
-      // Nếu GD_KD slot trống → fallback ADMIN (anh đảm nhiệm GĐKD thực tế).
-      const chain: string[] = [];
-      // Helper: resolve uid của GĐ role, fallback ADMIN nếu GD_KD trống.
-      const resolveGdUid = async (gdRole: 'GD_KD' | 'GD_VP'): Promise<string | null> => {
-        // Phase Fix (2026-06-09): filter status='active' để KHÔNG resolve về
-        // user inactive (vd ADMIN cũ trihuong815@gmail.com inactive vẫn match
-        // → chain[0] = inactive uid → người đang đăng nhập không có nút duyệt).
+      recipientTier = 'senior'; // legacy field — V6.5 build chain riêng theo nature
+
+      // V6.5 (2026-06-13) anh redesign — Build chain theo nature + budget tier:
+      //   SUPPORT     : chain = [recipientUnit] (đến thẳng đơn vị nhận, không qua lãnh đạo)
+      //   GOVERNANCE  : chain = [GĐ khối creator nếu TP/QLCS] + [leader đã chọn] +
+      //                 [CEO nếu vượt 50M] + [CHU_TICH nếu vượt 200M]
+      //   Dedup + giữ thứ tự + skip duplicate với creator (không tự duyệt).
+
+      const natureV65: 'support' | 'governance' =
+        body?.meta?.nature === 'governance' ? 'governance' : 'support';
+      const leaderUidV65: string | null =
+        typeof body?.meta?.recipientLeaderUid === 'string' ? body.meta.recipientLeaderUid : null;
+      const hasFinancialV65: boolean = body?.meta?.hasFinancial === true;
+      const estimatedCostV65: number =
+        typeof body?.meta?.estimatedCost === 'number' ? body.meta.estimatedCost : (estimatedCost ?? 0);
+
+      // Helper: resolve uid theo role + active, GD_KD trống → fallback ADMIN.
+      const resolveUidByRole = async (roleCode: string): Promise<string | null> => {
         const snap = await db.collection(COLLECTIONS.USERS)
           .where('status', '==', 'active')
-          .where('roleId', '==', gdRole).limit(1).get();
+          .where('roleId', '==', roleCode).limit(1).get();
         if (!snap.empty) return snap.docs[0].id;
-        if (gdRole === 'GD_KD') {
+        if (roleCode === 'GD_KD') {
           const adminSnap = await db.collection(COLLECTIONS.USERS)
             .where('status', '==', 'active')
             .where('roleId', '==', 'ADMIN').limit(1).get();
@@ -590,44 +594,72 @@ export async function POST(req: NextRequest) {
         }
         return null;
       };
-      if (isCreatorTpQlcs) {
-        const creatorBlock2 = getBlockOf(creatorRole);
-        const recipientBlock2 = getBlockOf(recipientRole);
-        const isCrossBlockProposal = creatorBlock2 !== 'all'
-          && recipientBlock2 !== 'all'
-          && creatorBlock2 !== recipientBlock2;
-        if (isCrossBlockProposal) {
-          const creatorGdRole = creatorBlock2 === 'KD' ? 'GD_KD' : 'GD_VP';
-          const recipientGdRole = recipientBlock2 === 'KD' ? 'GD_KD' : 'GD_VP';
-          // 1) Chèn GĐ khối creator (skip nếu recipient chính là GĐ creator — vô nghĩa)
-          if (recipientRole !== creatorGdRole) {
-            const creatorGdUid = await resolveGdUid(creatorGdRole);
-            if (creatorGdUid && creatorGdUid !== caller.profile.uid) {
-              chain.push(`user:${creatorGdUid}`);
-            }
-          }
-          // 2) Chèn GĐ khối recipient (skip nếu recipient chính là GĐ recipient — trùng)
-          if (recipientRole !== recipientGdRole) {
-            const recipientGdUid = await resolveGdUid(recipientGdRole);
-            if (recipientGdUid && recipientGdUid !== caller.profile.uid) {
-              // Tránh trùng nếu trùng người với GĐ creator (edge case: cùng 1 user 2 role - không xảy ra)
-              const tag = `user:${recipientGdUid}`;
-              if (!chain.includes(tag)) chain.push(tag);
-            }
+
+      const chain: string[] = [];
+      const pushUnique = (tag: string) => {
+        if (!tag || chain.includes(tag)) return;
+        if (tag === `user:${caller.profile.uid}`) return; // không tự duyệt
+        chain.push(tag);
+      };
+
+      if (natureV65 === 'support') {
+        // ─── A. Hỗ trợ công việc — chain = chỉ đơn vị nhận ───
+        pushUnique(`user:${recipientUid}`);
+      } else {
+        // ─── B. Đề xuất quản trị ───
+        // Bước 1: Chèn GĐ khối creator nếu là TP/QLCS (không vượt cấp)
+        if (isCreatorTpQlcs) {
+          const creatorBlock2 = getBlockOf(creatorRole);
+          if (creatorBlock2 !== 'all') {
+            const creatorGdRole = creatorBlock2 === 'KD' ? 'GD_KD' : 'GD_VP';
+            const creatorGdUid = await resolveUidByRole(creatorGdRole);
+            if (creatorGdUid) pushUnique(`user:${creatorGdUid}`);
           }
         }
+        // Bước 2: Chèn leader đã chọn (nếu khác GĐ creator vừa chèn)
+        if (leaderUidV65) {
+          pushUnique(`user:${leaderUidV65}`);
+        }
+        // Bước 3: Extend theo budget tier (chỉ khi có phát sinh TC)
+        if (hasFinancialV65 && estimatedCostV65 > 0) {
+          // Đọc role của leader để biết có cần chèn cấp cao hơn không
+          let leaderRole: string | null = null;
+          if (leaderUidV65) {
+            try {
+              const leaderDoc = await db.collection(COLLECTIONS.USERS).doc(leaderUidV65).get();
+              if (leaderDoc.exists) leaderRole = leaderDoc.data()?.roleId ?? null;
+            } catch { /* silent */ }
+          }
+          // Nhóm 4 (≥200tr): final = CHU_TICH
+          if (estimatedCostV65 >= 200_000_000) {
+            // Chèn CEO trước nếu leader < CEO
+            if (leaderRole !== 'CEO' && leaderRole !== 'CHU_TICH') {
+              const ceoUid = await resolveUidByRole('CEO');
+              if (ceoUid) pushUnique(`user:${ceoUid}`);
+            }
+            const ctUid = await resolveUidByRole('CHU_TICH');
+            if (ctUid) pushUnique(`user:${ctUid}`);
+          }
+          // Nhóm 3 (50-200tr): final = CEO
+          else if (estimatedCostV65 >= 50_000_000) {
+            if (leaderRole !== 'CEO' && leaderRole !== 'CHU_TICH') {
+              const ceoUid = await resolveUidByRole('CEO');
+              if (ceoUid) pushUnique(`user:${ceoUid}`);
+            }
+          }
+          // Nhóm 1+2 (<50tr): leader OK, không extend
+        }
       }
-      // 3) Cuối cùng: recipient được chọn
-      const recipientTag = `user:${recipientUid}`;
-      if (!chain.includes(recipientTag)) chain.push(recipientTag);
+
       approvalChain = chain;
+      if (chain.length === 0) {
+        return NextResponse.json({
+          error: 'Không xây dựng được chuỗi duyệt — vui lòng chọn đơn vị nhận và/hoặc lãnh đạo.',
+        }, { status: 400 });
+      }
       status = 'pending_approval';
       currentApprover = approvalChain[0];
-      // crossBlock theo block recipient vs creator
-      const recipientBlock = recipientRole === 'CEO' || recipientRole === 'ADMIN'
-        ? 'all' : (recipientRole === 'GD_KD' ? 'KD' : recipientRole === 'GD_VP' ? 'VP'
-        : (recipientRole.startsWith('QLCS_') ? 'KD' : null));
-      crossBlock = !!(recipientBlock && recipientBlock !== 'all' && creatorBlock !== 'all' && recipientBlock !== creatorBlock);
+      crossBlock = false; // V6.5 bỏ khái niệm crossBlock cho proposal — chain tự include cross-block nếu cần
     }
 
     const db = getFirebaseAdminDb();
