@@ -55,9 +55,11 @@ import {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type ProposalKind =
-  // V6 (5 mặc định)
+  // V6.4 (2026-06-13) — 3 loại chính thức
   | 'van_hanh'
+  | 'du_an'
   | 'cai_tien'
+  // Legacy V6 (proposal cũ trên Firestore)
   | 'dau_tu'
   | 'chien_luoc'
   | 'khan_cap'
@@ -246,7 +248,9 @@ const STATUS_COLOR: Record<ProposalStatus, string> = {
 
 const KIND_LABEL: Record<ProposalKind, string> = {
   van_hanh: 'Vận hành',
+  du_an: 'Dự án',
   cai_tien: 'Cải tiến',
+  // Legacy
   dau_tu: 'Đầu tư',
   chien_luoc: 'Chiến lược',
   khan_cap: 'Khẩn cấp',
@@ -259,7 +263,9 @@ const KIND_LABEL: Record<ProposalKind, string> = {
 
 const KIND_COLOR: Record<ProposalKind, string> = {
   van_hanh: 'bg-sky-50 text-sky-700 ring-sky-200',
+  du_an: 'bg-violet-50 text-violet-700 ring-violet-200',
   cai_tien: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+  // Legacy
   dau_tu: 'bg-amber-50 text-amber-700 ring-amber-200',
   chien_luoc: 'bg-violet-50 text-violet-700 ring-violet-200',
   khan_cap: 'bg-rose-50 text-rose-700 ring-rose-200',

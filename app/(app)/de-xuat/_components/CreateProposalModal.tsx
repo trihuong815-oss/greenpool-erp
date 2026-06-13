@@ -12,7 +12,7 @@
 //   1) Tên đề xuất *
 //   2) Loại đề xuất * (5 default: Vận hành/Cải tiến/Đầu tư/Chiến lược/Khẩn cấp)
 //   3) Lý do đề xuất *
-//   4) Giá trị dự kiến (VNĐ) — CHỈ HIỆN khi kind === 'dau_tu'
+//   4) Giá trị dự kiến (VNĐ) — CHỈ HIỆN khi (kind === 'du_an' || kind === 'dau_tu')
 //   5) File đính kèm (placeholder upload)
 //
 // Block "Luồng duyệt gợi ý" hiển thị NGAY sau khi user chọn kind + cost
@@ -32,12 +32,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   X,
-  Coins,
   Sparkles,
   Target,
   Paperclip,
   Workflow,
-  AlertTriangle,
   Lightbulb,
   FileText,
 } from 'lucide-react';
@@ -56,8 +54,11 @@ import {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type ProposalKindV5 =
+  // V6.4 (2026-06-13) anh chốt 3 loại — Vận hành / Dự án / Cải tiến
   | 'van_hanh'
+  | 'du_an'
   | 'cai_tien'
+  // Legacy (proposal cũ trên Firestore)
   | 'dau_tu'
   | 'chien_luoc'
   | 'khan_cap';
@@ -262,17 +263,17 @@ interface CreateProposalModalProps {
 // Default kinds — V6 đọc cứng 5 mặc định ở đây (V2 sẽ tải từ Cài đặt Workflow)
 // ─────────────────────────────────────────────────────────────────────────────
 
+// V6.4 (2026-06-13) anh chốt: form chỉ còn 3 loại — Vận hành / Dự án / Cải tiến.
+// Legacy dau_tu/chien_luoc/khan_cap bỏ khỏi form (vẫn render trên list proposal cũ).
 const KIND_V6_OPTIONS: {
   key: ProposalKindV5;
   label: string;
   icon: any;
   tone: string;
 }[] = [
-  { key: 'van_hanh',   label: 'Vận hành',   icon: Sparkles,       tone: 'bg-sky-50 text-sky-700 border-sky-300' },
-  { key: 'cai_tien',   label: 'Cải tiến',   icon: Lightbulb,      tone: 'bg-emerald-50 text-emerald-700 border-emerald-300' },
-  { key: 'dau_tu',     label: 'Đầu tư',     icon: Coins,          tone: 'bg-amber-50 text-amber-700 border-amber-300' },
-  { key: 'chien_luoc', label: 'Chiến lược', icon: Target,         tone: 'bg-violet-50 text-violet-700 border-violet-300' },
-  { key: 'khan_cap',   label: 'Khẩn cấp',   icon: AlertTriangle,  tone: 'bg-rose-50 text-rose-700 border-rose-300' },
+  { key: 'van_hanh', label: 'Vận hành', icon: Sparkles,  tone: 'bg-sky-50 text-sky-700 border-sky-300' },
+  { key: 'du_an',    label: 'Dự án',    icon: Target,    tone: 'bg-violet-50 text-violet-700 border-violet-300' },
+  { key: 'cai_tien', label: 'Cải tiến', icon: Lightbulb, tone: 'bg-emerald-50 text-emerald-700 border-emerald-300' },
 ];
 
 const ROLE_LABEL: Record<string, string> = {
@@ -337,6 +338,7 @@ function v6ToV5(
 function kindV5ToV3(k: ProposalKindV5): ProposalKindV3 {
   switch (k) {
     case 'van_hanh':   return 'van_hanh';
+    case 'du_an':      return 'tai_chinh'; // V6.4 — Dự án thường có chi phí → V3 'tai_chinh'
     case 'cai_tien':   return 'van_hanh';
     case 'dau_tu':     return 'tai_chinh';
     case 'chien_luoc': return 'chien_luoc';
@@ -502,7 +504,7 @@ export default function CreateProposalModal({
     if (!kind) return '';
     const parts: string[] = [];
     parts.push('Loại: ' + (KIND_V6_OPTIONS.find((k) => k.key === kind)?.label ?? kind));
-    if (kind === 'dau_tu' && estimatedCostNum) {
+    if ((kind === 'du_an' || kind === 'dau_tu') && estimatedCostNum) {
       parts.push('Giá trị: ' + formatVND(estimatedCostNum));
     }
     return parts.join(' · ');
@@ -550,7 +552,7 @@ export default function CreateProposalModal({
       title: title.trim(),
       kind: kind as ProposalKindV5,
       reason: reason.trim(),
-      estimatedCost: kind === 'dau_tu' ? estimatedCostNum : undefined,
+      estimatedCost: (kind === 'du_an' || kind === 'dau_tu') ? estimatedCostNum : undefined,
       attachments: attachments.length ? attachments : undefined,
       // V6+ Đơn vị liên quan + auto scope
       relatedUnits: relatedUnits.length ? relatedUnits : undefined,
@@ -729,7 +731,7 @@ export default function CreateProposalModal({
           </div>
 
           {/* 4 — Giá trị dự kiến (chỉ hiện khi kind = dau_tu) */}
-          {kind === 'dau_tu' && (
+          {(kind === 'du_an' || kind === 'dau_tu') && (
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1.5">
                 Giá trị dự kiến (VNĐ)
