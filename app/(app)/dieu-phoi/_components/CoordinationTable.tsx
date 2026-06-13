@@ -9,7 +9,6 @@ import {
   type CoordTask,
   type Collaborator,
   type DeptId,
-  type CoordType,
 } from './types';
 
 // ============================================================
@@ -142,46 +141,6 @@ function isPastDue(dueDate: string): boolean {
   return Date.now() > due;
 }
 
-// ----- V4: Loại chip 7 màu (van_hanh/marketing/dao_tao/nhan_su/ky_thuat/tai_chinh/du_an) -----
-const COORD_TYPE_V4_LABEL: Record<string, string> = {
-  van_hanh: 'Vận hành',
-  marketing: 'Marketing',
-  dao_tao: 'Đào tạo',
-  nhan_su: 'Nhân sự',
-  ky_thuat: 'Kỹ thuật',
-  tai_chinh: 'Tài chính',
-  du_an: 'Dự án',
-  // Backward compat V3 labels (fallback)
-  dieu_phoi: 'Điều phối',
-  ho_tro: 'Hỗ trợ',
-  de_xuat: 'Đề xuất',
-  phe_duyet: 'Phê duyệt',
-  canh_bao: 'Cảnh báo',
-};
-
-const COORD_TYPE_V4_COLOR: Record<string, string> = {
-  van_hanh: 'bg-sky-50 text-sky-700 ring-sky-200',
-  marketing: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-  dao_tao: 'bg-violet-50 text-violet-700 ring-violet-200',
-  nhan_su: 'bg-amber-50 text-amber-700 ring-amber-200',
-  ky_thuat: 'bg-orange-50 text-orange-700 ring-orange-200',
-  tai_chinh: 'bg-rose-50 text-rose-700 ring-rose-200',
-  du_an: 'bg-indigo-50 text-indigo-700 ring-indigo-200',
-  // Backward compat V3
-  dieu_phoi: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-  ho_tro: 'bg-sky-50 text-sky-700 ring-sky-200',
-  de_xuat: 'bg-violet-50 text-violet-700 ring-violet-200',
-  phe_duyet: 'bg-amber-50 text-amber-700 ring-amber-200',
-  canh_bao: 'bg-rose-50 text-rose-700 ring-rose-200',
-};
-
-function typeLabel(t: CoordType | string): string {
-  return COORD_TYPE_V4_LABEL[t] ?? String(t);
-}
-function typeColor(t: CoordType | string): string {
-  return COORD_TYPE_V4_COLOR[t] ?? 'bg-slate-50 text-slate-700 ring-slate-200';
-}
-
 type SeverityFilter = 'all' | 'binh_thuong' | 'khan_cap';
 
 export default function CoordinationTable({
@@ -250,7 +209,9 @@ export default function CoordinationTable({
         </select>
       </div>
 
-      {/* Table — V4 12 cột */}
+      {/* Table — V6.4 (2026-06-13): 9 cột chính.
+          Ẩn 3 cột phụ (Loại / Mức độ / Nội dung chờ) — xem ở Drawer khi click row.
+          Header rút gọn để không bị wrap nhiều dòng. */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -264,15 +225,12 @@ export default function CoordinationTable({
               </th>
               <th className="px-3 py-2.5 text-left font-medium w-10">#</th>
               <th className="px-3 py-2.5 text-left font-medium">Công việc</th>
-              <th className="px-3 py-2.5 text-left font-medium w-28">Loại</th>
               <th className="px-3 py-2.5 text-left font-medium w-44">Chủ trì</th>
               <th className="px-3 py-2.5 text-left font-medium w-36">Phối hợp</th>
-              <th className="px-3 py-2.5 text-left font-medium w-40">Tiến độ phối hợp</th>
+              <th className="px-3 py-2.5 text-left font-medium w-40">Tiến độ</th>
               <th className="px-3 py-2.5 text-left font-medium w-44">Đang chờ</th>
-              <th className="px-3 py-2.5 text-left font-medium">Nội dung chờ</th>
               <th className="px-3 py-2.5 text-left font-medium w-28">Deadline</th>
               <th className="px-3 py-2.5 text-left font-medium w-32">Trạng thái</th>
-              <th className="px-3 py-2.5 text-left font-medium w-24">Mức độ</th>
             </tr>
           </thead>
           <tbody>
@@ -283,7 +241,6 @@ export default function CoordinationTable({
                 .join(', ');
               const progress = computeProgress(t);
               const waiting = computeWaitingFor(t);
-              const severity = getSeverity(t);
               return (
                 <tr
                   key={t.id}
@@ -306,16 +263,7 @@ export default function CoordinationTable({
                       #{t.code}
                     </div>
                   </td>
-                  <td className="px-3 py-3 align-top">
-                    <span
-                      className={
-                        'inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ' +
-                        typeColor(t.type)
-                      }
-                    >
-                      {typeLabel(t.type)}
-                    </span>
-                  </td>
+                  {/* V6.4: Loại ẨN — xem ở Drawer khi click row */}
                   <td className="px-3 py-3 align-top">
                     <div className="flex items-center gap-1.5">
                       <span
@@ -373,12 +321,7 @@ export default function CoordinationTable({
                       </span>
                     </div>
                   </td>
-                  {/* V4: Nội dung chờ — computeWaitingFor.content */}
-                  <td className="px-3 py-3 align-top">
-                    <span className="text-sm text-slate-600 line-clamp-1">
-                      {waiting.content}
-                    </span>
-                  </td>
+                  {/* V6.4: Nội dung chờ ẨN — xem ở Drawer khi click row */}
                   <td
                     className={
                       'px-3 py-3 align-top text-sm tabular-nums ' +
@@ -397,25 +340,14 @@ export default function CoordinationTable({
                       {COORD_STATUS_LABEL[t.status]}
                     </span>
                   </td>
-                  {/* V4: Mức độ — chip rose nếu khẩn, slate nếu bình thường */}
-                  <td className="px-3 py-3 align-top">
-                    {severity === 'khan_cap' ? (
-                      <span className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-semibold bg-rose-100 text-rose-700 ring-1 ring-inset ring-rose-200">
-                        Khẩn cấp
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium bg-slate-100 text-slate-600">
-                        Bình thường
-                      </span>
-                    )}
-                  </td>
+                  {/* V6.4: Mức độ ẨN — xem ở Drawer khi click row */}
                 </tr>
               );
             })}
             {rows.length === 0 && (
               <tr>
                 <td
-                  colSpan={12}
+                  colSpan={9}
                   className="px-3 py-8 text-center text-sm text-slate-400"
                 >
                   Chưa có công việc điều phối nào.
