@@ -35,6 +35,7 @@ import { Loader2, Plus, RefreshCw } from 'lucide-react';
 import { tasksApi, type Task } from '@/lib/services/tasks/api-client';
 import { isTP, isQLCS } from '@/lib/auth/roles';
 import CompactDashboard from './_components/CompactDashboard';
+import MobileProposalView from './_components/Mobile/MobileProposalView';
 import DexuatDashboard, {
   type ProposalV6 as DashboardProposalV6,
 } from './_components/DexuatDashboard';
@@ -686,8 +687,8 @@ export function DeXuatClient(props: Props) {
 
   return (
     <div className="max-w-screen-2xl mx-auto space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
+      {/* Header — desktop only (mobile có title + FAB trong MobileProposalView) */}
+      <div className="hidden md:flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h2 className="text-base font-bold text-slate-900">Đề xuất</h2>
           <p className="text-xs text-slate-500 mt-0.5 capitalize">
@@ -727,31 +728,45 @@ export function DeXuatClient(props: Props) {
         <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
           {error}
         </div>
-      ) : isTP(currentUserRole) || isQLCS(currentUserRole) ? (
-        /* V6.4 (2026-06-13): Dashboard COMPACT cho TP/QLCS — gộp dashboard + bảng vào 1 component.
-           Spec anh chốt: 5 KPI cá nhân hoá + 2 widget (Donut loại + Hiệu suất) + bảng 5 cột + 5 tabs. */
-        <CompactDashboard
-          proposals={proposals}
-          currentUserUid={currentUserId}
-          onRowClick={setSelected}
-        />
       ) : (
         <>
-          {/* Dashboard V6 — 7 KPI + 1 Donut "Cơ cấu theo loại" (cho GD/CEO/CHU_TICH) */}
-          <DexuatDashboard
-            proposals={dashboardProposals}
-            currentUserUid={currentUserId}
-            currentUserRole={currentUserRole}
-          />
+          {/* V6.4 (2026-06-13): MOBILE — spec anh chốt: card view + bottom sheet +
+              swipe KPI + sticky tabs + FAB tạo. */}
+          <div className="md:hidden">
+            <MobileProposalView
+              proposals={proposals}
+              currentUserUid={currentUserId}
+              canCreate={canCreate}
+              onCreate={() => setShowCreate(true)}
+              onRowClick={setSelected}
+            />
+          </div>
 
-          {/* Table V6 — 7 tabs + 8 cột + dropdown 4 action */}
-          <DexuatTable
-            proposals={proposals}
-            currentUserUid={currentUserId}
-            currentUserRole={currentUserRole}
-            onRowClick={setSelected}
-            onAction={handleTableAction}
-          />
+          {/* Desktop (md+) — giữ 2 branch CompactDashboard (TP/QLCS) hoặc full (GD/CEO) */}
+          <div className="hidden md:block">
+            {isTP(currentUserRole) || isQLCS(currentUserRole) ? (
+              <CompactDashboard
+                proposals={proposals}
+                currentUserUid={currentUserId}
+                onRowClick={setSelected}
+              />
+            ) : (
+              <>
+                <DexuatDashboard
+                  proposals={dashboardProposals}
+                  currentUserUid={currentUserId}
+                  currentUserRole={currentUserRole}
+                />
+                <DexuatTable
+                  proposals={proposals}
+                  currentUserUid={currentUserId}
+                  currentUserRole={currentUserRole}
+                  onRowClick={setSelected}
+                  onAction={handleTableAction}
+                />
+              </>
+            )}
+          </div>
         </>
       )}
 

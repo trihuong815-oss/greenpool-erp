@@ -26,6 +26,10 @@ input, select, textarea, button { font-family: inherit; }
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
+/* V6.4 (2026-06-13): Mobile horizontal scroll (KPI swipe, tabs swipe) — ẩn scrollbar visual */
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+
 /* Carousel ảnh cơ sở: cơ sở có ≥ 2 ảnh → crossfade tự động. Mỗi ảnh sáng 5s,
    fade qua ảnh kế tiếp. animation-delay = (i * 5s) để các ảnh xuất hiện lệch nhau. */
 @keyframes branchCarousel {

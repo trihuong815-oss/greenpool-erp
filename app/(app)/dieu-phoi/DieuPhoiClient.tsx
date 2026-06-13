@@ -26,6 +26,7 @@ import BranchBarChart from './_components/BranchBarChart';
 import BottleneckTable from './_components/BottleneckTable';
 import TopWatchList from './_components/TopWatchList';
 import CompactDashboard from './_components/CompactDashboard';
+import MobileDispatchView from './_components/Mobile/MobileDispatchView';
 import ImportantNotiPanel from './_components/ImportantNotiPanel';
 import CoordinationTable from './_components/CoordinationTable';
 import CreateModal, { type CreatePayload } from './_components/CreateModal';
@@ -603,8 +604,8 @@ export default function DieuPhoiClient({
   return (
     <div className="max-w-screen-2xl mx-auto">
       <div className="space-y-5">
-        {/* Page header — title + actions */}
-        <div className="flex flex-wrap items-end justify-between gap-3 pb-1">
+        {/* Page header — title + actions (mobile ẩn vì có TopBar + nút tạo ở MobileView) */}
+        <div className="hidden md:flex flex-wrap items-end justify-between gap-3 pb-1">
           <div>
             <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-emerald-700 to-teal-600 bg-clip-text text-transparent">Điều phối công việc</h1>
             <p className="text-xs text-slate-500 mt-0.5">Theo dõi & điều phối nhiệm vụ liên phòng ban, liên cơ sở.</p>
@@ -625,8 +626,8 @@ export default function DieuPhoiClient({
           </button>
         </div>
 
-        {/* Filter bar — compact toolbar */}
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200/70 bg-white px-3 py-2 shadow-sm ring-1 ring-slate-50">
+        {/* Filter bar — desktop only (mobile có search + bottom sheet riêng) */}
+        <div className="hidden md:flex flex-wrap items-center gap-2 rounded-xl border border-slate-200/70 bg-white px-3 py-2 shadow-sm ring-1 ring-slate-50">
           <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-50 text-xs text-slate-600">
             <Calendar size={12} className="text-slate-400" />
             <span className="tabular-nums font-medium">{new Date().toLocaleDateString('vi-VN')}</span>
@@ -670,18 +671,34 @@ export default function DieuPhoiClient({
           <div className="py-16 flex items-center justify-center text-slate-400">
             <Loader2 className="animate-spin mr-2" size={18} /> Đang tải dữ liệu điều phối…
           </div>
-        ) : isCompactRole ? (
-          /* V6.4 (2026-06-13): Dashboard COMPACT cho TP/QLCS — ẩn phân tích hệ thống.
-             Spec anh chốt: 5 KPI cá nhân + 2 widget phân tích + bảng 6 cột + 5 tabs. */
-          <CompactDashboard
-            tasks={tasks}
-            currentUserUid={currentUserUid}
-            currentUserDeptId={currentUserDeptId}
-            currentUserFacilityId={currentUserFacilityId}
-            unitLabel={unitLabel}
-            onRowClick={setSelected}
-          />
         ) : (
+          <>
+            {/* V6.4 (2026-06-13): MOBILE — spec anh chốt full redesign: card view + bottom sheet +
+                swipe KPI + sticky tabs. CHỈ render mobile (md:hidden) — desktop view giữ nguyên. */}
+            <div className="md:hidden">
+              <MobileDispatchView
+                tasks={tasks}
+                currentUserUid={currentUserUid}
+                currentUserDeptId={currentUserDeptId}
+                currentUserFacilityId={currentUserFacilityId}
+                canCreate={canCreate}
+                onCreate={() => setShowCreate(true)}
+                onRowClick={setSelected}
+              />
+            </div>
+
+            {/* Desktop (md+) — giữ nguyên 2 branch CompactDashboard (TP/QLCS) hoặc full (GD/CEO) */}
+            <div className="hidden md:block">
+              {isCompactRole ? (
+                <CompactDashboard
+                  tasks={tasks}
+                  currentUserUid={currentUserUid}
+                  currentUserDeptId={currentUserDeptId}
+                  currentUserFacilityId={currentUserFacilityId}
+                  unitLabel={unitLabel}
+                  onRowClick={setSelected}
+                />
+              ) : (
           <>
             {/* Section: Tổng quan KPI */}
             <section className="space-y-2">
@@ -730,6 +747,9 @@ export default function DieuPhoiClient({
                 currentUserUid={currentUserUid}
               />
             </section>
+          </>
+              )}
+            </div>
           </>
         )}
       </div>
