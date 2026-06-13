@@ -125,6 +125,15 @@ service firebase.storage {
       allow write: if false;
     }
 
+    // ---- Proposal attachments (V6.4 P2 2026-06-13) ----
+    // Path: proposalAttachments/{uid}/{fileName}
+    // Upload qua POST /api/proposals/attachments (Admin SDK signed URL).
+    // Read qua signed URL 1 năm → rule defense-in-depth chặn client GET trực tiếp.
+    match /proposalAttachments/{uid}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
     // ---- Catch-all deny: không cho truy cập đối tượng nào khác ----
     match /{allPaths=**} {
       allow read, write: if false;

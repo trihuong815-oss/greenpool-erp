@@ -29,7 +29,7 @@
 //   - Thêm type mới `CreateProposalPayloadV6` đúng theo SPEC để tương lai có thể
 //     migrate dần DeXuatClient sang V6.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   X,
   Sparkles,
@@ -606,14 +606,43 @@ export default function CreateProposalModal({
     onClose();
   }
 
-  function handleAddAttachmentPlaceholder() {
-    // Placeholder upload — V2 sẽ tích hợp Firebase Storage.
-    const name = window.prompt(
-      'Nhập tên file (chức năng upload thực sẽ có ở phiên bản tiếp theo)',
-      '',
-    );
-    if (!name) return;
-    setAttachments((prev) => [...prev, { name: name.trim() }]);
+  // V6.4 (2026-06-13): upload thực vào Firebase Storage qua /api/proposals/attachments
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingFile, setUploadingFile] = useState(false);
+
+  function triggerFilePicker() {
+    fileInputRef.current?.click();
+  }
+
+  async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setUploadingFile(true);
+    const uploaded: typeof attachments = [];
+    try {
+      for (const f of Array.from(files)) {
+        const fd = new FormData();
+        fd.append('file', f);
+        const res = await fetch('/api/proposals/attachments', { method: 'POST', body: fd });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          alert(`Upload thất bại "${f.name}": ${j?.error ?? res.status}`);
+          continue;
+        }
+        if (typeof j?.url === 'string') {
+          uploaded.push({ name: j.name ?? f.name, url: j.url });
+        }
+      }
+      if (uploaded.length > 0) {
+        setAttachments((prev) => [...prev, ...uploaded]);
+      }
+    } catch (err: any) {
+      alert(`Lỗi upload: ${err?.message ?? 'unknown'}`);
+    } finally {
+      setUploadingFile(false);
+      // Reset input để có thể chọn lại cùng file
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   }
 
   function handleRemoveAttachment(idx: number) {
@@ -824,25 +853,34 @@ export default function CreateProposalModal({
             </div>
           </div>
 
-          {/* 5 — File đính kèm (placeholder) */}
+          {/* 5 — File đính kèm (V6.4: upload thực Firebase Storage) */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1.5">
               File đính kèm
               <span className="ml-1 text-[10px] font-normal text-slate-400">(tuỳ chọn)</span>
             </label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.webp,.gif,.txt,.csv,.zip"
+              onChange={handleFileSelected}
+              className="hidden"
+            />
             <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-4">
               {attachments.length === 0 ? (
                 <div className="text-center">
                   <Paperclip size={18} className="mx-auto text-slate-400 mb-1.5" />
                   <button
                     type="button"
-                    onClick={handleAddAttachmentPlaceholder}
-                    className="text-xs font-medium text-emerald-700 hover:text-emerald-800 underline"
+                    onClick={triggerFilePicker}
+                    disabled={uploadingFile}
+                    className="text-xs font-medium text-emerald-700 hover:text-emerald-800 underline disabled:opacity-50"
                   >
-                    Thêm file đính kèm
+                    {uploadingFile ? 'Đang tải lên…' : 'Thêm file đính kèm'}
                   </button>
                   <p className="text-[11px] text-slate-500 mt-1">
-                    Cho phép PDF, Excel, Word, Ảnh (upload thực sẽ có ở phiên bản tiếp theo).
+                    PDF, Word, Excel, PowerPoint, ảnh, text, zip — tối đa 20MB/file.
                   </p>
                 </div>
               ) : (
@@ -854,7 +892,13 @@ export default function CreateProposalModal({
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <FileText size={13} className="text-slate-500 shrink-0" />
-                        <span className="text-xs text-slate-700 truncate">{a.name}</span>
+                        {a.url ? (
+                          <a href={a.url} target="_blank" rel="noopener noreferrer" className="text-xs text-emerald-700 hover:underline truncate">
+                            {a.name}
+                          </a>
+                        ) : (
+                          <span className="text-xs text-slate-700 truncate">{a.name}</span>
+                        )}
                       </div>
                       <button
                         type="button"
@@ -867,10 +911,11 @@ export default function CreateProposalModal({
                   ))}
                   <button
                     type="button"
-                    onClick={handleAddAttachmentPlaceholder}
-                    className="text-xs font-medium text-emerald-700 hover:text-emerald-800 underline"
+                    onClick={triggerFilePicker}
+                    disabled={uploadingFile}
+                    className="text-xs font-medium text-emerald-700 hover:text-emerald-800 underline disabled:opacity-50"
                   >
-                    + Thêm file
+                    {uploadingFile ? 'Đang tải lên…' : '+ Thêm file'}
                   </button>
                 </div>
               )}
