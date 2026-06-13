@@ -61,5 +61,8 @@ export function taskScopeFromDoc(d: Record<string, any>): TaskForScope {
     currentApprover: d.currentApprover ?? null,
     // V6.4 (2026-06-12): Owner phụ trách — dùng cho canReadTask + canUpdateTaskMeta
     ownerUid: typeof d.ownerUid === 'string' ? d.ownerUid : null,
+    // V6.4 (2026-06-13): collab dept/facility — dùng cho canReadTask cho phép TP/QLCS collab đọc
+    collaboratorDeptIds: Array.isArray(d.collaboratorDeptIds) ? d.collaboratorDeptIds : [],
+    collaboratorFacilityIds: Array.isArray(d.collaboratorFacilityIds) ? d.collaboratorFacilityIds : [],
   };
 }

@@ -47,6 +47,10 @@ export interface TaskForScope {
   currentApprover?: string | null;
   // V6.4 (2026-06-12): Owner phụ trách (có thể khác createdBy — vd GĐKD tạo, QLCS là owner)
   ownerUid?: string | null;
+  // V6.4 (2026-06-13): Đơn vị phối hợp — collab phải đọc được task họ tham gia.
+  // Trước đây canReadTask không check collab → TP_KT là collab nhưng không thấy task.
+  collaboratorDeptIds?: string[];
+  collaboratorFacilityIds?: string[];
 }
 
 // Phase 12.5 (2026-06-03): mỗi approver trong chain có thể là user cụ thể hoặc role.
@@ -72,6 +76,10 @@ export function canReadTask(p: CallerProfile, t: TaskForScope): boolean {
   if (t.assigneeUserIds.includes(p.uid)) return true;
   // V6.4 (2026-06-12): Owner phụ trách — vd GĐKD tạo, QLCS là owner
   if (t.ownerUid && t.ownerUid === p.uid) return true;
+  // V6.4 (2026-06-13): Đơn vị phối hợp — TP/NV thuộc dept collab + QLCS thuộc facility collab.
+  // Cho phép cross-block (vd task khối VP có collab phòng KT thì TP_KT vẫn đọc được).
+  if (p.department_id && Array.isArray(t.collaboratorDeptIds) && t.collaboratorDeptIds.includes(p.department_id)) return true;
+  if (p.facility_id && Array.isArray(t.collaboratorFacilityIds) && t.collaboratorFacilityIds.includes(p.facility_id)) return true;
 
   const myBlock = getBlockOf(p.role_code);
   if (isGD(p)) {

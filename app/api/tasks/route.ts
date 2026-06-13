@@ -171,6 +171,30 @@ export async function GET(req: NextRequest) {
           .get()
       );
 
+      // Q7 (V6.4 2026-06-13): phòng phối hợp — TP/NV thuộc phòng có trong collaboratorDeptIds
+      // index: collaboratorDeptIds (array-contains) + createdAt
+      if (caller.profile.department_id) {
+        queries.push(
+          colRef
+            .where('collaboratorDeptIds', 'array-contains', caller.profile.department_id)
+            .orderBy('createdAt', 'desc')
+            .limit(LIST_LIMIT)
+            .get()
+        );
+      }
+
+      // Q8 (V6.4 2026-06-13): cơ sở phối hợp — QLCS thuộc facility có trong collaboratorFacilityIds
+      // index: collaboratorFacilityIds (array-contains) + createdAt
+      if (caller.profile.facility_id) {
+        queries.push(
+          colRef
+            .where('collaboratorFacilityIds', 'array-contains', caller.profile.facility_id)
+            .orderBy('createdAt', 'desc')
+            .limit(LIST_LIMIT)
+            .get()
+        );
+      }
+
       const results = await Promise.all(queries);
       results.forEach((snap) => addDocs(snap.docs));
     } else {
@@ -189,6 +213,17 @@ export async function GET(req: NextRequest) {
       queries.push(
         colRef.where('ownerUid', '==', caller.profile.uid).orderBy('createdAt', 'desc').limit(LIST_LIMIT).get()
       );
+      // V6.4 (2026-06-13): collab phòng + cơ sở
+      if (caller.profile.department_id) {
+        queries.push(
+          colRef.where('collaboratorDeptIds', 'array-contains', caller.profile.department_id).orderBy('createdAt', 'desc').limit(LIST_LIMIT).get()
+        );
+      }
+      if (caller.profile.facility_id) {
+        queries.push(
+          colRef.where('collaboratorFacilityIds', 'array-contains', caller.profile.facility_id).orderBy('createdAt', 'desc').limit(LIST_LIMIT).get()
+        );
+      }
 
       if (isCEO(caller.profile)) {
         queries.push(colRef.orderBy('createdAt', 'desc').limit(LIST_LIMIT).get());

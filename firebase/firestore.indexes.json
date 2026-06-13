@@ -48,6 +48,24 @@
       ]
     },
     {
+      "_comment": "V6.4 tasks: phòng phối hợp — where(collaboratorDeptIds array-contains) orderBy(createdAt) — TP/NV phòng KT thấy task có collab KT",
+      "collectionGroup": "tasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "collaboratorDeptIds", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "_comment": "V6.4 tasks: cơ sở phối hợp — where(collaboratorFacilityIds array-contains) orderBy(createdAt) — QLCS thấy task có collab cơ sở mình",
+      "collectionGroup": "tasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "collaboratorFacilityIds", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "_comment": "tasks: assigned to me (user) — where(assigneeUserIds array-contains) orderBy(createdAt)",
       "collectionGroup": "tasks",
       "queryScope": "COLLECTION",
