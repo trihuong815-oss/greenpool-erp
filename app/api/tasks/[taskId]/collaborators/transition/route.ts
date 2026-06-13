@@ -234,6 +234,14 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
       source: 'api',
     });
 
+    // V6.4 P2: user vừa hành động (accept/submit/owner_accept/owner_reject)
+    // → mark mọi noti Action Required cho task này của user → done.
+    try {
+      await (await import('@/lib/firebase/notifications-store')).markActionDoneForEntity(caller.profile.uid, taskId);
+    } catch (e: any) {
+      console.warn('[collab transition] markActionDone fail:', e?.message);
+    }
+
     // V6.4: push FCM noti
     try {
       const mod = await import('@/lib/firebase/task-notifications');

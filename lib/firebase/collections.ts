@@ -38,6 +38,7 @@ export const COLLECTIONS = {
   CONVERSATIONS: 'conversations',         // (Phase 13 — Chat: 1-1 + group. Subcollection messages.)
   CHAT_ACCESS_LOGS: 'chatAccessLogs',     // (Phase 13.5 — security audit: log mọi truy cập tin nhắn)
   RATE_LIMITS: 'rateLimits',              // (Phase 13.5 — rate limit counter per user+endpoint)
+  NOTIFICATIONS: 'notifications',         // (V6.4 P2 — center thông báo + bell dropdown + lịch sử cá nhân)
 } as const;
 
 // Subcollection names — đứng trong context của doc cha.

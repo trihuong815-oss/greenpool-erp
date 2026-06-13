@@ -328,6 +328,15 @@ service cloud.firestore {
       }
     }
 
+    // ---- Notifications (V6.4 P2) ----
+    // Read: chỉ chủ notification (userId === auth.uid) — client-side query có thể đọc.
+    // Write: CHỈ qua API (Admin SDK bypass rules). Client KHÔNG mark read trực tiếp
+    //        — phải gọi PATCH /api/notifications/[id] để có audit + permission check.
+    match /notifications/{notiId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow write: if false;
+    }
+
     // ---- Chat access logs (Phase 13.5 — Security audit) ----
     // Append-only audit log: ai đọc/gửi/react/upload tin nhắn vào conv nào.
     // CHỈ admin (CEO/GD) đọc được — KHÔNG ai khác kể cả người trong conv.

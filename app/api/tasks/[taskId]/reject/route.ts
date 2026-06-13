@@ -57,6 +57,13 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
       actorName: caller.actorName, actorRole: caller.actorRole, source: 'api',
     });
 
+    // V6.4 P2: user vừa reject → mark mọi noti Action Required cho entity này của user → done.
+    try {
+      await (await import('@/lib/firebase/notifications-store')).markActionDoneForEntity(caller.profile.uid, taskId);
+    } catch (e: any) {
+      console.warn('[task reject] markActionDone fail:', e?.message);
+    }
+
     await (await import('@/lib/firebase/task-notifications')).notifyTaskRejected({
       id: taskId, kind: data.kind, title: data.title,
       createdBy: data.createdBy, createdByName: data.createdByName,

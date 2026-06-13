@@ -193,7 +193,9 @@ export async function pushToUser(uid: string, payload: PushPayload) {
  *   - "RC" (legacy) → tương đương role:RC
  *  Hoặc array entry → push tất cả (filter trùng UID).
  */
-export async function pushToApproverEntries(entries: string[], payload: PushPayload): Promise<{ sent: number; failed: number; tokensCleaned: number }> {
+/** V6.4 P2 (2026-06-13): tách resolve uids khỏi push để task-notifications có thể
+ *  vừa push FCM vừa persist Firestore với cùng list uid (không double-query). */
+export async function resolveApproverUids(entries: string[]): Promise<string[]> {
   const uids = new Set<string>();
   const roles = new Set<string>();
   for (const e of entries) {
@@ -202,8 +204,6 @@ export async function pushToApproverEntries(entries: string[], payload: PushPayl
     else if (e.startsWith('role:')) roles.add(e.slice(5));
     else roles.add(e); // legacy raw role
   }
-  let totalSent = 0, totalFailed = 0, totalCleaned = 0;
-  // Resolve role → uids (1 query, in clause max 30)
   if (roles.size > 0) {
     try {
       const db = getFirebaseAdminDb();
@@ -214,8 +214,6 @@ export async function pushToApproverEntries(entries: string[], payload: PushPayl
       snap.docs.forEach((d) => uids.add(d.id));
 
       // Phase Noti-Audit (2026-06-07): GD_KD slot trống → fallback ADMIN
-      // (Phase 12.9.5: ADMIN đảm nhiệm GĐKD thực tế). Nếu request có role
-      // GD_KD mà không có user nào → query ADMIN bù.
       if (roles.has('GD_KD') && !roles.has('ADMIN')) {
         const hasGdKd = snap.docs.some((d) => d.data()?.roleId === 'GD_KD');
         if (!hasGdKd) {
@@ -227,13 +225,16 @@ export async function pushToApproverEntries(entries: string[], payload: PushPayl
         }
       }
     } catch (e: any) {
-      console.warn('[pushToApproverEntries] role resolve:', e?.message);
+      console.warn('[resolveApproverUids] role resolve:', e?.message);
     }
   }
-  if (uids.size === 0) return { sent: 0, failed: 0, tokensCleaned: 0 };
-  const result = await pushToUsers(Array.from(uids), payload);
-  totalSent += result.sent; totalFailed += result.failed; totalCleaned += result.tokensCleaned;
-  return { sent: totalSent, failed: totalFailed, tokensCleaned: totalCleaned };
+  return Array.from(uids);
+}
+
+export async function pushToApproverEntries(entries: string[], payload: PushPayload): Promise<{ sent: number; failed: number; tokensCleaned: number }> {
+  const uids = await resolveApproverUids(entries);
+  if (uids.length === 0) return { sent: 0, failed: 0, tokensCleaned: 0 };
+  return pushToUsers(uids, payload);
 }
 
 /** Push tới các user theo role (vd. GD_KD, GD_VP). Dùng cho approval / supervisor notifications. */

@@ -66,6 +66,46 @@
       ]
     },
     {
+      "_comment": "V6.4 P2 notifications: list tab All — where(userId) orderBy(createdAt)",
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "_comment": "V6.4 P2 notifications: tab Action — where(userId) where(actionStatus) where(isActionRequired) orderBy(createdAt)",
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "actionStatus", "order": "ASCENDING" },
+        { "fieldPath": "isActionRequired", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "_comment": "V6.4 P2 notifications: tab Read + mark-all-read — where(userId) where(isRead) orderBy(createdAt)",
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "isRead", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "_comment": "V6.4 P2 notifications: markActionDone helper + filter module — where(userId) where(entityId) where(actionStatus)",
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "entityId", "order": "ASCENDING" },
+        { "fieldPath": "actionStatus", "order": "ASCENDING" }
+      ]
+    },
+    {
       "_comment": "tasks: assigned to me (user) — where(assigneeUserIds array-contains) orderBy(createdAt)",
       "collectionGroup": "tasks",
       "queryScope": "COLLECTION",
