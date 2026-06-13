@@ -21,6 +21,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getFirebaseAdminDb } from '@/lib/firebase/admin';
 import { COLLECTIONS } from '@/lib/firebase/collections';
 import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-auth';
+import { ROLE_BLOCK } from '@/lib/permissions';
 
 // V6.4 (2026-06-13): TP role thực tế trong hệ thống (theo ROLE_BLOCK lib/permissions.ts).
 // Bỏ TP_QLCS ghost — không có trong ROLE_BLOCK. TP_DT/MKT/KT thuộc khối KD; TP_NS/KE/GS thuộc VP.
@@ -57,7 +58,7 @@ export async function GET(_req: NextRequest) {
     }
 
     const db = getFirebaseAdminDb();
-    const items: Array<{ uid: string; displayName: string; roleCode: string; roleName: string; branchId: string | null }> = [];
+    const items: Array<{ uid: string; displayName: string; roleCode: string; roleName: string; branchId: string | null; block: 'KD' | 'VP' | 'top' }> = [];
 
     // Firestore "in" cap 30 phần tử. TP+QLCS+2 GD có thể >30 sau này → batch chia.
     const BATCH = 30;
@@ -73,12 +74,20 @@ export async function GET(_req: NextRequest) {
         const d = doc.data();
         if (d.status === 'inactive' || d.disabled === true) continue;
         if (doc.id === caller.profile.uid) continue;
+        // V6.4 (2026-06-13): phân khối cho dropdown <optgroup>.
+        //   ROLE_BLOCK['GD_KD'|TP_KD|QLCS_*] = 'KD' → khối Kinh doanh
+        //   ROLE_BLOCK['GD_VP'|TP_VP]        = 'VP' → khối Văn phòng
+        //   CEO / CHU_TICH / ADMIN          = 'all' → group 'top' (cấp trên hệ thống)
+        const roleCode = typeof d.roleId === 'string' ? d.roleId : '';
+        const rawBlock = ROLE_BLOCK[roleCode];
+        const block: 'KD' | 'VP' | 'top' = rawBlock === 'all' ? 'top' : (rawBlock === 'VP' ? 'VP' : 'KD');
         items.push({
           uid: doc.id,
           displayName: typeof d.displayName === 'string' ? d.displayName : '(chưa đặt tên)',
-          roleCode: typeof d.roleId === 'string' ? d.roleId : '',
+          roleCode,
           roleName: typeof d.roleName === 'string' ? d.roleName : (d.roleId ?? ''),
           branchId: typeof d.branchId === 'string' ? d.branchId : null,
+          block,
         });
       }
     }

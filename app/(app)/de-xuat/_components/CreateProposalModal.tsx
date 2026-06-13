@@ -408,7 +408,7 @@ export default function CreateProposalModal({
   // V6.4 (2026-06-13) anh chốt cuối: bỏ chip Cấp trên/Ngang cấp — 1 dropdown duy nhất.
   const [recipientUid, setRecipientUid] = useState('');
   const [recipientName, setRecipientName] = useState('');
-  const [recipientOptions, setRecipientOptions] = useState<Array<{ uid: string; displayName: string; roleCode: string; roleName: string }>>([]);
+  const [recipientOptions, setRecipientOptions] = useState<Array<{ uid: string; displayName: string; roleCode: string; roleName: string; block?: 'KD' | 'VP' | 'top' }>>([]);
   const [loadingRecipients, setLoadingRecipients] = useState(false);
 
   // Fetch candidate list 1 lần khi mở modal (server tự xác định theo role caller)
@@ -897,14 +897,46 @@ export default function CreateProposalModal({
                 {loadingRecipients
                   ? 'Đang tải danh sách...'
                   : recipientOptions.length === 0
-                  ? 'Không có người nhận phù hợp ở cấp này'
+                  ? 'Không có người nhận phù hợp'
                   : '— Chọn người nhận —'}
               </option>
-              {recipientOptions.map((o) => (
-                <option key={o.uid} value={o.uid}>
-                  {o.displayName} · {o.roleName || o.roleCode}
-                </option>
-              ))}
+              {/* V6.4 (2026-06-13): group theo khối — anh chốt phân Khối Kinh doanh / Văn phòng / Cấp trên hệ thống */}
+              {(() => {
+                const kdList = recipientOptions.filter((o) => o.block === 'KD');
+                const vpList = recipientOptions.filter((o) => o.block === 'VP');
+                const topList = recipientOptions.filter((o) => o.block === 'top');
+                return (
+                  <>
+                    {kdList.length > 0 && (
+                      <optgroup label="Khối Kinh doanh">
+                        {kdList.map((o) => (
+                          <option key={o.uid} value={o.uid}>
+                            {o.displayName} · {o.roleName || o.roleCode}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {vpList.length > 0 && (
+                      <optgroup label="Khối Văn phòng">
+                        {vpList.map((o) => (
+                          <option key={o.uid} value={o.uid}>
+                            {o.displayName} · {o.roleName || o.roleCode}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {topList.length > 0 && (
+                      <optgroup label="Cấp trên hệ thống">
+                        {topList.map((o) => (
+                          <option key={o.uid} value={o.uid}>
+                            {o.displayName} · {o.roleName || o.roleCode}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                  </>
+                );
+              })()}
             </select>
             <p className="text-[11px] text-slate-500 mt-1.5 italic">
               Người được chọn sẽ là cấp đầu tiên duyệt. Hệ thống tự bổ sung các cấp tiếp theo dựa trên luồng duyệt gợi ý bên dưới.
