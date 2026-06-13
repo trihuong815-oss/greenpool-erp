@@ -490,14 +490,57 @@ export default function CreateProposalModal({
     return Number.isFinite(n) && n > 0 ? n : undefined;
   }, [estimatedCostStr]);
 
+  // V6.5 (2026-06-14) anh redesign: client preview phải KHỚP server build chain (route.ts).
+  //   - support: chain = [recipientUnit]
+  //   - governance: chain = [GĐ khối creator nếu TP/QLCS] + [leader] +
+  //                 [CEO nếu cost≥50tr] + [CHU_TICH nếu cost≥200tr]
+  // Lưu ý: client KHÔNG resolve UID → CEO thật, chỉ hiển thị LABEL role để user xem trước.
   const resolvedChain = useMemo<ResolvedStep[]>(() => {
     if (!kind) return [];
-    return resolveApproverChain({
-      kind,
-      estimatedCost: estimatedCostNum ?? 0,
-      creatorBlock: currentUserBlock,
-    });
-  }, [kind, estimatedCostNum, currentUserBlock]);
+    const roleLabel = (r: string): string => ({
+      GD_KD: 'Giám đốc Khối Kinh doanh',
+      GD_VP: 'Giám đốc Khối Văn phòng',
+      CEO: 'CEO',
+      CHU_TICH: 'Chủ tịch',
+    } as Record<string, string>)[r] ?? r;
+    const isCreatorTpQlcs = currentUserRole
+      ? (currentUserRole.startsWith('TP_') || currentUserRole.startsWith('QLCS_'))
+      : false;
+    const out: ResolvedStep[] = [];
+    const pushUnique = (roleCode: string, label: string, reason: string) => {
+      if (out.some((s) => s.roleCode === roleCode)) return;
+      out.push({ roleCode, label, reason });
+    };
+
+    if (nature === 'support') {
+      // Đến thẳng đơn vị nhận — chỉ hiển thị nếu đã chọn
+      if (recipientName) pushUnique('UNIT', recipientName, 'Đơn vị nhận hỗ trợ');
+    } else {
+      // governance
+      if (isCreatorTpQlcs) {
+        const gdRole = currentUserBlock === 'KD' ? 'GD_KD' : 'GD_VP';
+        pushUnique(gdRole, roleLabel(gdRole), 'Tự chèn GĐ khối của bạn (không vượt cấp)');
+      }
+      if (leaderUid && leaderName) {
+        // Tìm role của leader trong recipientOptions
+        const leader = recipientOptions.find((o) => o.uid === leaderUid);
+        const lrole = leader?.roleCode || 'LEADER';
+        pushUnique(lrole, leader?.displayName || leaderName, 'Lãnh đạo phê duyệt');
+      }
+      // Extend theo budget tier nếu hasFinancial
+      if (hasFinancial && (estimatedCostNum ?? 0) > 0) {
+        const cost = estimatedCostNum ?? 0;
+        const lastRole = out[out.length - 1]?.roleCode;
+        if (cost >= 200_000_000) {
+          if (lastRole !== 'CEO' && lastRole !== 'CHU_TICH') pushUnique('CEO', roleLabel('CEO'), 'Vượt 50tr → CEO duyệt');
+          if (lastRole !== 'CHU_TICH') pushUnique('CHU_TICH', roleLabel('CHU_TICH'), 'Vượt 200tr → Chủ tịch duyệt');
+        } else if (cost >= 50_000_000) {
+          if (lastRole !== 'CEO' && lastRole !== 'CHU_TICH') pushUnique('CEO', roleLabel('CEO'), 'Vượt 50tr → CEO duyệt');
+        }
+      }
+    }
+    return out;
+  }, [kind, nature, hasFinancial, estimatedCostNum, currentUserBlock, currentUserRole, leaderUid, leaderName, recipientName, recipientOptions]);
 
   // V6+ relatedUnits + auto scope
   const relatedUnits = useMemo(
@@ -514,15 +557,17 @@ export default function CreateProposalModal({
     );
   }
 
+  // V6.5 (2026-06-14): căn cứ theo nature + leader + budget tier mới
   const chainReason = useMemo(() => {
     if (!kind) return '';
     const parts: string[] = [];
+    parts.push(nature === 'governance' ? 'Quản trị' : 'Hỗ trợ');
     parts.push('Loại: ' + (KIND_V6_OPTIONS.find((k) => k.key === kind)?.label ?? kind));
-    if (kind === 'du_an' && estimatedCostNum) {
+    if (nature === 'governance' && hasFinancial && estimatedCostNum) {
       parts.push('Giá trị: ' + formatVND(estimatedCostNum));
     }
     return parts.join(' · ');
-  }, [kind, estimatedCostNum]);
+  }, [kind, nature, hasFinancial, estimatedCostNum]);
 
   if (!open) return null;
 
