@@ -1,12 +1,11 @@
-// Phase UI-2.1 (2026-06-07): Bottom navigation bar mobile (Zalo/Messenger pattern).
-// 5 mục tần số cao nhất: Dashboard / Tin nhắn / Giao việc / Doanh số / Khác.
-// Mobile only — ẩn ở md+ (desktop dùng sidebar đầy đủ).
+// Phase UI-2.1 (2026-06-07): Bottom navigation bar mobile.
+// V6.4 (2026-06-13): anh chốt xoá module Tin nhắn → 4 tab.
 
 'use client';
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, MessageCircle, ListTodo, BarChart3, Menu } from 'lucide-react';
+import { Home, ListTodo, BarChart3, Menu } from 'lucide-react';
 import { useMobileNav } from '@/components/MobileNavContext';
 import { useNotiCounts } from '@/lib/hooks/use-noti-counts';
 
@@ -14,7 +13,7 @@ interface TabItem {
   href?: string;
   label: string;
   icon: typeof Home;
-  badgeKey?: 'chat' | 'tasks';
+  badgeKey?: 'tasks';
   onClick?: () => void;
 }
 
@@ -24,10 +23,9 @@ export function BottomNavBar({ roleCode: _roleCode }: { roleCode: string }) {
   const noti = useNotiCounts();
 
   const tabs: TabItem[] = [
-    { href: '/dashboard',       label: 'Tổng quan', icon: Home },
-    { href: '/tin-nhan',         label: 'Tin nhắn',  icon: MessageCircle, badgeKey: 'chat' },
-    { href: '/giao-viec',        label: 'Điều phối', icon: ListTodo,      badgeKey: 'tasks' },
-    { href: '/doanh-so',         label: 'Doanh số',  icon: BarChart3 },
+    { href: '/dashboard',  label: 'Tổng quan', icon: Home },
+    { href: '/dieu-phoi',  label: 'Điều phối', icon: ListTodo, badgeKey: 'tasks' },
+    { href: '/doanh-so',   label: 'Doanh số',  icon: BarChart3 },
     { label: 'Khác', icon: Menu, onClick: () => setOpen(true) },
   ];
 
@@ -36,13 +34,11 @@ export function BottomNavBar({ roleCode: _roleCode }: { roleCode: string }) {
       className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-slate-200 shadow-[0_-2px_8px_rgba(0,0,0,0.04)] pb-[env(safe-area-inset-bottom)]"
       aria-label="Điều hướng mobile"
     >
-      <ul className="grid grid-cols-5 h-14">
+      <ul className="grid grid-cols-4 h-14">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = tab.href ? (pathname === tab.href || (tab.href !== '/dashboard' && pathname?.startsWith(tab.href))) : false;
-          const badge = tab.badgeKey === 'chat' ? noti.chat
-            : tab.badgeKey === 'tasks' ? noti.tasks
-            : 0;
+          const badge = tab.badgeKey === 'tasks' ? noti.tasks : 0;
 
           const inner = (
             <div
