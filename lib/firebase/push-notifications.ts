@@ -38,16 +38,29 @@ function sanitize(s: string): string {
     .trim();
 }
 
+/** V6.5 Phase A (2026-06-14): chi tiết per-uid để log vào notification.pushStatus.
+ *  - ok: ít nhất 1 device gửi thành công
+ *  - hasDevice: user có FCM token (false = no_device → in-app/email vẫn tới, không retry)
+ *  - err: lỗi gốc từ FCM nếu fail */
+export interface PerUidPushResult {
+  ok: boolean;
+  hasDevice: boolean;
+  err?: string;
+}
+
 /** Push tới nhiều users. Tự dedup uids + cleanup invalid tokens.
- *  Fire-and-forget — không throw. */
+ *  Fire-and-forget — không throw.
+ *  V6.5 Phase A: trả thêm perUid Map để upstream cập nhật notification.pushStatus. */
 export async function pushToUsers(uids: string[], payload: PushPayload): Promise<{
   sent: number;
   failed: number;
   tokensCleaned: number;
+  perUid: Map<string, PerUidPushResult>;
 }> {
+  const perUid: Map<string, PerUidPushResult> = new Map();
   // Dedup + filter empty
   const uniqRaw = Array.from(new Set(uids.filter((u): u is string => typeof u === 'string' && u.length > 0)));
-  if (uniqRaw.length === 0) return { sent: 0, failed: 0, tokensCleaned: 0 };
+  if (uniqRaw.length === 0) return { sent: 0, failed: 0, tokensCleaned: 0, perUid };
 
   const db = getFirebaseAdminDb();
   // V6.5 (2026-06-14) anh chốt: ADMIN IT (excludeFromBusinessNoti=true) chỉ nhận
@@ -60,9 +73,11 @@ export async function pushToUsers(uids: string[], payload: PushPayload): Promise
     uniq = uniqRaw.filter((_, i) => {
       const s = filterSnaps[i];
       if (!s.exists) return true;
-      return s.data()?.excludeFromBusinessNoti !== true;
+      const exc = s.data()?.excludeFromBusinessNoti === true;
+      if (exc) perUid.set(uniqRaw[i], { ok: false, hasDevice: false, err: 'excluded' });
+      return !exc;
     });
-    if (uniq.length === 0) return { sent: 0, failed: 0, tokensCleaned: 0 };
+    if (uniq.length === 0) return { sent: 0, failed: 0, tokensCleaned: 0, perUid };
   }
 
   // Phase PWA-Stability (2026-06-09): dual-write inAppNotifications.
@@ -83,16 +98,22 @@ export async function pushToUsers(uids: string[], payload: PushPayload): Promise
     const tokenMap: Map<string, string[]> = new Map();  // uid → tokens
     const allTokens: string[] = [];
     for (const s of snaps) {
-      if (!s.exists) continue;
+      if (!s.exists) {
+        perUid.set(s.id, { ok: false, hasDevice: false, err: 'user-not-found' });
+        continue;
+      }
       const x = s.data();
       // Phase B.6 (2026-06-07): extractFcmTokens centralized — đồng nhất logic
       // với 5 cron routes. Source-of-truth = fcmDevices, fallback fcmTokens legacy.
       const tk = extractFcmTokens(x);
-      if (tk.length === 0) continue;
+      if (tk.length === 0) {
+        perUid.set(s.id, { ok: false, hasDevice: false, err: 'no-device' });
+        continue;
+      }
       tokenMap.set(s.id, tk);
       allTokens.push(...tk);
     }
-    if (allTokens.length === 0) return { sent: 0, failed: 0, tokensCleaned: 0 };
+    if (allTokens.length === 0) return { sent: 0, failed: 0, tokensCleaned: 0, perUid };
 
     getFirebaseAdmin();
     const messaging = getMessaging();
@@ -151,17 +172,32 @@ export async function pushToUsers(uids: string[], payload: PushPayload): Promise
     }
     let cleaned = 0;
     const removeByUid: Map<string, string[]> = new Map();
+    // V6.5 Phase A: per-uid aggregate ok/err
+    const uidAgg = new Map<string, { okDevices: number; failDevices: number; lastErr?: string }>();
+    for (const uid of tokenMap.keys()) uidAgg.set(uid, { okDevices: 0, failDevices: 0 });
     allResponses.forEach((r, i) => {
-      if (!r.success && r.error) {
+      const o = tokenOwners[i];
+      const agg = uidAgg.get(o.uid)!;
+      if (r.success) {
+        agg.okDevices++;
+      } else if (r.error) {
+        agg.failDevices++;
+        agg.lastErr = r.error.code || r.error.message || 'unknown';
         const code = r.error.code ?? '';
         if (code.includes('registration-token-not-registered') || code.includes('invalid-argument')) {
-          const o = tokenOwners[i];
           if (!removeByUid.has(o.uid)) removeByUid.set(o.uid, []);
           removeByUid.get(o.uid)!.push(o.token);
           cleaned++;
         }
       }
     });
+    for (const [uid, agg] of uidAgg.entries()) {
+      perUid.set(uid, {
+        ok: agg.okDevices > 0,
+        hasDevice: true,
+        err: agg.okDevices === 0 ? (agg.lastErr ?? 'all-devices-failed') : undefined,
+      });
+    }
 
     // Phase 13.15 — BUG #N1 fix: cleanup invalid tokens dùng TRANSACTION để tránh race.
     // Trước đây read-modify-write: nếu user vừa POST token mới ở giữa snapshot read + update,
@@ -189,10 +225,14 @@ export async function pushToUsers(uids: string[], payload: PushPayload): Promise
       }));
     }
 
-    return { sent: successCount, failed: failureCount, tokensCleaned: cleaned };
+    return { sent: successCount, failed: failureCount, tokensCleaned: cleaned, perUid };
   } catch (e: any) {
     console.warn('[push-notifications] failed:', e?.message);
-    return { sent: 0, failed: 0, tokensCleaned: 0 };
+    // Toàn bộ uniq fail — ghi perUid hasDevice=true để retry cron pick lên
+    for (const u of uniq) {
+      if (!perUid.has(u)) perUid.set(u, { ok: false, hasDevice: true, err: e?.message ?? 'exception' });
+    }
+    return { sent: 0, failed: 0, tokensCleaned: 0, perUid };
   }
 }
 

@@ -78,10 +78,20 @@ export interface PersistNotificationInput {
   linkUrl: string;
 }
 
-/** Tạo N notification doc (1 doc / user). Fire-and-forget — không throw nếu fail. */
-export async function persistNotification(input: PersistNotificationInput): Promise<void> {
+/** V6.5 Phase A (2026-06-14): trạng thái push FCM cho mỗi notification doc.
+ *  - pending  : đã tạo doc, chưa push (hoặc đang push)
+ *  - sent     : FCM accept (messageId trả về OK ít nhất 1 device)
+ *  - failed   : tất cả device fail (sẽ retry qua cron)
+ *  - no_device: user chưa register FCM (không retry — chỉ in-app + email)
+ *  - excluded : user có excludeFromBusinessNoti (đã skip ngay từ đầu) */
+export type PushStatus = 'pending' | 'sent' | 'failed' | 'no_device' | 'excluded';
+
+/** Tạo N notification doc (1 doc / user). Fire-and-forget — không throw nếu fail.
+ *  V6.5 Phase A: trả về Map<uid, docId> để upstream cập nhật pushStatus sau khi gửi FCM. */
+export async function persistNotification(input: PersistNotificationInput): Promise<Map<string, string>> {
+  const docIdByUid = new Map<string, string>();
   const uidsRaw = Array.from(new Set(input.userIds.filter(Boolean)));
-  if (uidsRaw.length === 0) return;
+  if (uidsRaw.length === 0) return docIdByUid;
   const db = getFirebaseAdminDb();
 
   // V6.5 (2026-06-14): filter user có excludeFromBusinessNoti=true (ADMIN IT thuần)
@@ -92,7 +102,7 @@ export async function persistNotification(input: PersistNotificationInput): Prom
     if (!s.exists) return true;
     return s.data()?.excludeFromBusinessNoti !== true;
   });
-  if (uids.length === 0) return;
+  if (uids.length === 0) return docIdByUid;
 
   const col = db.collection(COLLECTIONS.NOTIFICATIONS);
   const now = new Date();
@@ -103,6 +113,7 @@ export async function persistNotification(input: PersistNotificationInput): Prom
   const batch = db.batch();
   for (const uid of uids) {
     const ref = col.doc();
+    docIdByUid.set(uid, ref.id);
     batch.set(ref, {
       userId: uid,
       module: input.module,
@@ -118,12 +129,69 @@ export async function persistNotification(input: PersistNotificationInput): Prom
       createdAt: now,
       readAt: null,
       linkUrl: input.linkUrl,
+      // V6.5 Phase A: push tracking
+      pushStatus: 'pending' as PushStatus,
+      pushError: null,
+      sentAt: null,
+      retryCount: 0,
+      nextRetryAt: null,
+      // Snapshot payload để retry không cần re-resolve user info
+      pushPayloadSnapshot: {
+        title: input.title,
+        body: input.message,
+        link: input.linkUrl,
+        type: input.type,
+      },
     });
   }
   try {
     await batch.commit();
   } catch (e: any) {
     console.warn('[persistNotification] batch commit fail:', e?.message, 'count=', uids.length);
+  }
+  return docIdByUid;
+}
+
+/** V6.5 Phase A (2026-06-14): cập nhật pushStatus + sentAt/pushError sau khi pushToUsers chạy.
+ *  Map vào notification doc của TỪNG uid. Fire-and-forget.
+ *  - results: Map<uid, { ok: boolean, err?: string, hasDevice: boolean }>
+ *  - docIdByUid: trả từ persistNotification ở trên */
+export async function updateNotiPushStatus(
+  docIdByUid: Map<string, string>,
+  results: Map<string, { ok: boolean; err?: string; hasDevice: boolean }>,
+): Promise<void> {
+  if (docIdByUid.size === 0 || results.size === 0) return;
+  const db = getFirebaseAdminDb();
+  const col = db.collection(COLLECTIONS.NOTIFICATIONS);
+  const now = new Date();
+  const batch = db.batch();
+  let count = 0;
+  for (const [uid, docId] of docIdByUid.entries()) {
+    const r = results.get(uid);
+    if (!r) continue;
+    let status: PushStatus;
+    if (r.ok) status = 'sent';
+    else if (!r.hasDevice) status = 'no_device';
+    else status = 'failed';
+    const update: Record<string, any> = {
+      pushStatus: status,
+      sentAt: r.ok ? now : null,
+      pushError: r.err ?? null,
+    };
+    // Failed → schedule retry sau 5 phút (lần đầu) — khớp cron min interval
+    if (status === 'failed') {
+      update.nextRetryAt = new Date(now.getTime() + 5 * 60_000);
+    }
+    batch.update(col.doc(docId), update);
+    count++;
+    // Firestore batch limit 500 — auto-commit khi đầy
+    if (count >= 500) {
+      try { batch.commit(); } catch {}
+      count = 0;
+    }
+  }
+  try { await batch.commit(); } catch (e: any) {
+    console.warn('[updateNotiPushStatus] commit fail:', e?.message);
   }
 }
 

@@ -6,45 +6,7 @@ import { getFirebaseAdminDb } from './admin';
 import { COLLECTIONS } from './collections';
 import { pushToUsers, resolveApproverUids } from './push-notifications';
 import { persistNotification, type NotiType, type NotiModule } from './notifications-store';
-import { sendEmailNotiBatch } from '@/lib/email/resend-client';
-
-const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://greenpool-erp.vercel.app';
-
-/** V6.5 (2026-06-14) Email backup cho action_required noti (iOS Safari web push không ổn định).
- *  Fire-and-forget — không throw. Gửi parallel cho N uids. */
-async function emailBackup(
-  uids: string[],
-  subject: string,
-  title: string,
-  body: string,
-  link: string,
-): Promise<void> {
-  if (uids.length === 0) return;
-  try {
-    const db = getFirebaseAdminDb();
-    const snaps = await db.getAll(...uids.map((u) => db.collection(COLLECTIONS.USERS).doc(u)));
-    const items: { to: string; subject: string; title: string; body: string; ctaLabel: string; ctaUrl: string; footerNote: string }[] = [];
-    for (const s of snaps) {
-      if (!s.exists) continue;
-      const x = s.data() as any;
-      if (x?.excludeFromBusinessNoti === true) continue; // tôn trọng cờ ADMIN IT
-      const email = typeof x?.email === 'string' ? x.email : '';
-      if (!email || !email.includes('@')) continue;
-      items.push({
-        to: email,
-        subject,
-        title,
-        body,
-        ctaLabel: 'Mở Green Pool ERP',
-        ctaUrl: link.startsWith('http') ? link : APP_BASE_URL + link,
-        footerNote: 'Đây là email backup vì thông báo đẩy trên thiết bị có thể không tới được. Bạn nhận được vì là người duyệt/được giao việc trong hệ thống.',
-      });
-    }
-    await sendEmailNotiBatch(items);
-  } catch (e: any) {
-    console.warn('[emailBackup] fail:', e?.message);
-  }
-}
+import { sendNotificationEvent } from './noti-engine';
 
 // V6.4 P2: helper xác định module từ kind để tách badge sidebar (proposal vs dispatch).
 function moduleOf(kind: TaskDoc['kind']): NotiModule {
@@ -125,50 +87,37 @@ export async function notifyTaskCreated(task: TaskDoc): Promise<void> {
       console.warn('[notifyTaskCreated] pending_approval nhưng không có approver entry:', task.id);
       return;
     }
-    // V6.4 P2: resolve uids 1 lần → vừa push FCM vừa persist Firestore (no double-query).
     const uids = await resolveApproverUids([entry]);
     if (uids.length === 0) {
       console.warn('[notifyTaskCreated] approver entry không resolve được user:', entry, task.id);
       return;
     }
-    const payload = {
+    // V6.5 Phase A (2026-06-14): dùng engine duy nhất — persist + push + email + log pushStatus.
+    await sendNotificationEvent({
+      type: 'task_pending_approval',
+      module: mod,
+      entityId: task.id,
       title: `📥 ${kindLabel(task.kind)} chờ duyệt`,
-      body: `"${task.title}" — từ ${task.createdByName ?? 'người tạo'}`,
-      link,
-      tag: `task-${task.id}`,
-      data: { taskId: task.id, kind: 'task_pending_approval' },
-    };
-    await Promise.all([
-      pushToUsers(uids, payload),
-      persistNotification({
-        userIds: uids, module: mod, entityId: task.id,
-        title: payload.title, message: payload.body,
-        type: 'task_pending_approval', linkUrl: link,
-      }),
-      // V6.5 (2026-06-14): email backup cho action_required (iOS Safari push chập chờn)
-      emailBackup(uids, `[Green Pool] ${kindLabel(task.kind)} cần duyệt: ${task.title}`,
-        payload.title, payload.body, link),
-    ]);
+      message: `"${task.title}" — từ ${task.createdByName ?? 'người tạo'}`,
+      linkUrl: link,
+      recipients: uids,
+      pushTag: `task-${task.id}`,
+      pushData: { taskId: task.id },
+    });
   } else {
     const uids = (await resolveAssigneeUids(task)).filter((u) => u !== task.createdBy);
     if (uids.length === 0) return;
-    const payload = {
+    await sendNotificationEvent({
+      type: 'task_assigned',
+      module: mod,
+      entityId: task.id,
       title: `📌 ${kindLabel(task.kind)} mới`,
-      body: `"${task.title}" — giao bởi ${task.createdByName ?? 'cấp trên'}`,
-      link,
-      tag: `task-${task.id}`,
-      data: { taskId: task.id, kind: 'task_assigned' },
-    };
-    await Promise.all([
-      pushToUsers(uids, payload),
-      persistNotification({
-        userIds: uids, module: mod, entityId: task.id,
-        title: payload.title, message: payload.body,
-        type: 'task_assigned', linkUrl: link,
-      }),
-      emailBackup(uids, `[Green Pool] Công việc mới: ${task.title}`,
-        payload.title, payload.body, link),
-    ]);
+      message: `"${task.title}" — giao bởi ${task.createdByName ?? 'cấp trên'}`,
+      linkUrl: link,
+      recipients: uids,
+      pushTag: `task-${task.id}`,
+      pushData: { taskId: task.id },
+    });
   }
 }
 

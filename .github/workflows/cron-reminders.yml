@@ -16,6 +16,7 @@ on:
     - cron: '30 15 * * *'    # checklist evening: deadline 21:30 VN → reminder 22:30 VN = 15:30 UTC
     # V6.5 (2026-06-14): cleanup FCM token stale >7 ngày — daily 03:00 UTC = 10:00 VN
     - cron: '0 3 * * *'      # cleanup-stale-fcm daily
+    # V6.5 Phase A (2026-06-14): retry failed FCM push — chia tải với send-reminders (đã chạy */5)
   workflow_dispatch:          # manual trigger để test
 
 # Concurrency: cancel runs cũ nếu chậm — tránh chồng chéo
@@ -41,6 +42,21 @@ jobs:
             echo "::error::Reminders cron failed with status $response"
             exit 1
           fi
+
+  # V6.5 Phase A (2026-06-14): retry FCM push fail (every 5min, max 3 lần, backoff 5p/15p/30p)
+  retry-failed-push:
+    if: github.event.schedule == '*/5 * * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Call retry-failed-push
+        run: |
+          response=$(curl -s -o /tmp/body -w "%{http_code}" \
+            -X POST "${{ secrets.APP_HOSTING_URL }}/api/cron/retry-failed-push" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "content-type: application/json")
+          echo "Status: $response"; cat /tmp/body
+          if [ "$response" -ne 200 ]; then exit 1; fi
 
   send-morning-summary:
     if: github.event.schedule == '0 0 * * *' || github.event_name == 'workflow_dispatch'
