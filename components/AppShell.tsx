@@ -18,6 +18,7 @@ import { FlagGate } from './FlagGate';
 import { PushHeartbeat } from './PushHeartbeat';
 import { NotiHealthBanner } from './NotiHealthBanner';
 import { ForceEnableNotiModal } from './ForceEnableNotiModal';
+import { IOSInstallPwaBanner } from './IOSInstallPwaBanner';
 
 interface AppShellProps {
   userName: string;
@@ -106,6 +107,9 @@ export function AppShell({ userName, userRole, roleCode, avatarUrl, menuOverride
           className="flex-1 flex flex-col overflow-hidden min-w-0 min-h-0 pb-14 md:pb-0"
         >
           <MfaRequiredBanner roleCode={roleCode} />
+          {/* V6.5 (2026-06-14): banner ép user iOS Safari "Add to Home Screen"
+              — root cause noti chập chờn (web push không deliver nếu chưa install PWA) */}
+          <IOSInstallPwaBanner />
           {/* Phase PWA-Stability (2026-06-09): cảnh báo persistent khi noti subscription unhealthy */}
           <NotiHealthBanner />
           {children}

@@ -14,6 +14,8 @@ on:
     - cron: '0 1 * * *'      # checklist morning: deadline 07:00 VN → reminder 08:00 VN = 01:00 UTC
     - cron: '30 7 * * *'     # checklist afternoon: deadline 13:30 VN → reminder 14:30 VN = 07:30 UTC
     - cron: '30 15 * * *'    # checklist evening: deadline 21:30 VN → reminder 22:30 VN = 15:30 UTC
+    # V6.5 (2026-06-14): cleanup FCM token stale >7 ngày — daily 03:00 UTC = 10:00 VN
+    - cron: '0 3 * * *'      # cleanup-stale-fcm daily
   workflow_dispatch:          # manual trigger để test
 
 # Concurrency: cancel runs cũ nếu chậm — tránh chồng chéo
@@ -131,6 +133,21 @@ jobs:
         run: |
           response=$(curl -s -o /tmp/body -w "%{http_code}" \
             -X POST "${{ secrets.APP_HOSTING_URL }}/api/cron/checklist-reminder?shift=evening" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "content-type: application/json")
+          echo "Status: $response"; cat /tmp/body
+          if [ "$response" -ne 200 ]; then exit 1; fi
+
+  cleanup-stale-fcm:
+    # V6.5 (2026-06-14): daily 10:00 VN — xóa token lastSeen >7 ngày
+    if: github.event.schedule == '0 3 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Call cleanup-stale-fcm
+        run: |
+          response=$(curl -s -o /tmp/body -w "%{http_code}" \
+            -X POST "${{ secrets.APP_HOSTING_URL }}/api/cron/cleanup-stale-fcm" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "content-type: application/json")
           echo "Status: $response"; cat /tmp/body
