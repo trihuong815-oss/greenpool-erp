@@ -293,6 +293,35 @@
         { "fieldPath": "pushStatus", "order": "ASCENDING" },
         { "fieldPath": "nextRetryAt", "order": "ASCENDING" }
       ]
+    },
+    {
+      "_comment": "V6.5 Phase B: cron proposal-overdue — where(kind='proposal') where(status='pending_approval') where(createdAt <= cutoff)",
+      "collectionGroup": "tasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "kind", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "_comment": "V6.5 Phase B: cron dispatch-overdue — where(kind='assignment') where(status IN [...])",
+      "collectionGroup": "tasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "kind", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "_comment": "V6.5 Phase B: cron action-required-stuck — where(isActionRequired=true) where(actionStatus='pending') where(createdAt <= cutoff)",
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "isActionRequired", "order": "ASCENDING" },
+        { "fieldPath": "actionStatus", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

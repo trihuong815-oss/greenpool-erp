@@ -107,10 +107,37 @@ export async function sendNotificationEvent(input: SendNotificationEventInput): 
 
   const ch = input.channels ?? {};
   const enableInApp = ch.inApp !== false;
-  const enablePush = ch.push !== false;
-  const enableEmail = ch.email ?? shouldEmailDefault(input.type);
+  const callerPushDefault = ch.push !== false;
+  const callerEmailDefault = ch.email ?? shouldEmailDefault(input.type);
 
-  // 1. Tạo notification doc (in-app + lịch sử + nguồn dữ liệu gốc cho badge)
+  // V6.5 Phase B (2026-06-14): user-level override per module.
+  // Mỗi user có thể tắt push/email cho module cụ thể qua /api/personal/noti-channels.
+  // Tách 2 list uid riêng: pushUids vs emailUids. inApp luôn tạo cho ALL uids
+  // (badge sidebar + bell vẫn đúng theo spec "không phụ thuộc 100% vào push").
+  let pushUids = uids;
+  let emailUids = callerEmailDefault ? uids : [];
+  try {
+    const db = getFirebaseAdminDb();
+    const userSnaps = await db.getAll(...uids.map((u) => db.collection(COLLECTIONS.USERS).doc(u)));
+    const allowedPush: string[] = [];
+    const allowedEmail: string[] = [];
+    for (const s of userSnaps) {
+      if (!s.exists) continue;
+      const ud = s.data() as any;
+      const userCh = ud?.notificationChannels?.[input.module];
+      // Mặc định nếu user chưa set → theo caller default
+      const userPush = userCh?.push !== false; // default true
+      const userEmail = userCh?.email === true; // default false (anh tự bật)
+      if (callerPushDefault && userPush) allowedPush.push(s.id);
+      if (callerEmailDefault && (userEmail || userCh === undefined)) allowedEmail.push(s.id);
+    }
+    pushUids = allowedPush;
+    emailUids = allowedEmail;
+  } catch (e: any) {
+    console.warn('[noti-engine] read user channels fail (fallback all-uids):', e?.message);
+  }
+
+  // 1. Tạo notification doc cho TẤT CẢ uids (in-app luôn — badge + bell + lịch sử)
   let docIdByUid: Map<string, string> = new Map();
   if (enableInApp) {
     docIdByUid = await persistNotification({
@@ -128,12 +155,11 @@ export async function sendNotificationEvent(input: SendNotificationEventInput): 
     result.recipientsAfterFilter = docIdByUid.size;
   }
 
-  // 2. Push FCM song song với email
+  // 2. Push FCM (subset uids đã opt-in)
   const tasks: Promise<any>[] = [];
-
-  if (enablePush) {
+  if (pushUids.length > 0) {
     tasks.push(
-      pushToUsers(uids, {
+      pushToUsers(pushUids, {
         title: input.title,
         body: input.message,
         link: input.linkUrl,
@@ -142,7 +168,6 @@ export async function sendNotificationEvent(input: SendNotificationEventInput): 
       }).then(async (r) => {
         result.pushSent = r.sent;
         result.pushFailed = r.failed;
-        // Cập nhật pushStatus per-uid (nếu đã tạo doc in-app)
         if (enableInApp && docIdByUid.size > 0) {
           await updateNotiPushStatus(docIdByUid, r.perUid);
         }
@@ -150,9 +175,9 @@ export async function sendNotificationEvent(input: SendNotificationEventInput): 
     );
   }
 
-  if (enableEmail) {
+  if (emailUids.length > 0) {
     tasks.push(
-      emailBackupForEvent(uids, input).then((r) => {
+      emailBackupForEvent(emailUids, input).then((r) => {
         result.emailOk = r.ok;
         result.emailFailed = r.failed;
         result.emailSkipped = r.skipped;

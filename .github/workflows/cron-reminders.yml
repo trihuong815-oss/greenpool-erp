@@ -17,6 +17,10 @@ on:
     # V6.5 (2026-06-14): cleanup FCM token stale >7 ngày — daily 03:00 UTC = 10:00 VN
     - cron: '0 3 * * *'      # cleanup-stale-fcm daily
     # V6.5 Phase A (2026-06-14): retry failed FCM push — chia tải với send-reminders (đã chạy */5)
+    # V6.5 Phase B (2026-06-14): SLA + escalation + stuck — hourly
+    - cron: '15 * * * *'     # proposal-overdue mỗi giờ (offset 15p để tránh cùng */5)
+    - cron: '30 * * * *'     # dispatch-overdue mỗi giờ (offset 30p)
+    - cron: '45 * * * *'     # action-required-stuck mỗi giờ (offset 45p)
   workflow_dispatch:          # manual trigger để test
 
 # Concurrency: cancel runs cũ nếu chậm — tránh chồng chéo
@@ -164,6 +168,51 @@ jobs:
         run: |
           response=$(curl -s -o /tmp/body -w "%{http_code}" \
             -X POST "${{ secrets.APP_HOSTING_URL }}/api/cron/cleanup-stale-fcm" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "content-type: application/json")
+          echo "Status: $response"; cat /tmp/body
+          if [ "$response" -ne 200 ]; then exit 1; fi
+
+  # V6.5 Phase B (2026-06-14): SLA monitoring đề xuất pending_approval — hourly
+  proposal-overdue:
+    if: github.event.schedule == '15 * * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Call proposal-overdue
+        run: |
+          response=$(curl -s -o /tmp/body -w "%{http_code}" \
+            -X POST "${{ secrets.APP_HOSTING_URL }}/api/cron/proposal-overdue" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "content-type: application/json")
+          echo "Status: $response"; cat /tmp/body
+          if [ "$response" -ne 200 ]; then exit 1; fi
+
+  # V6.5 Phase B (2026-06-14): điều phối quá hạn + escalation GĐ khối — hourly
+  dispatch-overdue:
+    if: github.event.schedule == '30 * * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Call dispatch-overdue
+        run: |
+          response=$(curl -s -o /tmp/body -w "%{http_code}" \
+            -X POST "${{ secrets.APP_HOSTING_URL }}/api/cron/dispatch-overdue" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "content-type: application/json")
+          echo "Status: $response"; cat /tmp/body
+          if [ "$response" -ne 200 ]; then exit 1; fi
+
+  # V6.5 Phase B (2026-06-14): action_required >24h chưa xử lý → resend noti — hourly
+  action-required-stuck:
+    if: github.event.schedule == '45 * * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Call action-required-stuck
+        run: |
+          response=$(curl -s -o /tmp/body -w "%{http_code}" \
+            -X POST "${{ secrets.APP_HOSTING_URL }}/api/cron/action-required-stuck" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "content-type: application/json")
           echo "Status: $response"; cat /tmp/body

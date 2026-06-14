@@ -1,6 +1,7 @@
 import { AppTopBar } from '@/components/AppTopBar';
 import { requireAuthedProfile } from '@/lib/firebase/current-profile';
 import { SecurityClient } from './SecurityClient';
+import { NotiChannelsSettings } from './NotiChannelsSettings';
 
 // Page Bảo mật — Phase 13.5: đổi mật khẩu + 2FA TOTP.
 // ADMIN/CEO/GD bắt buộc setup 2FA (banner global ép vào page này).
@@ -21,6 +22,9 @@ export default async function BaoMatPage() {
           roleCode={profile.roleCode}
           mfaRequired={isRequiredMfa}
         />
+        <div className="max-w-3xl mx-auto mt-6">
+          <NotiChannelsSettings />
+        </div>
       </div>
     </>
   );

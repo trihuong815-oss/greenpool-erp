@@ -29,7 +29,8 @@
 //   - Không đụng /dieu-phoi V4, không đụng module FROZEN
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   X,
   Check,
@@ -341,6 +342,33 @@ export default function ProposalDetailDrawer({
   const [decisionMode, setDecisionMode] =
     useState<'idle' | 'revision' | 'reject'>('idle');
   const [decisionNote, setDecisionNote] = useState('');
+
+  // V6.5 Phase C (2026-06-14): focus action button qua ?action=approve|reject|revision
+  // Khi user click noti dạng "Đề xuất chờ duyệt" → URL có ?action=approve →
+  // tự scroll tới nút "Duyệt" + flash highlight 1.5s để gợi ý hành động.
+  const approveBtnRef = useRef<HTMLButtonElement | null>(null);
+  const rejectBtnRef = useRef<HTMLButtonElement | null>(null);
+  const revisionBtnRef = useRef<HTMLButtonElement | null>(null);
+  const searchParams = useSearchParams();
+  const [flashBtn, setFlashBtn] = useState<string | null>(null);
+  useEffect(() => {
+    if (!proposal) return;
+    const action = searchParams.get('action');
+    if (!action) return;
+    const t = setTimeout(() => {
+      let target: HTMLButtonElement | null = null;
+      if (action === 'approve') target = approveBtnRef.current;
+      else if (action === 'reject') target = rejectBtnRef.current;
+      else if (action === 'revision') target = revisionBtnRef.current;
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        target.focus();
+        setFlashBtn(action);
+        setTimeout(() => setFlashBtn(null), 1500);
+      }
+    }, 300); // chờ drawer mount xong
+    return () => clearTimeout(t);
+  }, [proposal?.id, searchParams]);
 
   if (!proposal) return null;
 
@@ -785,24 +813,33 @@ export default function ProposalDetailDrawer({
                                 <div className="flex flex-wrap gap-1.5">
                                   <button
                                     type="button"
+                                    ref={approveBtnRef}
                                     onClick={handleApproveDirect}
-                                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm"
+                                    className={`inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition ${
+                                      flashBtn === 'approve' ? 'ring-4 ring-emerald-300 ring-offset-2 animate-pulse' : ''
+                                    }`}
                                   >
                                     <Check size={13} /> Duyệt
                                   </button>
                                   <button
                                     type="button"
+                                    ref={rejectBtnRef}
                                     onClick={() => setDecisionMode('reject')}
-                                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg"
+                                    className={`inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition ${
+                                      flashBtn === 'reject' ? 'ring-4 ring-rose-300 ring-offset-2 animate-pulse' : ''
+                                    }`}
                                   >
                                     <XCircle size={13} /> Từ chối
                                   </button>
                                   <button
                                     type="button"
+                                    ref={revisionBtnRef}
                                     onClick={() =>
                                       setDecisionMode('revision')
                                     }
-                                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg"
+                                    className={`inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg transition ${
+                                      flashBtn === 'revision' ? 'ring-4 ring-amber-300 ring-offset-2 animate-pulse' : ''
+                                    }`}
                                   >
                                     <RotateCcw size={13} /> Yêu cầu bổ sung
                                   </button>
