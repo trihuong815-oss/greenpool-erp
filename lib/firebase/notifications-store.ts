@@ -80,9 +80,20 @@ export interface PersistNotificationInput {
 
 /** Tạo N notification doc (1 doc / user). Fire-and-forget — không throw nếu fail. */
 export async function persistNotification(input: PersistNotificationInput): Promise<void> {
-  const uids = Array.from(new Set(input.userIds.filter(Boolean)));
-  if (uids.length === 0) return;
+  const uidsRaw = Array.from(new Set(input.userIds.filter(Boolean)));
+  if (uidsRaw.length === 0) return;
   const db = getFirebaseAdminDb();
+
+  // V6.5 (2026-06-14): filter user có excludeFromBusinessNoti=true (ADMIN IT thuần)
+  // — chỉ skip nếu noti là business event (mọi NotiType hiện đều là business).
+  const filterSnaps = await db.getAll(...uidsRaw.map((u) => db.collection(COLLECTIONS.USERS).doc(u)));
+  const uids = uidsRaw.filter((_, i) => {
+    const s = filterSnaps[i];
+    if (!s.exists) return true;
+    return s.data()?.excludeFromBusinessNoti !== true;
+  });
+  if (uids.length === 0) return;
+
   const col = db.collection(COLLECTIONS.NOTIFICATIONS);
   const now = new Date();
   const isActionRequired = ACTION_REQUIRED_TYPES.has(input.type);

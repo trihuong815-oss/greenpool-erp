@@ -46,12 +46,27 @@ export async function pushToUsers(uids: string[], payload: PushPayload): Promise
   tokensCleaned: number;
 }> {
   // Dedup + filter empty
-  const uniq = Array.from(new Set(uids.filter((u): u is string => typeof u === 'string' && u.length > 0)));
-  if (uniq.length === 0) return { sent: 0, failed: 0, tokensCleaned: 0 };
+  const uniqRaw = Array.from(new Set(uids.filter((u): u is string => typeof u === 'string' && u.length > 0)));
+  if (uniqRaw.length === 0) return { sent: 0, failed: 0, tokensCleaned: 0 };
+
+  const db = getFirebaseAdminDb();
+  // V6.5 (2026-06-14) anh chốt: ADMIN IT (excludeFromBusinessNoti=true) chỉ nhận
+  // lỗi hệ thống, KHÔNG nhận event business (đề xuất/điều phối/checklist...).
+  // System error noti dùng kind='system_error' để bypass filter này.
+  const isSystemErrorNoti = payload.data?.kind === 'system_error';
+  let uniq = uniqRaw;
+  if (!isSystemErrorNoti) {
+    const filterSnaps = await db.getAll(...uniqRaw.map((u) => db.collection(COLLECTIONS.USERS).doc(u)));
+    uniq = uniqRaw.filter((_, i) => {
+      const s = filterSnaps[i];
+      if (!s.exists) return true;
+      return s.data()?.excludeFromBusinessNoti !== true;
+    });
+    if (uniq.length === 0) return { sent: 0, failed: 0, tokensCleaned: 0 };
+  }
 
   // Phase PWA-Stability (2026-06-09): dual-write inAppNotifications.
-  // Đảm bảo user MỞ APP sẽ thấy noti dù FCM web push fail (token expired,
-  // SW killed, OS block). KHÔNG await — fire-and-forget, không block FCM.
+  // Đảm bảo user MỞ APP sẽ thấy noti dù FCM web push fail.
   import('./in-app-noti').then(({ writeInAppNotiBatch }) => {
     writeInAppNotiBatch(uniq, {
       title: payload.title,
@@ -63,8 +78,7 @@ export async function pushToUsers(uids: string[], payload: PushPayload): Promise
   }).catch(() => {});
 
   try {
-    const db = getFirebaseAdminDb();
-    // Fetch users parallel
+    // Fetch users parallel (lại — đã reuse db ở trên, không cần re-get)
     const snaps = await db.getAll(...uniq.map((u) => db.collection(COLLECTIONS.USERS).doc(u)));
     const tokenMap: Map<string, string[]> = new Map();  // uid → tokens
     const allTokens: string[] = [];
