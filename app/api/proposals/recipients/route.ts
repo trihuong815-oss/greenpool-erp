@@ -91,31 +91,10 @@ export async function GET(_req: NextRequest) {
         });
       }
     }
-    // V6.5 (2026-06-14) anh chốt: ADMIN hiện kiêm GD_KD.
-    // Nếu list cần GD_KD nhưng Firestore không có user GD_KD active → fallback ADMIN.
-    // Hiển thị ADMIN với block='KD' + roleName='Giám đốc Khối Kinh doanh (kiêm)' để
-    // user thấy quen mắt trong nhóm "Khối Kinh doanh". roleCode giữ 'ADMIN' để
-    // server build chain dùng đúng matchApprover('user:UID', uid, 'ADMIN').
-    if (targetRoles.includes('GD_KD') && !items.some((i) => i.roleCode === 'GD_KD')) {
-      const adminSnap = await db.collection(COLLECTIONS.USERS)
-        .where('roleId', '==', 'ADMIN')
-        .where('status', '==', 'active')
-        .get();
-      for (const doc of adminSnap.docs) {
-        if (seen.has(doc.id)) continue;
-        if (doc.id === caller.profile.uid) continue;
-        seen.add(doc.id);
-        const d = doc.data();
-        items.push({
-          uid: doc.id,
-          displayName: typeof d.displayName === 'string' ? d.displayName : '(ADMIN)',
-          roleCode: 'ADMIN',
-          roleName: 'Giám đốc Khối Kinh doanh (kiêm)',
-          branchId: null,
-          block: 'KD',
-        });
-      }
-    }
+    // V6.5 (2026-06-14): Đã tách bạch ADMIN ↔ GD_KD. huongnguyenvu chuyển hẳn sang
+    // roleId='GD_KD' (script migrate-huongnguyenvu-to-gdkd). ADMIN chỉ còn trihuong815
+    // (IT thuần, excludeFromBusinessNoti=true) — KHÔNG được nhận đề xuất nữa.
+    // → Bỏ fallback ADMIN. Nếu sau này GD_KD lại trống thì lỗi data phải sửa ở DB.
 
     items.sort((a, b) =>
       a.roleCode.localeCompare(b.roleCode) || a.displayName.localeCompare(b.displayName, 'vi'),

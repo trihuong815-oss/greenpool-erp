@@ -580,18 +580,13 @@ export async function POST(req: NextRequest) {
       const estimatedCostV65: number =
         typeof body?.meta?.estimatedCost === 'number' ? body.meta.estimatedCost : (estimatedCost ?? 0);
 
-      // Helper: resolve uid theo role + active, GD_KD trống → fallback ADMIN.
+      // V6.5 (2026-06-14): Tách bạch ADMIN ↔ GD_KD. huongnguyenvu đã chuyển sang
+      // roleId='GD_KD' chính thức. ADMIN chỉ còn trihuong815 (IT). Bỏ fallback ADMIN.
       const resolveUidByRole = async (roleCode: string): Promise<string | null> => {
         const snap = await db.collection(COLLECTIONS.USERS)
           .where('status', '==', 'active')
           .where('roleId', '==', roleCode).limit(1).get();
         if (!snap.empty) return snap.docs[0].id;
-        if (roleCode === 'GD_KD') {
-          const adminSnap = await db.collection(COLLECTIONS.USERS)
-            .where('status', '==', 'active')
-            .where('roleId', '==', 'ADMIN').limit(1).get();
-          if (!adminSnap.empty) return adminSnap.docs[0].id;
-        }
         return null;
       };
 

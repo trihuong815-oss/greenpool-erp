@@ -1194,8 +1194,9 @@ export default function CreateProposalModal({
                 <option value="">— Chọn lãnh đạo phê duyệt —</option>
                 {recipientOptions
                   .filter((o) =>
-                    // V6.5: ADMIN kiêm GD_KD (anh chốt 2026-06-14) — cho lọt vào dropdown leader.
-                    ['GD_KD', 'GD_VP', 'CEO', 'CHU_TICH', 'ADMIN'].includes(o.roleCode))
+                    // V6.5 (2026-06-14): Đã tách bạch — huongnguyenvu chuyển hẳn sang GD_KD.
+                    // Bỏ ADMIN khỏi whitelist leader (ADMIN trihuong815 chỉ làm IT).
+                    ['GD_KD', 'GD_VP', 'CEO', 'CHU_TICH'].includes(o.roleCode))
                   .map((o) => (
                     <option key={o.uid} value={o.uid}>
                       {o.displayName} · {o.roleName || o.roleCode}
