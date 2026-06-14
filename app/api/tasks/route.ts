@@ -518,52 +518,73 @@ export async function POST(req: NextRequest) {
     let recipientTier: string | null = null; // giữ name để build chain bên dưới (deprecated)
     let recipientUidResolved: string | null = null;
     if (kind === 'proposal') {
-      const recipientUid = typeof body?.recipientUid === 'string' ? body.recipientUid : '';
-      if (!recipientUid) {
-        return NextResponse.json({ error: 'Chọn người nhận đề xuất' }, { status: 400 });
-      }
-      if (recipientUid === caller.profile.uid) {
-        return NextResponse.json({ error: 'Không tự đề xuất cho chính mình' }, { status: 400 });
-      }
       const db = getFirebaseAdminDb();
-      const recipientDoc = await db.collection(COLLECTIONS.USERS).doc(recipientUid).get();
-      if (!recipientDoc.exists) {
-        return NextResponse.json({ error: 'Người nhận không tồn tại' }, { status: 400 });
-      }
-      const recipientData = recipientDoc.data()!;
-      if (recipientData.disabled) {
-        return NextResponse.json({ error: 'Người nhận đã bị khoá' }, { status: 400 });
-      }
-      const recipientRole: string = recipientData.roleId ?? '';
+      const recipientUid = typeof body?.recipientUid === 'string' ? body.recipientUid : '';
       const creatorRole = caller.profile.role_code;
       const isCreatorGD = creatorRole === 'GD_KD' || creatorRole === 'GD_VP';
       const isCreatorTpQlcs = creatorRole.startsWith('TP_') || creatorRole.startsWith('QLCS_');
 
-      // Build allowed set theo creator role (đồng bộ /api/proposals/recipients)
-      const ALL_TP_ROLES = new Set(['TP_KT','TP_DT','TP_MKT','TP_GS','TP_KE','TP_NS']);
-      const ALL_QLCS_ROLES = new Set(['QLCS_HM','QLCS_TK','QLCS_CTT','QLCS_24NCT','QLCS_TT']);
-      const allowed = new Set<string>();
-      if (creatorRole === 'ADMIN') {
-        ['GD_KD','GD_VP','CEO','CHU_TICH'].forEach((r) => allowed.add(r));
-      } else if (creatorRole === 'CEO') {
-        allowed.add('CHU_TICH');
-      } else if (isCreatorGD) {
-        allowed.add(creatorRole === 'GD_KD' ? 'GD_VP' : 'GD_KD');
-        allowed.add('CEO'); allowed.add('CHU_TICH');
-      } else if (isCreatorTpQlcs) {
-        ['GD_KD','GD_VP'].forEach((r) => allowed.add(r));
-        ALL_TP_ROLES.forEach((r) => allowed.add(r));
-        ALL_QLCS_ROLES.forEach((r) => allowed.add(r));
-        allowed.delete(creatorRole); // trừ chính caller
-      } else {
-        return NextResponse.json({ error: 'Vai trò không được dùng module này' }, { status: 403 });
+      // V6.5 (2026-06-14) anh chốt: governance cần ÍT NHẤT 1 đối tượng gửi đến
+      // (leader HOẶC recipient). Support vẫn bắt buộc đơn vị nhận (chain = recipient).
+      const natureCheck: 'support' | 'governance' =
+        body?.meta?.nature === 'governance' ? 'governance' : 'support';
+      const leaderUidCheck: string | null =
+        typeof body?.meta?.recipientLeaderUid === 'string' && body.meta.recipientLeaderUid
+          ? body.meta.recipientLeaderUid : null;
+      if (natureCheck === 'support' && !recipientUid) {
+        return NextResponse.json({ error: 'Chọn đơn vị nhận đề xuất (Hỗ trợ công việc)' }, { status: 400 });
       }
-      if (!allowed.has(recipientRole)) {
+      if (natureCheck === 'governance' && !recipientUid && !leaderUidCheck) {
         return NextResponse.json({
-          error: `Người nhận role '${recipientRole}' không hợp lệ với người gửi '${creatorRole}'`,
+          error: 'Cần ít nhất 1 đối tượng gửi đến (đơn vị nhận hoặc lãnh đạo phê duyệt)',
         }, { status: 400 });
       }
-      recipientUidResolved = recipientUid;
+      // Whitelist creator role — chặn role không hợp lệ ngay cả khi không có recipient
+      if (
+        creatorRole !== 'ADMIN' && creatorRole !== 'CEO' &&
+        !isCreatorGD && !isCreatorTpQlcs
+      ) {
+        return NextResponse.json({ error: 'Vai trò không được dùng module này' }, { status: 403 });
+      }
+
+      if (recipientUid) {
+        if (recipientUid === caller.profile.uid) {
+          return NextResponse.json({ error: 'Không tự đề xuất cho chính mình' }, { status: 400 });
+        }
+        const recipientDoc = await db.collection(COLLECTIONS.USERS).doc(recipientUid).get();
+        if (!recipientDoc.exists) {
+          return NextResponse.json({ error: 'Người nhận không tồn tại' }, { status: 400 });
+        }
+        const recipientData = recipientDoc.data()!;
+        if (recipientData.disabled) {
+          return NextResponse.json({ error: 'Người nhận đã bị khoá' }, { status: 400 });
+        }
+        const recipientRole: string = recipientData.roleId ?? '';
+
+        // Build allowed set theo creator role (đồng bộ /api/proposals/recipients)
+        const ALL_TP_ROLES = new Set(['TP_KT','TP_DT','TP_MKT','TP_GS','TP_KE','TP_NS']);
+        const ALL_QLCS_ROLES = new Set(['QLCS_HM','QLCS_TK','QLCS_CTT','QLCS_24NCT','QLCS_TT']);
+        const allowed = new Set<string>();
+        if (creatorRole === 'ADMIN') {
+          ['GD_KD','GD_VP','CEO','CHU_TICH'].forEach((r) => allowed.add(r));
+        } else if (creatorRole === 'CEO') {
+          allowed.add('CHU_TICH');
+        } else if (isCreatorGD) {
+          allowed.add(creatorRole === 'GD_KD' ? 'GD_VP' : 'GD_KD');
+          allowed.add('CEO'); allowed.add('CHU_TICH');
+        } else if (isCreatorTpQlcs) {
+          ['GD_KD','GD_VP'].forEach((r) => allowed.add(r));
+          ALL_TP_ROLES.forEach((r) => allowed.add(r));
+          ALL_QLCS_ROLES.forEach((r) => allowed.add(r));
+          allowed.delete(creatorRole);
+        }
+        if (!allowed.has(recipientRole)) {
+          return NextResponse.json({
+            error: `Người nhận role '${recipientRole}' không hợp lệ với người gửi '${creatorRole}'`,
+          }, { status: 400 });
+        }
+      }
+      recipientUidResolved = recipientUid || null;
       recipientTier = 'senior'; // legacy field — V6.5 build chain riêng theo nature
 
       // V6.5 (2026-06-13) anh redesign — Build chain theo nature + budget tier:
@@ -602,7 +623,8 @@ export async function POST(req: NextRequest) {
         pushUnique(`user:${recipientUid}`);
       } else {
         // ─── B. Đề xuất quản trị ───
-        // Bước 1: Chèn GĐ khối creator nếu là TP/QLCS (không vượt cấp)
+        // Anh chốt 2026-06-14: governance cần ÍT NHẤT 1 đối tượng (leader HOẶC recipient).
+        // Bước 1: Chèn GĐ khối creator nếu là TP/QLCS (không vượt cấp) — default an toàn
         if (isCreatorTpQlcs) {
           const creatorBlock2 = getBlockOf(creatorRole);
           if (creatorBlock2 !== 'all') {
@@ -611,7 +633,11 @@ export async function POST(req: NextRequest) {
             if (creatorGdUid) pushUnique(`user:${creatorGdUid}`);
           }
         }
-        // Bước 2: Chèn leader đã chọn (nếu khác GĐ creator vừa chèn)
+        // Bước 2: Nếu chọn đơn vị nhận (TP/QLCS ngang cấp hoặc GĐ khác khối) → chèn vào chain
+        if (recipientUid) {
+          pushUnique(`user:${recipientUid}`);
+        }
+        // Bước 3: Chèn leader đã chọn (nếu khác GĐ creator vừa chèn / recipient)
         if (leaderUidV65) {
           pushUnique(`user:${leaderUidV65}`);
         }

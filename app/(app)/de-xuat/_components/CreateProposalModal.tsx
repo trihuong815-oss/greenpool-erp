@@ -604,10 +604,17 @@ export default function CreateProposalModal({
     const r = reason.trim();
     if (!r) return 'Vui lòng nhập lý do đề xuất.';
     if (r.length < 10) return 'Lý do đề xuất tối thiểu 10 ký tự.';
-    if (!recipientUid) return 'Vui lòng chọn đơn vị nhận đề xuất.';
+    // V6.5 (2026-06-14) anh chốt: governance cần ÍT NHẤT 1 đối tượng gửi đến —
+    // GĐ khối/CEO/CHU_TICH (leader) HOẶC 1 TP/QLCS ngang cấp (recipient). Không bắt cả 2.
+    // Support vẫn bắt buộc đơn vị nhận (chain = recipient).
+    if (nature === 'support' && !recipientUid) {
+      return 'Vui lòng chọn đơn vị nhận đề xuất.';
+    }
     // V6.5 governance validate
     if (nature === 'governance') {
-      if (!leaderUid) return 'Vui lòng chọn lãnh đạo cần phê duyệt.';
+      if (!leaderUid && !recipientUid) {
+        return 'Vui lòng chọn ít nhất 1 đối tượng gửi đến (đơn vị nhận hoặc lãnh đạo phê duyệt).';
+      }
       if (hasFinancial) {
         if (!estimatedCostStr.trim() || (estimatedCostNum ?? 0) <= 0) {
           return 'Vui lòng nhập giá trị dự kiến (>0).';
@@ -1081,7 +1088,14 @@ export default function CreateProposalModal({
               Chỉ giữ TP/QLCS — chia 2 khối Kinh doanh / Văn phòng. */}
           <section className="rounded-lg border border-slate-200 bg-white px-4 py-3">
             <label className="block text-xs font-semibold text-slate-700 mb-2">
-              Đơn vị nhận đề xuất <span className="text-rose-500">*</span>
+              Đơn vị nhận đề xuất
+              {nature === 'support' ? (
+                <span className="text-rose-500"> *</span>
+              ) : (
+                <span className="ml-1 text-[11px] font-normal italic text-slate-400">
+                  (chọn ít nhất 1: đơn vị nhận hoặc lãnh đạo)
+                </span>
+              )}
             </label>
 
             {/* Toggle 2 khối — bấm lại cùng nút để đóng list */}
@@ -1178,7 +1192,10 @@ export default function CreateProposalModal({
           {nature === 'governance' && (
             <section className="rounded-lg border border-amber-200 bg-amber-50/40 px-4 py-3">
               <label className="block text-xs font-semibold text-slate-700 mb-2">
-                Lãnh đạo cần phê duyệt <span className="text-rose-500">*</span>
+                Lãnh đạo cần phê duyệt
+                <span className="ml-1 text-[11px] font-normal italic text-slate-400">
+                  (chọn ít nhất 1: đơn vị nhận hoặc lãnh đạo)
+                </span>
               </label>
               <select
                 value={leaderUid}
