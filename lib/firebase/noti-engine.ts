@@ -23,7 +23,9 @@ import {
   type NotiPriority,
 } from './notifications-store';
 import { pushToUsers } from './push-notifications';
-import { sendEmailNotiBatch } from '@/lib/email/resend-client';
+// V6.5 Phase A (2026-06-14): swap Resend → Gmail SMTP — Resend free chưa verify
+// domain chỉ gửi tới email owner. Gmail SMTP gửi tới mọi user qua App Password.
+import { sendEmailNotiBatch } from '@/lib/email/gmail-smtp-client';
 
 const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://greenpool-erp.vercel.app';
 
