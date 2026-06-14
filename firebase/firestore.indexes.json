@@ -284,6 +284,15 @@
         { "fieldPath": "participantIds", "arrayConfig": "CONTAINS" },
         { "fieldPath": "lastMessageAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "_comment": "V6.5 Phase A: cron retry-failed-push pick noti — where(pushStatus='failed') where(nextRetryAt <= now)",
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "pushStatus", "order": "ASCENDING" },
+        { "fieldPath": "nextRetryAt", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
