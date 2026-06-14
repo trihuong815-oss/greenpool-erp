@@ -421,6 +421,8 @@ export default function CreateProposalModal({
   const [leaderUid, setLeaderUid] = useState('');
   const [leaderName, setLeaderName] = useState('');
   const [hasFinancial, setHasFinancial] = useState(false);
+  // V6.5 (2026-06-14) anh chốt: toggle khối trong "Đơn vị nhận đề xuất" — bỏ GĐ, chỉ TP/QLCS
+  const [recipientBlockTab, setRecipientBlockTab] = useState<'KD' | 'VP'>('KD');
 
   // Fetch candidate list 1 lần khi mở modal (server tự xác định theo role caller)
   useEffect(() => {
@@ -1072,70 +1074,84 @@ export default function CreateProposalModal({
             </div>
           </div>
 
-          {/* V6.5 (2026-06-13) anh redesign: "Đơn vị nhận đề xuất" — đơn vị sẽ nhận / thực hiện hỗ trợ.
-              Cho support: là người thực hiện cuối chain.
-              Cho governance: là context — leader sẽ duyệt. */}
+          {/* V6.5 (2026-06-14) anh chốt: "Đơn vị nhận đề xuất" redesign —
+              2 toggle khối + grid card radio (UX giống Choose Owner /dieu-phoi).
+              Bỏ GD_KD + GD_VP khỏi list (đã có trong "Lãnh đạo phê duyệt" riêng cho governance).
+              Chỉ giữ TP/QLCS — chia 2 khối Kinh doanh / Văn phòng. */}
           <section className="rounded-lg border border-slate-200 bg-white px-4 py-3">
             <label className="block text-xs font-semibold text-slate-700 mb-2">
               Đơn vị nhận đề xuất <span className="text-rose-500">*</span>
             </label>
-            <select
-              value={recipientUid}
-              onChange={(e) => {
-                const uid = e.target.value;
-                setRecipientUid(uid);
-                const opt = recipientOptions.find((o) => o.uid === uid);
-                setRecipientName(opt?.displayName ?? '');
-              }}
-              disabled={loadingRecipients}
-              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            >
-              <option value="">
-                {loadingRecipients
-                  ? 'Đang tải danh sách...'
-                  : recipientOptions.length === 0
-                  ? 'Không có người nhận phù hợp'
-                  : '— Chọn người nhận —'}
-              </option>
-              {/* V6.4 (2026-06-13): group theo khối — anh chốt phân Khối Kinh doanh / Văn phòng / Cấp trên hệ thống */}
-              {(() => {
-                const kdList = recipientOptions.filter((o) => o.block === 'KD');
-                const vpList = recipientOptions.filter((o) => o.block === 'VP');
-                const topList = recipientOptions.filter((o) => o.block === 'top');
+
+            {/* Toggle 2 khối */}
+            <div className="flex gap-2 mb-3">
+              {(['KD', 'VP'] as const).map((b) => (
+                <button
+                  key={b}
+                  type="button"
+                  onClick={() => setRecipientBlockTab(b)}
+                  className={`px-4 py-1.5 rounded-md text-sm font-semibold transition ${
+                    recipientBlockTab === b
+                      ? 'bg-emerald-600 text-white shadow'
+                      : 'bg-white text-slate-700 ring-1 ring-slate-300 hover:ring-emerald-400'
+                  }`}
+                >
+                  {b === 'KD' ? 'Khối Kinh doanh' : 'Khối Văn phòng'}
+                </button>
+              ))}
+            </div>
+
+            {/* Grid card radio — filter chỉ TP/QLCS theo khối + bỏ ADMIN kiêm GD_KD (đã ở leader) */}
+            {(() => {
+              if (loadingRecipients) {
+                return <div className="text-sm text-slate-400 italic py-4 text-center">Đang tải danh sách...</div>;
+              }
+              const units = recipientOptions.filter((o) =>
+                (o.roleCode.startsWith('TP_') || o.roleCode.startsWith('QLCS_'))
+                && o.block === recipientBlockTab,
+              );
+              if (units.length === 0) {
                 return (
-                  <>
-                    {kdList.length > 0 && (
-                      <optgroup label="Khối Kinh doanh">
-                        {kdList.map((o) => (
-                          <option key={o.uid} value={o.uid}>
-                            {o.displayName} · {o.roleName || o.roleCode}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
-                    {vpList.length > 0 && (
-                      <optgroup label="Khối Văn phòng">
-                        {vpList.map((o) => (
-                          <option key={o.uid} value={o.uid}>
-                            {o.displayName} · {o.roleName || o.roleCode}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
-                    {topList.length > 0 && (
-                      <optgroup label="Cấp trên hệ thống">
-                        {topList.map((o) => (
-                          <option key={o.uid} value={o.uid}>
-                            {o.displayName} · {o.roleName || o.roleCode}
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
-                  </>
+                  <div className="text-sm text-slate-400 italic py-4 text-center bg-slate-50 rounded-md">
+                    Không có TP/QLCS thuộc khối {recipientBlockTab === 'KD' ? 'Kinh doanh' : 'Văn phòng'}.
+                  </div>
                 );
-              })()}
-            </select>
-            <p className="text-[11px] text-slate-500 mt-1.5 italic">
+              }
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {units.map((o) => {
+                    const active = recipientUid === o.uid;
+                    return (
+                      <button
+                        key={o.uid}
+                        type="button"
+                        onClick={() => {
+                          setRecipientUid(o.uid);
+                          setRecipientName(o.displayName);
+                        }}
+                        className={`text-left rounded-lg border-2 px-3 py-2.5 flex items-start gap-3 transition active:scale-[0.98] ${
+                          active
+                            ? 'border-emerald-500 bg-emerald-50'
+                            : 'border-slate-200 hover:border-emerald-300 bg-white'
+                        }`}
+                      >
+                        <span className={`mt-0.5 w-5 h-5 rounded-full border-2 shrink-0 flex items-center justify-center ${
+                          active ? 'border-emerald-600 bg-emerald-600' : 'border-slate-300 bg-white'
+                        }`}>
+                          {active && <span className="w-2 h-2 rounded-full bg-white" />}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-semibold text-slate-800 truncate">{o.displayName}</div>
+                          <div className="text-[11px] text-slate-500 truncate">{o.roleName || o.roleCode}</div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+
+            <p className="text-[11px] text-slate-500 mt-2 italic">
               {nature === 'support'
                 ? 'Đơn vị này sẽ trực tiếp nhận và hỗ trợ — không cần duyệt lãnh đạo.'
                 : 'Đơn vị nhận đề xuất (context — sẽ triển khai sau khi lãnh đạo phê duyệt).'}
