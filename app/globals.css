@@ -30,6 +30,13 @@ input, select, textarea, button { font-family: inherit; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 
+/* V6.5 (2026-06-14): fade-in mượt cho list expand (Đơn vị nhận đề xuất collapse/expand) */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in { animation: fade-in 0.18s ease-out; }
+
 /* Carousel ảnh cơ sở: cơ sở có ≥ 2 ảnh → crossfade tự động. Mỗi ảnh sáng 5s,
    fade qua ảnh kế tiếp. animation-delay = (i * 5s) để các ảnh xuất hiện lệch nhau. */
 @keyframes branchCarousel {

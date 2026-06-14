@@ -421,8 +421,9 @@ export default function CreateProposalModal({
   const [leaderUid, setLeaderUid] = useState('');
   const [leaderName, setLeaderName] = useState('');
   const [hasFinancial, setHasFinancial] = useState(false);
-  // V6.5 (2026-06-14) anh chốt: toggle khối trong "Đơn vị nhận đề xuất" — bỏ GĐ, chỉ TP/QLCS
-  const [recipientBlockTab, setRecipientBlockTab] = useState<'KD' | 'VP'>('KD');
+  // V6.5 (2026-06-14): toggle khối "Đơn vị nhận đề xuất".
+  // Default null = chưa xổ list (anh chốt: bấm khối nào mới xổ ra list khối đó).
+  const [recipientBlockTab, setRecipientBlockTab] = useState<'KD' | 'VP' | null>(null);
 
   // Fetch candidate list 1 lần khi mở modal (server tự xác định theo role caller)
   useEffect(() => {
@@ -1083,13 +1084,13 @@ export default function CreateProposalModal({
               Đơn vị nhận đề xuất <span className="text-rose-500">*</span>
             </label>
 
-            {/* Toggle 2 khối */}
+            {/* Toggle 2 khối — bấm lại cùng nút để đóng list */}
             <div className="flex gap-2 mb-3">
               {(['KD', 'VP'] as const).map((b) => (
                 <button
                   key={b}
                   type="button"
-                  onClick={() => setRecipientBlockTab(b)}
+                  onClick={() => setRecipientBlockTab(recipientBlockTab === b ? null : b)}
                   className={`px-4 py-1.5 rounded-md text-sm font-semibold transition ${
                     recipientBlockTab === b
                       ? 'bg-emerald-600 text-white shadow'
@@ -1101,8 +1102,8 @@ export default function CreateProposalModal({
               ))}
             </div>
 
-            {/* Grid card radio — filter chỉ TP/QLCS theo khối + bỏ ADMIN kiêm GD_KD (đã ở leader) */}
-            {(() => {
+            {/* Grid card radio — CHỈ render khi đã click 1 nút khối (anh chốt 2026-06-14) */}
+            {recipientBlockTab && (() => {
               if (loadingRecipients) {
                 return <div className="text-sm text-slate-400 italic py-4 text-center">Đang tải danh sách...</div>;
               }
@@ -1118,7 +1119,7 @@ export default function CreateProposalModal({
                 );
               }
               return (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 animate-fade-in">
                   {units.map((o) => {
                     const active = recipientUid === o.uid;
                     return (
@@ -1150,6 +1151,21 @@ export default function CreateProposalModal({
                 </div>
               );
             })()}
+
+            {/* Hint khi chưa chọn khối */}
+            {!recipientBlockTab && !recipientUid && (
+              <div className="text-xs text-slate-400 italic text-center py-2">
+                Bấm vào một khối ở trên để xem danh sách TP/QLCS.
+              </div>
+            )}
+
+            {/* Khi đã chọn người nhận nhưng đóng list → hiện chip người đã chọn */}
+            {!recipientBlockTab && recipientUid && recipientName && (
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-800 text-sm font-medium ring-1 ring-emerald-200">
+                <span className="w-2 h-2 rounded-full bg-emerald-600" />
+                Đã chọn: {recipientName}
+              </div>
+            )}
 
             <p className="text-[11px] text-slate-500 mt-2 italic">
               {nature === 'support'
