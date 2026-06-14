@@ -40,7 +40,6 @@ import {
   FileText,
 } from 'lucide-react';
 
-import { resolveApproverChain } from '../_lib/chain-resolver';
 import { formatVND } from '../_lib/proposal-settings';
 import {
   AVAILABLE_RELATED_UNITS,
@@ -1162,7 +1161,9 @@ export default function CreateProposalModal({
               >
                 <option value="">— Chọn lãnh đạo phê duyệt —</option>
                 {recipientOptions
-                  .filter((o) => ['GD_KD', 'GD_VP', 'CEO', 'CHU_TICH'].includes(o.roleCode))
+                  .filter((o) =>
+                    // V6.5: ADMIN kiêm GD_KD (anh chốt 2026-06-14) — cho lọt vào dropdown leader.
+                    ['GD_KD', 'GD_VP', 'CEO', 'CHU_TICH', 'ADMIN'].includes(o.roleCode))
                   .map((o) => (
                     <option key={o.uid} value={o.uid}>
                       {o.displayName} · {o.roleName || o.roleCode}
