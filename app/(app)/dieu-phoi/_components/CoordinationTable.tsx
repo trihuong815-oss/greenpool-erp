@@ -252,26 +252,28 @@ export default function CoordinationTable({
       <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-280px)]">
         <table className="w-full text-sm">
           <thead className="sticky top-0 z-20 bg-white shadow-[0_1px_0_0_rgba(0,0,0,0.06)]">
+            {/* V6.5 (2026-06-15) anh chốt: tăng diện tích cột "Công việc" để title dài
+                hiện đủ. Nén nhẹ Chủ trì + Đang chờ (44→36) + Deadline (28→24) bù lại. */}
             <tr className="bg-gradient-to-b from-slate-50 to-white border-b-2 border-slate-200 text-[10px] uppercase tracking-wider text-slate-600">
-              <th className="px-3 py-3 text-left font-semibold">
+              <th className="px-3 py-3 text-left font-semibold min-w-[280px]">
                 <span className="inline-flex items-center gap-1.5"><Briefcase size={12} className="text-emerald-600" /> Công việc</span>
               </th>
-              <th className="px-3 py-3 text-left font-semibold w-44">
+              <th className="px-3 py-3 text-left font-semibold w-36">
                 <span className="inline-flex items-center gap-1.5"><UserCheck size={12} className="text-sky-600" /> Chủ trì</span>
               </th>
-              <th className="px-3 py-3 text-left font-semibold w-36">
+              <th className="px-3 py-3 text-left font-semibold w-32">
                 <span className="inline-flex items-center gap-1.5"><Users size={12} className="text-violet-600" /> Phối hợp</span>
               </th>
-              <th className="px-3 py-3 text-left font-semibold w-40">
+              <th className="px-3 py-3 text-left font-semibold w-36">
                 <span className="inline-flex items-center gap-1.5"><Activity size={12} className="text-emerald-600" /> Tiến độ</span>
               </th>
-              <th className="px-3 py-3 text-left font-semibold w-44">
+              <th className="px-3 py-3 text-left font-semibold w-36">
                 <span className="inline-flex items-center gap-1.5"><Clock size={12} className="text-amber-600" /> Đang chờ</span>
               </th>
-              <th className="px-3 py-3 text-left font-semibold w-28">
+              <th className="px-3 py-3 text-left font-semibold w-24">
                 <span className="inline-flex items-center gap-1.5"><Calendar size={12} className="text-rose-600" /> Deadline</span>
               </th>
-              <th className="px-3 py-3 text-left font-semibold w-32">
+              <th className="px-3 py-3 text-left font-semibold w-28">
                 <span className="inline-flex items-center gap-1.5"><CircleDot size={12} className="text-slate-500" /> Trạng thái</span>
               </th>
             </tr>
