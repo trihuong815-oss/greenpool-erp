@@ -72,8 +72,24 @@ export async function cleanupInvalidFcmTokens(
       const x = snap.data() as any;
       const update: Record<string, any> = {};
       const devices: any[] = Array.isArray(x?.fcmDevices) ? x.fcmDevices : [];
-      const filteredDevices = devices.filter((d) => !tokens.includes(d?.token));
-      if (filteredDevices.length !== devices.length) update.fcmDevices = filteredDevices;
+      // V6.5 Noti Audit Phase B.5 (2026-06-15) — Issue 3.2: SOFT DELETE thay vì
+      // xoá hẳn token. Trước đây filter ra → mất trace device (lịch sử + user
+      // muốn restore device cũ không được). Giờ giữ device entry, set:
+      //   enabled = false
+      //   disabledReason = 'invalid' (FCM trả registration-token-not-registered)
+      //   disabledAt = now
+      // Cron cleanup-stale-fcm vẫn xoá device sau 7 ngày lastSeen — đủ thời gian
+      // user phát hiện + re-register; còn invalid-soft-disabled không cản trở.
+      const now = Date.now();
+      const tokenSet = new Set(tokens);
+      let changed = false;
+      const softDeleted = devices.map((d) => {
+        if (!d || !tokenSet.has(d.token) || d.enabled === false) return d;
+        changed = true;
+        return { ...d, enabled: false, disabledReason: 'invalid', disabledAt: now };
+      });
+      if (changed) update.fcmDevices = softDeleted;
+      // Legacy fcmTokens flat array — VẪN xoá hẳn (không có schema chứa metadata)
       if (Array.isArray(x?.fcmTokens)) {
         update.fcmTokens = FieldValue.arrayRemove(...tokens);
       }

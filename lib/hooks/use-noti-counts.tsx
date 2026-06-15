@@ -84,6 +84,43 @@ export function NotiCountsProvider({ children }: { children: ReactNode }) {
   const [bizItems, setBizItems] = useState<NotiItem[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // V6.5 Noti Audit Phase B.4 (2026-06-15) — Issue 1.3: realtime listener
+  // cho `notifications` collection (badge sidebar instant update).
+  // Trước đây business counters đợi polling 180s → UX inconsistent với chat realtime.
+  // Khi notifications doc thay đổi (mới tạo / actionStatus=done) → trigger fetchBiz()
+  // để counters refresh tức thì. Polling 180s vẫn giữ làm fallback nếu listener fail.
+  useEffect(() => {
+    const auth = getAuth(getFirebaseClient());
+    let unsubNoti: (() => void) | null = null;
+    const unsubAuth = onAuthStateChanged(auth, (user) => {
+      if (unsubNoti) { unsubNoti(); unsubNoti = null; }
+      if (!user) return;
+      try {
+        const db = getFirebaseClientDb();
+        const q = query(
+          collection(db, 'notifications'),
+          where('userId', '==', user.uid),
+          where('isActionRequired', '==', true),
+          where('actionStatus', '==', 'pending'),
+          fbLimit(100),
+        );
+        unsubNoti = onSnapshot(q, () => {
+          // Có change → trigger refetch counters. Debounce nhẹ 150ms để batch nhiều
+          // doc change cùng lúc (vd: server batch persist 5 noti cho 5 user).
+          if ((window as any).__notiCountsDebounce) clearTimeout((window as any).__notiCountsDebounce);
+          (window as any).__notiCountsDebounce = setTimeout(() => { fetchBiz(); }, 150);
+        }, (err) => {
+          // V6.5: KHÔNG silent — log để Sentry/console rõ khi listener die
+          console.warn('[use-noti-counts] notifications listener err:', err?.message);
+        });
+      } catch (e: any) {
+        console.warn('[use-noti-counts] notifications subscribe fail:', e?.message);
+      }
+    });
+    return () => { if (unsubNoti) unsubNoti(); unsubAuth(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ─── Chat realtime listener ───
   useEffect(() => {
     const auth = getAuth(getFirebaseClient());

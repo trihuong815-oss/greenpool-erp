@@ -23,7 +23,11 @@ import { writeAuditLog } from '@/lib/firebase/audit-log';
 
 export const maxDuration = 60;
 
-const ACTIVE_STATUSES = ['pending_approval', 'da_gui', 'dang_xem_xet'];
+// V6.5 Noti Audit Phase B.1 (2026-06-15) — Issue 2.4: mở rộng cover cả
+// PROPOSAL (kind='proposal') VÀ DISPATCH (kind='assignment') status đang chờ duyệt.
+// Trước đây chỉ proposal → dispatch task chờ user disabled bị kẹt vô thời hạn.
+const ACTIVE_PROPOSAL_STATUSES = ['pending_approval', 'da_gui', 'dang_xem_xet'];
+const ACTIVE_DISPATCH_STATUSES = ['pending_approval']; // dispatch chỉ kẹt khi đang chờ duyệt
 const QUERY_LIMIT = 200;
 
 export async function POST(req: NextRequest) {
@@ -37,14 +41,21 @@ export async function POST(req: NextRequest) {
   const db = getFirebaseAdminDb();
 
   try {
-    const snap = await db.collection(COLLECTIONS.TASKS)
-      .where('kind', '==', 'proposal')
-      .where('status', 'in', ACTIVE_STATUSES)
-      .limit(QUERY_LIMIT)
-      .get();
+    // V6.5 Noti Audit Phase B.1: 2 query song song proposal + dispatch.
+    const [propSnap, dispSnap] = await Promise.all([
+      db.collection(COLLECTIONS.TASKS)
+        .where('kind', '==', 'proposal')
+        .where('status', 'in', ACTIVE_PROPOSAL_STATUSES)
+        .limit(QUERY_LIMIT).get(),
+      db.collection(COLLECTIONS.TASKS)
+        .where('kind', '==', 'assignment')
+        .where('status', 'in', ACTIVE_DISPATCH_STATUSES)
+        .limit(QUERY_LIMIT).get(),
+    ]);
 
     let scanned = 0, cancelled = 0, skipped = 0;
-    for (const doc of snap.docs) {
+    const allDocs = [...propSnap.docs, ...dispSnap.docs];
+    for (const doc of allDocs) {
       scanned++;
       const t = doc.data();
       const cur = typeof t.currentApprover === 'string' ? t.currentApprover : '';
@@ -55,7 +66,7 @@ export async function POST(req: NextRequest) {
       // Lookup user — nếu inactive/disabled → auto cancel
       const userSnap = await db.collection(COLLECTIONS.USERS).doc(approverUid).get();
       if (!userSnap.exists) {
-        // User đã bị xoá hẳn — cancel proposal
+        // User đã bị xoá hẳn — cancel
       } else {
         const u = userSnap.data();
         if (u?.status !== 'inactive' && u?.disabled !== true) {
@@ -64,8 +75,14 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      const isProposal = t.kind === 'proposal';
+      const kindLabel = isProposal ? 'đề xuất' : 'điều phối';
+      const module = isProposal ? 'proposal' : 'dispatch';
+      const linkUrl = isProposal
+        ? `/de-xuat?proposalId=${doc.id}`
+        : `/dieu-phoi?taskId=${doc.id}`;
       const userName = userSnap.exists ? (userSnap.data()?.displayName ?? approverUid) : '(đã xoá)';
-      const reason = `Người duyệt "${userName}" không còn hoạt động. Hệ thống tự huỷ đề xuất để tránh kẹt chuỗi duyệt.`;
+      const reason = `Người duyệt "${userName}" không còn hoạt động. Hệ thống tự huỷ ${kindLabel} để tránh kẹt chuỗi duyệt.`;
       const now = new Date();
 
       try {
@@ -85,18 +102,17 @@ export async function POST(req: NextRequest) {
           event: 'auto_cancel_stale_approver',
           createdAt: now,
         });
-        // Notify creator
         if (typeof t.createdBy === 'string' && t.createdBy) {
           await sendNotificationEvent({
             type: 'task_rejected',
-            module: 'proposal',
+            module: module as 'proposal' | 'dispatch',
             entityId: doc.id,
-            title: '⛔ Đề xuất bị huỷ tự động',
+            title: `⛔ ${isProposal ? 'Đề xuất' : 'Điều phối'} bị huỷ tự động`,
             message: `"${t.title}" — ${reason}`,
-            linkUrl: `/de-xuat?proposalId=${doc.id}`,
+            linkUrl,
             recipients: [t.createdBy],
             priority: 'high',
-            pushTag: `proposal-cancel-${doc.id}`,
+            pushTag: `${module}-cancel-${doc.id}`,
           });
         }
         cancelled++;
