@@ -481,8 +481,30 @@ export default function DetailDrawer({
           </div>
         </div>
 
+        {/* V6.5 Phase 5 (2026-06-15): Sticky tab nav — 4 anchor để user nhảy nhanh
+            đến section thay vì scroll dài. Bỏ phương án accordion vì refactor 600 lines
+            JSX rủi ro cao. Đạt cùng mục tiêu UX: navigate nhanh + giảm friction. */}
+        <nav className="sticky top-0 z-10 flex items-center gap-1 border-b border-slate-200 bg-white/95 backdrop-blur px-3 py-2 shadow-sm overflow-x-auto">
+          {[
+            { id: 's-overview', label: 'Tổng quan' },
+            { id: 's-collab',   label: 'Phối hợp' },
+            { id: 's-result',   label: 'Kết quả' },
+            { id: 's-history',  label: 'Lịch sử' },
+          ].map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => document.getElementById(s.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              className="px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-md whitespace-nowrap"
+            >
+              {s.label}
+            </button>
+          ))}
+        </nav>
+
         {/* BODY scroll */}
         <div className="flex-1 overflow-y-auto px-5 py-4">
+          <div id="s-overview" />
           {/* 2) BLOCK OWNER */}
           <section className="mb-4">
             <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
@@ -508,6 +530,7 @@ export default function DetailDrawer({
             </div>
           </section>
 
+          <div id="s-collab" />
           {/* 3) BLOCK TIẾN ĐỘ PHỐI HỢP */}
           <section className="mb-4">
             <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
@@ -553,6 +576,7 @@ export default function DetailDrawer({
             </section>
           )}
 
+          <div id="s-result" />
           {/* 5) BLOCK MỤC TIÊU / KẾT QUẢ BÀN GIAO / KPI */}
           <section className="mb-4 space-y-2">
             {task.objective && (
@@ -998,6 +1022,7 @@ export default function DetailDrawer({
             </section>
           )}
 
+          <div id="s-history" />
           {/* 9) BLOCK LỊCH SỬ XỬ LÝ */}
           <section className="mb-2">
             <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">

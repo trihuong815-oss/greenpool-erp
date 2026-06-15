@@ -23,11 +23,11 @@ import KpiBar from './_components/KpiBar';
 import BlockDonut from './_components/BlockDonut';
 import DeptBarChart from './_components/DeptBarChart';
 import BranchBarChart from './_components/BranchBarChart';
-import BottleneckTable from './_components/BottleneckTable';
-import TopWatchList from './_components/TopWatchList';
+// V6.5 Phase 5 (2026-06-15): 3 widget gộp vào TheoDoiPanel — không import trực tiếp ở đây nữa
+import TheoDoiPanel from './_components/TheoDoiPanel';
 import CompactDashboard from './_components/CompactDashboard';
 import MobileDispatchView from './_components/Mobile/MobileDispatchView';
-import ImportantNotiPanel from './_components/ImportantNotiPanel';
+// ImportantNotiPanel gộp vào TheoDoiPanel
 import CoordinationTable from './_components/CoordinationTable';
 import CreateModal, { type CreatePayload } from './_components/CreateModal';
 import DetailDrawer from './_components/DetailDrawer';
@@ -783,17 +783,15 @@ export default function DieuPhoiClient({
               </div>
             </section>
 
-            {/* Section: Theo dõi */}
+            {/* V6.5 Phase 5 (2026-06-15): Section "Vấn đề cần xử lý ngay" — gộp 3 widget
+                cũ (BottleneckTable + TopWatchList + ImportantNotiPanel) → 1 panel 3 tab.
+                Lý do: 3 widget cũ hiển thị từ 3 góc khác nhau gây confusion + chiếm 3 cột. */}
             <section className="space-y-2">
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Theo dõi</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Vấn đề cần xử lý ngay</span>
                 <span className="flex-1 h-px bg-gradient-to-r from-slate-200 to-transparent" />
               </div>
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <BottleneckTable tasks={tasks} />
-                <TopWatchList tasks={tasks} />
-                <ImportantNotiPanel tasks={tasks} />
-              </div>
+              <TheoDoiPanel tasks={tasks} />
             </section>
 
             {/* Section: Danh sách điều phối */}
