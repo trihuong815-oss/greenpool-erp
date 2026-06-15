@@ -66,16 +66,34 @@ async function ensureSWRegistration(): Promise<ServiceWorkerRegistration | null>
     // Wait for active SW — có timeout 10s. iOS Safari đôi khi không trigger statechange =>
     // promise hang vô hạn. Modern browsers auto-activate trong dưới 1s; nếu quá 10s
     // coi như SW init xong (token sẽ register, nếu fail thì caller retry).
+    // V6.5 Noti Audit Phase C.3 (2026-06-15) — Issue 3.3: timeout 10s tight cho
+    // iOS Safari (cold start có thể 5-15s). Tăng lên 20s + POLLING 100ms x 200 lần
+    // backup nếu statechange event không trigger (iOS quirk).
     if (_swReg.installing) {
       await new Promise<void>((resolve) => {
         const sw = _swReg!.installing!;
+        const SW_TIMEOUT_MS = 20_000;
+        const POLL_MS = 100;
+        let resolved = false;
+        const doResolve = () => { if (!resolved) { resolved = true; resolve(); } };
+
         const timer = setTimeout(() => {
-          console.warn('[messaging-client] SW activation timeout 10s, proceed anyway');
-          resolve();
-        }, 10000);
+          console.warn('[messaging-client] SW activation timeout 20s, proceed anyway');
+          doResolve();
+        }, SW_TIMEOUT_MS);
+
         sw.addEventListener('statechange', () => {
-          if (sw.state === 'activated') { clearTimeout(timer); resolve(); }
+          if (sw.state === 'activated') { clearTimeout(timer); doResolve(); }
         });
+
+        // Polling fallback: kiểm tra state mỗi 100ms (iOS quirk khi event không fire)
+        const pollId = setInterval(() => {
+          if (resolved || sw.state === 'activated' || sw.state === 'redundant') {
+            clearInterval(pollId);
+            clearTimeout(timer);
+            doResolve();
+          }
+        }, POLL_MS);
       });
     }
     return _swReg;

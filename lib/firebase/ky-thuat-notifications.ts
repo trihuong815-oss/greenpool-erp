@@ -1,8 +1,14 @@
 // Notification helpers cho /api/ky-thuat/work events.
-// Fire-and-forget pattern: gọi với await để đảm bảo Cloud Run không terminate giữa chừng.
+//
+// V6.5 Noti Audit Phase C.1 (2026-06-15): MIGRATE từ pushToUsers/pushToRoles thuần
+// → sendNotificationEvent (engine V6.5 Phase A). Trước đây KT noti chỉ push FCM
+// transient → KT user KHÔNG thấy bell badge, không có lịch sử, không có retry queue.
+// Giờ đồng bộ với task/proposal/chat: persist Firestore → bell + sidebar +
+// retry + email backup (nếu user opt-in).
 
 import 'server-only';
-import { pushToUser, pushToUsers, pushToRoles } from './push-notifications';
+import { sendNotificationEvent } from './noti-engine';
+import { resolveApproverUids } from './push-notifications';
 
 interface WorkDoc {
   id: string;
@@ -20,7 +26,6 @@ interface WorkDoc {
   specialization?: 'HT' | 'XLN' | null;
 }
 
-// Đọc canonical assigneeIds, fallback assigneeId cho doc legacy.
 function getAssigneeIds(t: WorkDoc): string[] {
   if (Array.isArray(t.assigneeIds) && t.assigneeIds.length > 0) return t.assigneeIds;
   if (t.assigneeId) return [t.assigneeId];
@@ -33,55 +38,58 @@ const KIND_LABEL: Record<WorkDoc['kind'], string> = {
   proposal: '📩 Đề xuất KT',
 };
 
-function workLink(): string {
-  return '/ky-thuat/giao-viec';
+function workLink(workId: string): string {
+  return `/ky-thuat/giao-viec?id=${encodeURIComponent(workId)}`;
 }
 
 /** Task KT được tạo — push tất cả assignee (multi-assignee). */
 export async function notifyKtTaskCreated(task: WorkDoc): Promise<void> {
   const ids = getAssigneeIds(task).filter((u) => u !== task.createdBy);
   if (ids.length === 0) return;
-  await pushToUsers(ids, {
+  await sendNotificationEvent({
+    type: 'kt_task_assigned',
+    module: 'kt',
+    entityId: task.id,
     title: `${KIND_LABEL.task} mới`,
-    body: `"${task.title}" — ${task.createdByName ?? 'cấp trên'} giao @${task.branchId}`,
-    link: workLink(),
-    tag: `kt-${task.id}`,
-    data: { workId: task.id, kind: 'kt_task_assigned' },
-  }).catch(() => {});
+    message: `"${task.title}" — ${task.createdByName ?? 'cấp trên'} giao @${task.branchId}`,
+    linkUrl: workLink(task.id),
+    recipients: ids,
+    priority: 'normal',
+    pushTag: `kt-${task.id}`,
+  });
 }
 
-/** Phase Noti-Audit (2026-06-07): Báo cáo KT (report) được tạo — push cấp trên trực tiếp.
- *  Tương đương proposal pattern nhưng dành cho "đã làm xong, báo cáo lại" thay vì "xin duyệt".
- *  Approver list khớp với proposal: TP_KT + GD_KD + ADMIN/CEO + QLCS branch (nếu có specialization). */
+/** Báo cáo KT (report) được tạo — push cấp trên trực tiếp. */
 export async function notifyKtReportCreated(rep: WorkDoc): Promise<void> {
   const approvers: string[] = ['TP_KT', 'GD_KD', 'ADMIN', 'CEO'];
-  // QLCS của branch luôn được biết báo cáo KT tại cơ sở mình
   const QLCS_BY_BRANCH: Record<string, string> = {
     HM: 'QLCS_HM', TK: 'QLCS_TK', CTT: 'QLCS_CTT', '24': 'QLCS_24NCT', TT: 'QLCS_TT',
   };
   const qlcs = QLCS_BY_BRANCH[rep.branchId];
   if (qlcs) approvers.push(qlcs);
-  // Phụ trách cùng specialization (HT/XLN) — nếu có
   if (rep.specialization === 'HT') approvers.push('PP_HT');
   else if (rep.specialization === 'XLN') approvers.push('PP_XLN');
 
-  await pushToRoles(approvers, {
+  // Resolve roles → uids (push-notifications.resolveApproverUids cover role:RC)
+  const uids = await resolveApproverUids(approvers.map((r) => `role:${r}`));
+  if (uids.length === 0) return;
+  await sendNotificationEvent({
+    type: 'kt_report_created',
+    module: 'kt',
+    entityId: rep.id,
     title: `${KIND_LABEL.report} mới`,
-    body: `"${rep.title}" — từ ${rep.createdByName ?? 'KTV'} @${rep.branchId}`,
-    link: workLink(),
-    tag: `kt-${rep.id}`,
-    data: { workId: rep.id, kind: 'kt_report_created' },
-  }).catch(() => {});
+    message: `"${rep.title}" — từ ${rep.createdByName ?? 'KTV'} @${rep.branchId}`,
+    linkUrl: workLink(rep.id),
+    recipients: uids,
+    priority: 'low', // informational
+    pushTag: `kt-${rep.id}`,
+  });
 }
 
 /** Proposal KT được tạo — push approver. */
 export async function notifyKtProposalCreated(prop: WorkDoc): Promise<void> {
-  // Expense → QLCS của branch + TP_KT + GD_KD + ADMIN/CEO
-  // Professional → PP cùng specialization + TP_KT + GD_KD + ADMIN/CEO
-  // GD_KD là cấp trên trực tiếp của khối KD (TP_KT thuộc) → phải biết mọi đề xuất KT.
   const approvers: string[] = ['TP_KT', 'GD_KD', 'ADMIN', 'CEO'];
   if (prop.proposalType === 'expense') {
-    // QLCS của branch — query thêm ngoài role
     const QLCS_BY_BRANCH: Record<string, string> = {
       HM: 'QLCS_HM', TK: 'QLCS_TK', CTT: 'QLCS_CTT', '24': 'QLCS_24NCT', TT: 'QLCS_TT',
     };
@@ -91,13 +99,19 @@ export async function notifyKtProposalCreated(prop: WorkDoc): Promise<void> {
     if (prop.specialization === 'HT') approvers.push('PP_HT');
     else if (prop.specialization === 'XLN') approvers.push('PP_XLN');
   }
-  await pushToRoles(approvers, {
+  const uids = await resolveApproverUids(approvers.map((r) => `role:${r}`));
+  if (uids.length === 0) return;
+  await sendNotificationEvent({
+    type: 'kt_proposal_pending',
+    module: 'kt',
+    entityId: prop.id,
     title: `${KIND_LABEL.proposal} chờ duyệt`,
-    body: `"${prop.title}" — từ ${prop.createdByName ?? 'KTV'} @${prop.branchId}`,
-    link: workLink(),
-    tag: `kt-${prop.id}`,
-    data: { workId: prop.id, kind: 'kt_proposal_pending' },
-  }).catch(() => {});
+    message: `"${prop.title}" — từ ${prop.createdByName ?? 'KTV'} @${prop.branchId}`,
+    linkUrl: workLink(prop.id),
+    recipients: uids,
+    priority: 'high', // action required
+    pushTag: `kt-${prop.id}`,
+  });
 }
 
 /** Task KT đổi status — push creator + assignee (trừ actor). */
@@ -113,13 +127,18 @@ export async function notifyKtStatusChanged(
   const label = newStatus === 'done' ? '✓ hoàn thành'
     : newStatus === 'in_progress' ? '🔄 đang làm'
     : newStatus === 'cancelled' ? '🚫 đã huỷ' : `→ ${newStatus}`;
-  await pushToUsers([...recipients], {
+  await sendNotificationEvent({
+    type: 'kt_status_changed',
+    module: 'kt',
+    entityId: task.id,
     title: `${label}: ${task.title}`,
-    body: `${actor.name} cập nhật (KT @${task.branchId})`,
-    link: workLink(),
-    tag: `kt-${task.id}`,
-    data: { workId: task.id, kind: 'kt_status', status: newStatus },
-  }).catch(() => {});
+    message: `${actor.name} cập nhật (KT @${task.branchId})`,
+    linkUrl: workLink(task.id),
+    recipients: Array.from(recipients),
+    priority: 'low',
+    pushTag: `kt-${task.id}`,
+    pushData: { status: newStatus },
+  });
 }
 
 /** Proposal được duyệt / từ chối — push creator. */
@@ -130,11 +149,16 @@ export async function notifyKtProposalDecided(
   notes: string,
 ): Promise<void> {
   if (prop.createdBy === decider.uid) return;
-  await pushToUser(prop.createdBy, {
+  await sendNotificationEvent({
+    type: 'kt_proposal_decided',
+    module: 'kt',
+    entityId: prop.id,
     title: approved ? `✅ Đề xuất KT được duyệt` : `❌ Đề xuất KT bị từ chối`,
-    body: `"${prop.title}" — ${decider.name}${notes ? ': ' + notes.slice(0, 60) : ''}`,
-    link: workLink(),
-    tag: `kt-${prop.id}`,
-    data: { workId: prop.id, kind: approved ? 'kt_proposal_approved' : 'kt_proposal_rejected' },
-  }).catch(() => {});
+    message: `"${prop.title}" — ${decider.name}${notes ? ': ' + notes.slice(0, 60) : ''}`,
+    linkUrl: workLink(prop.id),
+    recipients: [prop.createdBy],
+    priority: approved ? 'normal' : 'high',
+    pushTag: `kt-${prop.id}`,
+    pushData: { approved: String(approved) },
+  });
 }

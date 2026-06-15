@@ -39,6 +39,9 @@ export const ACTION_REQUIRED_TYPES = new Set<NotiType>([
   'collab_returned',          // owner trả lại phần collab → cần làm lại
   'all_collab_done',          // owner cần xác nhận
   'proposal_create_coord',    // đề xuất đã duyệt — bạn cần tạo điều phối
+  // V6.5 Phase C.1: KT events action_required
+  'kt_task_assigned',          // KT viên được giao task → cần làm
+  'kt_proposal_pending',       // approver cần duyệt đề xuất KT
 ]);
 
 export type NotiType =
@@ -62,9 +65,15 @@ export type NotiType =
   | 'task_attachment'
   | 'task_comment'
   // V6.5 Noti Audit Phase A.1 (2026-06-15): chat message persist DB (trước đây chỉ push)
-  | 'chat_message';
+  | 'chat_message'
+  // V6.5 Noti Audit Phase C.1 (2026-06-15): KT module migrate sendNotificationEvent
+  | 'kt_task_assigned'
+  | 'kt_report_created'
+  | 'kt_proposal_pending'
+  | 'kt_status_changed'
+  | 'kt_proposal_decided';
 
-export type NotiModule = 'proposal' | 'dispatch' | 'chat';
+export type NotiModule = 'proposal' | 'dispatch' | 'chat' | 'kt';
 export type NotiPriority = 'low' | 'normal' | 'high' | 'urgent';
 export type NotiActionStatus = 'pending' | 'done' | 'dismissed';
 
@@ -137,12 +146,15 @@ export async function persistNotification(input: PersistNotificationInput): Prom
       sentAt: null,
       retryCount: 0,
       nextRetryAt: null,
-      // Snapshot payload để retry không cần re-resolve user info
+      // Snapshot payload để retry không cần re-resolve user info.
+      // V6.5 Noti Audit Phase C.2 (2026-06-15) — Issue 1.2: thêm entityCode để email
+      // retry có mã tham chiếu (DX-2026-0042 / DP-2026-XXXX) dễ trace.
       pushPayloadSnapshot: {
         title: input.title,
         body: input.message,
         link: input.linkUrl,
         type: input.type,
+        entityCode: input.entityCode ?? null,
       },
     });
   }
