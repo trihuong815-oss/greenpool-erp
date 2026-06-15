@@ -256,11 +256,39 @@ function DexuatTable(props: DexuatTableProps) {
     setPage(1);
   }, [tab, filterKind, keyword]);
 
-  const totalPage = Math.max(1, Math.ceil(filtered.length / perPage));
+  // V6.5 (2026-06-15) anh chốt: SORT MẶC ĐỊNH theo thời gian còn lại tăng dần
+  // (giống bảng Điều phối). Quy tắc:
+  //   • Đề xuất ở trạng thái kết thúc/đóng (da_phe_duyet/tu_choi/chuyen_dieu_phoi/dong_ho_so)
+  //     → XUỐNG CUỐI (không còn cần action gấp).
+  //   • 'nhap' (chưa gửi) → xuống cuối nhóm active (chưa vào chain, không có SLA).
+  //   • Còn lại sort theo SLA remainingH ASC (ít giờ còn lại trước → ưu tiên duyệt gấp).
+  //   • Quá hạn (remainingH < 0) → lên đầu (overdue càng lâu càng trước).
+  //   • Cùng remainingH → createdAt ASC (cũ trước).
+  const sorted = useMemo(() => {
+    const terminal = (s: ProposalV5['status']) =>
+      s === 'da_phe_duyet' || s === 'tu_choi' || s === 'chuyen_dieu_phoi' || s === 'dong_ho_so';
+    return [...filtered].sort((a, b) => {
+      const aT = terminal(a.status), bT = terminal(b.status);
+      if (aT !== bT) return aT ? 1 : -1;
+      // Nháp xuống cuối nhóm active
+      const aDraft = a.status === 'nhap', bDraft = b.status === 'nhap';
+      if (aDraft !== bDraft) return aDraft ? 1 : -1;
+      // SLA remainingH ASC (null = +Infinity = sau cùng)
+      const aSla = computeSLA(a);
+      const bSla = computeSLA(b);
+      const aRem = aSla ? aSla.remainingH : Number.POSITIVE_INFINITY;
+      const bRem = bSla ? bSla.remainingH : Number.POSITIVE_INFINITY;
+      if (aRem !== bRem) return aRem - bRem;
+      // Fallback: createdAt ASC
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    });
+  }, [filtered]);
+
+  const totalPage = Math.max(1, Math.ceil(sorted.length / perPage));
   const safePage = Math.min(page, totalPage);
   const paged = useMemo(
-    () => filtered.slice((safePage - 1) * perPage, safePage * perPage),
-    [filtered, safePage, perPage],
+    () => sorted.slice((safePage - 1) * perPage, safePage * perPage),
+    [sorted, safePage, perPage],
   );
 
   return (
