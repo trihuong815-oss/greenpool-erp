@@ -252,28 +252,26 @@ export default function CoordinationTable({
       <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-280px)]">
         <table className="w-full text-sm">
           <thead className="sticky top-0 z-20 bg-white shadow-[0_1px_0_0_rgba(0,0,0,0.06)]">
-            {/* V6.5 (2026-06-15) anh chốt: tăng diện tích cột "Công việc" để title dài
-                hiện đủ. Nén nhẹ Chủ trì + Đang chờ (44→36) + Deadline (28→24) bù lại. */}
+            {/* V6.5 (2026-06-15) anh chốt: bảng vừa macbook (1280px), không scroll ngang.
+                Bỏ cột "Phối hợp" — số đơn vị + tên hiện trong drawer khi click row.
+                Nén padding x-3 → x-2, giảm width Chủ trì/Tiến độ/Đang chờ/Trạng thái. */}
             <tr className="bg-gradient-to-b from-slate-50 to-white border-b-2 border-slate-200 text-[10px] uppercase tracking-wider text-slate-600 divide-x divide-slate-200">
-              <th className="px-3 py-3 text-left font-semibold min-w-[280px]">
+              <th className="px-2 py-2.5 text-left font-semibold min-w-[220px]">
                 <span className="inline-flex items-center gap-1.5"><Briefcase size={12} className="text-emerald-600" /> Công việc</span>
               </th>
-              <th className="px-3 py-3 text-left font-semibold w-36">
+              <th className="px-2 py-2.5 text-left font-semibold w-32">
                 <span className="inline-flex items-center gap-1.5"><UserCheck size={12} className="text-sky-600" /> Chủ trì</span>
               </th>
-              <th className="px-3 py-3 text-left font-semibold w-32">
-                <span className="inline-flex items-center gap-1.5"><Users size={12} className="text-violet-600" /> Phối hợp</span>
-              </th>
-              <th className="px-3 py-3 text-left font-semibold w-36">
+              <th className="px-2 py-2.5 text-left font-semibold w-28">
                 <span className="inline-flex items-center gap-1.5"><Activity size={12} className="text-emerald-600" /> Tiến độ</span>
               </th>
-              <th className="px-3 py-3 text-left font-semibold w-36">
+              <th className="px-2 py-2.5 text-left font-semibold w-32">
                 <span className="inline-flex items-center gap-1.5"><Clock size={12} className="text-amber-600" /> Đang chờ</span>
               </th>
-              <th className="px-3 py-3 text-left font-semibold w-24">
+              <th className="px-2 py-2.5 text-left font-semibold w-20">
                 <span className="inline-flex items-center gap-1.5"><Calendar size={12} className="text-rose-600" /> Deadline</span>
               </th>
-              <th className="px-3 py-3 text-left font-semibold w-28">
+              <th className="px-2 py-2.5 text-left font-semibold w-24">
                 <span className="inline-flex items-center gap-1.5"><CircleDot size={12} className="text-slate-500" /> Trạng thái</span>
               </th>
             </tr>
@@ -292,40 +290,44 @@ export default function CoordinationTable({
                   onClick={() => onRowClick(t)}
                   className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer divide-x divide-slate-100"
                 >
-                  {/* V6.5 (2026-06-15) anh chốt: bỏ cột checkbox + STT (#) — gây nhiễu, không có bulk action. */}
-                  <td className="px-3 py-3 align-top">
-                    <div className="font-medium text-slate-800">{t.title}</div>
-                    <div className="text-[10px] text-slate-400 mt-0.5">
-                      #{t.code}
+                  {/* Công việc — title + code + chip phối hợp inline (vd "+3 PH") */}
+                  <td className="px-2 py-2.5 align-top">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="font-medium text-slate-800 leading-snug">{t.title}</div>
+                      {/* Chip số đơn vị phối hợp — click row mở drawer xem chi tiết */}
+                      {t.collaboratorUnits.length > 0 && (
+                        <span
+                          title={collabDisplay}
+                          className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-violet-50 text-violet-700 ring-1 ring-violet-200"
+                        >
+                          <Users size={10} />{t.collaboratorUnits.length}
+                        </span>
+                      )}
                     </div>
+                    <div className="text-[10px] text-slate-400 mt-0.5">#{t.code}</div>
                   </td>
-                  {/* V6.4: Loại ẨN — xem ở Drawer khi click row */}
-                  <td className="px-3 py-3 align-top">
+                  {/* Chủ trì */}
+                  <td className="px-2 py-2.5 align-top">
                     <div className="flex items-center gap-1.5">
                       <span
                         className={
-                          'inline-flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-semibold ' +
+                          'inline-flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-semibold shrink-0 ' +
                           avatarColor(t.ownerName)
                         }
                       >
                         {initialsOf(t.ownerName)}
                       </span>
-                      <span className="text-sm text-slate-700 truncate">
-                        {t.ownerName}
-                      </span>
+                      <span className="text-xs text-slate-700 truncate">{t.ownerName}</span>
                     </div>
                   </td>
-                  <td className="px-3 py-3 align-top">
-                    <span className="text-sm text-slate-600">{collabDisplay}</span>
-                  </td>
-                  {/* V4: Tiến độ phối hợp X/Y + bar emerald + pct */}
-                  <td className="px-3 py-3 align-top">
+                  {/* Tiến độ — X/Y + bar */}
+                  <td className="px-2 py-2.5 align-top">
                     {progress.total === 0 ? (
                       <span className="text-xs text-slate-400">—</span>
                     ) : (
                       <div className="flex flex-col gap-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs font-medium text-slate-700 tabular-nums">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-[11px] font-medium text-slate-700 tabular-nums">
                             {progress.done}/{progress.total}
                           </span>
                           <span className="text-[10px] text-slate-500 tabular-nums">
@@ -341,49 +343,47 @@ export default function CoordinationTable({
                       </div>
                     )}
                   </td>
-                  {/* V4: Đang chờ — computeWaitingFor.person */}
-                  <td className="px-3 py-3 align-top">
+                  {/* Đang chờ */}
+                  <td className="px-2 py-2.5 align-top">
                     <div className="flex items-center gap-1.5">
                       <span
                         className={
-                          'inline-flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-semibold ' +
+                          'inline-flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-semibold shrink-0 ' +
                           avatarColor(waiting.person)
                         }
                       >
                         {initialsOf(waiting.person)}
                       </span>
-                      <span className="text-sm text-slate-700 truncate">
-                        {waiting.person}
-                      </span>
+                      <span className="text-xs text-slate-700 truncate">{waiting.person}</span>
                     </div>
                   </td>
-                  {/* V6.4: Nội dung chờ ẨN — xem ở Drawer khi click row */}
+                  {/* Deadline */}
                   <td
                     className={
-                      'px-3 py-3 align-top text-sm tabular-nums ' +
+                      'px-2 py-2.5 align-top text-xs tabular-nums ' +
                       (overdue ? 'text-rose-600 font-semibold' : 'text-slate-700')
                     }
                   >
                     {formatDate(t.dueDate)}
                   </td>
-                  <td className="px-3 py-3 align-top">
+                  {/* Trạng thái */}
+                  <td className="px-2 py-2.5 align-top">
                     <span
                       className={
-                        'inline-flex items-center rounded px-2 py-0.5 text-[11px] font-medium ' +
+                        'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap ' +
                         COORD_STATUS_COLOR[t.status]
                       }
                     >
                       {COORD_STATUS_LABEL[t.status]}
                     </span>
                   </td>
-                  {/* V6.4: Mức độ ẨN — xem ở Drawer khi click row */}
                 </tr>
               );
             })}
             {rows.length === 0 && (
               <tr>
                 <td
-                  colSpan={9}
+                  colSpan={6}
                   className="px-3 py-8 text-center text-sm text-slate-400"
                 >
                   Chưa có công việc điều phối nào.
