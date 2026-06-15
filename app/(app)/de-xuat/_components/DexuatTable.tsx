@@ -554,8 +554,8 @@ function DexuatRow({ p, currentUserUid, currentUserRole, onRowClick, onAction }:
   return (
     <tr
       onClick={() => onRowClick(p)}
-      className={`hover:bg-slate-50 cursor-pointer divide-x divide-slate-200 ${
-        overdue ? 'bg-rose-50/40' : ''
+      className={`hover:bg-emerald-50/60 cursor-pointer divide-x divide-slate-200 [&:nth-child(even)]:bg-slate-50/40 ${
+        overdue ? 'bg-rose-50/40 hover:bg-rose-50/70' : ''
       }`}
     >
       {/* 1. Mã */}

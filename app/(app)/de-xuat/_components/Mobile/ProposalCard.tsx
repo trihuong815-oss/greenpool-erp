@@ -93,6 +93,29 @@ export default function ProposalCard({ proposal, onTap }: Props) {
             </span>
           );
         })()}
+        {/* V6.5 Audit fix Phase B.4 (2026-06-15) — Issue 7.1: cost badge ở header
+            cho governance hasFinancial → user thấy ngay financial impact, không phải scroll body */}
+        {(() => {
+          if (proposal.nature !== 'governance' || !(proposal as any).hasFinancial) return null;
+          const cost = Number((proposal as any).estimatedCost ?? 0);
+          if (cost <= 0) return (
+            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset bg-rose-50 text-rose-700 ring-rose-200">💰 TC chưa rõ</span>
+          );
+          // Format ngắn gọn: <1M raw, <1B → "Xt", ≥1B → "Xtỷ"
+          const shortCost = cost >= 1_000_000_000
+            ? `${(cost / 1_000_000_000).toFixed(1).replace(/\.0$/, '')}tỷ`
+            : cost >= 1_000_000
+              ? `${Math.round(cost / 1_000_000)}tr`
+              : `${Math.round(cost / 1000)}k`;
+          const tone = cost >= 200_000_000 ? 'bg-rose-50 text-rose-700 ring-rose-200'
+            : cost >= 50_000_000 ? 'bg-amber-50 text-amber-700 ring-amber-200'
+            : 'bg-emerald-50 text-emerald-700 ring-emerald-200';
+          return (
+            <span className={'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset tabular-nums ' + tone}>
+              💰 {shortCost}
+            </span>
+          );
+        })()}
       </div>
 
       {/* V6.5 (2026-06-14): Hiện đầy đủ đơn vị nhận + lãnh đạo phê duyệt + người duyệt hiện tại */}

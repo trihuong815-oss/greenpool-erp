@@ -258,42 +258,49 @@ export default function DexuatDashboard({
           value={stats.cardCho}
           icon={<AlertCircle size={18} />}
           tone="amber"
+          tooltip="Đề xuất đang chờ TÔI duyệt — tôi là currentApprover trong chuỗi duyệt."
         />
         <KpiCard
           label="Đang xem xét"
           value={stats.cardDangXX}
           icon={<Eye size={18} />}
           tone="sky"
+          tooltip="Đề xuất đã gửi và đang trong quá trình duyệt chuỗi (chưa đến lượt tôi)."
         />
         <KpiCard
           label="Cần bổ sung"
           value={stats.cardYCBS}
           icon={<Send size={18} />}
           tone="orange"
+          tooltip="Đề xuất bị approver yêu cầu bổ sung — người tạo cần sửa và gửi lại."
         />
         <KpiCard
           label="Đã phê duyệt"
           value={stats.cardDuyet}
           icon={<CheckCircle2 size={18} />}
           tone="emerald"
+          tooltip="Đề xuất đã duyệt cuối chuỗi nhưng chưa tạo task điều phối."
         />
         <KpiCard
           label="Đã tạo điều phối"
           value={stats.cardDP}
           icon={<ArrowRightCircle size={18} />}
           tone="violet"
+          tooltip="Đề xuất duyệt xong và đã tạo task Điều phối liên kết — workflow hoàn tất."
         />
         <KpiCard
           label="Từ chối"
           value={stats.cardTuChoi}
           icon={<XCircle size={18} />}
           tone="rose"
+          tooltip="Đề xuất bị từ chối — creator có thể sửa và gửi lại (resubmit)."
         />
         <KpiCard
           label="Quá hạn"
           value={stats.cardQuaSLA}
           icon={<Clock size={18} />}
           tone="rose-dark"
+          tooltip="Đề xuất đang chờ duyệt và đã vượt SLA (12h urgent / 24h normal / 48h low)."
         />
       </div>
 
@@ -597,15 +604,21 @@ function KpiCard({
   value,
   icon,
   tone,
+  tooltip,
 }: {
   label: string;
   value: number;
   icon: React.ReactNode;
   tone: Tone;
+  /** V6.5 Audit fix Phase B.2 (2026-06-15) — Issue 6.4: tooltip giải nghĩa KPI cho user. */
+  tooltip?: string;
 }) {
   const t = TONE_STYLES[tone];
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-3 transition hover:shadow-md">
+    <div
+      className="rounded-xl border border-slate-200 bg-white p-3 transition hover:shadow-md cursor-help"
+      title={tooltip ?? label}
+    >
       <div className="mb-2 flex items-center justify-between">
         <span
           className={`inline-flex h-8 w-8 items-center justify-center rounded-lg ${t.bg} ${t.text} ring-1 ${t.ring}`}

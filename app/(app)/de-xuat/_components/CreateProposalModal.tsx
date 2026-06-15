@@ -420,6 +420,10 @@ export default function CreateProposalModal({
   // V6.5 (2026-06-14): toggle khối "Đơn vị nhận đề xuất".
   // Default null = chưa xổ list (anh chốt: bấm khối nào mới xổ ra list khối đó).
   const [recipientBlockTab, setRecipientBlockTab] = useState<'KD' | 'VP' | null>(null);
+  // V6.5 Audit fix Phase B.3 (2026-06-15) — Issue 5.2: track submit attempt để bôi đỏ
+  // inline 2 section (recipient + leader) khi governance miss cả 2 thay vì chỉ alert popup.
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  const govMissingTarget = nature === 'governance' && !leaderUid && !recipientUid && submitAttempted;
 
   // Fetch candidate list 1 lần khi mở modal (server tự xác định theo role caller)
   useEffect(() => {
@@ -671,6 +675,7 @@ export default function CreateProposalModal({
   }
 
   function handleSubmit() {
+    setSubmitAttempted(true); // V6.5 Phase B.3: bôi đỏ inline khi miss governance target
     const err = validateForSubmit();
     if (err) {
       alert(err);
@@ -984,7 +989,7 @@ export default function CreateProposalModal({
               2 toggle khối + grid card radio (UX giống Choose Owner /dieu-phoi).
               Bỏ GD_KD + GD_VP khỏi list (đã có trong "Lãnh đạo phê duyệt" riêng cho governance).
               Chỉ giữ TP/QLCS — chia 2 khối Kinh doanh / Văn phòng. */}
-          <section className="rounded-lg border border-slate-200 bg-white px-4 py-3">
+          <section className={`rounded-lg border bg-white px-4 py-3 ${govMissingTarget ? 'border-rose-400 ring-2 ring-rose-200' : 'border-slate-200'}`}>
             <label className="block text-xs font-semibold text-slate-700 mb-2">
               Đơn vị nhận đề xuất
               {nature === 'support' ? (
@@ -1119,11 +1124,17 @@ export default function CreateProposalModal({
                 ? 'Đơn vị này sẽ trực tiếp nhận và hỗ trợ — không cần duyệt lãnh đạo.'
                 : 'Đơn vị nhận đề xuất (context — sẽ triển khai sau khi lãnh đạo phê duyệt).'}
             </p>
+            {/* V6.5 Phase B.3: hint đỏ inline khi governance miss target */}
+            {govMissingTarget && (
+              <p className="text-xs text-rose-700 mt-1.5 font-medium">
+                ⚠ Cần chọn ÍT NHẤT 1 đối tượng (đơn vị nhận đề xuất HOẶC lãnh đạo phê duyệt).
+              </p>
+            )}
           </section>
 
           {/* V6.5: Lãnh đạo phê duyệt — CHỈ governance */}
           {nature === 'governance' && (
-            <section className="rounded-lg border border-amber-200 bg-amber-50/40 px-4 py-3">
+            <section className={`rounded-lg px-4 py-3 ${govMissingTarget ? 'border border-rose-400 ring-2 ring-rose-200 bg-rose-50/40' : 'border border-amber-200 bg-amber-50/40'}`}>
               <label className="block text-xs font-semibold text-slate-700 mb-2">
                 Lãnh đạo cần phê duyệt
                 <span className="ml-1 text-[11px] font-normal italic text-slate-400">
@@ -1199,7 +1210,12 @@ export default function CreateProposalModal({
         </div>
 
         {/* Footer — 3 nút theo SPEC */}
-        <div className="px-5 py-3 border-t border-slate-200 flex items-center justify-end gap-2 bg-slate-50 rounded-b-xl sticky bottom-0">
+        {/* V6.5 Audit fix Phase B.5 (2026-06-15) — Issue 5.3: sticky footer mobile safe-area-inset
+            để bàn phím ảo iOS không che 3 nút Huỷ/Lưu nháp/Gửi. shadow đậm hơn để tách footer khỏi form. */}
+        <div
+          className="px-5 py-3 border-t border-slate-200 flex items-center justify-end gap-2 bg-slate-50 rounded-b-xl sticky bottom-0 z-10 shadow-[0_-2px_8px_rgba(0,0,0,0.06)] sm:shadow-none"
+          style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+        >
           <button
             type="button"
             onClick={handleClose}
