@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Briefcase, UserCheck, Users, Activity, Clock, Calendar, CircleDot } from 'lucide-react';
 import {
   COORD_STATUS_LABEL,
   COORD_STATUS_COLOR,
@@ -181,7 +181,28 @@ export default function CoordinationTable({
     return byTab.filter((t) => getSeverity(t) === severityFilter);
   }, [tasks, activeTab, _currentUserUid, severityFilter]);
 
-  const rows = filteredTasks.slice(0, 10);
+  // V6.5 (2026-06-15) anh chốt SORT MẶC ĐỊNH:
+  //   • Task hoàn thành toàn bộ (hoan_thanh / dong_ho_so) → XUỐNG CUỐI
+  //   • Còn lại sort theo "thời gian còn lại" ASC (ít trước, ưu tiên xử lý gấp)
+  //   • Task không có dueDate → cuối nhóm chưa hoàn thành (vì không gấp)
+  //   • Cùng dueDate → createdAt ASC (task cũ trước)
+  const sortedTasks = useMemo(() => {
+    const isTerminal = (s: string) => s === 'hoan_thanh' || s === 'dong_ho_so';
+    const dueMs = (d: string | undefined) => {
+      if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return Number.POSITIVE_INFINITY;
+      return new Date(`${d}T23:59:59+07:00`).getTime();
+    };
+    return [...filteredTasks].sort((a, b) => {
+      const aT = isTerminal(a.status);
+      const bT = isTerminal(b.status);
+      if (aT !== bT) return aT ? 1 : -1; // hoàn thành xuống cuối
+      const diff = dueMs(a.dueDate) - dueMs(b.dueDate);
+      if (diff !== 0) return diff;
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    });
+  }, [filteredTasks]);
+
+  const rows = sortedTasks.slice(0, 10);
   const totalCount = counts.all;
 
   return (
@@ -224,32 +245,39 @@ export default function CoordinationTable({
         </select>
       </div>
 
-      {/* Table — V6.4 (2026-06-13): 9 cột chính.
-          Ẩn 3 cột phụ (Loại / Mức độ / Nội dung chờ) — xem ở Drawer khi click row.
-          Header rút gọn để không bị wrap nhiều dòng. */}
-      <div className="overflow-x-auto">
+      {/* Table — V6.5 (2026-06-15) anh chốt:
+          • Bỏ cột checkbox + STT (#) — không có chức năng bulk action, gây nhiễu.
+          • Header STICKY khi scroll (z-20 + shadow).
+          • Mỗi cột có icon màu riêng → phân biệt nhanh, không cần background đậm. */}
+      <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-280px)]">
         <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-slate-50 border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-500">
-              <th className="px-3 py-2.5 text-center w-10">
-                <input
-                  type="checkbox"
-                  className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 focus:ring-1"
-                  aria-label="Chọn tất cả"
-                />
+          <thead className="sticky top-0 z-20 bg-white shadow-[0_1px_0_0_rgba(0,0,0,0.06)]">
+            <tr className="bg-gradient-to-b from-slate-50 to-white border-b-2 border-slate-200 text-[10px] uppercase tracking-wider text-slate-600">
+              <th className="px-3 py-3 text-left font-semibold">
+                <span className="inline-flex items-center gap-1.5"><Briefcase size={12} className="text-emerald-600" /> Công việc</span>
               </th>
-              <th className="px-3 py-2.5 text-left font-medium w-10">#</th>
-              <th className="px-3 py-2.5 text-left font-medium">Công việc</th>
-              <th className="px-3 py-2.5 text-left font-medium w-44">Chủ trì</th>
-              <th className="px-3 py-2.5 text-left font-medium w-36">Phối hợp</th>
-              <th className="px-3 py-2.5 text-left font-medium w-40">Tiến độ</th>
-              <th className="px-3 py-2.5 text-left font-medium w-44">Đang chờ</th>
-              <th className="px-3 py-2.5 text-left font-medium w-28">Deadline</th>
-              <th className="px-3 py-2.5 text-left font-medium w-32">Trạng thái</th>
+              <th className="px-3 py-3 text-left font-semibold w-44">
+                <span className="inline-flex items-center gap-1.5"><UserCheck size={12} className="text-sky-600" /> Chủ trì</span>
+              </th>
+              <th className="px-3 py-3 text-left font-semibold w-36">
+                <span className="inline-flex items-center gap-1.5"><Users size={12} className="text-violet-600" /> Phối hợp</span>
+              </th>
+              <th className="px-3 py-3 text-left font-semibold w-40">
+                <span className="inline-flex items-center gap-1.5"><Activity size={12} className="text-emerald-600" /> Tiến độ</span>
+              </th>
+              <th className="px-3 py-3 text-left font-semibold w-44">
+                <span className="inline-flex items-center gap-1.5"><Clock size={12} className="text-amber-600" /> Đang chờ</span>
+              </th>
+              <th className="px-3 py-3 text-left font-semibold w-28">
+                <span className="inline-flex items-center gap-1.5"><Calendar size={12} className="text-rose-600" /> Deadline</span>
+              </th>
+              <th className="px-3 py-3 text-left font-semibold w-32">
+                <span className="inline-flex items-center gap-1.5"><CircleDot size={12} className="text-slate-500" /> Trạng thái</span>
+              </th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((t, idx) => {
+            {rows.map((t) => {
               const overdue = isPastDue(t.dueDate);
               const collabDisplay = t.collaboratorUnits
                 .map((u) => DEPT_LABEL[u as DeptId] ?? u)
@@ -262,16 +290,7 @@ export default function CoordinationTable({
                   onClick={() => onRowClick(t)}
                   className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer"
                 >
-                  <td className="px-3 py-3 text-center align-top" onClick={(e) => e.stopPropagation()}>
-                    <input
-                      type="checkbox"
-                      className="w-3.5 h-3.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 focus:ring-1"
-                      aria-label={`Chọn ${t.title}`}
-                    />
-                  </td>
-                  <td className="px-3 py-3 text-slate-400 tabular-nums align-top">
-                    {idx + 1}
-                  </td>
+                  {/* V6.5 (2026-06-15) anh chốt: bỏ cột checkbox + STT (#) — gây nhiễu, không có bulk action. */}
                   <td className="px-3 py-3 align-top">
                     <div className="font-medium text-slate-800">{t.title}</div>
                     <div className="text-[10px] text-slate-400 mt-0.5">
