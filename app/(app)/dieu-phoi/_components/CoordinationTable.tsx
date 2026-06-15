@@ -254,7 +254,7 @@ export default function CoordinationTable({
           <thead className="sticky top-0 z-20 bg-white shadow-[0_1px_0_0_rgba(0,0,0,0.06)]">
             {/* V6.5 (2026-06-15) anh chốt: tăng diện tích cột "Công việc" để title dài
                 hiện đủ. Nén nhẹ Chủ trì + Đang chờ (44→36) + Deadline (28→24) bù lại. */}
-            <tr className="bg-gradient-to-b from-slate-50 to-white border-b-2 border-slate-200 text-[10px] uppercase tracking-wider text-slate-600">
+            <tr className="bg-gradient-to-b from-slate-50 to-white border-b-2 border-slate-200 text-[10px] uppercase tracking-wider text-slate-600 divide-x divide-slate-200">
               <th className="px-3 py-3 text-left font-semibold min-w-[280px]">
                 <span className="inline-flex items-center gap-1.5"><Briefcase size={12} className="text-emerald-600" /> Công việc</span>
               </th>
@@ -290,7 +290,7 @@ export default function CoordinationTable({
                 <tr
                   key={t.id}
                   onClick={() => onRowClick(t)}
-                  className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer"
+                  className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer divide-x divide-slate-100"
                 >
                   {/* V6.5 (2026-06-15) anh chốt: bỏ cột checkbox + STT (#) — gây nhiễu, không có bulk action. */}
                   <td className="px-3 py-3 align-top">
