@@ -998,6 +998,49 @@ export default function ProposalDetailDrawer({
           </section>
         </div>
 
+        {/* V6.5 Audit fix Phase A.4 (2026-06-15) — Issue 6.3 CRITICAL:
+            Floating action bar MOBILE (md:hidden) — sticky bottom với 4 nút duyệt.
+            Hiện chỉ khi user là current approver + đang chờ quyết định.
+            Desktop dùng buttons trong timeline section S4 (đã có sẵn). */}
+        {userIsActiveApprover && decisionMode === 'idle' && (
+          <div className="md:hidden sticky bottom-0 z-20 px-3 py-2.5 border-t-2 border-amber-300 bg-amber-50/95 backdrop-blur shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
+            <div className="grid grid-cols-2 gap-1.5 mb-1.5">
+              <button
+                type="button"
+                onClick={handleApproveDirect}
+                className="inline-flex items-center justify-center gap-1 px-3 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm"
+              >
+                <Check size={14} /> Duyệt
+              </button>
+              {handleApproveAndCreate && (
+                <button
+                  type="button"
+                  onClick={handleApproveAndCreateClick}
+                  className="inline-flex items-center justify-center gap-1 px-3 py-2 text-sm font-bold text-white bg-violet-600 hover:bg-violet-700 rounded-lg shadow-md"
+                >
+                  <Sparkles size={13} /> Duyệt & Tạo ĐP
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={() => setDecisionMode('revision')}
+                className="inline-flex items-center justify-center gap-1 px-3 py-2 text-xs font-semibold text-amber-700 bg-white border border-amber-200 hover:bg-amber-100 rounded-lg"
+              >
+                <RotateCcw size={13} /> Yêu cầu bổ sung
+              </button>
+              <button
+                type="button"
+                onClick={() => setDecisionMode('reject')}
+                className="inline-flex items-center justify-center gap-1 px-3 py-2 text-xs font-semibold text-rose-700 bg-white border border-rose-200 hover:bg-rose-100 rounded-lg"
+              >
+                <XCircle size={13} /> Từ chối
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ── Footer ────────────────────────────────────────────── */}
         <div className="px-5 py-3 border-t border-slate-200 bg-slate-50">
           <div className="flex items-center justify-end gap-2 flex-wrap">

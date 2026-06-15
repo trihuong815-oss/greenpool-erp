@@ -996,8 +996,41 @@ export default function CreateProposalModal({
               )}
             </label>
 
-            {/* Toggle 2 khối — bấm lại cùng nút để đóng list */}
-            <div className="flex gap-2 mb-3">
+            {/* V6.5 Audit fix Phase A.6 (2026-06-15) — Issue 5.1: MOBILE dropdown 1 select gộp
+                (≤640px). Trước đây toggle 2 button + grid card chiếm chỗ + wrap xấu trên 375px.
+                Desktop (≥sm) vẫn dùng toggle + grid card có visual radio. */}
+            <div className="sm:hidden mb-3">
+              <select
+                value={recipientUid}
+                onChange={(e) => {
+                  const opt = recipientOptions.find((o) => o.uid === e.target.value);
+                  setRecipientUid(e.target.value);
+                  setRecipientName(opt?.displayName ?? '');
+                  setRecipientBlockTab(opt?.block === 'KD' ? 'KD' : opt?.block === 'VP' ? 'VP' : null);
+                }}
+                disabled={loadingRecipients}
+                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="">— Chọn đơn vị nhận —</option>
+                <optgroup label="Khối Kinh doanh">
+                  {recipientOptions
+                    .filter((o) => (o.roleCode.startsWith('TP_') || o.roleCode.startsWith('QLCS_')) && o.block === 'KD')
+                    .map((o) => (
+                      <option key={o.uid} value={o.uid}>{o.displayName} · {o.roleName || o.roleCode}</option>
+                    ))}
+                </optgroup>
+                <optgroup label="Khối Văn phòng">
+                  {recipientOptions
+                    .filter((o) => (o.roleCode.startsWith('TP_') || o.roleCode.startsWith('QLCS_')) && o.block === 'VP')
+                    .map((o) => (
+                      <option key={o.uid} value={o.uid}>{o.displayName} · {o.roleName || o.roleCode}</option>
+                    ))}
+                </optgroup>
+              </select>
+            </div>
+
+            {/* Toggle 2 khối — DESKTOP only — bấm lại cùng nút để đóng list */}
+            <div className="hidden sm:flex gap-2 mb-3">
               {(['KD', 'VP'] as const).map((b) => (
                 <button
                   key={b}
@@ -1014,7 +1047,8 @@ export default function CreateProposalModal({
               ))}
             </div>
 
-            {/* Grid card radio — CHỈ render khi đã click 1 nút khối (anh chốt 2026-06-14) */}
+            {/* Grid card radio — DESKTOP only (mobile dùng dropdown ở trên). */}
+            <div className="hidden sm:block">
             {recipientBlockTab && (() => {
               if (loadingRecipients) {
                 return <div className="text-sm text-slate-400 italic py-4 text-center">Đang tải danh sách...</div>;
@@ -1063,8 +1097,9 @@ export default function CreateProposalModal({
                 </div>
               );
             })()}
+            </div>
 
-            {/* Hint khi chưa chọn khối */}
+            {/* Hint khi chưa chọn khối (desktop only) */}
             {!recipientBlockTab && !recipientUid && (
               <div className="text-xs text-slate-400 italic text-center py-2">
                 Bấm vào một khối ở trên để xem danh sách TP/QLCS.

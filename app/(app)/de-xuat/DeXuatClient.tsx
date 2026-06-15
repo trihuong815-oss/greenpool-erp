@@ -34,6 +34,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, Plus, RefreshCw } from 'lucide-react';
 import { tasksApi, type Task } from '@/lib/services/tasks/api-client';
 import { isTP, isQLCS } from '@/lib/auth/roles';
+import { useNotiCounts } from '@/lib/hooks/use-noti-counts';
 import CompactDashboard from './_components/CompactDashboard';
 import MobileProposalView from './_components/Mobile/MobileProposalView';
 import DexuatDashboard, {
@@ -384,6 +385,10 @@ export function DeXuatClient(props: Props) {
   const [selected, setSelected] = useState<ProposalV6 | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const refresh = useCallback(() => setReloadKey((k) => k + 1), []);
+  // V6.5 Audit fix Phase A.5 (2026-06-15) — Issue 4.4: refresh badge sidebar
+  // sau mỗi action (approve/reject/revision/resubmit) để count update tức thì
+  // thay vì đợi polling 180s. Đồng bộ với pattern Điều phối.
+  const { refresh: refreshNotiCounts } = useNotiCounts();
 
   // ── Load list ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -521,39 +526,36 @@ export function DeXuatClient(props: Props) {
 
   const handleApprove = useCallback(async (id: string, note?: string) => {
     try {
-      // eslint-disable-next-line no-console
-      console.log('[de-xuat V6] approve', { id, note });
       await tasksApi.approve(id, note);
       setSelected(null);
       refresh();
+      refreshNotiCounts(); // V6.5: badge sidebar update ngay sau action
     } catch (e: any) {
       alert(`Phê duyệt thất bại: ${e?.message ?? 'lỗi không xác định'}`);
     }
-  }, [refresh]);
+  }, [refresh, refreshNotiCounts]);
 
   const handleRequestRevision = useCallback(async (id: string, reason: string) => {
     try {
-      // eslint-disable-next-line no-console
-      console.log('[de-xuat V6] request_revision', { id, reason });
       await tasksApi.requestRevision(id, reason);
       setSelected(null);
       refresh();
+      refreshNotiCounts();
     } catch (e: any) {
       alert(`Yêu cầu bổ sung thất bại: ${e?.message ?? 'lỗi không xác định'}`);
     }
-  }, [refresh]);
+  }, [refresh, refreshNotiCounts]);
 
   const handleReject = useCallback(async (id: string, reason: string) => {
     try {
-      // eslint-disable-next-line no-console
-      console.log('[de-xuat V6] reject', { id, reason });
       await tasksApi.reject(id, reason);
       setSelected(null);
       refresh();
+      refreshNotiCounts();
     } catch (e: any) {
       alert(`Từ chối thất bại: ${e?.message ?? 'lỗi không xác định'}`);
     }
-  }, [refresh]);
+  }, [refresh, refreshNotiCounts]);
 
   /** V6.4 (2026-06-12): creator gửi lại đề xuất bị reject — server reset chain duyệt. */
   const handleResubmit = useCallback(async (id: string, note?: string) => {
@@ -561,10 +563,11 @@ export function DeXuatClient(props: Props) {
       await tasksApi.resubmit(id, note);
       setSelected(null);
       refresh();
+      refreshNotiCounts();
     } catch (e: any) {
       alert(`Gửi lại thất bại: ${e?.message ?? 'lỗi không xác định'}`);
     }
-  }, [refresh]);
+  }, [refresh, refreshNotiCounts]);
 
   /** V6: đóng hồ sơ. V7 sẽ wire endpoint backend dedicated. */
   const handleCloseDossier = useCallback(async (id: string) => {

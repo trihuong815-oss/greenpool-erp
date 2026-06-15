@@ -643,32 +643,50 @@ export async function POST(req: NextRequest) {
         }
         // Bước 3: Extend theo budget tier (chỉ khi có phát sinh TC)
         if (hasFinancialV65 && estimatedCostV65 > 0) {
-          // Đọc role của leader để biết có cần chèn cấp cao hơn không
-          let leaderRole: string | null = null;
-          if (leaderUidV65) {
-            try {
-              const leaderDoc = await db.collection(COLLECTIONS.USERS).doc(leaderUidV65).get();
-              if (leaderDoc.exists) leaderRole = leaderDoc.data()?.roleId ?? null;
-            } catch { /* silent */ }
+          // V6.5 Audit fix (2026-06-15) — Issue 1.1 + 2.2: CHUYỂN từ leader-driven
+          // sang CHAIN-AWARE check. Trước đây chỉ kiểm tra leaderRole đơn lẻ → MISS
+          // case TP/QLCS chọn leader=CHU_TICH mà cost ở mức 50-200M cần CEO duyệt
+          // (chain [GD_KD, CHU_TICH] vô tình bỏ CEO).
+          // SỬA: check toàn chain xem CEO/CHU_TICH đã có chưa, ép chèn theo TIER COST.
+          //
+          // Async resolve role cho mỗi entry trong chain (chain entry dạng 'user:UID').
+          async function chainHasRole(role: 'CEO' | 'CHU_TICH'): Promise<boolean> {
+            for (const entry of chain) {
+              if (!entry.startsWith('user:')) continue;
+              const uid = entry.slice(5);
+              try {
+                const s = await db.collection(COLLECTIONS.USERS).doc(uid).get();
+                if (s.exists && s.data()?.roleId === role) return true;
+              } catch { /* silent */ }
+            }
+            return false;
           }
-          // Nhóm 4 (≥200tr): final = CHU_TICH
+
+          // Nhóm 4 (≥200tr): bắt buộc CHU_TICH cuối + CEO trước nếu chưa có
           if (estimatedCostV65 >= 200_000_000) {
-            // Chèn CEO trước nếu leader < CEO
-            if (leaderRole !== 'CEO' && leaderRole !== 'CHU_TICH') {
+            const hasCeo = await chainHasRole('CEO');
+            if (!hasCeo) {
               const ceoUid = await resolveUidByRole('CEO');
               if (ceoUid) pushUnique(`user:${ceoUid}`);
             }
-            const ctUid = await resolveUidByRole('CHU_TICH');
-            if (ctUid) pushUnique(`user:${ctUid}`);
+            const hasCt = await chainHasRole('CHU_TICH');
+            if (!hasCt) {
+              const ctUid = await resolveUidByRole('CHU_TICH');
+              if (ctUid) pushUnique(`user:${ctUid}`);
+            }
           }
-          // Nhóm 3 (50-200tr): final = CEO
+          // Nhóm 3 (50-200tr): bắt buộc CEO duyệt — KHÔNG được skip dù leader cao hơn
           else if (estimatedCostV65 >= 50_000_000) {
-            if (leaderRole !== 'CEO' && leaderRole !== 'CHU_TICH') {
+            const hasCeo = await chainHasRole('CEO');
+            const hasCt = await chainHasRole('CHU_TICH');
+            // Nếu chain đã có CEO HOẶC CHU_TICH (cấp cao hơn) thì OK, không cần chèn thêm
+            if (!hasCeo && !hasCt) {
               const ceoUid = await resolveUidByRole('CEO');
               if (ceoUid) pushUnique(`user:${ceoUid}`);
             }
           }
           // Nhóm 1+2 (<50tr): leader OK, không extend
+          // (leaderRole đọc trước đó không còn cần thiết — bỏ block đọc.)
         }
       }
 

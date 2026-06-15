@@ -59,6 +59,8 @@ type TabKey =
   | 'da_duyet'
   | 'chuyen_dieu_phoi';
 
+// V6.5 Audit fix Phase A.3 (2026-06-15) — Issue 6.2: gộp 7 tab → 4 chính + 3 phụ
+// (đồng bộ pattern Điều phối Phase 5.6) để giảm break layout 1200px.
 const TABS: { key: TabKey; label: string; icon: any }[] = [
   { key: 'all',              label: 'Tất cả',              icon: Inbox },
   { key: 'mine',             label: 'Tôi tạo',             icon: FilePlus2 },
@@ -68,6 +70,8 @@ const TABS: { key: TabKey; label: string; icon: any }[] = [
   { key: 'da_duyet',         label: 'Đã duyệt',            icon: CheckCircle2 },
   { key: 'chuyen_dieu_phoi', label: 'Đã tạo điều phối',    icon: Send },
 ];
+const PRIMARY_TAB_KEYS: TabKey[] = ['all', 'mine', 'pending_me', 'da_duyet'];
+const SECONDARY_TAB_KEYS: TabKey[] = ['dang_xem_xet', 'ycbs', 'chuyen_dieu_phoi'];
 
 // ──────────────────────────────────────────────────────────────────────────────
 // SLA — tính từ updatedAt + slaHours theo role approver hiện tại
@@ -192,6 +196,8 @@ function DexuatTable(props: DexuatTableProps) {
   const { proposals, currentUserUid, currentUserRole, onRowClick, onAction } = props;
 
   const [tab, setTab] = useState<TabKey>('all');
+  // V6.5 Audit fix Phase A.3: tab phụ chỉ hiện khi user click "+ Lọc nâng cao"
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [keyword, setKeyword] = useState('');
   const [filterKind, setFilterKind] = useState<'all' | ProposalKind>('all');
 
@@ -293,9 +299,10 @@ function DexuatTable(props: DexuatTableProps) {
 
   return (
     <div className="space-y-3">
-      {/* ── Tabs row (7 tabs V6) ────────────────────────────────────────────── */}
+      {/* V6.5 Audit fix Phase A.3 (2026-06-15) — 4 tab chính luôn hiện + 3 tab phụ
+          hiện inline khi active hoặc khi showAdvanced=true. Nút "+ Lọc nâng cao" toggle. */}
       <div className="flex items-center gap-1 border-b border-slate-200 overflow-x-auto -mx-3 px-3 md:mx-0 md:px-0">
-        {TABS.map(({ key, label, icon: Icon }) => {
+        {TABS.filter(({ key }) => PRIMARY_TAB_KEYS.includes(key) || SECONDARY_TAB_KEYS.includes(key) && (showAdvanced || tab === key)).map(({ key, label, icon: Icon }) => {
           const active = tab === key;
           const badge = tabCounts[key];
           return (
@@ -321,6 +328,14 @@ function DexuatTable(props: DexuatTableProps) {
             </button>
           );
         })}
+        {/* V6.5 Audit fix Phase A.3: nút toggle 3 tab phụ */}
+        <button
+          type="button"
+          onClick={() => setShowAdvanced((v) => !v)}
+          className="ml-auto shrink-0 px-3 py-1.5 text-[11px] font-semibold text-slate-500 hover:text-emerald-700 rounded-md border border-slate-200 bg-white"
+        >
+          {showAdvanced ? '↑ Ẩn lọc nâng cao' : '+ Lọc nâng cao'}
+        </button>
       </div>
 
       {/* ── Filter row GỌN V6: search + Loại ────────────────────────────────── */}

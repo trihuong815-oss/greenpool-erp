@@ -10,7 +10,7 @@ import { getFirebaseAdminDb } from '@/lib/firebase/admin';
 import { COLLECTIONS } from '@/lib/firebase/collections';
 import { writeAuditLog } from '@/lib/firebase/audit-log';
 import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-auth';
-import { canUpdateTaskStatus, canApproveTask } from '@/lib/firebase/tasks-scope';
+import { canUpdateTaskStatus } from '@/lib/firebase/tasks-scope';
 // Phase B.3: centralized scope helper.
 import { taskScopeFromDoc as asScope } from '@/lib/firebase/tasks-serialize';
 
@@ -46,12 +46,21 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
     if (data.createdBy === caller.profile.uid) {
       return NextResponse.json({ error: 'Người tạo không thể tự yêu cầu bổ sung.' }, { status: 403 });
     }
-    // Quyền: assignee (recipient — pending/in_progress) HOẶC approver
-    // (đang trong chain — pending_approval).
+    // V6.5 Audit fix (2026-06-15) — Issue 1.2: STRICT permission.
+    // Trước đây `canApproveTask` chỉ check role match pattern → 3 người trong chain
+    // đều có thể gọi request-revision. Giờ check CHỈ currentApprover khớp caller.
     const isInChain = data.status === 'pending_approval';
     if (isInChain) {
-      if (!canApproveTask(caller.profile, asScope(data))) {
-        return NextResponse.json({ error: 'Bạn không có quyền yêu cầu bổ sung — chưa đến lượt bạn duyệt.' }, { status: 403 });
+      // Match strict: data.currentApprover = 'user:UID' hoặc 'role:RC'
+      const current = typeof data.currentApprover === 'string' ? data.currentApprover : '';
+      const matchUid = current === `user:${caller.profile.uid}`;
+      const matchRole = current === `role:${caller.profile.role_code}`;
+      // Fallback OVERRIDE: ADMIN/CEO/CHU_TICH escalate hộ
+      const isOverride = ['ADMIN', 'CEO', 'CHU_TICH'].includes(caller.profile.role_code);
+      if (!matchUid && !matchRole && !isOverride) {
+        return NextResponse.json({
+          error: 'Chỉ người duyệt hiện tại (currentApprover) được yêu cầu bổ sung — chưa đến lượt bạn.',
+        }, { status: 403 });
       }
     } else {
       if (!canUpdateTaskStatus(caller.profile, asScope(data))) {
