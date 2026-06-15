@@ -189,14 +189,25 @@ export default function CompactProposalTable({ proposals, currentUserUid, onRowC
                   <td className="px-3 py-3 align-top text-xs space-y-0.5">
                     {p.recipientUnitName && (
                       <div className="truncate">
-                        <span className="text-slate-400">Đv nhận:</span>{' '}
+                        <span className="text-slate-400">Đơn vị nhận:</span>{' '}
                         <span className="text-slate-700">{p.recipientUnitName}</span>
                       </div>
                     )}
-                    {p.nature === 'governance' && p.recipientLeaderName && (
+                    {p.nature === 'governance' && typeof p.recipientLeaderName === 'string' && p.recipientLeaderName.trim() && (
                       <div className="truncate">
                         <span className="text-slate-400">Lãnh đạo:</span>{' '}
                         <span className="text-slate-700 font-medium">{p.recipientLeaderName}</span>
+                      </div>
+                    )}
+                    {/* V6.5 (2026-06-14): hasFinancial + estimatedCost (nhất quán toàn UI) */}
+                    {p.nature === 'governance' && (p as any).hasFinancial && (
+                      <div className="truncate">
+                        <span className="text-slate-400">Tài chính:</span>{' '}
+                        <span className="text-amber-700 font-medium tabular-nums">
+                          {(p as any).estimatedCost > 0
+                            ? '₫' + Number((p as any).estimatedCost).toLocaleString('vi-VN')
+                            : 'Chưa rõ'}
+                        </span>
                       </div>
                     )}
                     <div className="truncate text-slate-700">

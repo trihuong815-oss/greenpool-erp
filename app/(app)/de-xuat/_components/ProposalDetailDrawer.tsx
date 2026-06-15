@@ -31,6 +31,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { NATURE_META } from './types';
 import {
   X,
   Check,
@@ -614,13 +615,17 @@ export default function ProposalDetailDrawer({
               <Field label="Mã" value={proposal.code} />
               <Field label="Tên đề xuất" value={proposal.title} />
               <Field label="Loại" value={KIND_LABEL[proposal.kind]} />
-              {/* V6.5 (2026-06-14): Tính chất đề xuất */}
-              {proposal.nature && (
-                <Field
-                  label="Tính chất"
-                  value={proposal.nature === 'governance' ? '⚙️ Đề xuất quản trị' : '🤝 Hỗ trợ công việc'}
-                />
-              )}
+              {/* V6.5 (2026-06-14): Tính chất — dùng NATURE_META chung 4 mặt.
+                  Fallback graceful cho data cũ (unitsScope='lien_khoi' → governance). */}
+              {(() => {
+                const natureRaw = proposal.nature;
+                const scopeOld = (proposal as any).unitsScope as 'trong_khoi' | 'lien_khoi' | undefined;
+                const nature = natureRaw
+                  ?? (scopeOld === 'lien_khoi' ? 'governance' : scopeOld === 'trong_khoi' ? 'support' : null);
+                if (!nature) return null;
+                const m = NATURE_META[nature];
+                return <Field label="Tính chất" value={`${m.emoji} ${m.label}`} />;
+              })()}
               <Field
                 label="Người tạo"
                 value={

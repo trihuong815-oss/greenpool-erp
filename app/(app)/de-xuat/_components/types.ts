@@ -131,64 +131,34 @@ export interface WorkflowRule {
 // V6+ Đơn vị liên quan (multi-select) — auto detect Trong khối / Liên khối
 // ────────────────────────────────────────────────────────────────────────────
 
-/** Đơn vị liên quan trong đề xuất — multi-select trong form. */
+/** @deprecated V6.5: form không còn multi-select. Giữ type cho adapter
+ *  read field cũ (relatedUnits trong ProposalV6 vẫn optional cho data Firestore cũ). */
 export interface RelatedUnit {
-  id: string;          // 'TP_MKT' | 'QLCS_HM' | 'GD_KD' | ...
-  label: string;       // 'TP Marketing' | 'QLCS Hoàng Mai' | ...
-  block: 'KD' | 'VP';  // khối của đơn vị
+  id: string;
+  label: string;
+  block: 'KD' | 'VP';
 }
 
+/** @deprecated V6.5: thay bằng nature='governance' (kèm crossBlock từ server). */
 export type UnitsScope = 'trong_khoi' | 'lien_khoi';
 
-/** Danh sách đơn vị có thể chọn (lookup table). */
-export const AVAILABLE_RELATED_UNITS: RelatedUnit[] = [
-  // Khối Kinh doanh
-  { id: 'GD_KD',     label: 'GĐ Kinh doanh',  block: 'KD' },
-  { id: 'TP_MKT',    label: 'TP Marketing',   block: 'KD' },
-  { id: 'TP_DT',     label: 'TP Đào tạo',     block: 'KD' },
-  { id: 'TP_KT',     label: 'TP Kỹ thuật',    block: 'KD' },
-  // V6.3: 5 cơ sở chuẩn — anh chốt 2026-06-12
-  { id: 'QLCS_HM',    label: 'QLCS Hoàng Mai',              block: 'KD' },
-  { id: 'QLCS_24NCT', label: 'QLCS 24 Nguyễn Cơ Thạch',     block: 'KD' },
-  { id: 'QLCS_TK',    label: 'QLCS 20 Thuỵ Khuê',           block: 'KD' },
-  { id: 'QLCS_TT',    label: 'QLCS Thanh Trì',              block: 'KD' },
-  { id: 'QLCS_CTT',   label: 'QLCS Cung Thể Thao Mỹ Đình',  block: 'KD' },
-  // Khối Văn phòng
-  { id: 'GD_VP',     label: 'GĐ Văn phòng',   block: 'VP' },
-  { id: 'TP_NS',     label: 'TP Nhân sự',     block: 'VP' },
-  { id: 'TP_KE',     label: 'TP Kế toán',     block: 'VP' },
-  { id: 'TP_GS',     label: 'TP Giám sát',    block: 'VP' },
-];
-
-/** Lookup khối từ roleCode (cho creatorBlock auto). */
+/** Lookup khối từ roleCode — DÙNG cho adapter (creatorBlock auto). */
 export const ROLE_TO_BLOCK: Record<string, 'KD' | 'VP'> = {
   GD_KD: 'KD', TP_MKT: 'KD', TP_DT: 'KD', TP_KT: 'KD',
   QLCS_HM: 'KD', QLCS_TK: 'KD', QLCS_CTT: 'KD', QLCS_24NCT: 'KD', QLCS_TT: 'KD',
   GD_VP: 'VP', TP_NS: 'VP', TP_KE: 'VP', TP_GS: 'VP',
 };
 
-/**
- * Auto detect Trong khối / Liên khối.
- * - 'lien_khoi' nếu có ≥1 đơn vị KD VÀ ≥1 đơn vị VP (kể cả creator).
- * - 'trong_khoi' nếu tất cả (creator + units) thuộc CÙNG 1 khối.
- */
-export function detectUnitsScope(
-  creatorBlock: 'KD' | 'VP',
-  relatedUnits: RelatedUnit[],
-): UnitsScope {
-  const blocks = new Set<'KD' | 'VP'>([creatorBlock]);
-  for (const u of relatedUnits) blocks.add(u.block);
-  return blocks.size > 1 ? 'lien_khoi' : 'trong_khoi';
-}
+// V6.5 (2026-06-14): Xoá AVAILABLE_RELATED_UNITS (17 entries), detectUnitsScope,
+// UNITS_SCOPE_LABEL/COLOR. grep 0 import. Server tự compute crossBlock từ recipient.
 
-export const UNITS_SCOPE_LABEL: Record<UnitsScope, string> = {
-  trong_khoi: 'Trong khối',
-  lien_khoi: 'Liên khối',
-};
-export const UNITS_SCOPE_COLOR: Record<UnitsScope, string> = {
-  trong_khoi: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-  lien_khoi: 'bg-violet-50 text-violet-700 ring-violet-200',
-};
+/** V6.5 (2026-06-14): Hằng số nature — dùng cho 4 mặt UI (form/table/card/drawer)
+ *  để emoji + label nhất quán. */
+export const NATURE_META = {
+  support:    { emoji: '🤝', label: 'Hỗ trợ công việc', shortLabel: 'Hỗ trợ',  color: 'bg-sky-50 text-sky-700 ring-sky-200' },
+  governance: { emoji: '⚙️', label: 'Đề xuất quản trị', shortLabel: 'Quản trị', color: 'bg-violet-50 text-violet-700 ring-violet-200' },
+} as const;
+export type NatureKey = keyof typeof NATURE_META;
 
 // ────────────────────────────────────────────────────────────────────────────
 // V6 ProposalV6 — 5 trường nhập V6 + standard meta + legacy V5 (giữ shape)
@@ -342,38 +312,9 @@ export const PROPOSAL_KIND_COLOR: Record<ProposalKind, string> = {
   cai_tien: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
 };
 
-// ────────────────────────────────────────────────────────────────────────────
-// Legacy V5 label maps — giữ cho sibling V5 chưa migrate
-// ────────────────────────────────────────────────────────────────────────────
-/** @deprecated V5 only */
-export const PRIORITY_LABEL: Record<Priority, string> = {
-  binh_thuong: 'Bình thường',
-  quan_trong: 'Quan trọng',
-  khan_cap: 'Khẩn cấp',
-};
-
-/** @deprecated V5 only */
-export const PRIORITY_COLOR: Record<Priority, string> = {
-  binh_thuong: 'bg-slate-100 text-slate-700 ring-slate-200',
-  quan_trong: 'bg-amber-50 text-amber-700 ring-amber-200',
-  khan_cap: 'bg-rose-50 text-rose-700 ring-rose-200',
-};
-
-/** @deprecated V5 only */
-export const SOURCE_LABEL: Record<ProposalSource, string> = {
-  phat_sinh: 'Phát sinh',
-  kpi: 'KPI',
-  hop: 'Họp',
-  ceo_giao: 'CEO giao',
-  khach_hang_phan_anh: 'Khách hàng phản ánh',
-  khac: 'Khác',
-};
-
-/** @deprecated V5 only */
-export const AFTER_APPROVAL_LABEL: Record<AfterApproval, string> = {
-  chi_phe_duyet: 'Chỉ phê duyệt',
-  de_nghi_tao_dieu_phoi: 'Đề nghị tạo điều phối',
-};
+// V6.5 (2026-06-14): Xoá 4 label map V5 deprecated (PRIORITY_LABEL/COLOR,
+// SOURCE_LABEL, AFTER_APPROVAL_LABEL) — grep 0 import bất kỳ đâu. Type alias
+// Priority/ProposalSource/AfterApproval vẫn giữ optional cho adapter backward-compat.
 
 // ────────────────────────────────────────────────────────────────────────────
 // SLA per role (giờ) — đồng bộ /dieu-phoi

@@ -41,6 +41,7 @@ import {
   PROPOSAL_KIND_LABEL,
   PROPOSAL_KIND_COLOR,
   SLA_HOURS,
+  NATURE_META,
   type ProposalKind,
   type ProposalV5,
   type ApproverStep,
@@ -330,8 +331,10 @@ function DexuatTable(props: DexuatTableProps) {
                 <th className="px-3 py-2.5">Tên đề xuất</th>
                 <th className="px-3 py-2.5">Loại</th>
                 <th className="px-3 py-2.5">Người tạo</th>
-                <th className="px-3 py-2.5">Đơn vị liên quan</th>
-                <th className="px-3 py-2.5">Khối</th>
+                {/* V6.5 (2026-06-14): Bỏ cột "Đơn vị liên quan" — duplicate với
+                    "Đơn vị nhận" (recipientUnit) + "Lãnh đạo phê duyệt" (recipientLeader)
+                    đã có trong drawer + mobile card. relatedUnits giữ deprecated cho data cũ. */}
+                <th className="px-3 py-2.5">Tính chất</th>
                 <th className="px-3 py-2.5">Người duyệt hiện tại</th>
                 <th className="px-3 py-2.5">SLA</th>
                 <th className="px-3 py-2.5">Trạng thái</th>
@@ -341,7 +344,7 @@ function DexuatTable(props: DexuatTableProps) {
             <tbody>
               {paged.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-sm text-slate-500">
+                  <td colSpan={9} className="py-12 text-center text-sm text-slate-500">
                     Không có đề xuất nào khớp bộ lọc.
                   </td>
                 </tr>
@@ -547,59 +550,23 @@ function DexuatRow({ p, currentUserUid, currentUserRole, onRowClick, onAction }:
         </div>
       </td>
 
-      {/* 4b. Đơn vị liên quan (V6+) */}
-      <td className="px-3 py-2.5">
-        {(() => {
-          const units = Array.isArray((p as any).relatedUnits) ? (p as any).relatedUnits : [];
-          if (units.length === 0) return <span className="text-slate-300 text-xs">—</span>;
-          const first2 = units.slice(0, 2);
-          const more = units.length - first2.length;
-          return (
-            <div className="flex flex-wrap gap-1 max-w-[200px]">
-              {first2.map((u: any) => (
-                <span
-                  key={u.id}
-                  className={`px-1.5 py-0.5 rounded text-[10px] font-medium ring-1 ${
-                    u.block === 'KD'
-                      ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
-                      : 'bg-violet-50 text-violet-700 ring-violet-200'
-                  }`}
-                  title={u.label}
-                >
-                  {u.label}
-                </span>
-              ))}
-              {more > 0 && (
-                <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600">
-                  +{more}
-                </span>
-              )}
-            </div>
-          );
-        })()}
-      </td>
+      {/* V6.5 (2026-06-14): Xoá cell "Đơn vị liên quan" cùng cột header.
+          relatedUnits đã deprecated — UI thay bằng "Đơn vị nhận" + "Lãnh đạo phê duyệt"
+          ở drawer/mobile card. */}
 
-      {/* 4c. V6.5 (2026-06-14): Tag tính chất (Quản trị / Hỗ trợ) thay unitsScope cũ */}
+      {/* 4c. V6.5 (2026-06-14): Tag tính chất — dùng NATURE_META hằng số chung 4 mặt. */}
       <td className="px-3 py-2.5">
         {(() => {
-          const nature = (p as any).nature as 'support' | 'governance' | undefined;
-          if (!nature) {
-            // Fallback unitsScope cho data cũ
-            const scope = (p as any).unitsScope as 'trong_khoi' | 'lien_khoi' | undefined;
-            if (!scope) return <span className="text-slate-300 text-xs">—</span>;
-            return (
-              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold ring-1 ${
-                scope === 'lien_khoi' ? 'bg-violet-100 text-violet-800 ring-violet-200' : 'bg-emerald-100 text-emerald-800 ring-emerald-200'
-              }`}>
-                {scope === 'lien_khoi' ? '🔗 Liên khối' : '✓ Trong khối'}
-              </span>
-            );
-          }
+          // Fallback graceful: data cũ thiếu nature → suy từ unitsScope (legacy)
+          const natureRaw = (p as any).nature as 'support' | 'governance' | undefined;
+          const scopeOld = (p as any).unitsScope as 'trong_khoi' | 'lien_khoi' | undefined;
+          const nature: 'support' | 'governance' | null = natureRaw
+            ?? (scopeOld === 'lien_khoi' ? 'governance' : scopeOld === 'trong_khoi' ? 'support' : null);
+          if (!nature) return <span className="text-slate-300 text-xs">—</span>;
+          const m = NATURE_META[nature];
           return (
-            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold ring-1 ${
-              nature === 'governance' ? 'bg-amber-100 text-amber-800 ring-amber-200' : 'bg-sky-100 text-sky-800 ring-sky-200'
-            }`}>
-              {nature === 'governance' ? '⚙️ Quản trị' : '🤝 Hỗ trợ'}
+            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold ring-1 ${m.color}`}>
+              {m.emoji} {m.shortLabel}
             </span>
           );
         })()}
@@ -610,14 +577,23 @@ function DexuatRow({ p, currentUserUid, currentUserRole, onRowClick, onAction }:
         <div className="text-[11px] space-y-0.5 max-w-[180px]">
           {(p as any).recipientUnitName && (
             <div className="truncate" title={`Đơn vị nhận: ${(p as any).recipientUnitName}`}>
-              <span className="text-slate-400">Nhận:</span>{' '}
+              <span className="text-slate-400">Đơn vị nhận:</span>{' '}
               <span className="text-slate-700">{(p as any).recipientUnitName}</span>
             </div>
           )}
-          {(p as any).nature === 'governance' && (p as any).recipientLeaderName && (
+          {(p as any).nature === 'governance' && typeof (p as any).recipientLeaderName === 'string' && (p as any).recipientLeaderName.trim() && (
             <div className="truncate" title={`Lãnh đạo: ${(p as any).recipientLeaderName}`}>
               <span className="text-slate-400">Lãnh đạo:</span>{' '}
               <span className="text-slate-700 font-medium">{(p as any).recipientLeaderName}</span>
+            </div>
+          )}
+          {/* V6.5 (2026-06-14): hasFinancial + estimatedCost cho governance (nhất quán với drawer + form) */}
+          {(p as any).nature === 'governance' && (p as any).hasFinancial && (
+            <div className="truncate" title="Có phát sinh tài chính">
+              <span className="text-slate-400">TC:</span>{' '}
+              <span className="text-amber-700 font-medium tabular-nums">
+                {(p as any).estimatedCost > 0 ? '₫' + Number((p as any).estimatedCost).toLocaleString('vi-VN') : 'Chưa rõ giá trị'}
+              </span>
             </div>
           )}
           {currStep ? (

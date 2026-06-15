@@ -41,12 +41,9 @@ import {
 } from 'lucide-react';
 
 import { formatVND } from '../_lib/proposal-settings';
-import {
-  AVAILABLE_RELATED_UNITS,
-  detectUnitsScope,
-  UNITS_SCOPE_LABEL,
-  UNITS_SCOPE_COLOR,
-} from './types';
+import { NATURE_META } from './types';
+// V6.5 (2026-06-14): xoá import relatedUnits/unitsScope — UI đã bỏ section "Đơn vị liên quan",
+// thay bằng "Đơn vị nhận" + "Lãnh đạo phê duyệt".
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types V5 — GIỮ NGUYÊN export (DeXuatClient hiện vẫn import)
@@ -408,8 +405,7 @@ export default function CreateProposalModal({
   const [reason, setReason] = useState('');
   const [estimatedCostStr, setEstimatedCostStr] = useState('');
   const [attachments, setAttachments] = useState<ProposalAttachmentDraftV6[]>([]);
-  // V6+ Đơn vị liên quan multi-select
-  const [relatedUnitIds, setRelatedUnitIds] = useState<string[]>([]);
+  // V6.5 (2026-06-14): xoá state relatedUnitIds — form không còn UI multi-select đơn vị.
   // V6.4 (2026-06-13) anh chốt cuối: bỏ chip Cấp trên/Ngang cấp — 1 dropdown duy nhất.
   const [recipientUid, setRecipientUid] = useState('');
   const [recipientName, setRecipientName] = useState('');
@@ -460,9 +456,7 @@ export default function CreateProposalModal({
     setReason(p.reason ?? p.problemStatement ?? p.description ?? '');
     setEstimatedCostStr(typeof p.estimatedCost === 'number' && p.estimatedCost > 0 ? String(p.estimatedCost) : '');
     setAttachments(Array.isArray(p.attachments) ? p.attachments : []);
-    setRelatedUnitIds(
-      Array.isArray(p.relatedUnits) ? p.relatedUnits.map((u: any) => u.id) : [],
-    );
+    // V6.5 (2026-06-14): bỏ pre-fill relatedUnits (form V6.5 không còn field này).
     // V6.4: pre-fill recipient (đơn vị nhận) nếu có
     const uid = (p as any).recipientUnitUid ?? (p as any).recipientUid;
     if (typeof uid === 'string') {
@@ -544,21 +538,6 @@ export default function CreateProposalModal({
     return out;
   }, [kind, nature, hasFinancial, estimatedCostNum, currentUserBlock, currentUserRole, leaderUid, leaderName, recipientName, recipientOptions]);
 
-  // V6+ relatedUnits + auto scope
-  const relatedUnits = useMemo(
-    () => AVAILABLE_RELATED_UNITS.filter((u) => relatedUnitIds.includes(u.id)),
-    [relatedUnitIds],
-  );
-  const unitsScope = useMemo(
-    () => detectUnitsScope(currentUserBlock, relatedUnits),
-    [currentUserBlock, relatedUnits],
-  );
-  function toggleUnit(id: string) {
-    setRelatedUnitIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    );
-  }
-
   // V6.5 (2026-06-14): căn cứ theo nature + leader + budget tier mới
   const chainReason = useMemo(() => {
     if (!kind) return '';
@@ -580,7 +559,6 @@ export default function CreateProposalModal({
     setReason('');
     setEstimatedCostStr('');
     setAttachments([]);
-    setRelatedUnitIds([]);
     setRecipientUid('');
     setRecipientName('');
     // V6.5 reset
@@ -838,7 +816,7 @@ export default function CreateProposalModal({
                     : 'border-slate-200 hover:border-emerald-300'
                 }`}
               >
-                <div className="text-sm font-semibold text-slate-800">Hỗ trợ công việc</div>
+                <div className="text-sm font-semibold text-slate-800">{NATURE_META.support.emoji} {NATURE_META.support.label}</div>
                 <div className="text-[11px] text-slate-500 mt-0.5">Nhờ đơn vị khác hỗ trợ — không cần duyệt lãnh đạo</div>
               </button>
               <button
@@ -850,7 +828,7 @@ export default function CreateProposalModal({
                     : 'border-slate-200 hover:border-emerald-300'
                 }`}
               >
-                <div className="text-sm font-semibold text-slate-800">Đề xuất quản trị</div>
+                <div className="text-sm font-semibold text-slate-800">{NATURE_META.governance.emoji} {NATURE_META.governance.label}</div>
                 <div className="text-[11px] text-slate-500 mt-0.5">Cần lãnh đạo phê duyệt (chi phí, mua sắm, đầu tư, đổi quy trình…)</div>
               </button>
             </div>
@@ -929,89 +907,9 @@ export default function CreateProposalModal({
             </>
           )}
 
-          {/* V6.5 (2026-06-13): "Đơn vị liên quan" ĐÃ BỎ — anh chốt form đề xuất gọn,
-              không có khái niệm Trong khối/Liên khối ở form tạo. Server tự xác định scope. */}
-          {false && (
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-              Đơn vị liên quan
-              <span className="ml-1 text-[10px] font-normal text-slate-400">
-                (chọn nhiều · hệ thống tự xác định Trong khối / Liên khối)
-              </span>
-            </label>
-            <div className="rounded-lg border border-slate-200 bg-white p-3">
-              {/* Khối KD */}
-              <div className="mb-2">
-                <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 mb-1">
-                  Khối Kinh doanh
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {AVAILABLE_RELATED_UNITS.filter((u) => u.block === 'KD').map((u) => {
-                    const active = relatedUnitIds.includes(u.id);
-                    return (
-                      <button
-                        key={u.id}
-                        type="button"
-                        onClick={() => toggleUnit(u.id)}
-                        className={
-                          'px-2.5 py-1 rounded-md text-xs font-medium ring-1 transition ' +
-                          (active
-                            ? 'bg-emerald-100 text-emerald-800 ring-emerald-300'
-                            : 'bg-white text-slate-600 ring-slate-200 hover:ring-emerald-300')
-                        }
-                      >
-                        {u.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              {/* Khối VP */}
-              <div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-violet-700 mb-1">
-                  Khối Văn phòng
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {AVAILABLE_RELATED_UNITS.filter((u) => u.block === 'VP').map((u) => {
-                    const active = relatedUnitIds.includes(u.id);
-                    return (
-                      <button
-                        key={u.id}
-                        type="button"
-                        onClick={() => toggleUnit(u.id)}
-                        className={
-                          'px-2.5 py-1 rounded-md text-xs font-medium ring-1 transition ' +
-                          (active
-                            ? 'bg-violet-100 text-violet-800 ring-violet-300'
-                            : 'bg-white text-slate-600 ring-slate-200 hover:ring-violet-300')
-                        }
-                      >
-                        {u.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-            {/* Auto-tag scope chip */}
-            <div className="mt-2 flex items-center gap-2 text-[11px]">
-              <span className="text-slate-500">Phạm vi tự xác định:</span>
-              <span
-                className={
-                  'inline-flex items-center px-2 py-0.5 rounded ring-1 ring-inset font-semibold ' +
-                  UNITS_SCOPE_COLOR[unitsScope]
-                }
-              >
-                {unitsScope === 'lien_khoi' ? '🔗 ' : '✓ '}
-                {UNITS_SCOPE_LABEL[unitsScope]}
-              </span>
-              <span className="text-slate-400">
-                ({relatedUnits.length} đơn vị · creator khối{' '}
-                {currentUserBlock === 'KD' ? 'KD' : 'VP'})
-              </span>
-            </div>
-          </div>
-          )}
+          {/* V6.5 (2026-06-14): "Đơn vị liên quan" ĐÃ XOÁ HẲN. Form đề xuất gọn —
+              thay bằng "Đơn vị nhận đề xuất" + "Lãnh đạo phê duyệt" (governance).
+              Server tự xác định crossBlock dựa vào recipient + creator block. */}
 
           {/* 5 — File đính kèm (V6.4: upload thực Firebase Storage) */}
           <div>

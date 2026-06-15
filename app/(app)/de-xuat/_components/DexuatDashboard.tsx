@@ -422,15 +422,13 @@ export default function DexuatDashboard({
             Cơ cấu đề xuất theo khối
           </h3>
           {(() => {
-            // Compute từ proposals: KD/VP/Liên khối
+            // V6.5 (2026-06-14): bỏ tính qua relatedUnits (deprecated). Dùng `crossBlock`
+            // flag (đã set bởi backend dựa vào recipient + creator block).
             let kd = 0, vp = 0, cross = 0;
             for (const p of proposals as any[]) {
-              const units: { block: 'KD'|'VP' }[] = Array.isArray(p.relatedUnits) ? p.relatedUnits : [];
-              const blocks = new Set<'KD'|'VP'>([p.creatorBlock]);
-              for (const u of units) blocks.add(u.block);
-              if (blocks.size > 1) cross++;
-              else if (blocks.has('KD')) kd++;
-              else vp++;
+              if (p.crossBlock === true) cross++;
+              else if (p.creatorBlock === 'VP') vp++;
+              else kd++;
             }
             const total = kd + vp + cross;
             const segs = [

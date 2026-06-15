@@ -4,6 +4,7 @@ import { Clock, UserCheck } from 'lucide-react';
 import {
   PROPOSAL_KIND_LABEL, PROPOSAL_KIND_COLOR,
   PROPOSAL_STATUS_LABEL, PROPOSAL_STATUS_COLOR,
+  NATURE_META,
   type ProposalV6, type ProposalKind,
 } from '../types';
 
@@ -77,17 +78,21 @@ export default function ProposalCard({ proposal, onTap }: Props) {
         }>
           {PROPOSAL_KIND_LABEL[kind] ?? kind}
         </span>
-        {/* V6.5 (2026-06-14): tag nature thay vì unitsScope cũ */}
-        {proposal.nature && (
-          <span className={
-            'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ' +
-            (proposal.nature === 'governance'
-              ? 'bg-amber-50 text-amber-700 ring-amber-200'
-              : 'bg-sky-50 text-sky-700 ring-sky-200')
-          }>
-            {proposal.nature === 'governance' ? '⚙️ Quản trị' : '🤝 Hỗ trợ'}
-          </span>
-        )}
+        {/* V6.5 (2026-06-14): tag nature dùng NATURE_META hằng số chung 4 mặt.
+            Fallback graceful cho data cũ: unitsScope='lien_khoi' → governance. */}
+        {(() => {
+          const natureRaw = proposal.nature;
+          const scopeOld = (proposal as any).unitsScope as 'trong_khoi' | 'lien_khoi' | undefined;
+          const nature = natureRaw
+            ?? (scopeOld === 'lien_khoi' ? 'governance' : scopeOld === 'trong_khoi' ? 'support' : null);
+          if (!nature) return null;
+          const m = NATURE_META[nature];
+          return (
+            <span className={'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset ' + m.color}>
+              {m.emoji} {m.shortLabel}
+            </span>
+          );
+        })()}
       </div>
 
       {/* V6.5 (2026-06-14): Hiện đầy đủ đơn vị nhận + lãnh đạo phê duyệt + người duyệt hiện tại */}
@@ -98,10 +103,21 @@ export default function ProposalCard({ proposal, onTap }: Props) {
             <span className="text-slate-800 font-medium truncate">{proposal.recipientUnitName}</span>
           </div>
         )}
-        {proposal.nature === 'governance' && proposal.recipientLeaderName && (
+        {proposal.nature === 'governance' && typeof proposal.recipientLeaderName === 'string' && proposal.recipientLeaderName.trim() && (
           <div className="flex items-center gap-2">
             <span className="text-slate-500 text-xs">⚙️ Lãnh đạo duyệt:</span>
             <span className="text-slate-800 font-medium truncate">{proposal.recipientLeaderName}</span>
+          </div>
+        )}
+        {/* V6.5 (2026-06-14): hasFinancial + estimatedCost (nhất quán form/table/drawer) */}
+        {proposal.nature === 'governance' && (proposal as any).hasFinancial && (
+          <div className="flex items-center gap-2">
+            <span className="text-slate-500 text-xs">💰 Tài chính:</span>
+            <span className="text-amber-700 font-semibold tabular-nums">
+              {(proposal as any).estimatedCost > 0
+                ? '₫' + Number((proposal as any).estimatedCost).toLocaleString('vi-VN')
+                : 'Chưa xác định giá trị'}
+            </span>
           </div>
         )}
         <div className="flex items-center gap-2">
