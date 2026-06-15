@@ -68,8 +68,42 @@ export function DashboardContent({
   const hideRevenue = isKTOnly(roleCode);
   const todayLabel = new Date().toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'numeric', day: 'numeric' });
 
+  // V6.5 (2026-06-15) anh chốt: GD_KD muốn ảnh các cơ sở LÊN TRÊN CÙNG —
+  // anh phụ trách trực tiếp 5 cơ sở khối Kinh doanh, mở dashboard là thấy
+  // hình ảnh + tên cơ sở trước, sau đó mới đến KPI/Doanh số.
+  const facilitiesOnTop = roleCode === 'GD_KD';
+
+  // Component: lưới ảnh các cơ sở (tách ra để inject ở 2 vị trí khác nhau theo role)
+  const facilitiesGrid = (
+    <>
+      <SectionTitle icon={Building2} title="Cơ sở" count={visibleFacilities.length} />
+      <div className="card">
+        {(() => {
+          const shown = facilities.filter((f) => visibleFacilities.includes(f.id));
+          if (shown.length === 0) {
+            return <div className="text-sm text-slate-400 italic py-6 text-center">Bạn chưa được gán cơ sở.</div>;
+          }
+          const gridCls =
+            shown.length === 1 ? 'grid grid-cols-1 gap-4'
+            : shown.length === 2 ? 'grid grid-cols-1 md:grid-cols-2 gap-4'
+            : shown.length === 3 ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4'
+            : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4';
+          const cardSize: 'lg' | 'md' = shown.length <= 2 ? 'lg' : 'md';
+          return (
+            <div className={gridCls}>
+              {shown.map((f) => <FacilityCard key={f.id} facility={f} size={cardSize} />)}
+            </div>
+          );
+        })()}
+      </div>
+    </>
+  );
+
   return (
     <div className="space-y-5">
+
+      {/* V6.5 (2026-06-15): GD_KD → ảnh cơ sở LÊN ĐẦU (trước KPI header) */}
+      {facilitiesOnTop && facilitiesGrid}
 
       {/* ===== HEADER: Tổng quan hôm nay ===== */}
       <div className="rounded-xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-cyan-50 px-5 py-4">
@@ -100,27 +134,8 @@ export function DashboardContent({
         </div>
       </div>
 
-      {/* ===== HÀNG 2: CƠ SỞ ===== */}
-      <SectionTitle icon={Building2} title="Cơ sở" count={visibleFacilities.length} />
-      <div className="card">
-        {(() => {
-          const shown = facilities.filter((f) => visibleFacilities.includes(f.id));
-          if (shown.length === 0) {
-            return <div className="text-sm text-slate-400 italic py-6 text-center">Bạn chưa được gán cơ sở.</div>;
-          }
-          const gridCls =
-            shown.length === 1 ? 'grid grid-cols-1 gap-4'
-            : shown.length === 2 ? 'grid grid-cols-1 md:grid-cols-2 gap-4'
-            : shown.length === 3 ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4'
-            : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4';
-          const cardSize: 'lg' | 'md' = shown.length <= 2 ? 'lg' : 'md';
-          return (
-            <div className={gridCls}>
-              {shown.map((f) => <FacilityCard key={f.id} facility={f} size={cardSize} />)}
-            </div>
-          );
-        })()}
-      </div>
+      {/* ===== HÀNG 2: CƠ SỞ ===== (GD_KD đã đẩy lên TRÊN đầu — skip ở đây) */}
+      {!facilitiesOnTop && facilitiesGrid}
 
       {/* ===== HÀNG 3: DOANH SỐ ===== */}
       {!hideRevenue && (<>
