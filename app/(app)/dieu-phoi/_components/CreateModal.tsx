@@ -120,6 +120,10 @@ export interface CreatePayloadV4 {
   createdAt: string;                   // ISO
   createdByUid: string;
   createdByName: string;
+  /** V6.5 (2026-06-15): nếu tạo từ đề xuất → link ngược về proposal. Adapter
+   *  server set `meta.fromProposalId/Code` trên task + update proposal.linkedCoordTaskId. */
+  fromProposalId?: string;
+  fromProposalCode?: string;
 }
 
 /**
@@ -237,6 +241,15 @@ interface CreateModalProps {
   currentUserName?: string;
   currentUserRole?: string;
   currentUserBlock?: Block;
+  /** V6.5 (2026-06-15): pre-fill TẠO MỚI từ đề xuất — chỉ title + description + meta
+   *  (KHÔNG bật edit mode). User vẫn tự nhập owner/deadline/collaborators/deliverable. */
+  prefillFromProposal?: {
+    title: string;
+    description: string;
+    fromProposalId: string;
+    fromProposalCode: string;
+    estimatedCost?: number | null;
+  } | null;
 }
 
 export default function CreateModal({
@@ -248,6 +261,7 @@ export default function CreateModal({
   currentUserUid = '',
   currentUserName = '',
   currentUserBlock,
+  prefillFromProposal,
 }: CreateModalProps) {
   const isEditMode = !!initialTask;
   // ── Khối 1 — Thông tin chung
@@ -351,6 +365,17 @@ export default function CreateModal({
     setFinalDeliverable(t.finalDeliverable ?? t.expectedDeliverable ?? '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialTask?.id]);
+
+  // V6.5 (2026-06-15): pre-fill TẠO MỚI từ đề xuất (chỉ title + description + meta).
+  // KHÔNG bật edit mode — user vẫn dùng full form để nhập rest (owner, deadline,
+  // collaborators, deliverable…). Đáp ứng spec anh chốt: "chỉ cần link tên công việc
+  // + mã đề xuất qua, sau đó hiện bảng điều phối để tạo nội dung".
+  useEffect(() => {
+    if (!open || !prefillFromProposal || initialTask) return;
+    setTitle(prefillFromProposal.title);
+    setDescription(prefillFromProposal.description);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, prefillFromProposal?.fromProposalId]);
 
   if (!open) return null;
 
@@ -487,6 +512,9 @@ export default function CreateModal({
       createdAt: new Date().toISOString(),
       createdByUid: currentUserUid,
       createdByName: currentUserName,
+      // V6.5 (2026-06-15): link ngược về proposal nếu tạo từ Duyệt & Tạo điều phối
+      fromProposalId: prefillFromProposal?.fromProposalId,
+      fromProposalCode: prefillFromProposal?.fromProposalCode,
     };
   }
 

@@ -16,7 +16,7 @@
 // ============================================================
 
 import { useCallback, useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Calendar, ChevronDown, Loader2, Plus, RefreshCw } from 'lucide-react';
 import { isTP, isQLCS } from '@/lib/auth/roles';
 import KpiBar from './_components/KpiBar';
@@ -96,9 +96,19 @@ export default function DieuPhoiClient({
   const unitLabel = isQLCS(currentUserRole) ? `QLCS ${currentUserFacilityId ?? ''}`.trim()
     : isTP(currentUserRole) ? (currentUserName || 'phòng tôi')
     : 'đơn vị tôi';
+  const router = useRouter();
   const [showCreate, setShowCreate] = useState(false);
   /** V6.2: task đang được sửa (null = chế độ tạo mới). */
   const [editingTask, setEditingTask] = useState<CoordTask | null>(null);
+  /** V6.5 (2026-06-15): prefill TẠO MỚI từ đề xuất (?createFromProposal=<id>).
+   *  KHÔNG bật edit mode — user vẫn dùng full form để nhập owner/deadline/collaborators. */
+  const [prefillFromProposal, setPrefillFromProposal] = useState<{
+    title: string;
+    description: string;
+    fromProposalId: string;
+    fromProposalCode: string;
+    estimatedCost?: number | null;
+  } | null>(null);
   const [selected, setSelected] = useState<CoordTask | null>(null);
   const [tasks, setTasks] = useState<CoordTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -136,6 +146,44 @@ export default function DieuPhoiClient({
     const found = tasks.find((t) => t.id === deeplinkTaskId);
     if (found) setSelected(found);
   }, [deeplinkTaskId, tasks]);
+
+  // V6.5 (2026-06-15): deeplink ?createFromProposal=<id> — flow "Duyệt & Tạo điều phối".
+  // Fetch proposal info → prefill 2 field tối thiểu (title + description=reason) →
+  // mở CreateModal. User tự nhập owner/deadline/collaborators.
+  const fromProposalId = searchParams?.get('createFromProposal') ?? null;
+  useEffect(() => {
+    if (!fromProposalId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const proposal: any = await tasksApi.get(fromProposalId);
+        if (cancelled || !proposal) return;
+        const yyyy = (proposal.createdAt ?? '').slice(0, 4) || new Date().getFullYear().toString();
+        const code = `DX-${yyyy}-${proposal.id.slice(0, 4).toUpperCase()}`;
+        const reason = (proposal.meta?.reason as string)
+          ?? (proposal.meta?.problemStatement as string)
+          ?? proposal.description
+          ?? '';
+        setPrefillFromProposal({
+          title: proposal.title ?? '',
+          description: [
+            reason,
+            `Sinh từ đề xuất ${code}`,
+            typeof proposal.estimatedCost === 'number' && proposal.estimatedCost > 0
+              ? `Giá trị dự kiến: ${proposal.estimatedCost.toLocaleString('vi-VN')} đ`
+              : '',
+          ].filter(Boolean).join('\n\n'),
+          fromProposalId: proposal.id,
+          fromProposalCode: code,
+          estimatedCost: typeof proposal.estimatedCost === 'number' ? proposal.estimatedCost : null,
+        });
+        setShowCreate(true);
+      } catch (e: any) {
+        console.warn('[dieu-phoi] fetch proposal for prefill fail:', e?.message);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [fromProposalId]);
 
   // Helper: cập nhật 1 task vào state + cập nhật selected drawer.
   const applyTaskUpdate = useCallback((next: CoordTask) => {
@@ -204,15 +252,40 @@ export default function DieuPhoiClient({
           collaboratorFacilityIds,
           collaboratorRoles,
           // V6.2 fix: lưu thêm Owner + deadline riêng cho mỗi collab.
+          // V6.5 (2026-06-15): nếu tạo từ đề xuất → ghi meta.fromProposalId/Code để
+          // adapter Detail Drawer hiển thị link ngược về đề xuất.
           ...(({
             ownerUid: payload.ownerUid,
             ownerName: payload.ownerName,
             ownerBlock: payload.ownerBlock,
             collaboratorDeadlines,
+            meta: payload.fromProposalId
+              ? {
+                  fromProposalId: payload.fromProposalId,
+                  fromProposalCode: payload.fromProposalCode,
+                }
+              : undefined,
           } as any)),
         };
 
         const created = await tasksApi.create(body);
+
+        // V6.5 (2026-06-15): reverse link — update đề xuất với linkedCoordId/Code
+        // + chuyển status sang 'chuyen_dieu_phoi' (Đã tạo điều phối).
+        if (payload.fromProposalId) {
+          try {
+            await tasksApi.update(payload.fromProposalId, {
+              status: 'chuyen_dieu_phoi',
+              meta: {
+                linkedCoordId: created.id,
+                linkedCoordCode: (created as any).code ?? null,
+                linkedCoordAt: new Date().toISOString(),
+              },
+            } as any);
+          } catch (revErr: any) {
+            console.warn('[dieu-phoi] reverse link proposal fail:', revErr?.message);
+          }
+        }
 
         // Emit noti "coord_created" — V1 chỉ console.log, V5 wire FCM.
         const fakeCoord: CoordTask = {
@@ -250,6 +323,11 @@ export default function DieuPhoiClient({
         emitNotifications('create', notifyOnCreate(fakeCoord, payload.approverUid));
 
         setShowCreate(false);
+        // V6.5 (2026-06-15): clear prefill + query param sau khi tạo xong
+        setPrefillFromProposal(null);
+        if (payload.fromProposalId) {
+          router.replace('/dieu-phoi');
+        }
         reload();
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'lỗi không xác định';
@@ -757,13 +835,14 @@ export default function DieuPhoiClient({
       {showCreate && (
         <CreateModal
           open
-          onClose={() => { setShowCreate(false); setEditingTask(null); }}
+          onClose={() => { setShowCreate(false); setEditingTask(null); setPrefillFromProposal(null); }}
           onCreate={handleCreate}
           initialTask={editingTask}
           onUpdate={handleUpdate}
           currentUserUid={currentUserUid}
           currentUserName={currentUserName}
           currentUserRole={currentUserRole}
+          prefillFromProposal={prefillFromProposal}
         />
       )}
       <DetailDrawer

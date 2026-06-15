@@ -577,101 +577,40 @@ export function DeXuatClient(props: Props) {
     setSelected(null);
   }, []);
 
-  /** V6: Duyệt & Tạo điều phối — gộp 2 action.
-   *  Nếu đề xuất còn đang chờ duyệt → approve trước, sau đó tạo task coord. */
+  /** V6.5 (2026-06-15) anh redesign: Đơn giản hoá flow "Duyệt & Tạo điều phối".
+   *  KHÔNG còn auto-tạo task ngầm với 10+ field — gây fail vì thiếu validation.
+   *  Bước 1: approve proposal (nếu chưa)
+   *  Bước 2: navigate /dieu-phoi?createFromProposal=<id>
+   *           → DieuPhoiClient detect query → fetch proposal → mở CreateModal
+   *             với pre-fill 2 field tối thiểu (title + description=reason)
+   *           → User tự nhập owner, deadline, collaborators, deliverable…
+   *           → Sau khi save task: linkedCoordTaskId được set tại server. */
   const handleApproveAndCreateCoord = useCallback(async (id: string) => {
     const p = proposals.find((x) => x.id === id);
     if (!p) return;
-    // V6.5 (2026-06-13): chống tạo trùng — nếu đã có linkedCoordTaskId thì cảnh báo.
+    // Chống tạo trùng — nếu đã có linkedCoordTaskId thì mở thẳng task đó
     if (p.linkedCoordTaskId) {
       alert(`Đề xuất ${p.code} đã được tạo điều phối: ${p.linkedCoordTaskCode ?? p.linkedCoordTaskId}.\nMở module Điều phối để xem.`);
       router.push(`/dieu-phoi?taskId=${encodeURIComponent(p.linkedCoordTaskId)}`);
       return;
     }
     if (!confirm(
-      `Phê duyệt và tạo điều phối từ đề xuất "${p.title}"?\n\n` +
-      'Hệ thống sẽ chuyển trạng thái sang "Đã tạo điều phối" và mở /dieu-phoi.',
+      `Phê duyệt đề xuất "${p.title}" và mở form Điều phối?\n\n` +
+      'Anh sẽ nhập owner, deadline, đơn vị phối hợp và mục tiêu ở form Điều phối.',
     )) return;
     try {
-      // 1. Approve trước nếu còn đang chờ
+      // Approve trước nếu còn đang chờ duyệt
       if (
         p.status === 'da_gui' ||
         p.status === 'dang_xem_xet' ||
         p.status === 'yeu_cau_bo_sung'
       ) {
-        // eslint-disable-next-line no-console
-        console.log('[de-xuat V6] approve before create_coord', { id });
         await tasksApi.approve(id);
       }
-      // 2. Tạo task coord assignment với meta tham chiếu
-      //    SPEC: CHỈ map 4 field — title / reason→description / file / mã tham chiếu.
-      //    KHÔNG map Owner/KPI/Deadline (xác định tại Điều phối).
-      // V6+: gợi ý collaborators từ relatedUnits đề xuất (TP_*/QLCS_*/GD_KD/GD_VP)
-      const relatedUnits = Array.isArray((p as any).relatedUnits) ? (p as any).relatedUnits : [];
-      const collaboratorDeptIds: string[] = [];
-      const collaboratorFacilityIds: string[] = [];
-      const collaboratorRoles: Record<string, string> = {};
-      for (const u of relatedUnits) {
-        // TP_* → dept · QLCS_<BR> → facility · GD_KD/GD_VP → role tag
-        if (u.id.startsWith('TP_')) {
-          const deptCode = u.id.slice(3); // 'MKT', 'DT', 'KT', 'NS', 'KE', 'GS'
-          collaboratorDeptIds.push(deptCode);
-          collaboratorRoles[`dept:${deptCode}`] = `Phối hợp triển khai từ đề xuất ${p.code}`;
-        } else if (u.id.startsWith('QLCS_')) {
-          const branch = u.id.slice(5); // 'HM', 'TK', 'CTT', '24NCT', 'TT'
-          collaboratorFacilityIds.push(branch);
-          collaboratorRoles[`facility:${branch}`] = `Phối hợp triển khai từ đề xuất ${p.code}`;
-        }
-        // GD_KD / GD_VP — không map thành collaborator (Owner sẽ xác định khi tạo điều phối)
-      }
-      const body: any = {
-        kind: 'assignment',
-        title: p.title,
-        description: [
-          p.reason ?? '',
-          `Sinh từ đề xuất ${p.code}`,
-          // V6.5 (2026-06-13): include giá trị nếu có
-          typeof p.estimatedCost === 'number' && p.estimatedCost > 0
-            ? `Giá trị dự kiến: ${p.estimatedCost.toLocaleString('vi-VN')} đ`
-            : '',
-        ].filter(Boolean).join('\n\n'),
-        priority: 'normal',
-        dueDate: null,
-        assigneeBlock: p.creatorBlock,
-        assigneeUserIds: [],
-        goal: null,
-        expectedDeliverable: null,
-        // V6+ gợi ý đơn vị phối hợp (người tạo điều phối có thể chỉnh)
-        collaboratorDeptIds,
-        collaboratorFacilityIds,
-        collaboratorRoles,
-        // V6.5: estimatedCost từ proposal map sang task (anh chốt: tự động lấy giá trị)
-        estimatedCost: typeof p.estimatedCost === 'number' ? p.estimatedCost : null,
-        meta: {
-          fromProposalId: p.id,
-          fromProposalCode: p.code,
-          fromProposalCost: p.estimatedCost ?? null,
-          relatedUnits, // pass nguyên để adapter coord dùng nếu cần
-        },
-      };
-      const created = await tasksApi.create(body);
-      // V6.4 reverse link → P3.4 (2026-06-13): thêm linkedCoordCode để adapter hiển thị code đẹp.
-      try {
-        await tasksApi.update(p.id, {
-          meta: {
-            linkedCoordId: created.id,
-            linkedCoordCode: (created as any).code ?? null,
-            linkedCoordAt: new Date().toISOString(),
-          },
-        } as any);
-      } catch (revErr: any) {
-        // eslint-disable-next-line no-console
-        console.warn('[de-xuat] reverse link failed:', revErr?.message);
-      }
-      alert(`Đã tạo điều phối từ đề xuất ${p.code}. Đang chuyển sang module Điều phối...`);
-      router.push('/dieu-phoi');
+      // Navigate sang /dieu-phoi với query → form Điều phối tự mở với prefill
+      router.push(`/dieu-phoi?createFromProposal=${encodeURIComponent(id)}`);
     } catch (e: any) {
-      alert(`Duyệt & Tạo điều phối thất bại: ${e?.message ?? 'lỗi không xác định'}`);
+      alert(`Phê duyệt thất bại: ${e?.message ?? 'lỗi không xác định'}`);
     }
   }, [proposals, router]);
 
