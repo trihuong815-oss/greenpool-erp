@@ -10,7 +10,7 @@
 // Tiếng Việt CÓ DẤU đầy đủ. Tailwind only. Default export.
 // ============================================================
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   X,
   Bell,
@@ -359,27 +359,75 @@ export default function DetailDrawer({
   const severity: V4Severity =
     (task.severity as V4Severity | undefined) ?? 'binh_thuong';
 
-  // Timeline — V4 schema chưa lưu history riêng → dựng từ createdAt + waitingSince.
-  // V6.5 Phase 5.2 (2026-06-15): standardize timeline icon — mỗi event 1 icon đặc trưng:
-  //   ✓ tick (create) · 📤 send (collab submit) · ⛔ X (reject) · ✓✓ check (complete) · 🛡 shield (approve)
-  // Hiện V4 chỉ có 2 row (create + waiting). Khi V5 thêm event sẽ extend type/icon.
-  const history: Array<{ time: string; who: string; action: string; iconKey: 'create' | 'waiting' | 'submit' | 'reject' | 'complete' | 'approve'; tone: string }> =
-    [
-      {
-        time: formatDateTimeIso(task.createdAt),
-        who: task.createdByName,
-        action: 'Khởi tạo điều phối',
-        iconKey: 'create',
-        tone: 'emerald',
-      },
-      {
-        time: formatDateTimeIso(task.waitingSince),
-        who: waiting.person || '—',
-        action: `Đang chờ: ${waiting.content || '—'}`,
-        iconKey: 'waiting',
-        tone: 'amber',
-      },
-    ];
+  // V6.5 Phase 5.3 (2026-06-15): Fetch timeline THẬT từ /api/tasks/[id]/comments
+  // (subcollection comments lưu mọi event transition đã có sẵn — em chỉ thêm field
+  // `event` ở 5 routes để timeline drawer biết icon nào dùng).
+  // Fallback: nếu fetch fail hoặc empty → giữ 2 row mock (create + waiting current).
+  type TimelineIcon = 'create' | 'waiting' | 'submit' | 'reject' | 'complete' | 'approve';
+  type TimelineEntry = { time: string; who: string; action: string; iconKey: TimelineIcon; note?: string };
+
+  const [timelineFromDb, setTimelineFromDb] = useState<TimelineEntry[]>([]);
+  useEffect(() => {
+    if (!task) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/tasks/${task.id}/comments`, { cache: 'no-store' });
+        if (!res.ok) return;
+        const j = await res.json();
+        const rows = Array.isArray(j?.rows) ? j.rows : [];
+        const EVENT_TO_ICON: Record<string, TimelineIcon> = {
+          create: 'create',
+          collab_accept: 'create',
+          collab_submit: 'submit',
+          collab_owner_accept: 'complete',
+          collab_owner_reject: 'reject',
+          owner_confirm: 'complete',
+          owner_request_supplement: 'reject',
+          result_approve: 'approve',
+          result_reject: 'reject',
+        };
+        const entries: TimelineEntry[] = rows.map((r: any) => {
+          const ev = typeof r.event === 'string' ? r.event : '';
+          const icon: TimelineIcon = EVENT_TO_ICON[ev] ?? (r.kind === 'created' ? 'create' : 'waiting');
+          return {
+            time: formatDateTimeIso(r.createdAt),
+            who: r.authorName || '—',
+            action: r.body || r.text || '—',
+            iconKey: icon,
+            note: r.note || undefined,
+          };
+        });
+        if (!cancelled) setTimelineFromDb(entries);
+      } catch { /* silent — fallback mock */ }
+    })();
+    return () => { cancelled = true; };
+  }, [task?.id]);
+
+  // Nếu có data DB → dùng, không thì fallback 2 row mock (giữ UX cũ).
+  const history: TimelineEntry[] = timelineFromDb.length > 0 ? [
+    ...timelineFromDb,
+    // Append current waiting nếu task chưa terminal
+    ...(task.status !== 'hoan_thanh' && task.status !== 'dong_ho_so' && waiting.person ? [{
+      time: formatDateTimeIso(task.waitingSince),
+      who: waiting.person,
+      action: `Đang chờ: ${waiting.content || '—'}`,
+      iconKey: 'waiting' as TimelineIcon,
+    }] : []),
+  ] : [
+    {
+      time: formatDateTimeIso(task.createdAt),
+      who: task.createdByName,
+      action: 'Khởi tạo điều phối',
+      iconKey: 'create' as TimelineIcon,
+    },
+    {
+      time: formatDateTimeIso(task.waitingSince),
+      who: waiting.person || '—',
+      action: `Đang chờ: ${waiting.content || '—'}`,
+      iconKey: 'waiting' as TimelineIcon,
+    },
+  ];
 
   // ----- Handlers -----
 

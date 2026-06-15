@@ -790,12 +790,14 @@ export async function POST(req: NextRequest) {
     const eventBody = status === 'pending_approval'
       ? `Tạo ${kindLabel} — chờ ${approverDisplay} duyệt`
       : `Tạo ${kindLabel}`;
+    // V6.5 Phase 5.3 (2026-06-15): thêm field `event` để timeline drawer render icon đúng.
     await ref.collection('comments').add({
       authorId: caller.profile.uid,
       authorName: caller.actorName,
       authorRole: caller.actorRole,
       body: eventBody,
       kind: 'created',
+      event: 'create',
       createdAt: now,
     });
 

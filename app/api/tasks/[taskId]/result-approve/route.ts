@@ -57,9 +57,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
       authorName: caller.actorName,
       authorRole: caller.actorRole,
       kind: 'transition',
-      text: 'Người duyệt kết quả: ĐỒNG Ý — Đã hoàn thành',
+      event: 'result_approve',
+      body: 'Người duyệt kết quả: ĐỒNG Ý — Đã hoàn thành',
       note: note || null,
-      createdAt: nowIso,
+      createdAt: new Date(),
     });
 
     await writeAuditLog({

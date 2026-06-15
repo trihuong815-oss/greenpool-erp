@@ -74,9 +74,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
       authorName: caller.actorName,
       authorRole: caller.actorRole,
       kind: 'transition',
-      text: hasApprover ? 'Owner xác nhận hoàn thành — chuyển người duyệt kết quả' : 'Owner xác nhận hoàn thành — Đã hoàn thành',
+      event: 'owner_confirm',
+      body: hasApprover ? 'Owner xác nhận hoàn thành — chuyển người duyệt kết quả' : 'Owner xác nhận hoàn thành — Đã hoàn thành',
       note: noteRaw || null,
-      createdAt: nowIso,
+      createdAt: new Date(),
     });
 
     await writeAuditLog({

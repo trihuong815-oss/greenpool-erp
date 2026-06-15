@@ -230,12 +230,15 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
       owner_accept: 'Owner đã chấp nhận phần phối hợp',
       owner_reject: 'Owner đã trả lại phần phối hợp',
     };
+    // V6.5 Phase 5.3 (2026-06-15): thêm field `event` để timeline drawer render
+    // icon map (collab_accept/submit/owner_accept/owner_reject) thay vì parse text.
     await ref.collection('comments').add({
       authorId: caller.profile.uid,
       authorName: caller.actorName,
       authorRole: caller.actorRole,
       body: `${labels[action]} — ${collabKey}` + (action === 'owner_reject' && newState.rejectionReason ? `: ${newState.rejectionReason}` : ''),
       kind: 'collab_transition',
+      event: `collab_${action}`, // collab_accept | collab_submit | collab_owner_accept | collab_owner_reject
       createdAt: new Date(),
     });
 

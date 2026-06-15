@@ -110,9 +110,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
       authorName: caller.actorName,
       authorRole: caller.actorRole,
       kind: 'transition',
-      text: `Owner yêu cầu bổ sung ${collabKeys.length} đơn vị: ${collabKeys.join(', ')}`,
+      event: 'owner_request_supplement',
+      body: `Owner yêu cầu bổ sung ${collabKeys.length} đơn vị: ${collabKeys.join(', ')}`,
       note: reasonTrim,
-      createdAt: nowIso,
+      createdAt: new Date(),
     });
 
     await writeAuditLog({
