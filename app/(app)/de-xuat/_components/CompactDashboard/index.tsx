@@ -20,9 +20,11 @@ interface Props {
   proposals: ProposalV6[];
   currentUserUid: string;
   onRowClick: (p: ProposalV6) => void;
+  /** V6.5 Audit fix Phase D.2 (2026-06-15): khối của user — hiển thị context "Đang xem khối X". */
+  userBlock?: 'KD' | 'VP' | null;
 }
 
-export default function CompactDashboard({ proposals, currentUserUid, onRowClick }: Props) {
+export default function CompactDashboard({ proposals, currentUserUid, onRowClick, userBlock }: Props) {
   const [filterKey, setFilterKey] = useState<DexCompactKpiKey | null>(null);
 
   return (
@@ -30,6 +32,12 @@ export default function CompactDashboard({ proposals, currentUserUid, onRowClick
       <section className="space-y-2">
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Tổng quan</span>
+          {/* V6.5 Phase D.2: context indicator cho TP/QLCS biết scope view */}
+          {userBlock && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
+              👤 Khối {userBlock === 'KD' ? 'Kinh doanh' : 'Văn phòng'} — đề xuất tôi tham gia
+            </span>
+          )}
           <span className="flex-1 h-px bg-gradient-to-r from-slate-200 to-transparent" />
         </div>
         <CompactKpiBar proposals={proposals} currentUserUid={currentUserUid} active={filterKey} onSelect={setFilterKey} />

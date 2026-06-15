@@ -21,6 +21,8 @@ on:
     - cron: '15 * * * *'     # proposal-overdue mỗi giờ (offset 15p để tránh cùng */5)
     - cron: '30 * * * *'     # dispatch-overdue mỗi giờ (offset 30p)
     - cron: '45 * * * *'     # action-required-stuck mỗi giờ (offset 45p)
+    # V6.5 Audit Phase D.1 (2026-06-15): proposal stale recipient cleanup — hourly
+    - cron: '50 * * * *'     # proposal-stale-recipient mỗi giờ (offset 50p)
   workflow_dispatch:          # manual trigger để test
 
 # Concurrency: cancel runs cũ nếu chậm — tránh chồng chéo
@@ -213,6 +215,21 @@ jobs:
         run: |
           response=$(curl -s -o /tmp/body -w "%{http_code}" \
             -X POST "${{ secrets.APP_HOSTING_URL }}/api/cron/action-required-stuck" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "content-type: application/json")
+          echo "Status: $response"; cat /tmp/body
+          if [ "$response" -ne 200 ]; then exit 1; fi
+
+  # V6.5 Audit Phase D.1 (2026-06-15): proposal stale recipient cleanup — hourly
+  proposal-stale-recipient:
+    if: github.event.schedule == '50 * * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Call proposal-stale-recipient
+        run: |
+          response=$(curl -s -o /tmp/body -w "%{http_code}" \
+            -X POST "${{ secrets.APP_HOSTING_URL }}/api/cron/proposal-stale-recipient" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "content-type: application/json")
           echo "Status: $response"; cat /tmp/body

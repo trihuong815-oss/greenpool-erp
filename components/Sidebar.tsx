@@ -182,7 +182,19 @@ export function Sidebar({ userName, userRole, roleCode, avatarUrl, menuOverrides
                           isActive ? 'text-emerald-700' : 'text-slate-400 group-hover:text-slate-600'
                         }`}
                       />
-                      <span className="truncate">{item.label}</span>
+                      <span
+                        className="truncate"
+                        title={
+                          // V6.5 Audit fix Phase D.3 (2026-06-15) — Issue 7.3:
+                          // Tooltip cho TP/QLCS biết scope khi vào /de-xuat (xem đề xuất tham gia,
+                          // không phải toàn hệ thống). Roles cao hơn không cần tooltip.
+                          item.route === 'de-xuat' && (roleCode.startsWith('TP_') || roleCode.startsWith('QLCS_'))
+                            ? 'Xem đề xuất bạn tạo + đề xuất bạn được phê duyệt (theo khối của bạn)'
+                            : undefined
+                        }
+                      >
+                        {item.label}
+                      </span>
                       {item.route === 'dieu-phoi' && <DispatchBadge />}
                       {item.route === 'de-xuat' && <ProposalsBadge />}
                       {item.route === 'tin-nhan' && <ChatUnreadBadge />}

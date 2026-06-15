@@ -734,6 +734,7 @@ export function DeXuatClient(props: Props) {
                 proposals={proposals}
                 currentUserUid={currentUserId}
                 onRowClick={setSelected}
+                userBlock={currentUserBlock}
               />
             ) : (
               <>
