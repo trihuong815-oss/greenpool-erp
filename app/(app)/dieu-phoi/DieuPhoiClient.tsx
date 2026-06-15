@@ -41,8 +41,9 @@ import {
 } from './_lib/workflow-engine';
 import {
   notifyOnCreate,
-  notifyOnCollabRejected,
-  notifyOnCoordComplete,
+  // V6.5 (2026-06-15): notifyOnCollabRejected + notifyOnCoordComplete đã chuyển server-side
+  // (notifyTaskOwnerConfirmed + notifyCollabSupplementRequested + notifyTaskResultDecided
+  // trong task-notifications.ts). Bỏ import client để tránh dead code.
   type NotificationTrigger,
 } from './_lib/coord-notifications';
 
@@ -521,137 +522,117 @@ export default function DieuPhoiClient({
   // 6. handleOwnerConfirmAll — Owner xác nhận hoàn thành tổng thể
   //    status: cho_owner_xac_nhan → (cho_duyet_ket_qua | hoan_thanh)
   // ============================================================
+  // V6.5 Phase 1 (2026-06-15): wire endpoint thật, bỏ mock alert.
   const handleOwnerConfirmAll = useCallback(
-    (taskId: string) => {
+    async (taskId: string) => {
       const task = tasks.find((t) => t.id === taskId);
       if (!task) return;
       if ((task.status as string) !== 'cho_owner_xac_nhan') {
         alert('Điều phối chưa sẵn sàng để Owner xác nhận hoàn thành.');
         return;
       }
-      const nowIso = new Date().toISOString();
-      const hasApprover = !!task.resultApproverUid;
-      const nextStatus: CoordStatus = hasApprover
-        ? ('cho_duyet_ket_qua' as CoordStatus)
-        : ('hoan_thanh' as CoordStatus);
-      const next: CoordTask = { ...task, status: nextStatus, updatedAt: nowIso };
-      applyTaskUpdate(next);
-
-      if (!hasApprover) {
-        // Đã hoàn thành luôn → noti complete.
-        emitNotifications('coord_completed', notifyOnCoordComplete(next, next.createdByUid));
-      } else {
-        // eslint-disable-next-line no-console
-        console.log('[dieu-phoi] owner confirm — waiting approver', { taskId });
+      try {
+        const res = await fetch(`/api/tasks/${taskId}/owner-confirm`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(j?.error || `HTTP ${res.status}`);
+        reload();
+      } catch (e: any) {
+        alert(`Xác nhận hoàn thành thất bại: ${e?.message ?? 'lỗi'}`);
       }
-      alert(`V1 (local): Đã xác nhận hoàn thành tổng thể.\nV5 sẽ POST /api/coord-tasks/${taskId}/owner-confirm.`);
     },
-    [tasks, applyTaskUpdate],
+    [tasks, reload],
   );
 
   // ============================================================
   // 7. handleOwnerRequestSupplement — Owner YCBS các collab đã chọn
   //    Mỗi collab → status='bi_tra_lai' + rejectionReason; task → 'dang_phoi_hop'.
   // ============================================================
+  // V6.5 Phase 1 (2026-06-15): wire endpoint thật.
+  // Map collabIds (id 'dept-MKT' UI) → collabKeys ('dept:MKT' server format).
   const handleOwnerRequestSupplement = useCallback(
-    (taskId: string, collabIds: string[], reason: string) => {
+    async (taskId: string, collabIds: string[], reason: string) => {
       const r = reason.trim();
-      if (!r) {
-        alert('Vui lòng nhập lý do bổ sung.');
-        return;
-      }
-      if (!collabIds || collabIds.length === 0) {
-        alert('Chưa chọn đơn vị phối hợp nào.');
-        return;
-      }
-      const task = tasks.find((t) => t.id === taskId);
-      if (!task) return;
-      const nowIso = new Date().toISOString();
-      const ids = new Set(collabIds);
-      const nextCollabs = task.collaborators.map((c) =>
-        ids.has(c.id)
-          ? {
-              ...c,
-              status: 'bi_tra_lai' as CollabStatus,
-              rejectedAt: nowIso,
-              rejectionReason: r,
-            }
-          : c,
+      if (!r) { alert('Vui lòng nhập lý do bổ sung.'); return; }
+      if (!collabIds || collabIds.length === 0) { alert('Chưa chọn đơn vị phối hợp nào.'); return; }
+      // UI dùng id 'dept-MKT'/'facility-HM' → server cần 'dept:MKT'/'facility:HM'
+      const collabKeys = collabIds.map((id) =>
+        id.startsWith('dept-') ? `dept:${id.slice(5)}`
+        : id.startsWith('facility-') ? `facility:${id.slice(9)}`
+        : id,
       );
-      const next: CoordTask = {
-        ...task,
-        collaborators: nextCollabs,
-        status: 'dang_phoi_hop' as CoordStatus,
-        updatedAt: nowIso,
-      };
-      applyTaskUpdate(next);
-
-      // Emit reject noti cho từng collab được YCBS.
-      for (const c of nextCollabs) {
-        if (ids.has(c.id)) {
-          emitNotifications(
-            'collab_rejected_ycbs',
-            notifyOnCollabRejected(next, c, r),
-          );
-        }
+      try {
+        const res = await fetch(`/api/tasks/${taskId}/collaborators/request-supplement`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ collabKeys, reason: r }),
+        });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(j?.error || `HTTP ${res.status}`);
+        reload();
+      } catch (e: any) {
+        alert(`Yêu cầu bổ sung thất bại: ${e?.message ?? 'lỗi'}`);
       }
-      // eslint-disable-next-line no-console
-      console.log('[dieu-phoi] owner ycbs', { taskId, collabIds, reason: r });
-      alert(`V1 (local): Đã yêu cầu bổ sung ${collabIds.length} đơn vị.\nV5 sẽ POST /api/coord-tasks/${taskId}/owner-request-supplement.`);
     },
-    [tasks, applyTaskUpdate],
+    [reload],
   );
 
   // ============================================================
   // 8. handleResultApprove / handleResultReject — Người duyệt
   //    cho_duyet_ket_qua → hoan_thanh | dang_xu_ly (trả lại)
   // ============================================================
+  // V6.5 Phase 1 (2026-06-15): wire endpoint thật.
   const handleResultApprove = useCallback(
-    (taskId: string) => {
+    async (taskId: string) => {
       const task = tasks.find((t) => t.id === taskId);
       if (!task) return;
       if ((task.status as string) !== 'cho_duyet_ket_qua') {
         alert('Điều phối không ở trạng thái chờ duyệt kết quả.');
         return;
       }
-      const next: CoordTask = {
-        ...task,
-        status: 'hoan_thanh' as CoordStatus,
-        updatedAt: new Date().toISOString(),
-      };
-      applyTaskUpdate(next);
-      emitNotifications('coord_completed', notifyOnCoordComplete(next, next.createdByUid));
-      // eslint-disable-next-line no-console
-      console.log('[dieu-phoi] result approve', { taskId });
-      alert(`V1 (local): Đã duyệt kết quả.\nV5 sẽ POST /api/coord-tasks/${taskId}/result-approve.`);
+      try {
+        const res = await fetch(`/api/tasks/${taskId}/result-approve`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(j?.error || `HTTP ${res.status}`);
+        reload();
+      } catch (e: any) {
+        alert(`Duyệt kết quả thất bại: ${e?.message ?? 'lỗi'}`);
+      }
     },
-    [tasks, applyTaskUpdate],
+    [tasks, reload],
   );
 
   const handleResultReject = useCallback(
-    (taskId: string, reason: string) => {
+    async (taskId: string, reason: string) => {
       const r = reason.trim();
-      if (!r) {
-        alert('Vui lòng nhập lý do trả lại kết quả.');
-        return;
-      }
+      if (!r) { alert('Vui lòng nhập lý do trả lại kết quả.'); return; }
       const task = tasks.find((t) => t.id === taskId);
       if (!task) return;
       if ((task.status as string) !== 'cho_duyet_ket_qua') {
         alert('Điều phối không ở trạng thái chờ duyệt kết quả.');
         return;
       }
-      const next: CoordTask = {
-        ...task,
-        status: 'dang_xu_ly' as CoordStatus,
-        updatedAt: new Date().toISOString(),
-      };
-      applyTaskUpdate(next);
-      // eslint-disable-next-line no-console
-      console.log('[dieu-phoi] result reject', { taskId, reason: r });
-      alert(`V1 (local): Đã trả lại kết quả về Owner.\nV5 sẽ POST /api/coord-tasks/${taskId}/result-reject.`);
+      try {
+        const res = await fetch(`/api/tasks/${taskId}/result-reject`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ reason: r }),
+        });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(j?.error || `HTTP ${res.status}`);
+        reload();
+      } catch (e: any) {
+        alert(`Trả lại kết quả thất bại: ${e?.message ?? 'lỗi'}`);
+      }
     },
-    [tasks, applyTaskUpdate],
+    [tasks, reload],
   );
 
   // ============================================================

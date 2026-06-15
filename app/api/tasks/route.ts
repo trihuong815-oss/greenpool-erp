@@ -734,6 +734,28 @@ export async function POST(req: NextRequest) {
       collaboratorRoles,
       // V6.2 (2026-06-12): deadline RIÊNG per collab + Owner field tách biệt
       collaboratorDeadlines,
+      // V6.5 (2026-06-15): init collaboratorStates {} ngay khi tạo task
+      // → transition route không phải null-check mỗi lần. Mỗi key = 'dept:X' | 'facility:Y'
+      // mặc định { status: 'chua_tiep_nhan' } khi collab transition lần đầu.
+      collaboratorStates: (() => {
+        const states: Record<string, { status: string; deadline?: string }> = {};
+        for (const id of collaboratorDeptIds) {
+          const key = `dept:${id}`;
+          states[key] = { status: 'chua_tiep_nhan' };
+          // Sync deadline từ collaboratorDeadlines vào state để đọc 1 chỗ
+          if (collaboratorDeadlines[key]) states[key].deadline = collaboratorDeadlines[key];
+        }
+        for (const id of collaboratorFacilityIds) {
+          const key = `facility:${id}`;
+          states[key] = { status: 'chua_tiep_nhan' };
+          if (collaboratorDeadlines[key]) states[key].deadline = collaboratorDeadlines[key];
+        }
+        return states;
+      })(),
+      // V6.5: waitingSince ngay từ lúc tạo task (Owner chưa tiếp nhận)
+      waitingSince: now.toISOString(),
+      waitingForPerson: typeof body?.ownerName === 'string' ? body.ownerName : null,
+      waitingForContent: 'Owner tiếp nhận điều phối',
       ownerUid: typeof body?.ownerUid === 'string' ? body.ownerUid : null,
       ownerName: typeof body?.ownerName === 'string' ? body.ownerName : null,
       ownerBlock: ['KD', 'VP'].includes(body?.ownerBlock) ? body.ownerBlock : null,

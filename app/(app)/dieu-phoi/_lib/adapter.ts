@@ -123,18 +123,25 @@ function computeWaitingFor(
   collabs: Collaborator[],
   status: CoordStatus,
 ): { person: string; content: string; since: string } {
-  const since = t.updatedAt ?? t.createdAt;
+  // V6.5 (2026-06-15): ưu tiên waitingSince (server set mỗi transition) hơn updatedAt/createdAt.
+  const since = (t as any).waitingSince ?? t.updatedAt ?? t.createdAt;
   if (status === ('cho_owner_xac_nhan' as CoordStatus)) {
-    const person = t.currentApprover?.replace(/^(user|role):/, '') ?? '';
-    return { person, content: t.goal ?? '', since };
+    const person = (t as any).waitingForPerson ?? t.currentApprover?.replace(/^(user|role):/, '') ?? '';
+    return { person, content: (t as any).waitingForContent ?? t.goal ?? '', since };
   }
-  const pending = collabs.find((c) => c.status !== 'hoan_thanh');
-  if (pending) {
-    return {
-      person: pending.responsibleName || pending.unitName,
-      content: pending.supportContent || (t.goal ?? ''),
-      since: pending.acceptedAt ?? since,
-    };
+  // V6.5 (2026-06-15): SORT theo PRIORITY chuẩn — ai cần xử lý GẤP nhất lên trước:
+  //   chua_tiep_nhan (chưa nhận) > bi_tra_lai (đang nợ) > da_tiep_nhan > dang_thuc_hien > gui_hoan_thanh
+  //   Trước đây dùng .find() trả collab pending ĐẦU TIÊN trong array → không deterministic.
+  const PRIORITY: string[] = ['chua_tiep_nhan', 'bi_tra_lai', 'da_tiep_nhan', 'dang_thuc_hien', 'gui_hoan_thanh'];
+  for (const status of PRIORITY) {
+    const pending = collabs.find((c) => (c.status as string) === status);
+    if (pending) {
+      return {
+        person: pending.responsibleName || pending.unitName,
+        content: pending.supportContent || (t.goal ?? ''),
+        since: pending.acceptedAt ?? since,
+      };
+    }
   }
   return { person: '', content: t.goal ?? '', since };
 }

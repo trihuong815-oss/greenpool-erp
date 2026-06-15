@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Briefcase, UserCheck, Users, Activity, Clock, Calendar, CircleDot } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Briefcase, UserCheck, Users, Activity, Clock, Calendar, CircleDot, ArrowUp } from 'lucide-react';
 import {
   COORD_STATUS_LABEL,
   COORD_STATUS_COLOR,
@@ -268,8 +268,8 @@ export default function CoordinationTable({
               <th className="px-2 py-2.5 text-left font-semibold w-32">
                 <span className="inline-flex items-center gap-1.5"><Clock size={12} className="text-amber-600" /> Đang chờ</span>
               </th>
-              <th className="px-2 py-2.5 text-left font-semibold w-20">
-                <span className="inline-flex items-center gap-1.5"><Calendar size={12} className="text-rose-600" /> Deadline</span>
+              <th className="px-2 py-2.5 text-left font-semibold w-20" title="Đang sort theo Deadline tăng dần — task gấp lên đầu, task hoàn thành xuống cuối">
+                <span className="inline-flex items-center gap-1"><Calendar size={12} className="text-rose-600" /> Deadline <ArrowUp size={10} className="text-rose-500" /></span>
               </th>
               <th className="px-2 py-2.5 text-left font-semibold w-24">
                 <span className="inline-flex items-center gap-1.5"><CircleDot size={12} className="text-slate-500" /> Trạng thái</span>

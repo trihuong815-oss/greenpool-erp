@@ -438,3 +438,143 @@ export async function notifyCollabTransition(
     }),
   ]);
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// V6.5 Phase 1 (2026-06-15): 3 noti functions cho Owner cấp cao + Người duyệt
+// ────────────────────────────────────────────────────────────────────────────
+
+/** Owner xác nhận hoàn thành — báo creator + resultApprover (nếu có). */
+export async function notifyTaskOwnerConfirmed(task: {
+  id: string;
+  kind: 'proposal' | 'assignment';
+  title: string;
+  createdBy?: string;
+  createdByName?: string;
+  ownerUid?: string;
+  resultApproverUid?: string | null;
+  resultApproverName?: string | null;
+  hasApprover: boolean;
+}): Promise<void> {
+  const link = taskLink(task.id, task.kind);
+  const mod = moduleOf(task.kind);
+
+  if (task.hasApprover && task.resultApproverUid) {
+    // Có người duyệt kết quả → noti người đó (action required)
+    await sendNotificationEvent({
+      type: 'task_pending_approval',
+      module: mod,
+      entityId: task.id,
+      title: '🔔 Cần duyệt kết quả điều phối',
+      message: `"${task.title}" — Owner đã xác nhận hoàn thành, chờ bạn duyệt kết quả cuối.`,
+      linkUrl: link,
+      recipients: [task.resultApproverUid],
+      priority: 'high',
+      pushTag: `task-${task.id}`,
+    });
+  } else {
+    // Không người duyệt → báo creator informational
+    if (task.createdBy && task.createdBy !== task.ownerUid) {
+      await sendNotificationEvent({
+        type: 'task_completed',
+        module: mod,
+        entityId: task.id,
+        title: '✅ Điều phối hoàn thành',
+        message: `"${task.title}" — Owner đã xác nhận hoàn thành.`,
+        linkUrl: link,
+        recipients: [task.createdBy],
+        priority: 'normal',
+        pushTag: `task-${task.id}`,
+      });
+    }
+  }
+}
+
+/** Owner YCBS các đơn vị phối hợp — báo người thuộc các đơn vị đó. */
+export async function notifyCollabSupplementRequested(task: {
+  id: string;
+  kind: 'proposal' | 'assignment';
+  title: string;
+  collabKeys: string[];
+  reason: string;
+  ownerName?: string;
+}): Promise<void> {
+  const link = taskLink(task.id, task.kind);
+  const mod = moduleOf(task.kind);
+
+  // Resolve uids từ collabKeys (dept:X | facility:Y) → members của đơn vị
+  const recipients = new Set<string>();
+  try {
+    const db = getFirebaseAdminDb();
+    for (const key of task.collabKeys) {
+      const m = key.match(/^(dept|facility):(.+)$/);
+      if (!m) continue;
+      const field = m[1] === 'dept' ? 'departmentId' : 'branchId';
+      const snap = await db.collection(COLLECTIONS.USERS)
+        .where('status', '==', 'active')
+        .where(field, '==', m[2])
+        .limit(50).get();
+      snap.docs.forEach((d) => recipients.add(d.id));
+    }
+  } catch (e: any) {
+    console.warn('[notifyCollabSupplementRequested] resolve fail:', e?.message);
+  }
+  if (recipients.size === 0) return;
+
+  await sendNotificationEvent({
+    type: 'collab_returned',
+    module: mod,
+    entityId: task.id,
+    title: `⛔ Yêu cầu bổ sung từ ${task.ownerName ?? 'Owner'}`,
+    message: `"${task.title}" — ${task.reason.slice(0, 200)}`,
+    linkUrl: link,
+    recipients: Array.from(recipients),
+    priority: 'high',
+    pushTag: `task-${task.id}`,
+  });
+}
+
+/** Người duyệt kết quả OK / từ chối — báo Owner + creator. */
+export async function notifyTaskResultDecided(task: {
+  id: string;
+  kind: 'proposal' | 'assignment';
+  title: string;
+  decision: 'approved' | 'rejected';
+  approverName?: string;
+  ownerUid?: string;
+  createdBy?: string;
+  reason?: string;
+}): Promise<void> {
+  const link = taskLink(task.id, task.kind);
+  const mod = moduleOf(task.kind);
+
+  const recipients = new Set<string>();
+  if (task.ownerUid) recipients.add(task.ownerUid);
+  if (task.createdBy && task.createdBy !== task.ownerUid) recipients.add(task.createdBy);
+  if (recipients.size === 0) return;
+
+  if (task.decision === 'approved') {
+    await sendNotificationEvent({
+      type: 'task_completed',
+      module: mod,
+      entityId: task.id,
+      title: `✅ Kết quả đã được duyệt`,
+      message: `"${task.title}" — ${task.approverName ?? 'Người duyệt'} đã đồng ý. Điều phối hoàn thành.`,
+      linkUrl: link,
+      recipients: Array.from(recipients),
+      priority: 'normal',
+      pushTag: `task-${task.id}`,
+    });
+  } else {
+    await sendNotificationEvent({
+      type: 'task_revision_requested',
+      module: mod,
+      entityId: task.id,
+      title: `⛔ Kết quả bị trả lại`,
+      message: `"${task.title}" — ${task.approverName ?? 'Người duyệt'} yêu cầu xem lại: ${(task.reason ?? '').slice(0, 200)}`,
+      linkUrl: link,
+      recipients: Array.from(recipients),
+      priority: 'high',
+      pushTag: `task-${task.id}`,
+    });
+  }
+}

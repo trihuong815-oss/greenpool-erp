@@ -23,6 +23,11 @@ import { writeAuditLog } from '@/lib/firebase/audit-log';
 import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-auth';
 import { isCEO } from '@/lib/auth/roles';
 
+// V6.5 Phase 3 (2026-06-15): override roles = ADMIN + CEO + CHU_TICH (đồng bộ
+// DetailDrawer OWNER_OVERRIDE_ROLES). Trước đây chỉ check isCEO → ADMIN/CHU_TICH
+// bị từ chối khi cần escalate hộ Owner.
+const OWNER_OVERRIDE_ROLES = new Set(['ADMIN', 'CEO', 'CHU_TICH']);
+
 const COL = COLLECTIONS.TASKS;
 
 const ACTIONS = new Set(['accept', 'submit', 'owner_accept', 'owner_reject']);
@@ -75,8 +80,8 @@ function canCollabAct(
   collabId: string,
 ): boolean {
   const p = caller.profile;
-  if (isCEO(p.role_code)) return true;
-  // Owner / Creator được uỷ quyền thao tác collab (an toàn)
+  // V6.5 (2026-06-15): mở rộng từ isCEO → ADMIN/CEO/CHU_TICH (đồng bộ client OVERRIDE).
+  if (OWNER_OVERRIDE_ROLES.has(p.role_code) || isCEO(p.role_code)) return true;
   if (data.createdBy === p.uid) return true;
   if (data.ownerUid && data.ownerUid === p.uid) return true;
   // Assigned direct
@@ -90,7 +95,8 @@ function canCollabAct(
 
 function canOwnerAct(caller: { profile: any }, data: Record<string, any>): boolean {
   const p = caller.profile;
-  if (isCEO(p.role_code)) return true;
+  // V6.5 (2026-06-15): mở rộng ADMIN/CEO/CHU_TICH.
+  if (OWNER_OVERRIDE_ROLES.has(p.role_code) || isCEO(p.role_code)) return true;
   if (data.createdBy === p.uid) return true;
   if (data.ownerUid && data.ownerUid === p.uid) return true;
   return false;
@@ -190,6 +196,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
       collaboratorStates: states,
       updatedAt: new Date(),
       updatedBy: caller.profile.uid,
+      // V6.5 (2026-06-15): RESET waitingSince mỗi transition để bottleneck clock chạy đúng.
+      // Trước đây waitingSince không reset → BottleneckTable tính từ createdAt cũ sai.
+      waitingSince: nowIso,
     };
 
     // V6.4: nếu tất cả collab đã 'hoan_thanh' → task auto chuyển 'cho_owner_xac_nhan'
@@ -202,6 +211,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
     const allDone = allKeys.length > 0 && allKeys.every((k) => states[k]?.status === 'hoan_thanh');
     if (allDone && data.status !== 'cho_owner_xac_nhan' && data.status !== 'hoan_thanh' && data.status !== 'dong_ho_so') {
       update.status = 'cho_owner_xac_nhan';
+      // V6.5 (2026-06-15): khi auto-transition sang cho_owner_xac_nhan, set waiting cho Owner.
+      update.waitingForPerson = data.ownerName || 'Owner';
+      update.waitingForContent = 'Owner xác nhận tổng kết quả';
     }
 
     await ref.update(update);
