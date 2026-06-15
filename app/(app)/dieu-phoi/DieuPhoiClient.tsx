@@ -204,21 +204,21 @@ export default function DieuPhoiClient({
         const collaboratorDeptIds: string[] = [];
         const collaboratorFacilityIds: string[] = [];
         const collaboratorRoles: Record<string, string> = {};
-        // V6.2 fix: lưu deadline RIÊNG cho mỗi collab (anh chốt — user nhập 13/6 cho
-        // Kỹ thuật, deadline tổng 20/6 → adapter cần đọc riêng).
         const collaboratorDeadlines: Record<string, string> = {};
+        // V6.5 Phase 5 (2026-06-15): map Người phụ trách per collab → server lưu vào
+        // collaboratorStates[key].responsibleUid/Name để transition route check permission.
+        const collaboratorResponsibles: Record<string, { uid: string; name: string }> = {};
         for (const c of payload.collaborators) {
           if (!c.unitId) continue;
           const [prefix, rawId] = c.unitId.split(':');
           if (!prefix || !rawId) continue;
-          if (prefix === 'DEPT') {
-            collaboratorDeptIds.push(rawId);
-            collaboratorRoles[`dept:${rawId}`] = c.supportContent;
-            if (c.deadline) collaboratorDeadlines[`dept:${rawId}`] = c.deadline;
-          } else if (prefix === 'BRANCH') {
-            collaboratorFacilityIds.push(rawId);
-            collaboratorRoles[`facility:${rawId}`] = c.supportContent;
-            if (c.deadline) collaboratorDeadlines[`facility:${rawId}`] = c.deadline;
+          const key = prefix === 'DEPT' ? `dept:${rawId}` : `facility:${rawId}`;
+          if (prefix === 'DEPT') collaboratorDeptIds.push(rawId);
+          else if (prefix === 'BRANCH') collaboratorFacilityIds.push(rawId);
+          collaboratorRoles[key] = c.supportContent;
+          if (c.deadline) collaboratorDeadlines[key] = c.deadline;
+          if (c.responsibleUid) {
+            collaboratorResponsibles[key] = { uid: c.responsibleUid, name: c.responsibleName };
           }
         }
 
@@ -260,6 +260,8 @@ export default function DieuPhoiClient({
             ownerName: payload.ownerName,
             ownerBlock: payload.ownerBlock,
             collaboratorDeadlines,
+            // V6.5 Phase 5: map Người phụ trách → server lưu vào collaboratorStates
+            collaboratorResponsibles,
             meta: payload.fromProposalId
               ? {
                   fromProposalId: payload.fromProposalId,

@@ -78,16 +78,21 @@ function canCollabAct(
   data: Record<string, any>,
   collabKind: 'dept' | 'facility',
   collabId: string,
+  collabKey: string,
 ): boolean {
   const p = caller.profile;
-  // V6.5 (2026-06-15): mở rộng từ isCEO → ADMIN/CEO/CHU_TICH (đồng bộ client OVERRIDE).
   if (OWNER_OVERRIDE_ROLES.has(p.role_code) || isCEO(p.role_code)) return true;
   if (data.createdBy === p.uid) return true;
   if (data.ownerUid && data.ownerUid === p.uid) return true;
-  // Assigned direct
   const aus: string[] = Array.isArray(data.assigneeUserIds) ? data.assigneeUserIds : [];
   if (aus.includes(p.uid)) return true;
-  // Thuộc đơn vị collab
+  // V6.5 Phase 5 (2026-06-15): ưu tiên Người phụ trách (responsibleUid lưu khi tạo task).
+  // Nếu collabStates[key] có responsibleUid → CHỈ user đó được tiếp nhận/gửi kết quả.
+  // Fallback: nếu chưa có responsibleUid → check dept/facility membership (legacy data).
+  const states = (data.collaboratorStates ?? {}) as Record<string, any>;
+  const st = states[collabKey];
+  if (st?.responsibleUid) return st.responsibleUid === p.uid;
+  // Fallback dept/facility membership
   if (collabKind === 'dept' && p.department_id === collabId) return true;
   if (collabKind === 'facility' && p.facility_id === collabId) return true;
   return false;
@@ -151,8 +156,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
         return NextResponse.json({ error: 'Chỉ Owner / Creator được duyệt phần phối hợp' }, { status: 403 });
       }
     } else {
-      if (!canCollabAct(caller, data, collab.kind, collab.id)) {
-        return NextResponse.json({ error: 'Bạn không thuộc đơn vị phối hợp này' }, { status: 403 });
+      if (!canCollabAct(caller, data, collab.kind, collab.id, collabKey)) {
+        return NextResponse.json({ error: 'Bạn không phải Người phụ trách / không thuộc đơn vị phối hợp này' }, { status: 403 });
       }
     }
 

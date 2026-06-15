@@ -166,8 +166,14 @@ export default function CoordinationTable({
   const [activeTab, setActiveTab] = useState<TabKey>('all');
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all');
 
-  // Compute count cho từng tab từ tasks thật
+  // V6.5 Phase 5 (2026-06-15): collapse 8 tab → 4 tab CHÍNH (mặc định nhìn thấy)
+  // + 4 tab phụ ẨN trong dropdown "Lọc nâng cao" để giảm noise:
+  //   Tab chính:  Tất cả · Tôi phụ trách · Tôi giao · Quá hạn
+  //   Nâng cao:   Liên khối · Chờ phản hồi · Chờ duyệt · Điểm nghẽn
   const tabKeys: TabKey[] = ['all', 'mine', 'sent', 'cross', 'waiting_resp', 'waiting_appr', 'overdue', 'bottleneck'];
+  const PRIMARY_TABS: TabKey[] = ['all', 'mine', 'sent', 'overdue'];
+  const SECONDARY_TABS: TabKey[] = ['cross', 'waiting_resp', 'waiting_appr', 'bottleneck'];
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const counts = useMemo(() => {
     const out = {} as Record<TabKey, number>;
     for (const k of tabKeys) out[k] = filterByTab(tasks, k, _currentUserUid).length;
@@ -207,10 +213,10 @@ export default function CoordinationTable({
 
   return (
     <div className="rounded-xl border border-slate-200/70 bg-white shadow-md ring-1 ring-slate-50 overflow-hidden">
-      {/* Tabs row */}
+      {/* V6.5 Phase 5 (2026-06-15): Tabs row — 4 tab chính + nút "Lọc nâng cao" mở 4 tab phụ */}
       <div className="border-b border-slate-200 overflow-x-auto bg-gradient-to-b from-slate-50/60 to-white">
         <div className="flex items-center gap-1 px-2">
-          {tabKeys.map((key) => {
+          {PRIMARY_TABS.map((key) => {
             const isActive = activeTab === key;
             return (
               <button
@@ -228,6 +234,33 @@ export default function CoordinationTable({
               </button>
             );
           })}
+          {/* SECONDARY tabs hiện inline khi đã chọn (active) hoặc khi showAdvanced */}
+          {SECONDARY_TABS.filter((k) => showAdvanced || activeTab === k).map((key) => {
+            const isActive = activeTab === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setActiveTab(key)}
+                className={
+                  'px-3.5 py-2.5 text-xs whitespace-nowrap border-b-2 -mb-px transition-colors ' +
+                  (isActive
+                    ? 'border-emerald-500 text-emerald-700 font-bold'
+                    : 'border-transparent text-slate-500 hover:text-slate-800 font-medium')
+                }
+              >
+                {TAB_LABEL[key]} <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[16px] px-1 rounded-full bg-slate-100 text-slate-600 text-[10px] font-semibold tabular-nums">{counts[key]}</span>
+              </button>
+            );
+          })}
+          {/* Toggle nâng cao */}
+          <button
+            type="button"
+            onClick={() => setShowAdvanced((v) => !v)}
+            className="ml-auto px-3 py-1.5 text-[11px] font-semibold text-slate-500 hover:text-emerald-700 rounded-md border border-slate-200 bg-white shrink-0"
+          >
+            {showAdvanced ? '↑ Ẩn lọc nâng cao' : '+ Lọc nâng cao'}
+          </button>
         </div>
       </div>
 

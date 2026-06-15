@@ -736,20 +736,25 @@ export async function POST(req: NextRequest) {
       collaboratorDeadlines,
       // V6.5 (2026-06-15): init collaboratorStates {} ngay khi tạo task
       // → transition route không phải null-check mỗi lần. Mỗi key = 'dept:X' | 'facility:Y'
-      // mặc định { status: 'chua_tiep_nhan' } khi collab transition lần đầu.
+      // mặc định { status: 'chua_tiep_nhan', responsibleUid, responsibleName, deadline }.
+      // V6.5 Phase 5: client gửi body.collaboratorResponsibles = { 'dept:KT': { uid, name } }
+      // → server lưu vào state → permission check transition route dùng được.
       collaboratorStates: (() => {
-        const states: Record<string, { status: string; deadline?: string }> = {};
-        for (const id of collaboratorDeptIds) {
-          const key = `dept:${id}`;
-          states[key] = { status: 'chua_tiep_nhan' };
-          // Sync deadline từ collaboratorDeadlines vào state để đọc 1 chỗ
-          if (collaboratorDeadlines[key]) states[key].deadline = collaboratorDeadlines[key];
-        }
-        for (const id of collaboratorFacilityIds) {
-          const key = `facility:${id}`;
-          states[key] = { status: 'chua_tiep_nhan' };
-          if (collaboratorDeadlines[key]) states[key].deadline = collaboratorDeadlines[key];
-        }
+        const states: Record<string, any> = {};
+        const respMap: Record<string, { uid: string; name: string }> =
+          (body?.collaboratorResponsibles && typeof body.collaboratorResponsibles === 'object')
+            ? body.collaboratorResponsibles
+            : {};
+        const addKey = (key: string) => {
+          const r = respMap[key];
+          states[key] = {
+            status: 'chua_tiep_nhan',
+            ...(collaboratorDeadlines[key] ? { deadline: collaboratorDeadlines[key] } : {}),
+            ...(r?.uid ? { responsibleUid: r.uid, responsibleName: r.name } : {}),
+          };
+        };
+        for (const id of collaboratorDeptIds) addKey(`dept:${id}`);
+        for (const id of collaboratorFacilityIds) addKey(`facility:${id}`);
         return states;
       })(),
       // V6.5: waitingSince ngay từ lúc tạo task (Owner chưa tiếp nhận)

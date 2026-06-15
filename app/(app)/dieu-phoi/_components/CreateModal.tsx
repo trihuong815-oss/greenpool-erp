@@ -82,6 +82,9 @@ export interface CreateCollaboratorV4 {
   unitName: string;      // denormalized label
   supportContent: string;
   deadline: string;      // YYYY-MM-DD
+  // V6.5 Phase 5 (2026-06-15): Người phụ trách bắt buộc cho mỗi collab
+  responsibleUid: string;
+  responsibleName: string;
 }
 
 export interface CreateKpiV4 {
@@ -221,6 +224,26 @@ interface CollaboratorDraft {
   unitId: string;
   supportContent: string;
   deadline: string;
+  // V6.5 Phase 5 (2026-06-15): bắt buộc Người phụ trách → server validate non-empty
+  // → fix issue collab không tiếp nhận được do responsibleUid rỗng.
+  responsibleUid: string;
+  responsibleName: string;
+}
+
+/** V6.5: lookup options Người phụ trách theo unitId đã chọn (mock từ OWNER_POOL).
+ *  - 'DEPT:XX' → TP của phòng XX (vd DEPT:KT → TP Kỹ thuật)
+ *  - 'BRANCH:HM' → QLCS Hoàng Mai
+ *  V2 sẽ thay bằng fetch /api/users?dept=XX hoặc ?branch=YY. */
+function getResponsibleOptions(unitId: string): OwnerOption[] {
+  if (!unitId) return [];
+  const [prefix, id] = unitId.split(':');
+  if (prefix === 'DEPT') {
+    return OWNER_POOL.filter((o) => o.unitId === id && (o.role.startsWith('TP_') || o.role === 'TP_QLCS'));
+  }
+  if (prefix === 'BRANCH') {
+    return OWNER_POOL.filter((o) => o.unitId === id && o.role === 'QLCS');
+  }
+  return [];
 }
 
 interface KpiDraft {
@@ -344,23 +367,31 @@ export default function CreateModal({
     // Format unitId PHẢI dùng UPPERCASE prefix `DEPT:` / `BRANCH:` để khớp
     // select option value. Lowercase 'dept:'/'facility:' chỉ dùng cho KEY của
     // collaboratorRoles trên server.
+    // V6.5 (2026-06-15): pre-fill responsibleUid/Name từ states server lưu khi tạo task gốc.
+    const states = (t as any).collaboratorStates ?? {};
     for (const d of (t.collaboratorDeptIds ?? [])) {
+      const key = `dept:${d}`;
+      const s = states[key] ?? {};
       draft.push({
         id: `prefill-d-${idx++}`,
         unitId: `DEPT:${d}`,
-        responsibleName: '',
-        supportContent: roles[`dept:${d}`] ?? '',
-        deadline: t.dueDate ?? '',
-      } as CollaboratorDraft);
+        responsibleUid: s.responsibleUid ?? '',
+        responsibleName: s.responsibleName ?? '',
+        supportContent: roles[key] ?? '',
+        deadline: s.deadline ?? t.dueDate ?? '',
+      });
     }
     for (const f of (t.collaboratorFacilityIds ?? [])) {
+      const key = `facility:${f}`;
+      const s = states[key] ?? {};
       draft.push({
         id: `prefill-f-${idx++}`,
         unitId: `BRANCH:${f}`,
-        responsibleName: '',
-        supportContent: roles[`facility:${f}`] ?? '',
-        deadline: t.dueDate ?? '',
-      } as CollaboratorDraft);
+        responsibleUid: s.responsibleUid ?? '',
+        responsibleName: s.responsibleName ?? '',
+        supportContent: roles[key] ?? '',
+        deadline: s.deadline ?? t.dueDate ?? '',
+      });
     }
     setCollaborators(draft);
     // Kết quả
@@ -386,7 +417,7 @@ export default function CreateModal({
   function addCollaborator() {
     setCollaborators((prev) => [
       ...prev,
-      { id: `c-${Date.now()}-${prev.length}`, unitId: '', supportContent: '', deadline: '' },
+      { id: `c-${Date.now()}-${prev.length}`, unitId: '', supportContent: '', deadline: '', responsibleUid: '', responsibleName: '' },
     ]);
   }
   function updateCollaborator(id: string, patch: Partial<CollaboratorDraft>) {
@@ -464,6 +495,12 @@ export default function CreateModal({
         if (!c.unitId)                e[`collab-${idx}-unit`]     = 'Chọn đơn vị.';
         if (!c.supportContent.trim()) e[`collab-${idx}-content`]  = 'Nhập cần hỗ trợ.';
         if (!c.deadline)              e[`collab-${idx}-deadline`] = 'Chọn deadline riêng.';
+        // V6.5 Phase 5 (2026-06-15): bắt buộc Người phụ trách để collab thực sự tiếp nhận được.
+        if (!c.responsibleUid)        e[`collab-${idx}-resp`]     = 'Chọn người phụ trách.';
+        // V6.5: deadline collab ≤ deadline tổng (tránh inconsistency)
+        if (c.deadline && dueDate && c.deadline > dueDate) {
+          e[`collab-${idx}-deadline`] = `Deadline collab phải ≤ deadline tổng (${dueDate}).`;
+        }
       });
     }
     if (!objective.trim())        e.objective         = 'Vui lòng nhập mục tiêu công việc.';
@@ -497,6 +534,9 @@ export default function CreateModal({
       collaborators: collaborators.map((c) => ({
         unitId: c.unitId,
         unitName: unitLabel(c.unitId),
+        // V6.5 Phase 5 (2026-06-15): wire responsibleUid/Name → server sẽ map vào collaboratorStates
+        responsibleUid: c.responsibleUid,
+        responsibleName: c.responsibleName,
         supportContent: c.supportContent.trim(),
         deadline: c.deadline,
       })),
@@ -917,7 +957,10 @@ export default function CreateModal({
                       </label>
                       <select
                         value={c.unitId}
-                        onChange={(e) => updateCollaborator(c.id, { unitId: e.target.value })}
+                        onChange={(e) => {
+                          // V6.5: reset responsibleUid khi đổi unit (option list sẽ khác)
+                          updateCollaborator(c.id, { unitId: e.target.value, responsibleUid: '', responsibleName: '' });
+                        }}
                         className={`w-full px-2 py-1.5 text-xs rounded-lg border bg-white outline-none ${
                           errors[`collab-${idx}-unit`]
                             ? 'border-rose-400'
@@ -994,6 +1037,38 @@ export default function CreateModal({
                         <Trash2 size={14} />
                       </button>
                     </div>
+                  </div>
+
+                  {/* V6.5 Phase 5 (2026-06-15): Hàng 2 — Người phụ trách (bắt buộc) */}
+                  <div className="mt-2 pt-2 border-t border-slate-200">
+                    <label className="block text-[11px] font-medium text-slate-600 mb-1">
+                      Người phụ trách <span className="text-rose-500">*</span>
+                      {!c.unitId && <span className="ml-1 text-[10px] italic text-slate-400">(chọn đơn vị trước)</span>}
+                    </label>
+                    <select
+                      value={c.responsibleUid}
+                      disabled={!c.unitId}
+                      onChange={(e) => {
+                        const opt = getResponsibleOptions(c.unitId).find((o) => o.uid === e.target.value);
+                        updateCollaborator(c.id, {
+                          responsibleUid: e.target.value,
+                          responsibleName: opt?.name ?? '',
+                        });
+                      }}
+                      className={`w-full px-2 py-1.5 text-xs rounded-lg border bg-white outline-none disabled:bg-slate-100 disabled:cursor-not-allowed ${
+                        errors[`collab-${idx}-resp`]
+                          ? 'border-rose-400'
+                          : 'border-slate-300 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500'
+                      }`}
+                    >
+                      <option value="">-- Chọn người phụ trách --</option>
+                      {getResponsibleOptions(c.unitId).map((o) => (
+                        <option key={o.uid} value={o.uid}>{o.name} · {o.role}</option>
+                      ))}
+                    </select>
+                    {errors[`collab-${idx}-resp`] && (
+                      <p className="text-[10px] text-rose-600 mt-0.5">{errors[`collab-${idx}-resp`]}</p>
+                    )}
                   </div>
                 </div>
               ))}
@@ -1248,8 +1323,9 @@ export default function CreateModal({
           </section>
         </div>
 
-        {/* Footer — 3 nút: Huỷ · Lưu nháp · Tạo điều phối */}
-        <div className="px-5 py-3 border-t border-slate-200 flex items-center justify-end gap-2 bg-slate-50 rounded-b-xl">
+        {/* Footer V6.5 Phase 5 (2026-06-15): sticky bottom mobile (≤640px) — anh không
+            phải scroll dài để tìm nút Tạo. Desktop: footer thường (rounded). */}
+        <div className="px-5 py-3 border-t border-slate-200 flex items-center justify-end gap-2 bg-slate-50 rounded-b-xl sticky bottom-0 z-10 shadow-[0_-2px_8px_rgba(0,0,0,0.05)] sm:shadow-none">
           <button
             type="button"
             onClick={handleClose}
