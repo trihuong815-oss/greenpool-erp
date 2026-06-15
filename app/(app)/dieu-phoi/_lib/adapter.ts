@@ -70,6 +70,26 @@ const STATUS_MAP: Record<string, CoordStatus> = {
 const BRANCH_IDS = new Set<string>(['HM', 'NCT24', 'TK', 'TT', 'CTT']);
 const DEPT_IDS = new Set<string>(['MKT', 'DT', 'KT', 'QLCS', 'NS', 'KE', 'GS']);
 
+// V6.5 (2026-06-15): mapping ownerRole → DeptId để DeptBarChart đếm đúng "hiệu suất theo phòng ban".
+// Trước đây adapter LUÔN trả ownerDeptId=undefined → mọi dept đếm 0 task → biểu đồ % luôn 0.
+const ROLE_TO_DEPT: Record<string, DeptId> = {
+  TP_MKT: 'MKT', TP_DT: 'DT', TP_KT: 'KT',
+  TP_NS: 'NS',  TP_KE: 'KE', TP_GS: 'GS',
+  // QLCS_* không map (đã chuyển sang Cơ sở — xem BranchBarChart)
+};
+function resolveOwnerDeptId(task: any): DeptId | undefined {
+  // Ưu tiên field gốc do server set khi tạo task (assigneeDeptId nếu có)
+  const ad = task?.assigneeDeptId;
+  if (typeof ad === 'string' && DEPT_IDS.has(ad) && ad !== 'QLCS') return ad as DeptId;
+  // Fallback: suy từ ownerRole (form V4 lưu ownerRole='TP_KT'/...)
+  const role = task?.ownerRole;
+  if (typeof role === 'string' && ROLE_TO_DEPT[role]) return ROLE_TO_DEPT[role];
+  // Cuối cùng: suy từ createdByRole (proposal cũ, owner = creator)
+  const cRole = task?.createdByRole;
+  if (typeof cRole === 'string' && ROLE_TO_DEPT[cRole]) return ROLE_TO_DEPT[cRole];
+  return undefined;
+}
+
 // ============================================================
 // Inline workflow helpers (sẽ tách sang workflow-engine.ts sau)
 // ============================================================
@@ -276,7 +296,9 @@ export function adaptTask(t: Task): CoordTaskV4 {
     // Fallback createdBy/createdByName cho docs cũ chưa có Owner picker.
     ownerUid: (t as any).ownerUid || t.assigneeUserIds?.[0] || t.createdBy,
     ownerName: (t as any).ownerName || t.createdByName || '',
-    ownerDeptId: undefined,
+    // V6.5 (2026-06-15) FIX: resolve dept thật từ assigneeDeptId hoặc ownerRole
+    // → DeptBarChart "Hiệu suất theo phòng ban" giờ đếm ĐÚNG, không còn 0% cho mọi dept.
+    ownerDeptId: resolveOwnerDeptId(t),
     ownerBlock,
     branch,
     collaborators,
