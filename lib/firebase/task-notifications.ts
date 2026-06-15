@@ -312,14 +312,28 @@ export async function notifyTaskResubmitted(
 /** Phase 12 — Recipient yêu cầu creator bổ sung đề xuất. Push creator (Action Required). */
 export async function notifyTaskRevisionRequested(
   task: TaskDoc,
-  requester: { uid: string; name: string },
+  // V6.5 Audit fix Phase C.4 (2026-06-15) — Issue 4.2: role optional để noti hiển thị
+  // "GĐ KD yêu cầu bổ sung" rõ ràng thay vì generic name.
+  requester: { uid: string; name: string; role?: string },
   message: string,
 ): Promise<void> {
   if (!task.createdBy || task.createdBy === requester.uid) return;
   const link = taskLink(task.id, task.kind);
   const mod = moduleOf(task.kind);
+  // V6.5: role prefix (vd "GĐ Kinh doanh") nếu có, để creator biết ai đang yêu cầu
+  const ROLE_LABEL: Record<string, string> = {
+    CHU_TICH: 'Chủ tịch', CEO: 'CEO',
+    GD_KD: 'GĐ Kinh doanh', GD_VP: 'GĐ Văn phòng',
+    TP_KT: 'TP Kỹ thuật', TP_DT: 'TP Đào tạo', TP_MKT: 'TP Marketing',
+    TP_NS: 'TP Nhân sự', TP_KE: 'TP Kế toán', TP_GS: 'TP Giám sát',
+    ADMIN: 'Admin',
+  };
+  const roleLbl = requester.role ? (ROLE_LABEL[requester.role] ?? requester.role) : '';
+  const title = roleLbl
+    ? `⚠️ ${roleLbl} ${requester.name} yêu cầu bổ sung`
+    : `⚠️ ${requester.name} yêu cầu bổ sung`;
   const payload = {
-    title: `⚠️ ${requester.name} yêu cầu bổ sung`,
+    title,
     body: `"${task.title}" — ${message.slice(0, 100)}`,
     link, tag: `task-${task.id}`,
     data: { taskId: task.id, kind: 'task_revision_requested' },

@@ -122,7 +122,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
         assigneeFacilityId: data.assigneeFacilityId ?? null,
         status: 'requested_revision',
       },
-      { uid: caller.profile.uid, name: caller.actorName ?? '' },
+      // V6.5 Audit fix Phase C.4 (2026-06-15) — Issue 4.2: truyền role để UI noti render
+      // "GĐ KD yêu cầu bổ sung" thay vì generic "ai đó yêu cầu". Optional payload.
+      { uid: caller.profile.uid, name: caller.actorName ?? '', role: caller.profile.role_code },
       message,
     );
 

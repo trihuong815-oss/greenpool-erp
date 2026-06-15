@@ -803,10 +803,13 @@ export async function POST(req: NextRequest) {
     const kindLabel = kind === 'proposal' ? 'đề xuất' : 'giao việc';
     // Phase Stability 2026-06-10: resolve approver entry → tên người Vietnamese
     // thay vì raw "user:UID" hay "role:GD_VP".
-    const approverDisplay = await (await import('@/lib/firebase/approver-name'))
-      .resolveApproverName(currentApprover);
+    // V6.5 Audit fix Phase C.3 (2026-06-15) — Issue 4.1: guard null currentApprover
+    // tránh crash resolve khi chain rỗng. Body fallback "(chưa có chuỗi duyệt)".
+    const approverDisplay = currentApprover
+      ? await (await import('@/lib/firebase/approver-name')).resolveApproverName(currentApprover)
+      : null;
     const eventBody = status === 'pending_approval'
-      ? `Tạo ${kindLabel} — chờ ${approverDisplay} duyệt`
+      ? (approverDisplay ? `Tạo ${kindLabel} — chờ ${approverDisplay} duyệt` : `Tạo ${kindLabel} (chưa có chuỗi duyệt)`)
       : `Tạo ${kindLabel}`;
     // V6.5 Phase 5.3 (2026-06-15): thêm field `event` để timeline drawer render icon đúng.
     await ref.collection('comments').add({

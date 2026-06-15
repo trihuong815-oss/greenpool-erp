@@ -35,6 +35,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ taskId: st
       rejectionReason: reason,
       approvedBy: caller.profile.uid,
       approvedAt: now,
+      // V6.5 Audit fix Phase C.5 (2026-06-15) — Issue 4.3: reset currentApprover
+      // tránh drawer hiển thị stale state "đang chờ ai đó duyệt" sau khi đã reject.
+      currentApprover: null,
       updatedAt: now,
       updatedBy: caller.profile.uid,
     });
