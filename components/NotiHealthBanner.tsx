@@ -45,8 +45,34 @@ export function NotiHealthBanner() {
 
     fetchHealth();
     const id = setInterval(fetchHealth, CHECK_INTERVAL_MS);
-    return () => clearInterval(id);
+
+    // V6.5 (2026-06-15): khi anh focus app sau idle dài, refetch ngay để banner
+    // phản ánh tình trạng thực (PushHeartbeat song song đã ping server cập nhật lastSeen).
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') fetchHealth();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [fetchHealth]);
+
+  // V6.5 (2026-06-15): khi status='warning' (idle 12-72h) → tự FORCE ping heartbeat
+  // 1 lần để cố cứu, sau đó refetch banner. Trước đây PushHeartbeat bị cooldown 6h
+  // → user focus app nhưng heartbeat skip → banner mãi vàng. Force = bỏ cooldown.
+  useEffect(() => {
+    if (data?.status !== 'warning') return;
+    let cancelled = false;
+    (async () => {
+      try {
+        await runHealingCheck({ force: true });
+        if (!cancelled) await fetchHealth();
+      } catch { /* silent */ }
+    })();
+    return () => { cancelled = true; };
+  }, [data?.status, fetchHealth]);
 
   async function handleRefresh() {
     setRefreshing(true);
@@ -94,20 +120,20 @@ export function NotiHealthBanner() {
         </div>
         <div className="text-xs mt-0.5 opacity-90">{data.message}</div>
       </div>
-      {data.action === 'refresh' && (
-        <button
-          onClick={handleRefresh}
-          disabled={refreshing}
-          className={`shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold ${
-            isCritical
-              ? 'bg-rose-700 hover:bg-rose-800 text-white'
-              : 'bg-amber-600 hover:bg-amber-700 text-white'
-          } disabled:opacity-60`}
-        >
-          <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
-          {refreshing ? 'Đang bật...' : 'Bật lại noti'}
-        </button>
-      )}
+      {/* V6.5 (2026-06-15): luôn show nút "Bật lại" cho cả warning + critical
+          (trước đây chỉ critical mới có nút → warning kẹt 12-72h không có cách action) */}
+      <button
+        onClick={handleRefresh}
+        disabled={refreshing}
+        className={`shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold ${
+          isCritical
+            ? 'bg-rose-700 hover:bg-rose-800 text-white'
+            : 'bg-amber-600 hover:bg-amber-700 text-white'
+        } disabled:opacity-60`}
+      >
+        <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
+        {refreshing ? 'Đang bật...' : 'Bật lại noti'}
+      </button>
       <button
         onClick={handleDismiss}
         className="shrink-0 text-slate-500 hover:text-slate-800 p-1"
