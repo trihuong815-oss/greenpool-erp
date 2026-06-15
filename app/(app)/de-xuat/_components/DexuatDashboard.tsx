@@ -330,102 +330,102 @@ export default function DexuatDashboard({
         </div>
       )}
 
-      {/* V6.5 (2026-06-15): GỘP "Đề xuất theo giá trị" + "Cơ cấu đề xuất theo loại"
-          vào 1 hàng — mỗi widget chiếm 1/2 chiều rộng (md:grid-cols-2 từ 768px,
-          đảm bảo mọi laptop/tablet ngang đều chia đôi). Mobile <768px xếp dọc. */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        {/* Bar chart 4 nhóm tài chính */}
-        {(stats.tierBuckets.t1 + stats.tierBuckets.t2 + stats.tierBuckets.t3 + stats.tierBuckets.t4) > 0 ? (
-          <div className="rounded-xl border border-slate-200 bg-white p-5">
+      {/* V6.5 (2026-06-15): 1 CARD CHA — chia đôi bên trong (trái: bar value, phải: donut kind).
+          Divider dọc ở giữa (md:border-l). Mobile <768px → xếp dọc. */}
+      <div className="rounded-xl border border-slate-200 bg-white p-5">
+        <div className="flex flex-col md:flex-row md:divide-x md:divide-slate-200">
+          {/* NỬA TRÁI — Đề xuất theo giá trị */}
+          <div className="flex-1 md:pr-5">
             <h3 className="mb-4 text-sm font-semibold text-slate-700">Đề xuất theo giá trị</h3>
-            <div className="space-y-3">
-              {[
-                { label: 'Dưới 5 triệu', n: stats.tierBuckets.t1, color: 'emerald', range: '< 5 tr' },
-                { label: '5 – 50 triệu', n: stats.tierBuckets.t2, color: 'sky', range: '5–50 tr' },
-                { label: '50 – 200 triệu', n: stats.tierBuckets.t3, color: 'amber', range: '50–200 tr' },
-                { label: 'Từ 200 triệu', n: stats.tierBuckets.t4, color: 'rose', range: '≥ 200 tr' },
-              ].map((b) => {
-                const tot = stats.tierBuckets.t1 + stats.tierBuckets.t2 + stats.tierBuckets.t3 + stats.tierBuckets.t4;
-                const pct = tot === 0 ? 0 : Math.round((b.n / tot) * 100);
-                const colorMap: Record<string, { bar: string; text: string; bg: string }> = {
-                  emerald: { bar: 'linear-gradient(90deg, #34d399, #10b981)', text: 'text-emerald-700', bg: 'bg-emerald-50' },
-                  sky:     { bar: 'linear-gradient(90deg, #60a5fa, #3b82f6)', text: 'text-sky-700', bg: 'bg-sky-50' },
-                  amber:   { bar: 'linear-gradient(90deg, #fbbf24, #f59e0b)', text: 'text-amber-700', bg: 'bg-amber-50' },
-                  rose:    { bar: 'linear-gradient(90deg, #fb7185, #e11d48)', text: 'text-rose-700', bg: 'bg-rose-50' },
-                };
-                const c = colorMap[b.color];
-                return (
-                  <div key={b.label}>
-                    <div className="flex items-center justify-between mb-1 text-xs">
-                      <div className="flex items-center gap-2">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-md font-semibold ${c.bg} ${c.text}`}>
-                          {b.range}
+            {(stats.tierBuckets.t1 + stats.tierBuckets.t2 + stats.tierBuckets.t3 + stats.tierBuckets.t4) > 0 ? (
+              <div className="space-y-3">
+                {[
+                  { label: 'Dưới 5 triệu', n: stats.tierBuckets.t1, color: 'emerald', range: '< 5 tr' },
+                  { label: '5 – 50 triệu', n: stats.tierBuckets.t2, color: 'sky', range: '5–50 tr' },
+                  { label: '50 – 200 triệu', n: stats.tierBuckets.t3, color: 'amber', range: '50–200 tr' },
+                  { label: 'Từ 200 triệu', n: stats.tierBuckets.t4, color: 'rose', range: '≥ 200 tr' },
+                ].map((b) => {
+                  const tot = stats.tierBuckets.t1 + stats.tierBuckets.t2 + stats.tierBuckets.t3 + stats.tierBuckets.t4;
+                  const pct = tot === 0 ? 0 : Math.round((b.n / tot) * 100);
+                  const colorMap: Record<string, { bar: string; text: string; bg: string }> = {
+                    emerald: { bar: 'linear-gradient(90deg, #34d399, #10b981)', text: 'text-emerald-700', bg: 'bg-emerald-50' },
+                    sky:     { bar: 'linear-gradient(90deg, #60a5fa, #3b82f6)', text: 'text-sky-700', bg: 'bg-sky-50' },
+                    amber:   { bar: 'linear-gradient(90deg, #fbbf24, #f59e0b)', text: 'text-amber-700', bg: 'bg-amber-50' },
+                    rose:    { bar: 'linear-gradient(90deg, #fb7185, #e11d48)', text: 'text-rose-700', bg: 'bg-rose-50' },
+                  };
+                  const c = colorMap[b.color];
+                  return (
+                    <div key={b.label}>
+                      <div className="flex items-center justify-between mb-1 text-xs">
+                        <div className="flex items-center gap-2">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-md font-semibold ${c.bg} ${c.text}`}>
+                            {b.range}
+                          </span>
+                          <span className="text-slate-600">{b.label}</span>
+                        </div>
+                        <span className="tabular-nums text-slate-700 font-medium">
+                          {b.n} đề xuất <span className="text-slate-400">({pct}%)</span>
                         </span>
-                        <span className="text-slate-600">{b.label}</span>
                       </div>
-                      <span className="tabular-nums text-slate-700 font-medium">
-                        {b.n} đề xuất <span className="text-slate-400">({pct}%)</span>
-                      </span>
+                      <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden shadow-inner">
+                        <div className="h-full rounded-full shadow-sm transition-all" style={{ width: `${pct}%`, background: c.bar }} />
+                      </div>
                     </div>
-                    <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden shadow-inner">
-                      <div className="h-full rounded-full shadow-sm transition-all" style={{ width: `${pct}%`, background: c.bar }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="flex items-center justify-center py-8 text-sm text-slate-400 italic">
+                Chưa có đề xuất có giá trị tài chính
+              </div>
+            )}
           </div>
-        ) : (
-          // Placeholder nếu chưa có dữ liệu tài chính → giữ grid 2 cột visual không bị lệch
-          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 p-5 flex items-center justify-center text-sm text-slate-400 italic">
-            Chưa có đề xuất có giá trị tài chính
-          </div>
-        )}
 
-        {/* Cơ cấu đề xuất theo loại */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5">
-          <h3 className="mb-4 text-sm font-semibold text-slate-700">
-            Cơ cấu đề xuất theo loại
-          </h3>
-          <div className="grid grid-cols-1 items-center gap-4 sm:grid-cols-2">
-            <div className="flex justify-center sm:justify-start">
-              <DonutChart
-                segments={(Object.keys(stats.kindCount) as ProposalKindV6[]).map(
-                  (k) => ({
-                    value: stats.kindCount[k],
-                    color: KIND_COLOR[k],
-                    label: KIND_LABEL[k],
-                  })
-                )}
-                total={stats.totalKind}
-              />
+          {/* NỬA PHẢI — Cơ cấu đề xuất theo loại */}
+          <div className="flex-1 mt-5 md:mt-0 md:pl-5 pt-5 md:pt-0 border-t border-slate-200 md:border-t-0">
+            <h3 className="mb-4 text-sm font-semibold text-slate-700">
+              Cơ cấu đề xuất theo loại
+            </h3>
+            <div className="grid grid-cols-1 items-center gap-4 sm:grid-cols-2">
+              <div className="flex justify-center sm:justify-start">
+                <DonutChart
+                  segments={(Object.keys(stats.kindCount) as ProposalKindV6[]).map(
+                    (k) => ({
+                      value: stats.kindCount[k],
+                      color: KIND_COLOR[k],
+                      label: KIND_LABEL[k],
+                    })
+                  )}
+                  total={stats.totalKind}
+                />
+              </div>
+              <ul className="space-y-2 text-sm">
+                {(Object.keys(stats.kindCount) as ProposalKindV6[]).map((k) => {
+                  const c = stats.kindCount[k];
+                  const pct =
+                    stats.totalKind > 0
+                      ? Math.round((c / stats.totalKind) * 100)
+                      : 0;
+                  return (
+                    <li key={k} className="flex items-center gap-2">
+                      <span
+                        className="h-3 w-3 rounded-sm shrink-0"
+                        style={{ backgroundColor: KIND_COLOR[k] }}
+                      />
+                      <span className="flex-1 truncate text-slate-700 text-xs">
+                        {KIND_LABEL[k]}
+                      </span>
+                      <span className="tabular-nums font-semibold text-slate-800 text-sm">
+                        {c}
+                      </span>
+                      <span className="w-10 text-right text-[11px] tabular-nums text-slate-500">
+                        {pct}%
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
             </div>
-            <ul className="space-y-2 text-sm">
-              {(Object.keys(stats.kindCount) as ProposalKindV6[]).map((k) => {
-                const c = stats.kindCount[k];
-                const pct =
-                  stats.totalKind > 0
-                    ? Math.round((c / stats.totalKind) * 100)
-                    : 0;
-                return (
-                  <li key={k} className="flex items-center gap-2">
-                    <span
-                      className="h-3 w-3 rounded-sm shrink-0"
-                      style={{ backgroundColor: KIND_COLOR[k] }}
-                    />
-                    <span className="flex-1 truncate text-slate-700 text-xs">
-                      {KIND_LABEL[k]}
-                    </span>
-                    <span className="tabular-nums font-semibold text-slate-800 text-sm">
-                      {c}
-                    </span>
-                    <span className="w-10 text-right text-[11px] tabular-nums text-slate-500">
-                      {pct}%
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
           </div>
         </div>
       </div>
