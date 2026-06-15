@@ -360,21 +360,26 @@ export default function DetailDrawer({
     (task.severity as V4Severity | undefined) ?? 'binh_thuong';
 
   // Timeline — V4 schema chưa lưu history riêng → dựng từ createdAt + waitingSince.
-  const history: Array<{ time: string; who: string; action: string; dotColor: string }> =
+  // V6.5 Phase 5.2 (2026-06-15): standardize timeline icon — mỗi event 1 icon đặc trưng:
+  //   ✓ tick (create) · 📤 send (collab submit) · ⛔ X (reject) · ✓✓ check (complete) · 🛡 shield (approve)
+  // Hiện V4 chỉ có 2 row (create + waiting). Khi V5 thêm event sẽ extend type/icon.
+  const history: Array<{ time: string; who: string; action: string; iconKey: 'create' | 'waiting' | 'submit' | 'reject' | 'complete' | 'approve'; tone: string }> =
     [
-          {
-            time: formatDateTimeIso(task.createdAt),
-            who: task.createdByName,
-            action: 'Khởi tạo điều phối',
-            dotColor: 'bg-emerald-500',
-          },
-          {
-            time: formatDateTimeIso(task.waitingSince),
-            who: waiting.person || '—',
-            action: `Đang chờ: ${waiting.content || '—'}`,
-            dotColor: 'bg-amber-500',
-          },
-        ];
+      {
+        time: formatDateTimeIso(task.createdAt),
+        who: task.createdByName,
+        action: 'Khởi tạo điều phối',
+        iconKey: 'create',
+        tone: 'emerald',
+      },
+      {
+        time: formatDateTimeIso(task.waitingSince),
+        who: waiting.person || '—',
+        action: `Đang chờ: ${waiting.content || '—'}`,
+        iconKey: 'waiting',
+        tone: 'amber',
+      },
+    ];
 
   // ----- Handlers -----
 
@@ -1029,16 +1034,29 @@ export default function DetailDrawer({
               Lịch sử xử lý
             </h3>
             <ol className="relative ml-2 border-l border-slate-200 pl-4">
-              {history.map((h, i) => (
-                <li key={i} className="relative mb-3 last:mb-0">
-                  <span
-                    className={`absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full ring-2 ring-white ${h.dotColor}`}
-                  />
-                  <div className="text-[10px] tabular-nums text-slate-400">{h.time}</div>
-                  <div className="text-sm font-medium text-slate-800">{h.who}</div>
-                  <div className="text-xs text-slate-600">{h.action}</div>
-                </li>
-              ))}
+              {history.map((h, i) => {
+                // V6.5 (2026-06-15): icon đặc trưng cho mỗi event type — đồng bộ pattern
+                // standardize timeline (audit yêu cầu).
+                const ICONS = {
+                  create:   { Icon: CheckCircle2, bg: 'bg-emerald-500' },
+                  waiting:  { Icon: Clock,         bg: 'bg-amber-500'   },
+                  submit:   { Icon: Send,          bg: 'bg-sky-500'     },
+                  reject:   { Icon: XCircle,       bg: 'bg-rose-500'    },
+                  complete: { Icon: CheckCircle2,  bg: 'bg-emerald-600' },
+                  approve:  { Icon: ShieldCheck,   bg: 'bg-violet-500'  },
+                } as const;
+                const { Icon, bg } = ICONS[h.iconKey];
+                return (
+                  <li key={i} className="relative mb-3 last:mb-0">
+                    <span className={`absolute -left-[26px] top-0 flex h-5 w-5 items-center justify-center rounded-full text-white ring-2 ring-white ${bg}`}>
+                      <Icon className="h-3 w-3" />
+                    </span>
+                    <div className="text-[10px] tabular-nums text-slate-400">{h.time}</div>
+                    <div className="text-sm font-medium text-slate-800">{h.who}</div>
+                    <div className="text-xs text-slate-600">{h.action}</div>
+                  </li>
+                );
+              })}
             </ol>
           </section>
         </div>

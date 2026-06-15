@@ -884,16 +884,30 @@ export default function CreateModal({
                 {errors.ownerUid && <p className="text-[11px] text-rose-600 mt-1">{errors.ownerUid}</p>}
               </div>
 
-              {/* Hiển thị tóm tắt sau khi chọn */}
+              {/* V6.5 Phase 5.2 (2026-06-15): Chip preview rõ visual — avatar initials
+                  + tên + role + khối + đơn vị. Thay box text trước đây để dễ nhìn nhất quán
+                  với pattern chip ở bảng list. */}
               {selectedOwner && (
-                <div className="col-span-2 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200">
-                  <p className="text-xs text-emerald-800">
-                    <strong>Khối:</strong> {BLOCK_LABEL[selectedOwner.block]} ·{' '}
-                    <strong>Đơn vị:</strong>{' '}
-                    {selectedOwner.block === 'KD'
-                      ? BRANCH_LABEL[selectedOwner.unitId as BranchId] ?? DEPT_LABEL[selectedOwner.unitId as DeptId] ?? selectedOwner.unitId
-                      : DEPT_LABEL[selectedOwner.unitId as DeptId] ?? selectedOwner.unitId}
-                  </p>
+                <div className="col-span-2 flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-emerald-50 border border-emerald-300 ring-1 ring-emerald-200">
+                  <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-xs font-bold text-white">
+                    {(() => {
+                      const parts = selectedOwner.name.trim().split(/\s+/);
+                      const last = parts[parts.length - 1] || '';
+                      const first = parts[0] || '';
+                      return (first[0] + (last[0] || '')).toUpperCase();
+                    })()}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-semibold text-emerald-900 truncate">
+                      {selectedOwner.name}
+                      <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-white text-emerald-700 ring-1 ring-emerald-200">{selectedOwner.role}</span>
+                    </div>
+                    <div className="text-[11px] text-emerald-700 mt-0.5 truncate">
+                      Khối {BLOCK_LABEL[selectedOwner.block]} · {selectedOwner.block === 'KD'
+                        ? BRANCH_LABEL[selectedOwner.unitId as BranchId] ?? DEPT_LABEL[selectedOwner.unitId as DeptId] ?? selectedOwner.unitId
+                        : DEPT_LABEL[selectedOwner.unitId as DeptId] ?? selectedOwner.unitId}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

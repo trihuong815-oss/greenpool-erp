@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle, CheckCircle, ClipboardList, Hourglass, Users,
   type LucideIcon,
@@ -83,33 +84,63 @@ export default function SwipeKpiBar({
     { key: 'qua-han', label: 'Quá hạn', icon: AlertTriangle, accent: 'rose2', count: quaHan },
   ];
 
+  // V6.5 Phase 5.2 (2026-06-15): Dots indicator — track card đang giữa viewport.
+  // Onscroll: tính scrollLeft / cardStride → activeDot index. Show dưới row card.
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const [activeDot, setActiveDot] = useState(0);
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const cardW = 148 + 12; // width + gap
+      const idx = Math.round(el.scrollLeft / cardW);
+      setActiveDot(Math.max(0, Math.min(items.length - 1, idx)));
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [items.length]);
+
   return (
-    <div className="-mx-4 px-4 overflow-x-auto scrollbar-hide snap-x snap-mandatory">
-      <div className="flex gap-3 pb-1">
-        {items.map((item) => {
-          const Icon = item.icon;
-          const a = ACCENT[item.accent];
-          const isActive = active === item.key;
-          return (
-            <button
-              key={item.key}
-              type="button"
-              onClick={() => onSelect(isActive ? null : item.key)}
-              className={
-                'snap-start shrink-0 w-[148px] rounded-2xl bg-white shadow-sm p-3.5 transition active:scale-95 ' +
-                'ring-1 ' + (isActive ? `${a.ring} ring-2` : 'ring-slate-200')
-              }
-            >
-              <div className={`inline-flex rounded-xl p-2 ${a.wrap} mb-2`}>
-                <Icon size={18} className={a.icon} />
-              </div>
-              <div className={`text-3xl font-bold tabular-nums ${a.count} leading-none`}>
-                {item.count}
-              </div>
-              <div className="text-[12px] font-medium text-slate-600 mt-1.5 truncate">{item.label}</div>
-            </button>
-          );
-        })}
+    <div className="-mx-4">
+      <div ref={scrollerRef} className="px-4 overflow-x-auto scrollbar-hide snap-x snap-mandatory">
+        <div className="flex gap-3 pb-1">
+          {items.map((item) => {
+            const Icon = item.icon;
+            const a = ACCENT[item.accent];
+            const isActive = active === item.key;
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => onSelect(isActive ? null : item.key)}
+                className={
+                  'snap-start shrink-0 w-[148px] rounded-2xl bg-white shadow-sm p-3.5 transition active:scale-95 ' +
+                  'ring-1 ' + (isActive ? `${a.ring} ring-2` : 'ring-slate-200')
+                }
+              >
+                <div className={`inline-flex rounded-xl p-2 ${a.wrap} mb-2`}>
+                  <Icon size={18} className={a.icon} />
+                </div>
+                <div className={`text-3xl font-bold tabular-nums ${a.count} leading-none`}>
+                  {item.count}
+                </div>
+                <div className="text-[12px] font-medium text-slate-600 mt-1.5 truncate">{item.label}</div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      {/* V6.5: dots indicator — chỉ vị trí card hiện tại + còn bao nhiêu card phải/trái */}
+      <div className="flex justify-center gap-1.5 mt-2" aria-hidden="true">
+        {items.map((_, i) => (
+          <span
+            key={i}
+            className={`h-1.5 rounded-full transition-all ${
+              i === activeDot ? 'w-4 bg-emerald-600' : 'w-1.5 bg-slate-300'
+            }`}
+          />
+        ))}
       </div>
     </div>
   );
