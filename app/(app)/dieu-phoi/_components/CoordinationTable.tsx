@@ -276,7 +276,7 @@ export default function CoordinationTable({
               </th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-slate-200">
             {rows.map((t) => {
               const overdue = isPastDue(t.dueDate);
               const collabDisplay = t.collaboratorUnits
@@ -288,7 +288,7 @@ export default function CoordinationTable({
                 <tr
                   key={t.id}
                   onClick={() => onRowClick(t)}
-                  className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer divide-x divide-slate-100"
+                  className="hover:bg-slate-50 cursor-pointer divide-x divide-slate-200"
                 >
                   {/* Công việc — title + code + chip phối hợp inline (vd "+3 PH") */}
                   <td className="px-2 py-2.5 align-top">
