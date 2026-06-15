@@ -1,8 +1,14 @@
-// Push notification cho Chat (Phase 13).
-// Khi có message mới → push tới mọi participant trừ sender.
+// V6.5 Noti Audit Phase A.1 (2026-06-15): MIGRATE từ pushToUsers thuần → sendNotificationEvent.
+//
+// LÝ DO: trước đây chat-noti chỉ push FCM transient. Nếu push fail (network/SW chết/iOS chưa PWA)
+// → tin nhắn LỌT HOÀN TOÀN (không vào bell, không lịch sử, không retry).
+//
+// SAU MIGRATE: chat_message persist vào collection `notifications` (giống proposal/dispatch).
+// Bell badge thấy được, retry cron 5p/15p/30p, email backup nếu user opt-in.
+// Module='chat' tách khỏi proposal/dispatch để badge sidebar không lẫn.
 
 import 'server-only';
-import { pushToUsers } from './push-notifications';
+import { sendNotificationEvent } from './noti-engine';
 
 interface NotifyArgs {
   conversationId: string;
@@ -27,19 +33,22 @@ export async function notifyNewMessage(args: NotifyArgs): Promise<void> {
   } else {
     title = `💬 ${args.senderName}`;
   }
-  // Phase 13.14: log error rõ ràng thay vì silent catch (giúp debug noti fail).
   try {
-    const res = await pushToUsers(args.recipients, {
+    await sendNotificationEvent({
+      type: 'chat_message',
+      module: 'chat',
+      entityId: args.conversationId,
       title,
-      body: args.text,
-      link: `/tin-nhan?cid=${encodeURIComponent(args.conversationId)}`,
-      tag: `chat-${args.conversationId}`,
-      data: { kind: 'chat_message', conversationId: args.conversationId },
+      message: args.text.slice(0, 200),
+      linkUrl: `/tin-nhan?cid=${encodeURIComponent(args.conversationId)}`,
+      recipients: args.recipients,
+      priority: 'normal',
+      pushTag: `chat-${args.conversationId}`,
+      pushData: { conversationId: args.conversationId, type: args.conversationType },
+      // Chat KHÔNG cần email backup (spam quá nếu 50 tin/ngày). Push + in-app đủ.
+      channels: { inApp: true, push: true, email: false },
     });
-    if (res.sent === 0 && args.recipients.length > 0) {
-      console.warn('[chat-noti] 0 push sent cho', args.recipients.length, 'recipient (tokens trống hoặc invalid)');
-    }
   } catch (e: any) {
-    console.error('[chat-noti] push fail:', e?.message ?? 'unknown', '| recipients=', args.recipients.length);
+    console.error('[chat-noti] sendNotificationEvent fail:', e?.message ?? 'unknown', '| recipients=', args.recipients.length);
   }
 }

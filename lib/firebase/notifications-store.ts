@@ -60,9 +60,11 @@ export type NotiType =
   | 'proposal_create_coord' // proposal duyệt xong — tạo điều phối
   | 'task_overdue'
   | 'task_attachment'
-  | 'task_comment';
+  | 'task_comment'
+  // V6.5 Noti Audit Phase A.1 (2026-06-15): chat message persist DB (trước đây chỉ push)
+  | 'chat_message';
 
-export type NotiModule = 'proposal' | 'dispatch';
+export type NotiModule = 'proposal' | 'dispatch' | 'chat';
 export type NotiPriority = 'low' | 'normal' | 'high' | 'urgent';
 export type NotiActionStatus = 'pending' | 'done' | 'dismissed';
 

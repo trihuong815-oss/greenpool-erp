@@ -33,14 +33,28 @@ export async function POST(req: NextRequest) {
       const snap = await tx.get(ref);
       const devices: any[] = Array.isArray(snap.data()?.fcmDevices) ? snap.data()!.fcmDevices : [];
       const idx = devices.findIndex((d) => d?.token === token);
-      if (idx < 0) return { found: false };
+      if (idx < 0) return { found: false, disabled: false };
+      // V6.5 Noti Audit Phase A.3 (2026-06-15) — Issue 3.1: nếu user đã tắt device
+      // (enabled=false) → KHÔNG update lastSeen. Trước đây vẫn update → device được
+      // coi "fresh" → push vẫn gửi → mâu thuẫn user intent.
+      // → Trả 410 Gone cho client biết device đang tắt, không re-register tự động.
+      if (devices[idx]?.enabled === false) {
+        return { found: true, disabled: true, deviceLabel: devices[idx]?.label ?? null };
+      }
       const updated = [...devices];
       updated[idx] = { ...updated[idx], lastSeen: now };
       tx.update(ref, { fcmDevices: updated });
-      return { found: true, deviceLabel: devices[idx]?.label ?? null };
+      return { found: true, disabled: false, deviceLabel: devices[idx]?.label ?? null };
     });
     if (!result.found) {
       return NextResponse.json({ error: 'Token không có trong fcmDevices — cần re-register' }, { status: 404 });
+    }
+    if (result.disabled) {
+      return NextResponse.json({
+        error: 'Device đã bị tắt — bật lại ở /bao-mat để nhận thông báo',
+        deviceDisabled: true,
+        label: result.deviceLabel,
+      }, { status: 410 });
     }
     return NextResponse.json({ ok: true, label: result.deviceLabel });
   } catch (e: any) {

@@ -80,17 +80,22 @@ export async function pushToUsers(uids: string[], payload: PushPayload): Promise
     if (uniq.length === 0) return { sent: 0, failed: 0, tokensCleaned: 0, perUid };
   }
 
-  // Phase PWA-Stability (2026-06-09): dual-write inAppNotifications.
-  // Đảm bảo user MỞ APP sẽ thấy noti dù FCM web push fail.
-  import('./in-app-noti').then(({ writeInAppNotiBatch }) => {
-    writeInAppNotiBatch(uniq, {
+  // V6.5 Noti Audit Phase A.4 (2026-06-15) — Issue 1.1: AWAIT dual-write in-app
+  // TRƯỚC khi push FCM. Trước đây fire-and-forget then-chain → push hit client
+  // (notification banner hiện) NHƯNG in-app doc chưa kịp viết → user click bell
+  // thấy trống → confused. Đảm bảo bell luôn có doc trước khi push tới thiết bị.
+  try {
+    const { writeInAppNotiBatch } = await import('./in-app-noti');
+    await writeInAppNotiBatch(uniq, {
       title: payload.title,
       body: payload.body,
       link: payload.link ?? null,
       kind: payload.data?.kind ?? 'generic',
       data: payload.data ?? {},
-    }).catch(() => {});
-  }).catch(() => {});
+    });
+  } catch (e: any) {
+    console.warn('[push-notifications] in-app dual-write fail:', e?.message);
+  }
 
   try {
     // Fetch users parallel (lại — đã reuse db ở trên, không cần re-get)

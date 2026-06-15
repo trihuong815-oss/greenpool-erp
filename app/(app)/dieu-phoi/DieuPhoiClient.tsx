@@ -19,6 +19,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Calendar, ChevronDown, Loader2, Plus, RefreshCw } from 'lucide-react';
 import { isTP, isQLCS } from '@/lib/auth/roles';
+import { useNotiCounts } from '@/lib/hooks/use-noti-counts';
 import KpiBar from './_components/KpiBar';
 import BlockDonut from './_components/BlockDonut';
 import DeptBarChart from './_components/DeptBarChart';
@@ -116,7 +117,15 @@ export default function DieuPhoiClient({
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
-  const reload = useCallback(() => setReloadKey((k) => k + 1), []);
+  // V6.5 Noti Audit Phase A.2 (2026-06-15) — Issue 4.1: refresh badge sidebar
+  // sau mỗi action workflow (collab/owner/result) → count update tức thì thay vì
+  // đợi polling 180s. Đồng bộ pattern với DeXuatClient (Phase A.5 Đề xuất).
+  const { refresh: refreshNotiCounts } = useNotiCounts();
+  // Reload list + refresh badge sidebar cùng lúc — wrap reload để mọi callsite tự cập nhật badge.
+  const reload = useCallback(() => {
+    setReloadKey((k) => k + 1);
+    refreshNotiCounts();
+  }, [refreshNotiCounts]);
 
   useEffect(() => {
     let cancelled = false;
@@ -187,10 +196,13 @@ export default function DieuPhoiClient({
   }, [fromProposalId]);
 
   // Helper: cập nhật 1 task vào state + cập nhật selected drawer.
+  // V6.5 Noti Audit Phase A.2 (2026-06-15): mỗi update task = workflow event → refresh badge
+  // sidebar tức thì (không đợi polling 180s).
   const applyTaskUpdate = useCallback((next: CoordTask) => {
     setTasks((prev) => prev.map((t) => (t.id === next.id ? next : t)));
     setSelected((sel) => (sel && sel.id === next.id ? next : sel));
-  }, []);
+    refreshNotiCounts();
+  }, [refreshNotiCounts]);
 
   // ============================================================
   // 1. handleCreate — POST /api/tasks (giữ adapter map V4→V3 body)
