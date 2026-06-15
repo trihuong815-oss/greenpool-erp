@@ -144,34 +144,22 @@ function collabColor(status: string): string {
  * Format YYYY-MM-DD → dd/mm/yyyy bằng slice (KHÔNG Date object).
  * Nếu chuỗi không khớp, trả về nguyên gốc.
  */
+// V6.5 (2026-06-15): SỬA múi giờ. Trước đây slice raw string ISO → render giờ UTC
+// (chênh 7h với giờ Hà Nội). Giờ dùng helper formatDateHN/formatDateTimeHN từ
+// lib/dates.ts — convert ISO sang timeZone='Asia/Ho_Chi_Minh' đúng chuẩn.
+import { formatDateHN as _formatDateHN, formatDateTimeHN as _formatDateTimeHN } from '@/lib/dates';
+
 function formatDateIso(iso: string | undefined | null): string {
-  if (!iso) return '—';
-  const s = String(iso);
-  if (s.length >= 10 && s.charAt(4) === '-' && s.charAt(7) === '-') {
-    const yyyy = s.slice(0, 4);
-    const mm = s.slice(5, 7);
-    const dd = s.slice(8, 10);
-    return `${dd}/${mm}/${yyyy}`;
+  // Nếu là 'YYYY-MM-DD' date-only (dueDate) → format trực tiếp không qua tz
+  // (date-only không có khái niệm giờ → tz không đổi gì).
+  if (typeof iso === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    return `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
   }
-  return s;
+  return _formatDateHN(iso);
 }
 
-/**
- * Format ISO datetime → dd/mm/yyyy HH:mm bằng slice.
- */
 function formatDateTimeIso(iso: string | undefined | null): string {
-  if (!iso) return '—';
-  const s = String(iso);
-  if (s.length >= 16 && s.charAt(4) === '-' && s.charAt(7) === '-' && s.charAt(10) === 'T') {
-    const yyyy = s.slice(0, 4);
-    const mm = s.slice(5, 7);
-    const dd = s.slice(8, 10);
-    const hh = s.slice(11, 13);
-    const mi = s.slice(14, 16);
-    return `${dd}/${mm}/${yyyy} ${hh}:${mi}`;
-  }
-  if (s.length >= 10) return formatDateIso(s);
-  return s;
+  return _formatDateTimeHN(iso);
 }
 
 function initials(name: string): string {
@@ -246,29 +234,21 @@ function computeWaitingFor(task: CoordTask): {
 // Permission helpers (mock — chuyển sang RBAC server khi sẵn sàng)
 // ============================================================
 
-const OWNER_UPDATE_ROLES = new Set([
-  'ADMIN',
-  'CHU_TICH',
-  'CEO',
-  'GD_KD',
-  'GD_VP',
-  'TP_DT',
-  'TP_KT',
-  'TP_NS',
-  'TP_KE',
-  'TP_GS',
-  'TP_MKT',
-  'QLCS',
-  'QLCS_HM',
-  'QLCS_TK',
-  'QLCS_CTT',
-  'QLCS_24NCT',
-  'QLCS_TT',
-]);
+// V6.5 (2026-06-15) anh chốt: SỬA quyền "Owner xác nhận hoàn thành".
+// Trước đây whitelist gồm tất cả TP/QLCS/GĐ/CEO/ADMIN → mọi role này đều
+// thấy nút "Xác nhận hoàn thành" dù KHÔNG phải Owner thật → ai cũng tác động
+// thay Owner = sai phân quyền. Hiện chỉ:
+//   • Owner thật (task.ownerUid === uid) — người được giao task
+//   • ADMIN / CEO — escalation cấp cao khi Owner vắng/nghỉ
+//   • CHU_TICH — đỉnh hệ thống
+// KHÔNG còn cho TP/QLCS/GĐ khối khác xác nhận thay.
+const OWNER_OVERRIDE_ROLES = new Set(['ADMIN', 'CEO', 'CHU_TICH']);
+// Giữ alias để các check khác (canCloseDossier line 359) không vỡ.
+const OWNER_UPDATE_ROLES = OWNER_OVERRIDE_ROLES;
 
 function isOwnerLike(uid: string, role: string, task: CoordTask): boolean {
   if (task.ownerUid === uid) return true;
-  return OWNER_UPDATE_ROLES.has(role);
+  return OWNER_OVERRIDE_ROLES.has(role);
 }
 
 // ============================================================
