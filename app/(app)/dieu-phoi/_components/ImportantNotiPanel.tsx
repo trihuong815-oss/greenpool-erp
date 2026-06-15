@@ -45,13 +45,23 @@ export default function ImportantNotiPanel({ tasks }: Props) {
           title: `${t.title} đang quá hạn ${days} ngày`,
           sub: `Đang chờ: ${t.waitingForPerson || '—'}`, ts,
         });
-      } else if (t.status === 'cho_phe_duyet') {
+      } else if (
+        // V6.5 (2026-06-15) FIX: thêm V4 'cho_duyet_ket_qua' + V4 'cho_owner_xac_nhan'
+        // bên cạnh V3 'cho_phe_duyet' (backward-compat data cũ).
+        t.status === 'cho_duyet_ket_qua' ||
+        (t.status as string) === 'cho_phe_duyet' ||
+        t.status === 'cho_owner_xac_nhan'
+      ) {
         list.push({
           id: `${t.id}-ap`, time, icon: CheckCircle, color: 'amber',
           title: `${t.title} - cần phê duyệt`,
           sub: `Đang chờ: ${t.waitingForPerson || '—'}`, ts,
         });
-      } else if (t.status === 'cho_phan_hoi') {
+      } else if (
+        // V6.5 (2026-06-15) FIX: V3 'cho_phan_hoi' → V4 'dang_phoi_hop' (collab đang phối hợp).
+        t.status === 'dang_phoi_hop' ||
+        (t.status as string) === 'cho_phan_hoi'
+      ) {
         list.push({
           id: `${t.id}-rp`, time, icon: MessageSquare, color: 'sky',
           title: `${t.title} chờ phản hồi`,

@@ -106,12 +106,14 @@ export default function KpiBar({ tasks, currentUserUid }: KpiBarProps) {
 
     // -------- KPI 1: Cần tôi xử lý --------
     // a) Owner = tôi và task đang chờ xử lý (chưa hoàn thành / đóng)
+    // V6.5 (2026-06-15) FIX: Bỏ 'cho_phan_hoi' — V3 status đã chết, V4 dùng
+    // 'dang_phoi_hop'. Trước đây kiểm tra 'cho_phan_hoi' không có ý nghĩa
+    // nhưng vẫn count → false positive cho ownerNeedsAction.
     const ownerNeedsAction =
       ownedByMe &&
       tStatus !== 'hoan_thanh' &&
       tStatus !== 'dong_ho_so' &&
       (tStatus === 'cho_owner_xac_nhan' ||
-        tStatus === 'cho_phan_hoi' ||
         tStatus === 'khoi_tao' ||
         tStatus === 'dang_xu_ly' ||
         tStatus === 'dang_phoi_hop');

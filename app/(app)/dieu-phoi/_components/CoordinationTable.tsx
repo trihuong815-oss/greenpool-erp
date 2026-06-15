@@ -90,14 +90,29 @@ function isPastDueISO(dueDate: string): boolean {
   return Number.isFinite(due) && due < Date.now();
 }
 
+// V6.5 (2026-06-15) — FIX công thức filter tab theo audit (3 bug):
+// 1. "sent" — đổi `createdByName + ownerUid!==uid` (lỏng) → `createdByUid===uid` (chuẩn)
+//    Anh tạo task giao người khác = thuộc tab "Tôi giao", chứ KHÔNG phải mọi task có
+//    createdByName + Owner khác mình.
+// 2. "waiting_resp" — V3 `cho_phan_hoi` không tồn tại trong V4 → đổi định nghĩa
+//    đúng nghĩa "chờ collab phản hồi": task có ≥1 collab status ∈
+//    ['chua_tiep_nhan','gui_hoan_thanh','bi_tra_lai'] (đồng bộ KpiBar:141-145).
+// 3. "waiting_appr" — V3 `cho_phe_duyet` → V4 `cho_duyet_ket_qua` (đồng bộ DetailDrawer).
 function filterByTab(tasks: CoordTask[], tab: TabKey, uid: string) {
   switch (tab) {
     case 'all':          return tasks;
     case 'mine':         return tasks.filter((t) => t.ownerUid === uid);
-    case 'sent':         return tasks.filter((t) => t.createdByName && t.ownerUid !== uid);
+    case 'sent':         return tasks.filter((t) => t.createdByUid === uid);
     case 'cross':        return tasks.filter((t) => t.scope === 'lien_khoi');
-    case 'waiting_resp': return tasks.filter((t) => t.status === 'cho_phan_hoi');
-    case 'waiting_appr': return tasks.filter((t) => t.status === 'cho_phe_duyet');
+    case 'waiting_resp': return tasks.filter((t) =>
+      t.collaborators.some((c) => {
+        const s = c.status as string;
+        return s === 'chua_tiep_nhan' || s === 'gui_hoan_thanh' || s === 'bi_tra_lai';
+      }),
+    );
+    case 'waiting_appr': return tasks.filter((t) =>
+      t.status === 'cho_duyet_ket_qua' || (t.status as string) === 'cho_phe_duyet', // V4 + fallback V3
+    );
     case 'overdue':      return tasks.filter((t) => isPastDueISO(t.dueDate) && t.status !== 'hoan_thanh' && t.status !== 'dong_ho_so');
     case 'bottleneck':   return tasks.filter((t) => t.waitingForPerson && (Date.now() - new Date(t.waitingSince || t.createdAt).getTime()) > 24 * 3600_000);
   }
