@@ -409,4 +409,66 @@ chore: <config, deps, tooling>
 
 ---
 
+## 15. NOTIFICATION SYSTEM V6.5 (Phase A+B+C đã hoàn tất 2026-06-15)
+
+### Kiến trúc (BẮT BUỘC theo)
+1. **Notification DB = nguồn dữ liệu gốc** (Firestore collection `notifications`).
+   Mỗi noti có schema: userId/module/entityId/title/message/type/priority/
+   isRead/isActionRequired/actionStatus/pushStatus/pushError/sentAt/retryCount/
+   nextRetryAt/pushPayloadSnapshot.
+2. **Push FCM = kênh nhắc** (không phải source). Push fail → noti vẫn còn trong DB.
+3. **Badge sidebar/chuông đọc từ DB** qua `use-noti-counts` hook + Firestore realtime listener.
+4. **Engine duy nhất**: `sendNotificationEvent` (`lib/firebase/noti-engine.ts`). MỌI noti
+   từ task/proposal/dispatch/chat/kt PHẢI đi qua engine này — KHÔNG gọi `pushToUsers` thuần.
+
+### 4 module noti
+- `proposal`  → đề xuất duyệt
+- `dispatch`  → điều phối công việc
+- `chat`      → tin nhắn (Phase A.1 noti audit 2026-06-15)
+- `kt`        → kỹ thuật vận hành (Phase C.1 noti audit 2026-06-15)
+
+### iOS PWA notification — limitation
+- iOS Safari KHÔNG deliver web push notification nếu chưa "Add to Home Screen" (PWA installed).
+- Component `IOSInstallPwaBanner` (components/) tự detect + show banner hướng dẫn.
+- iOS PWA deeplink có delay 5-10s (Apple throttle FCM web push).
+
+### FCM token lifecycle
+- Storage: `users.fcmDevices[]` với schema { token, enabled, lastSeen, userAgent, label, disabledReason?, disabledAt? }
+- Heartbeat: cron + client mỗi 6h update `lastSeen`. Nếu device.enabled=false → server trả 410 (Phase A.3 audit).
+- Cleanup stale token: cron daily 10:00 VN xoá fcmDevices có lastSeen >7 ngày.
+- Invalid token (FCM trả `registration-token-not-registered`): SOFT DELETE (enabled=false + disabledReason='invalid') — Phase B.5 audit.
+- Retry queue: 5p / 15p / 30p, max 3 lần (cron retry-failed-push every 5 min).
+
+### Cron jobs noti
+- `*/5 * * * *` retry-failed-push (FCM push fail)
+- `0 3 * * *`   cleanup-stale-fcm (xoá token >7d)
+- `15 * * * *`  proposal-overdue (SLA reminder)
+- `30 * * * *`  dispatch-overdue (escalation GĐ khối >24h)
+- `45 * * * *`  action-required-stuck (resend >24h chưa xử lý)
+- `50 * * * *`  proposal-stale-recipient (cancel proposal+dispatch khi approver disabled)
+
+### Channel settings per user
+- Settings page: `/bao-mat` → component `NotiChannelsSettings`
+- API: `GET/PUT /api/personal/noti-channels`
+- 3 module × 3 channel: inApp/push/email — inApp luôn ON (source of truth)
+- Engine read user override khi gửi: nếu user tắt push/email → skip kênh đó (vẫn persist inApp doc)
+
+### Email backup (Gmail SMTP)
+- Wrapper: `lib/email/gmail-smtp-client.ts` (Nodemailer)
+- Env vars: `GMAIL_SMTP_USER` + `GMAIL_SMTP_PASS` (App Password)
+- Default policy: chỉ gửi email cho `ACTION_REQUIRED_TYPES` (proposal cần duyệt, KT proposal pending, ...)
+- KHÔNG gửi cho chat_message (spam quá)
+
+### Multi-tab sync
+- BroadcastChannel `gp-noti-sync`: tab A mark read → tab B refetch counters (Phase C.4 audit)
+- Realtime onSnapshot `notifications where userId+isActionRequired+actionStatus=pending` → debounce 150ms → fetchBiz
+
+### Deep link
+- `/de-xuat?proposalId=X[&action=approve|reject|revision]` — proposal drawer auto-open + focus action button
+- `/dieu-phoi?taskId=X[&createFromProposal=Y]` — dispatch drawer auto-open
+- `/tin-nhan?cid=X` — chat conversation
+- `/ky-thuat/giao-viec?id=X` — KT work item
+
+---
+
 *Claude: Đọc file này TRƯỚC KHI làm bất kỳ thay đổi nào. Kiểm tra encoding trước khi sửa font/layout.*
