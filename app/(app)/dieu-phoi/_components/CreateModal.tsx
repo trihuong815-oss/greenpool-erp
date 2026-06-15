@@ -67,7 +67,10 @@ const SEVERITIES_V4: { id: SeverityV4; label: string }[] = [
   { id: 'khan_cap',    label: 'Khẩn cấp' },
 ];
 
-const DEPT_IDS: DeptId[] = ['MKT', 'DT', 'KT', 'QLCS', 'NS', 'KE', 'GS'];
+// V6.5 (2026-06-15): bỏ 'QLCS' khỏi danh sách phòng ban — QLCS là role quản lý
+// cơ sở (HM/TK/CTT/24/TT), KHÔNG phải phòng ban. 5 cơ sở đã có trong optgroup
+// "Cơ sở (KD)" riêng bên dưới.
+const DEPT_IDS: DeptId[] = ['MKT', 'DT', 'KT', 'NS', 'KE', 'GS'];
 const BRANCH_IDS: BranchId[] = ['HM', 'NCT24', 'TK', 'TT', 'CTT'];
 const BLOCKS: Block[] = ['KD', 'VP'];
 
