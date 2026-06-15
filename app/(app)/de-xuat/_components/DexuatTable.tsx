@@ -326,7 +326,8 @@ function DexuatTable(props: DexuatTableProps) {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 sticky top-0 z-10">
-              <tr className="text-left border-b border-slate-200 text-[11px] font-semibold text-slate-600 uppercase tracking-wider">
+              {/* V6.5 (2026-06-15) anh chốt: kẻ ô ngang + dọc đồng bộ với bảng Điều phối. */}
+              <tr className="text-left border-b-2 border-slate-200 text-[11px] font-semibold text-slate-600 uppercase tracking-wider divide-x divide-slate-200">
                 <th className="px-3 py-2.5">Mã</th>
                 <th className="px-3 py-2.5">Tên đề xuất</th>
                 <th className="px-3 py-2.5">Loại</th>
@@ -341,7 +342,7 @@ function DexuatTable(props: DexuatTableProps) {
                 <th className="px-1 py-2.5 text-center">Hành động</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-slate-200">
               {paged.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="py-12 text-center text-sm text-slate-500">
@@ -510,7 +511,7 @@ function DexuatRow({ p, currentUserUid, currentUserRole, onRowClick, onAction }:
   return (
     <tr
       onClick={() => onRowClick(p)}
-      className={`border-b border-slate-100 last:border-0 hover:bg-slate-50 cursor-pointer ${
+      className={`hover:bg-slate-50 cursor-pointer divide-x divide-slate-200 ${
         overdue ? 'bg-rose-50/40' : ''
       }`}
     >
