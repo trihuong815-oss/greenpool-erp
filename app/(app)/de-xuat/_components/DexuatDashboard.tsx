@@ -331,8 +331,9 @@ export default function DexuatDashboard({
       )}
 
       {/* V6.5 (2026-06-15): GỘP "Đề xuất theo giá trị" + "Cơ cấu đề xuất theo loại"
-          vào 1 hàng — mỗi widget chiếm 1/2 chiều rộng (lg:grid-cols-2). Mobile xếp dọc. */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          vào 1 hàng — mỗi widget chiếm 1/2 chiều rộng (md:grid-cols-2 từ 768px,
+          đảm bảo mọi laptop/tablet ngang đều chia đôi). Mobile <768px xếp dọc. */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {/* Bar chart 4 nhóm tài chính */}
         {(stats.tierBuckets.t1 + stats.tierBuckets.t2 + stats.tierBuckets.t3 + stats.tierBuckets.t4) > 0 ? (
           <div className="rounded-xl border border-slate-200 bg-white p-5">
