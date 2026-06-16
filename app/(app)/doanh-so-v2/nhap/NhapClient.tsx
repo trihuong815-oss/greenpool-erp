@@ -34,11 +34,17 @@ function todayDisplay(): string {
   return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`;
 }
 
+// V6 (2026-06-17): persist local rows (typing chưa save) qua reload bằng localStorage.
+// Key = saleId_date (== batch.id). Sang ngày mới key mới → tự reset, không leak day cũ.
+const STORAGE_PREFIX = 'gp-sales-v2-draft-';
+const storageKey = (batchId: string) => `${STORAGE_PREFIX}${batchId}`;
+
 export default function NhapClient({ branchId, branchName, saleName, packages }: Props) {
   const [batch, setBatch] = useState<SalesDailyBatch | null>(null);
   const [rows, setRows] = useState<SalesTransaction[]>([]);
   const [localRows, setLocalRows] = useState<LocalRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hydrated, setHydrated] = useState(false); // true sau khi load localStorage xong
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,11 +88,44 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
     return batch.status === 'draft' || batch.status === 'returned';
   }, [batch]);
 
+  // Hydrate localRows từ localStorage sau khi batch ready. Cleanup key của ngày cũ.
+  useEffect(() => {
+    if (!batch || hydrated) return;
+    try {
+      const raw = localStorage.getItem(storageKey(batch.id));
+      if (raw) {
+        const parsed = JSON.parse(raw) as LocalRow[];
+        if (Array.isArray(parsed)) setLocalRows(parsed);
+      }
+      // Cleanup key của ngày cũ cho cùng Sale (sang ngày mới: key mới khác, key cũ xoá)
+      const prefix = `${STORAGE_PREFIX}${batch.saleId}_`;
+      const currentKey = storageKey(batch.id);
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith(prefix) && k !== currentKey) localStorage.removeItem(k);
+      }
+    } catch (e) {
+      console.warn('[sales-v2] localStorage hydrate fail:', e);
+    }
+    setHydrated(true);
+  }, [batch, hydrated]);
+
+  // Persist localRows → localStorage mỗi khi state thay đổi (chỉ sau khi hydrate xong).
+  useEffect(() => {
+    if (!batch || !hydrated) return;
+    try {
+      if (localRows.length === 0) localStorage.removeItem(storageKey(batch.id));
+      else localStorage.setItem(storageKey(batch.id), JSON.stringify(localRows));
+    } catch (e) {
+      console.warn('[sales-v2] localStorage save fail:', e);
+    }
+  }, [batch, hydrated, localRows]);
+
   // V6 (2026-06-17): Auto-ensure trailing empty row khi có thể edit — Sale không cần
   // kéo lên bấm "+ Thêm dòng" mỗi lần. Khi row cuối có dữ liệu → tự thêm 1 empty row
-  // ngay sau để typing tiếp. Initial mount + sau Lưu tạm (localRows về []) cũng add 1 empty.
+  // ngay sau để typing tiếp. Chỉ chạy SAU hydrate để không ghi đè localStorage data.
   useEffect(() => {
-    if (!canEdit) return;
+    if (!canEdit || !hydrated) return;
     setLocalRows((prev) => {
       if (prev.length === 0) return [makeEmptyRow()];
       const last = prev[prev.length - 1];
@@ -94,7 +133,7 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
       if (hasData) return [...prev, makeEmptyRow()];
       return prev;
     });
-  }, [localRows, canEdit]);
+  }, [localRows, canEdit, hydrated]);
 
   const totals = useMemo(() => {
     let sales = 0, collected = 0, count = 0;
