@@ -17,7 +17,7 @@ export const dynamic = 'force-dynamic';
 export async function POST() {
   try {
     const caller = await getAuthedCaller();
-    const ctx = resolveSaleContext(caller);
+    const ctx = await resolveSaleContext(caller);
     if ('error' in ctx) return NextResponse.json({ error: ctx.error }, { status: 403 });
 
     const date = todayInVN();

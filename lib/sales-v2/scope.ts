@@ -4,8 +4,10 @@
 import 'server-only';
 import type { AuthedCaller } from '@/lib/firebase/checklist-auth';
 import type { BranchId } from '@/lib/types';
-import { BRANCH_BY_ID } from '@/lib/branches';
+import { BRANCH_BY_ID, isBranchId } from '@/lib/branches';
 import { isTopAdmin } from '@/lib/permissions';
+import { getFirebaseAdminDb } from '@/lib/firebase/admin';
+import { COLLECTIONS } from '@/lib/firebase/collections';
 
 export type ScopeRole =
   | 'sale'            // NV_SALE, NV_SALE_PT — chỉ batch của mình
@@ -64,21 +66,38 @@ export function canEditTransaction(
   return false;
 }
 
-/** Resolve branch + sale info từ caller. */
-export function resolveSaleContext(caller: AuthedCaller): {
+/** Resolve branch + sale info từ caller. branchName fetch từ Firestore `branches` (source
+ *  of truth — admin tự sửa được, không cần deploy). BRANCH_BY_ID chỉ làm fallback. */
+export async function resolveSaleContext(caller: AuthedCaller): Promise<{
   saleId: string;
   saleName: string;
   branchId: BranchId;
   branchName: string;
-} | { error: string } {
+} | { error: string }> {
   const role = getScopeRole(caller.profile.role_code);
   if (role !== 'sale') return { error: 'Chỉ tài khoản Sale mới được nhập' };
-  const branchId = caller.profile.facility_id as BranchId | null;
-  if (!branchId || !BRANCH_BY_ID[branchId]) return { error: 'Tài khoản Sale chưa được gán cơ sở' };
+  const raw = caller.profile.facility_id;
+  if (!raw || !isBranchId(raw)) return { error: 'Tài khoản Sale chưa được gán cơ sở' };
+  const branchId: BranchId = raw;
+
+  // Fetch branchName từ Firestore — admin edit qua /users hoặc trực tiếp DB sẽ có hiệu lực ngay.
+  let branchName = BRANCH_BY_ID[branchId]?.name ?? branchId;
+  try {
+    const db = getFirebaseAdminDb();
+    const doc = await db.collection(COLLECTIONS.BRANCHES).doc(branchId).get();
+    if (doc.exists) {
+      const dbName = String(doc.data()?.name ?? '').trim();
+      if (dbName) branchName = dbName;
+    }
+  } catch (e) {
+    // Fallback xuống BRANCH_BY_ID nếu Firestore fail — KHÔNG block flow
+    console.warn('[resolveSaleContext] fetch branchName fail, fallback to code constant:', e);
+  }
+
   return {
     saleId: caller.profile.uid,
     saleName: caller.actorName || caller.profile.uid,
     branchId,
-    branchName: BRANCH_BY_ID[branchId].name,
+    branchName,
   };
 }

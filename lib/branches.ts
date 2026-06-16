@@ -26,7 +26,7 @@ export const BRANCHES: ReadonlyArray<BranchMeta> = [
   { id: 'HM',  name: 'Green Pool Hoàng Mai',          shortName: 'HM',   color: '#10b981' },
   { id: 'TK',  name: 'Green Pool 20 Thuỵ Khuê',       shortName: 'TK',   color: '#06b6d4' },
   { id: 'CTT', name: 'Green Pool Cung Thể Thao MĐ',   shortName: 'CTT',  color: '#8b5cf6' },
-  { id: '24',  name: 'Green Pool 24 Nguyễn Công Trứ', shortName: '24',   color: '#f59e0b' },
+  { id: '24',  name: 'Green Pool 24 Nguyễn Cơ Thạch',  shortName: '24',   color: '#f59e0b' },
   { id: 'TT',  name: 'Green Pool Thanh Trì',          shortName: 'TT',   color: '#ef4444' },
 ] as const;
 

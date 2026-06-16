@@ -59,7 +59,7 @@ export default async function NhapDoanhSoV2Page() {
     actorName: profile.displayName,
     actorRole: profile.roleName ?? profile.roleCode,
   };
-  const ctx = resolveSaleContext(fakeCaller);
+  const ctx = await resolveSaleContext(fakeCaller);
   if ('error' in ctx) {
     return (
       <>
