@@ -330,52 +330,162 @@ export default function DexuatDashboard({
         </div>
       )}
 
-      {/* V6.5 (2026-06-15): Row 1 — Bar "Đề xuất theo giá trị" standalone full width.
-          Hover effect: nhẹ nhấc + shadow để feel tương tác. */}
-      <div className="rounded-xl border border-slate-200 bg-white p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md">
-        <h3 className="mb-4 text-sm font-semibold text-slate-700">Đề xuất theo giá trị</h3>
-        {(stats.tierBuckets.t1 + stats.tierBuckets.t2 + stats.tierBuckets.t3 + stats.tierBuckets.t4) > 0 ? (
-          <div className="space-y-3">
-            {[
-              { label: 'Dưới 5 triệu', n: stats.tierBuckets.t1, color: 'emerald', range: '< 5 tr' },
-              { label: '5 – 50 triệu', n: stats.tierBuckets.t2, color: 'sky', range: '5–50 tr' },
-              { label: '50 – 200 triệu', n: stats.tierBuckets.t3, color: 'amber', range: '50–200 tr' },
-              { label: 'Từ 200 triệu', n: stats.tierBuckets.t4, color: 'rose', range: '≥ 200 tr' },
-            ].map((b) => {
-              const tot = stats.tierBuckets.t1 + stats.tierBuckets.t2 + stats.tierBuckets.t3 + stats.tierBuckets.t4;
-              const pct = tot === 0 ? 0 : Math.round((b.n / tot) * 100);
-              const colorMap: Record<string, { bar: string; text: string; bg: string }> = {
-                emerald: { bar: 'linear-gradient(90deg, #34d399, #10b981)', text: 'text-emerald-700', bg: 'bg-emerald-50' },
-                sky:     { bar: 'linear-gradient(90deg, #60a5fa, #3b82f6)', text: 'text-sky-700', bg: 'bg-sky-50' },
-                amber:   { bar: 'linear-gradient(90deg, #fbbf24, #f59e0b)', text: 'text-amber-700', bg: 'bg-amber-50' },
-                rose:    { bar: 'linear-gradient(90deg, #fb7185, #e11d48)', text: 'text-rose-700', bg: 'bg-rose-50' },
-              };
-              const c = colorMap[b.color];
-              return (
-                <div key={b.label}>
-                  <div className="flex items-center justify-between mb-1 text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-md font-semibold ${c.bg} ${c.text}`}>
-                        {b.range}
+      {/* V6.5 (2026-06-16): Row 1 — [Bar "theo giá trị" | Điểm nghẽn] cùng hàng.
+          md:grid-cols-2 chia đôi; mobile <768px xếp dọc. Mỗi card hover độc lập. */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {/* TRÁI — Bar "Đề xuất theo giá trị" */}
+        <div className="rounded-xl border border-slate-200 bg-white p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md">
+          <h3 className="mb-4 text-sm font-semibold text-slate-700">Đề xuất theo giá trị</h3>
+          {(stats.tierBuckets.t1 + stats.tierBuckets.t2 + stats.tierBuckets.t3 + stats.tierBuckets.t4) > 0 ? (
+            <div className="space-y-3">
+              {[
+                { label: 'Dưới 5 triệu', n: stats.tierBuckets.t1, color: 'emerald', range: '< 5 tr' },
+                { label: '5 – 50 triệu', n: stats.tierBuckets.t2, color: 'sky', range: '5–50 tr' },
+                { label: '50 – 200 triệu', n: stats.tierBuckets.t3, color: 'amber', range: '50–200 tr' },
+                { label: 'Từ 200 triệu', n: stats.tierBuckets.t4, color: 'rose', range: '≥ 200 tr' },
+              ].map((b) => {
+                const tot = stats.tierBuckets.t1 + stats.tierBuckets.t2 + stats.tierBuckets.t3 + stats.tierBuckets.t4;
+                const pct = tot === 0 ? 0 : Math.round((b.n / tot) * 100);
+                const colorMap: Record<string, { bar: string; text: string; bg: string }> = {
+                  emerald: { bar: 'linear-gradient(90deg, #34d399, #10b981)', text: 'text-emerald-700', bg: 'bg-emerald-50' },
+                  sky:     { bar: 'linear-gradient(90deg, #60a5fa, #3b82f6)', text: 'text-sky-700', bg: 'bg-sky-50' },
+                  amber:   { bar: 'linear-gradient(90deg, #fbbf24, #f59e0b)', text: 'text-amber-700', bg: 'bg-amber-50' },
+                  rose:    { bar: 'linear-gradient(90deg, #fb7185, #e11d48)', text: 'text-rose-700', bg: 'bg-rose-50' },
+                };
+                const c = colorMap[b.color];
+                return (
+                  <div key={b.label}>
+                    <div className="flex items-center justify-between mb-1 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-md font-semibold ${c.bg} ${c.text}`}>
+                          {b.range}
+                        </span>
+                        <span className="text-slate-600">{b.label}</span>
+                      </div>
+                      <span className="tabular-nums text-slate-700 font-medium">
+                        {b.n} đề xuất <span className="text-slate-400">({pct}%)</span>
                       </span>
-                      <span className="text-slate-600">{b.label}</span>
                     </div>
-                    <span className="tabular-nums text-slate-700 font-medium">
-                      {b.n} đề xuất <span className="text-slate-400">({pct}%)</span>
-                    </span>
+                    <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden shadow-inner">
+                      <div className="h-full rounded-full shadow-sm transition-all" style={{ width: `${pct}%`, background: c.bar }} />
+                    </div>
                   </div>
-                  <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden shadow-inner">
-                    <div className="h-full rounded-full shadow-sm transition-all" style={{ width: `${pct}%`, background: c.bar }} />
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex items-center justify-center py-8 text-sm text-slate-400 italic">
+              Chưa có đề xuất có giá trị tài chính
+            </div>
+          )}
+        </div>
+
+        {/* PHẢI — Điểm nghẽn đề xuất */}
+        <div className="rounded-xl border border-slate-200 bg-white overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md">
+          <div className="bg-rose-50/60 px-4 py-2.5 border-b border-rose-100">
+            <h3 className="text-[11px] font-bold uppercase tracking-wider text-rose-700">
+              Điểm nghẽn đề xuất
+            </h3>
+          </div>
+          {(() => {
+            interface AggRow { key: string; name: string; holding: number; longestHours: number }
+            const approverGroups = new Map<string, AggRow>();
+            const longest: Array<{ id: string; code: string; title: string; hours: number; approver: string }> = [];
+            const blockTon = { KD: 0, VP: 0 };
+
+            for (const p of proposals as any[]) {
+              const pending = ['da_gui', 'dang_xem_xet', 'yeu_cau_bo_sung'].includes(p.status);
+              if (!pending) continue;
+              const hrs = p.updatedAt ? (nowMs - new Date(p.updatedAt).getTime()) / 3_600_000 : 0;
+              const cur = p.approverChain?.[p.approverIdx];
+              const aprName = cur?.name || cur?.roleCode || 'Chưa xác định';
+              if (cur) {
+                const key = cur.uid || cur.roleCode || aprName;
+                const ex = approverGroups.get(key);
+                if (!ex) approverGroups.set(key, { key, name: aprName, holding: 1, longestHours: hrs });
+                else { ex.holding++; if (hrs > ex.longestHours) ex.longestHours = hrs; }
+              }
+              longest.push({ id: p.id, code: p.code, title: p.title, hours: hrs, approver: aprName });
+              if (p.creatorBlock === 'KD') blockTon.KD++;
+              else if (p.creatorBlock === 'VP') blockTon.VP++;
+            }
+            const topApprovers = Array.from(approverGroups.values())
+              .sort((a, b) => b.holding - a.holding || b.longestHours - a.longestHours)
+              .slice(0, 3);
+            const topLongest = longest.sort((a, b) => b.hours - a.hours).slice(0, 3);
+            const totalPending = blockTon.KD + blockTon.VP;
+
+            if (topApprovers.length === 0 && totalPending === 0) {
+              return <div className="py-8 text-center text-sm text-emerald-600 font-medium">✓ Không có điểm nghẽn</div>;
+            }
+
+            const fmtHrs = (h: number) => h < 24 ? `${Math.round(h)}h` : `${(h / 24).toFixed(1)} ngày`;
+
+            return (
+              <div className="divide-y divide-slate-100">
+                {topApprovers.length > 0 && (
+                  <div className="px-4 py-3">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+                      Người duyệt giữ nhiều
+                    </div>
+                    {topApprovers.map((r) => (
+                      <div key={r.key} className="flex items-center justify-between py-1.5 text-sm">
+                        <span className="truncate text-slate-800 font-medium">{r.name}</span>
+                        <span className="shrink-0 ml-2 inline-flex items-center gap-2">
+                          <span className="tabular-nums text-slate-600 text-xs">{r.holding} ĐX</span>
+                          <span className="tabular-nums text-rose-600 text-xs font-semibold">{fmtHrs(r.longestHours)}</span>
+                        </span>
+                      </div>
+                    ))}
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="flex items-center justify-center py-8 text-sm text-slate-400 italic">
-            Chưa có đề xuất có giá trị tài chính
-          </div>
-        )}
+                )}
+                {topLongest.length > 0 && (
+                  <div className="px-4 py-3">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+                      Đề xuất chờ lâu nhất
+                    </div>
+                    {topLongest.map((r) => (
+                      <div key={r.id} className="py-1.5">
+                        <div className="text-sm font-medium text-slate-800 truncate" title={r.title}>{r.title}</div>
+                        <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
+                          <span className="tabular-nums">#{r.code}</span>
+                          <span>·</span>
+                          <span className="text-rose-600 font-semibold tabular-nums">Chờ {fmtHrs(r.hours)}</span>
+                          <span>·</span>
+                          <span className="truncate">tại {r.approver}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {totalPending > 0 && (
+                  <div className="px-4 py-3">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+                      Tồn theo khối tạo
+                    </div>
+                    <div className="space-y-1.5">
+                      {[{ label: 'Khối Kinh doanh', n: blockTon.KD, color: 'bg-emerald-500' },
+                        { label: 'Khối Văn phòng', n: blockTon.VP, color: 'bg-violet-500' }].map((b) => {
+                        const pct = totalPending === 0 ? 0 : Math.round((b.n / totalPending) * 100);
+                        return (
+                          <div key={b.label}>
+                            <div className="flex items-center justify-between text-xs mb-0.5">
+                              <span className="text-slate-700">{b.label}</span>
+                              <span className="tabular-nums text-slate-600">{b.n} <span className="text-slate-400">({pct}%)</span></span>
+                            </div>
+                            <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                              <div className={`h-full ${b.color}`} style={{ width: `${pct}%` }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </div>
       </div>
 
       {/* V6.5 (2026-06-15): Row 2 — 2 DONUT CÙNG HÀNG (theo loại | theo khối).
@@ -470,119 +580,6 @@ export default function DexuatDashboard({
         </div>
       </div>
 
-      {/* V6.5 (2026-06-15): Row 3 — Điểm nghẽn đề xuất full width.
-          Donut "theo khối" đã chuyển lên Row 2 cạnh donut "theo loại". */}
-      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md">
-          <div className="bg-rose-50/60 px-4 py-2.5 border-b border-rose-100">
-            <h3 className="text-[11px] font-bold uppercase tracking-wider text-rose-700">
-              Điểm nghẽn đề xuất
-            </h3>
-          </div>
-          {(() => {
-            // === Mục 1: Top người duyệt giữ nhiều nhất ===
-            interface AggRow { key: string; name: string; holding: number; longestHours: number }
-            const approverGroups = new Map<string, AggRow>();
-            // === Mục 2: Top đề xuất chờ lâu nhất ===
-            const longest: Array<{ id: string; code: string; title: string; hours: number; approver: string }> = [];
-            // === Mục 3: Tồn theo khối tạo ===
-            const blockTon = { KD: 0, VP: 0 };
-
-            for (const p of proposals as any[]) {
-              const pending = ['da_gui', 'dang_xem_xet', 'yeu_cau_bo_sung'].includes(p.status);
-              if (!pending) continue;
-              const hrs = p.updatedAt ? (nowMs - new Date(p.updatedAt).getTime()) / 3_600_000 : 0;
-              const cur = p.approverChain?.[p.approverIdx];
-              const aprName = cur?.name || cur?.roleCode || 'Chưa xác định';
-              if (cur) {
-                const key = cur.uid || cur.roleCode || aprName;
-                const ex = approverGroups.get(key);
-                if (!ex) approverGroups.set(key, { key, name: aprName, holding: 1, longestHours: hrs });
-                else { ex.holding++; if (hrs > ex.longestHours) ex.longestHours = hrs; }
-              }
-              longest.push({ id: p.id, code: p.code, title: p.title, hours: hrs, approver: aprName });
-              if (p.creatorBlock === 'KD') blockTon.KD++;
-              else if (p.creatorBlock === 'VP') blockTon.VP++;
-            }
-            const topApprovers = Array.from(approverGroups.values())
-              .sort((a, b) => b.holding - a.holding || b.longestHours - a.longestHours)
-              .slice(0, 3);
-            const topLongest = longest.sort((a, b) => b.hours - a.hours).slice(0, 3);
-            const totalPending = blockTon.KD + blockTon.VP;
-
-            if (topApprovers.length === 0 && totalPending === 0) {
-              return <div className="py-8 text-center text-sm text-emerald-600 font-medium">✓ Không có điểm nghẽn</div>;
-            }
-
-            const fmtHrs = (h: number) => h < 24 ? `${Math.round(h)}h` : `${(h / 24).toFixed(1)} ngày`;
-
-            return (
-              <div className="divide-y divide-slate-100">
-                {/* Mục 1 */}
-                {topApprovers.length > 0 && (
-                  <div className="px-4 py-3">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">
-                      Người duyệt giữ nhiều
-                    </div>
-                    {topApprovers.map((r) => (
-                      <div key={r.key} className="flex items-center justify-between py-1.5 text-sm">
-                        <span className="truncate text-slate-800 font-medium">{r.name}</span>
-                        <span className="shrink-0 ml-2 inline-flex items-center gap-2">
-                          <span className="tabular-nums text-slate-600 text-xs">{r.holding} ĐX</span>
-                          <span className="tabular-nums text-rose-600 text-xs font-semibold">{fmtHrs(r.longestHours)}</span>
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {/* Mục 2 */}
-                {topLongest.length > 0 && (
-                  <div className="px-4 py-3">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">
-                      Đề xuất chờ lâu nhất
-                    </div>
-                    {topLongest.map((r) => (
-                      <div key={r.id} className="py-1.5">
-                        <div className="text-sm font-medium text-slate-800 truncate" title={r.title}>{r.title}</div>
-                        <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
-                          <span className="tabular-nums">#{r.code}</span>
-                          <span>·</span>
-                          <span className="text-rose-600 font-semibold tabular-nums">Chờ {fmtHrs(r.hours)}</span>
-                          <span>·</span>
-                          <span className="truncate">tại {r.approver}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {/* Mục 3 */}
-                {totalPending > 0 && (
-                  <div className="px-4 py-3">
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">
-                      Tồn theo khối tạo
-                    </div>
-                    <div className="space-y-1.5">
-                      {[{ label: 'Khối Kinh doanh', n: blockTon.KD, color: 'bg-emerald-500' },
-                        { label: 'Khối Văn phòng', n: blockTon.VP, color: 'bg-violet-500' }].map((b) => {
-                        const pct = totalPending === 0 ? 0 : Math.round((b.n / totalPending) * 100);
-                        return (
-                          <div key={b.label}>
-                            <div className="flex items-center justify-between text-xs mb-0.5">
-                              <span className="text-slate-700">{b.label}</span>
-                              <span className="tabular-nums text-slate-600">{b.n} <span className="text-slate-400">({pct}%)</span></span>
-                            </div>
-                            <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                              <div className={`h-full ${b.color}`} style={{ width: `${pct}%` }} />
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
-        </div>
     </div>
   );
 }
