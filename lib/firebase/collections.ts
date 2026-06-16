@@ -39,6 +39,13 @@ export const COLLECTIONS = {
   CHAT_ACCESS_LOGS: 'chatAccessLogs',     // (Phase 13.5 — security audit: log mọi truy cập tin nhắn)
   RATE_LIMITS: 'rateLimits',              // (Phase 13.5 — rate limit counter per user+endpoint)
   NOTIFICATIONS: 'notifications',         // (V6.4 P2 — center thông báo + bell dropdown + lịch sử cá nhân)
+  // ─── Module "Doanh số v2" (2026-06-16) ───
+  // Song song module sales cũ FROZEN. Workflow: Sale nhập daily batch → Kế toán đối chiếu →
+  // Auto-link thanh toán nốt. Xem lib/types/sales-v2.ts.
+  SALES_DAILY_BATCHES: 'salesDailyBatches',   // 1 doc / sale / ngày — bảng nhập theo ngày
+  SALES_TRANSACTIONS: 'salesTransactions',    // Mỗi dòng grid là 1 doc
+  SALES_AUDIT_LOGS: 'salesAuditLogs',          // Log mọi chỉnh sửa của kế toán
+  SALES_MONTHLY_SUMMARY: 'salesMonthlySummary', // Rebuild via cron daily 23:00
 } as const;
 
 // Subcollection names — đứng trong context của doc cha.

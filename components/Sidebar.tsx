@@ -7,6 +7,7 @@ import { effectiveMenu } from '@/lib/permissions';
 import {
   Home, BarChart3, CheckSquare, FileText, ListTodo, MessageCircle, Inbox,
   Users, DollarSign, FileBarChart, GraduationCap, Megaphone, Settings, LogOut, UserCog, Wrench, KeyRound, X, Briefcase, ShieldCheck, Search,
+  PencilLine, ClipboardCheck, CreditCard, TrendingUp,
   type LucideIcon,
 } from 'lucide-react';
 import { DispatchBadge } from './DispatchBadge';
@@ -52,6 +53,17 @@ const MENU_SECTIONS: MenuSection[] = [
       { route: 'ky-thuat',      label: 'Kỹ thuật vận hành',      icon: Wrench },
       { route: 'checklist-v2',  label: 'Checklist vận hành',     icon: CheckSquare },
       { route: 'quy-trinh',     label: 'Quy trình vận hành',     icon: FileText },
+    ],
+  },
+  {
+    // Phase 0 (2026-06-16): Module mới Doanh số v2 — song song module sales cũ FROZEN.
+    // Sau khi user xác nhận ổn → migrate hoàn toàn + ẩn section "Vận hành > Doanh số" cũ.
+    title: 'Doanh số v2',
+    items: [
+      { route: 'doanh-so-v2/nhap',      label: 'Nhập doanh số ngày', icon: PencilLine },
+      { route: 'doanh-so-v2/doi-chieu', label: 'Đối chiếu doanh số', icon: ClipboardCheck },
+      { route: 'doanh-so-v2/cong-no',   label: 'Công nợ',            icon: CreditCard },
+      { route: 'doanh-so-v2/tong-ket',  label: 'Tổng kết tháng',     icon: TrendingUp },
     ],
   },
   {

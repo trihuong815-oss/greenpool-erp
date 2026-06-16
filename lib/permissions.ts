@@ -23,17 +23,20 @@ export const MENU_PERMISSIONS: Record<string, string[]> = {
   // 'quan-ly-sale' — CHỈ admin (CEO/GD_KD/GD_VP) — thêm/tắt/đổi tên NV_SALE per branch.
   // 'quan-ly-cong-viec' — admin + mọi manager (QLCS/TP/TT) để lên lịch + theo dõi công việc trong scope của mình.
   // 'cong-viec-ca-nhan' — Không gian làm việc cá nhân (Phase 9). Chỉ cấp quản lý+.
-  ADMIN:     ['dashboard','tin-nhan','doanh-so','doanh-so/nhap','doanh-so/packages','checklist-v2','quy-trinh','giao-viec','dieu-phoi','de-xuat','quan-ly-cong-viec','quan-ly-sale','sodo','luong','bao-cao','daotao','mkt','users','ky-thuat','cong-viec-ca-nhan','bao-mat'],
-  CEO:       ['dashboard','tin-nhan','doanh-so','doanh-so/nhap','doanh-so/packages','checklist-v2','quy-trinh','giao-viec','dieu-phoi','de-xuat','quan-ly-cong-viec','quan-ly-sale','sodo','luong','bao-cao','daotao','mkt','users','ky-thuat','cong-viec-ca-nhan','bao-mat'],
-  GD_KD:     ['dashboard','tin-nhan','doanh-so','doanh-so/nhap','doanh-so/packages','checklist-v2','quy-trinh','giao-viec','dieu-phoi','de-xuat','quan-ly-cong-viec','quan-ly-sale','sodo','luong','bao-cao','daotao','mkt','users','ky-thuat','cong-viec-ca-nhan','bao-mat'],
-  GD_VP:     ['dashboard','tin-nhan','checklist-v2','quy-trinh','giao-viec','dieu-phoi','de-xuat','quan-ly-cong-viec','quan-ly-sale','sodo','luong','bao-cao','ky-thuat','cong-viec-ca-nhan','bao-mat'],
+  // ─── 'doanh-so-v2/*' (2026-06-16): module mới, song song module sales cũ. Sale nhập daily batch,
+  // kế toán đối chiếu. 4 route key: nhap | doi-chieu | cong-no | tong-ket. Xem lib/types/sales-v2.ts.
+  ADMIN:     ['dashboard','tin-nhan','doanh-so','doanh-so/nhap','doanh-so/packages','doanh-so-v2/nhap','doanh-so-v2/doi-chieu','doanh-so-v2/cong-no','doanh-so-v2/tong-ket','checklist-v2','quy-trinh','giao-viec','dieu-phoi','de-xuat','quan-ly-cong-viec','quan-ly-sale','sodo','luong','bao-cao','daotao','mkt','users','ky-thuat','cong-viec-ca-nhan','bao-mat'],
+  CEO:       ['dashboard','tin-nhan','doanh-so','doanh-so/nhap','doanh-so/packages','doanh-so-v2/nhap','doanh-so-v2/doi-chieu','doanh-so-v2/cong-no','doanh-so-v2/tong-ket','checklist-v2','quy-trinh','giao-viec','dieu-phoi','de-xuat','quan-ly-cong-viec','quan-ly-sale','sodo','luong','bao-cao','daotao','mkt','users','ky-thuat','cong-viec-ca-nhan','bao-mat'],
+  GD_KD:     ['dashboard','tin-nhan','doanh-so','doanh-so/nhap','doanh-so/packages','doanh-so-v2/nhap','doanh-so-v2/doi-chieu','doanh-so-v2/cong-no','doanh-so-v2/tong-ket','checklist-v2','quy-trinh','giao-viec','dieu-phoi','de-xuat','quan-ly-cong-viec','quan-ly-sale','sodo','luong','bao-cao','daotao','mkt','users','ky-thuat','cong-viec-ca-nhan','bao-mat'],
+  GD_VP:     ['dashboard','tin-nhan','doanh-so-v2/doi-chieu','doanh-so-v2/cong-no','doanh-so-v2/tong-ket','checklist-v2','quy-trinh','giao-viec','dieu-phoi','de-xuat','quan-ly-cong-viec','quan-ly-sale','sodo','luong','bao-cao','ky-thuat','cong-viec-ca-nhan','bao-mat'],
 
-  // QLCS_* — KHÔNG thấy `luong`, `doanh-so/packages` (quản trị gói catalog), `users` (theo spec 2026-05-27)
-  QLCS_HM:   ['dashboard','tin-nhan','doanh-so','doanh-so/nhap','checklist-v2','quy-trinh','giao-viec','dieu-phoi','de-xuat','quan-ly-cong-viec','sodo','bao-cao','daotao','mkt','ky-thuat','cong-viec-ca-nhan','bao-mat'],
-  QLCS_TK:   ['dashboard','tin-nhan','doanh-so','doanh-so/nhap','checklist-v2','quy-trinh','giao-viec','dieu-phoi','de-xuat','quan-ly-cong-viec','sodo','bao-cao','daotao','mkt','ky-thuat','cong-viec-ca-nhan','bao-mat'],
-  QLCS_CTT:  ['dashboard','tin-nhan','doanh-so','doanh-so/nhap','checklist-v2','quy-trinh','giao-viec','dieu-phoi','de-xuat','quan-ly-cong-viec','sodo','bao-cao','daotao','mkt','ky-thuat','cong-viec-ca-nhan','bao-mat'],
-  QLCS_24NCT:['dashboard','tin-nhan','doanh-so','doanh-so/nhap','checklist-v2','quy-trinh','giao-viec','dieu-phoi','de-xuat','quan-ly-cong-viec','sodo','bao-cao','daotao','mkt','ky-thuat','cong-viec-ca-nhan','bao-mat'],
-  QLCS_TT:   ['dashboard','tin-nhan','doanh-so','doanh-so/nhap','checklist-v2','quy-trinh','giao-viec','dieu-phoi','de-xuat','quan-ly-cong-viec','sodo','bao-cao','daotao','mkt','ky-thuat','cong-viec-ca-nhan','bao-mat'],
+  // QLCS_* — KHÔNG thấy `luong`, `doanh-so/packages` (quản trị gói catalog), `users` (theo spec 2026-05-27).
+  // QLCS xem doanh-so-v2 trong scope cơ sở mình (cong-no + tong-ket + doi-chieu để review batch của Sale dưới quyền).
+  QLCS_HM:   ['dashboard','tin-nhan','doanh-so','doanh-so/nhap','doanh-so-v2/doi-chieu','doanh-so-v2/cong-no','doanh-so-v2/tong-ket','checklist-v2','quy-trinh','giao-viec','dieu-phoi','de-xuat','quan-ly-cong-viec','sodo','bao-cao','daotao','mkt','ky-thuat','cong-viec-ca-nhan','bao-mat'],
+  QLCS_TK:   ['dashboard','tin-nhan','doanh-so','doanh-so/nhap','doanh-so-v2/doi-chieu','doanh-so-v2/cong-no','doanh-so-v2/tong-ket','checklist-v2','quy-trinh','giao-viec','dieu-phoi','de-xuat','quan-ly-cong-viec','sodo','bao-cao','daotao','mkt','ky-thuat','cong-viec-ca-nhan','bao-mat'],
+  QLCS_CTT:  ['dashboard','tin-nhan','doanh-so','doanh-so/nhap','doanh-so-v2/doi-chieu','doanh-so-v2/cong-no','doanh-so-v2/tong-ket','checklist-v2','quy-trinh','giao-viec','dieu-phoi','de-xuat','quan-ly-cong-viec','sodo','bao-cao','daotao','mkt','ky-thuat','cong-viec-ca-nhan','bao-mat'],
+  QLCS_24NCT:['dashboard','tin-nhan','doanh-so','doanh-so/nhap','doanh-so-v2/doi-chieu','doanh-so-v2/cong-no','doanh-so-v2/tong-ket','checklist-v2','quy-trinh','giao-viec','dieu-phoi','de-xuat','quan-ly-cong-viec','sodo','bao-cao','daotao','mkt','ky-thuat','cong-viec-ca-nhan','bao-mat'],
+  QLCS_TT:   ['dashboard','tin-nhan','doanh-so','doanh-so/nhap','doanh-so-v2/doi-chieu','doanh-so-v2/cong-no','doanh-so-v2/tong-ket','checklist-v2','quy-trinh','giao-viec','dieu-phoi','de-xuat','quan-ly-cong-viec','sodo','bao-cao','daotao','mkt','ky-thuat','cong-viec-ca-nhan','bao-mat'],
 
   TP_KT:     ['dashboard','tin-nhan','checklist-v2','quy-trinh','giao-viec','dieu-phoi','de-xuat','quan-ly-cong-viec','bao-cao','ky-thuat','cong-viec-ca-nhan','bao-mat'],
   // Phó phòng KT (Hệ thống / Xử lý nước) — xem toàn module ky-thuat, không xem doanh số.
@@ -58,7 +61,9 @@ export const MENU_PERMISSIONS: Record<string, string[]> = {
   // TIBAN_TT (Trưởng tiểu ban Truyền thông Nội bộ): thuộc phòng NS (tầng 4) — KHÔNG dùng /giao-viec.
   TIBAN_TT:  ['dashboard','tin-nhan','quy-trinh','quan-ly-cong-viec','bao-cao','cong-viec-ca-nhan','bao-mat'],
   TP_GS:     ['dashboard','tin-nhan','quy-trinh','giao-viec','dieu-phoi','de-xuat','quan-ly-cong-viec','bao-cao','sodo','cong-viec-ca-nhan','bao-mat'],
-  TP_KE:     ['dashboard','tin-nhan','quy-trinh','giao-viec','dieu-phoi','de-xuat','quan-ly-cong-viec','bao-cao','luong','cong-viec-ca-nhan','bao-mat'],
+  TP_KE:     ['dashboard','tin-nhan','doanh-so-v2/doi-chieu','doanh-so-v2/cong-no','doanh-so-v2/tong-ket','quy-trinh','giao-viec','dieu-phoi','de-xuat','quan-ly-cong-viec','bao-cao','luong','cong-viec-ca-nhan','bao-mat'],
+  // NV_KE — Nhân viên kế toán cơ sở. Đối chiếu doanh số daily của Sale, xem công nợ cơ sở.
+  NV_KE:     ['dashboard','tin-nhan','doanh-so-v2/doi-chieu','doanh-so-v2/cong-no','doanh-so-v2/tong-ket','cong-viec-ca-nhan','bao-mat'],
   TP_NS:     ['dashboard','tin-nhan','quy-trinh','giao-viec','dieu-phoi','de-xuat','quan-ly-cong-viec','bao-cao','luong','sodo','cong-viec-ca-nhan','bao-mat'],
 
   // Phase 12.8 (2026-06-04): /giao-viec chỉ dành cho TP/QLCS/GD/CEO/Chủ tịch (theo tài liệu anh chốt).
@@ -66,8 +71,9 @@ export const MENU_PERMISSIONS: Record<string, string[]> = {
   TT_DT:     ['dashboard','tin-nhan','quy-trinh','quan-ly-cong-viec','bao-cao','bao-mat'],
   GV_CB:     ['dashboard','tin-nhan','quy-trinh','bao-mat'],
   GV_NC:     ['dashboard','tin-nhan','quy-trinh','bao-mat'],
-  NV_SALE:   ['dashboard','tin-nhan','bao-mat'],
-  NV_SALE_PT:['dashboard','tin-nhan','bao-mat'],
+  // Sale (NV_SALE + NV_SALE_PT) — Phase 0 module Doanh số v2: nhập daily + xem công nợ + tổng kết tháng cá nhân.
+  NV_SALE:   ['dashboard','tin-nhan','doanh-so-v2/nhap','doanh-so-v2/cong-no','doanh-so-v2/tong-ket','bao-mat'],
+  NV_SALE_PT:['dashboard','tin-nhan','doanh-so-v2/nhap','doanh-so-v2/cong-no','doanh-so-v2/tong-ket','bao-mat'],
   NV_CH:     ['dashboard','tin-nhan','bao-mat'],
 };
 
