@@ -31,6 +31,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
     console.error('[sales-v2/batches/[id]] GET error:', err);
-    return NextResponse.json({ error: 'Lỗi server' }, { status: 500 });
+    return NextResponse.json({ error: err?.message ?? 'Lỗi server' }, { status: 500 });
   }
 }

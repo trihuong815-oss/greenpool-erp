@@ -38,18 +38,20 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Không có quyền' }, { status: 403 });
     }
 
+    // Single-field where → Firestore auto-index. Sort client-side để tránh composite index.
     const txSnap = await db.collection(COLLECTIONS.SALES_TRANSACTIONS)
       .where('batchId', '==', batchId)
-      .orderBy('createdAt', 'asc')
       .get();
-    const transactions = txSnap.docs.map((d) => serializeTransaction(d.id, d.data()));
+    const transactions = txSnap.docs
+      .map((d) => serializeTransaction(d.id, d.data()))
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     return NextResponse.json({ ok: true, transactions });
   } catch (err: any) {
     if (err instanceof UnauthorizedError) {
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
     console.error('[sales-v2/transactions] GET error:', err);
-    return NextResponse.json({ error: 'Lỗi server' }, { status: 500 });
+    return NextResponse.json({ error: err?.message ?? 'Lỗi server' }, { status: 500 });
   }
 }
 
@@ -145,6 +147,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
     console.error('[sales-v2/transactions] POST error:', err);
-    return NextResponse.json({ error: 'Lỗi server' }, { status: 500 });
+    return NextResponse.json({ error: err?.message ?? 'Lỗi server' }, { status: 500 });
   }
 }

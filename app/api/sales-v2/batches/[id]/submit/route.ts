@@ -86,6 +86,6 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
     console.error('[sales-v2/batches/[id]/submit] POST error:', err);
-    return NextResponse.json({ error: 'Lỗi server' }, { status: 500 });
+    return NextResponse.json({ error: err?.message ?? 'Lỗi server' }, { status: 500 });
   }
 }

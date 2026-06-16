@@ -41,6 +41,6 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
     console.error('[sales-v2/packages] GET error:', err);
-    return NextResponse.json({ error: 'Lỗi server' }, { status: 500 });
+    return NextResponse.json({ error: err?.message ?? 'Lỗi server' }, { status: 500 });
   }
 }

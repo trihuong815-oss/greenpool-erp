@@ -123,7 +123,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
     console.error('[sales-v2/transactions/[id]] PATCH error:', err);
-    return NextResponse.json({ error: 'Lỗi server' }, { status: 500 });
+    return NextResponse.json({ error: err?.message ?? 'Lỗi server' }, { status: 500 });
   }
 }
 
@@ -151,6 +151,6 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
     console.error('[sales-v2/transactions/[id]] DELETE error:', err);
-    return NextResponse.json({ error: 'Lỗi server' }, { status: 500 });
+    return NextResponse.json({ error: err?.message ?? 'Lỗi server' }, { status: 500 });
   }
 }

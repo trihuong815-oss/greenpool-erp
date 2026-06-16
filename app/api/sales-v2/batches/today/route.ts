@@ -25,21 +25,16 @@ export async function POST() {
     const db = getFirebaseAdminDb();
     const col = db.collection(COLLECTIONS.SALES_DAILY_BATCHES);
 
-    // Idempotent lookup: 1 doc / sale / date
-    const existing = await col
-      .where('saleId', '==', ctx.saleId)
-      .where('date', '==', date)
-      .limit(1)
-      .get();
-
-    if (!existing.empty) {
-      const doc = existing.docs[0];
-      return NextResponse.json({ ok: true, batch: serializeBatch(doc.id, doc.data()), created: false });
+    // Doc id deterministic = ${saleId}_${date} → idempotent lookup không cần composite index.
+    const docId = `${ctx.saleId}_${date}`;
+    const ref = col.doc(docId);
+    const existing = await ref.get();
+    if (existing.exists) {
+      return NextResponse.json({ ok: true, batch: serializeBatch(existing.id, existing.data() ?? {}), created: false });
     }
 
     // Create new batch (draft)
     const now = Timestamp.now();
-    const ref = col.doc();
     const data = {
       date,
       month,
@@ -68,6 +63,6 @@ export async function POST() {
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
     console.error('[sales-v2/batches/today] POST error:', err);
-    return NextResponse.json({ error: 'Lỗi server' }, { status: 500 });
+    return NextResponse.json({ error: err?.message ?? 'Lỗi server' }, { status: 500 });
   }
 }
