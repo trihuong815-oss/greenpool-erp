@@ -293,7 +293,7 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
                 <span><span className="text-slate-400">Ngày:</span> <strong>{todayDisplay()}</strong></span>
               </div>
               <p className="mt-2 text-xs text-slate-500">
-                💡 Gõ mã gói hoặc tên gói để tìm nhanh. Chọn HBTE sẽ hiện ô Người giám hộ. Sau khi nhập xong bấm <strong>Gửi đối chiếu ngày</strong>.
+                💡 Gõ tên thẻ/gói (vd "Thẻ học bơi", "120 lượt") để tìm nhanh. Chọn gói trẻ em sẽ hiện ô Người giám hộ. Sau khi nhập xong bấm <strong>Gửi đối chiếu ngày</strong>.
               </p>
             </div>
             <span className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ring-1 ${statusMeta.cls}`}>

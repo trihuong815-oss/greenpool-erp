@@ -29,12 +29,14 @@ export default function PackagePicker({ packages, value, disabled, onChange }: P
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return packages.slice(0, MAX_RESULTS);
+    // Match: lowercase + bỏ dấu tiếng Việt để user gõ "the hoc boi" cũng ra "Thẻ học bơi"
+    const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    const qn = norm(q);
     return packages
-      .filter((p) =>
-        p.code.toLowerCase().includes(q) ||
-        p.name.toLowerCase().includes(q) ||
-        `${p.code} ${p.name}`.toLowerCase().includes(q),
-      )
+      .filter((p) => {
+        const haystack = norm(`${p.code} ${p.name}`);
+        return haystack.includes(qn);
+      })
       .slice(0, MAX_RESULTS);
   }, [packages, query]);
 
@@ -94,7 +96,7 @@ export default function PackagePicker({ packages, value, disabled, onChange }: P
           onFocus={() => { if (!disabled) setOpen(true); }}
           onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
           onKeyDown={handleKeyDown}
-          placeholder={selected ? '' : 'HBTE, YOGA, PT...'}
+          placeholder={selected ? '' : 'Tên thẻ / gói...'}
           className="w-full pl-6 pr-2 py-1 rounded border border-slate-200 bg-white text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:bg-slate-50"
         />
       </div>

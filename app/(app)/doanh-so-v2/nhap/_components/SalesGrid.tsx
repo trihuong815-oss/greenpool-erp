@@ -119,21 +119,21 @@ export default function SalesGrid({
   return (
     <div className="card overflow-hidden p-0">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1300px] text-sm">
+        <table className="w-full min-w-[1900px] text-sm">
           <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
             <tr>
               <Th width={40}>#</Th>
               <Th width={180}>Tên khách hàng *</Th>
-              <Th width={120}>SĐT *</Th>
-              <Th width={160}>Người giám hộ</Th>
+              <Th width={150}>SĐT *</Th>
+              <Th width={170}>Người giám hộ</Th>
               <Th width={130}>Nguồn *</Th>
-              <Th width={200}>Gói *</Th>
-              <Th width={140}>Loại GD *</Th>
-              <Th width={130}>HT thu *</Th>
-              <Th width={120} align="right">Giá trị gói *</Th>
-              <Th width={120} align="right">Thu hôm nay *</Th>
-              <Th width={120} align="right">Công nợ</Th>
-              <Th width={140}>Ghi chú</Th>
+              <Th width={280}>Gói *</Th>
+              <Th width={150}>Loại GD *</Th>
+              <Th width={140}>HT thu *</Th>
+              <Th width={130} align="right">Giá trị gói *</Th>
+              <Th width={130} align="right">Thu hôm nay *</Th>
+              <Th width={130} align="right">Công nợ</Th>
+              <Th width={180}>Ghi chú</Th>
               <Th width={44}></Th>
             </tr>
           </thead>
