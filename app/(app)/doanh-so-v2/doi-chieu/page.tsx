@@ -1,12 +1,47 @@
-import PlaceholderPage from '../_components/PlaceholderPage';
+// Kế toán đối chiếu doanh số daily batch — server bootstrap.
+// Phase 2 (2026-06-17).
 
-export default async function DoiChieuDoanhSoV2Page() {
+import { canAccessRoute } from '@/lib/permissions';
+import { requireAuthedProfile } from '@/lib/firebase/current-profile';
+import { AppTopBar } from '@/components/AppTopBar';
+import { canAccountantReview, getScopeRole } from '@/lib/sales-v2/scope';
+import { isBranchId, type BranchId } from '@/lib/branches';
+import DoiChieuClient from './DoiChieuClient';
+
+export const dynamic = 'force-dynamic';
+
+export default async function DoiChieuPage() {
+  const { profile } = await requireAuthedProfile();
+
+  if (!canAccessRoute(profile.roleCode, 'doanh-so-v2/doi-chieu', profile.menuOverrides)) {
+    return (
+      <>
+        <AppTopBar title="Đối chiếu doanh số" icon="task" />
+        <div className="flex-1 flex items-center justify-center p-3 md:p-6 bg-slate-50">
+          <div className="card text-center py-12 max-w-md">
+            <div className="text-5xl mb-4">🔒</div>
+            <div className="font-bold text-slate-800 text-lg mb-2">Không có quyền truy cập</div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // Allow kế toán + top role review. QLCS view-only (read-only mode trong UI).
+  const role = getScopeRole(profile.roleCode);
+  const canReview = canAccountantReview(profile.roleCode);
+
+  const branchId: BranchId | null = isBranchId(profile.branchId) ? profile.branchId : null;
+
   return (
-    <PlaceholderPage
-      routeKey="doanh-so-v2/doi-chieu"
-      title="Đối chiếu doanh số"
-      description="Kế toán xem danh sách batch Sale gửi, mở chi tiết, duyệt toàn bộ / sửa & duyệt / trả lại."
-      phaseLabel="Phase 2"
-    />
+    <>
+      <AppTopBar title="Đối chiếu doanh số" icon="task" />
+      <DoiChieuClient
+        myRoleCode={profile.roleCode}
+        myBranchId={branchId}
+        scope={role ?? 'qlcs'}
+        canReview={canReview}
+      />
+    </>
   );
 }

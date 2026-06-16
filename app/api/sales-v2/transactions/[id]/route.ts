@@ -12,6 +12,7 @@ import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-aut
 import { canEditTransaction } from '@/lib/sales-v2/scope';
 import { serializeTransaction } from '@/lib/sales-v2/serialize';
 import { getPackageById } from '@/lib/sales-v2/packages';
+import { writeSalesAuditBatch } from '@/lib/sales-v2/audit';
 import type { SalesV2Source, TransactionType, PaymentMethod } from '@/lib/types/sales-v2';
 
 export const runtime = 'nodejs';
@@ -115,6 +116,23 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     updates.updatedAt = Timestamp.now();
     await txRef.update(updates);
+
+    // Audit log: chỉ ghi khi kế toán/quản lý sửa (khác saleId owner). Sale tự sửa
+    // batch draft của mình không cần log (đỡ noise).
+    const isReviewerEdit = batch.saleId !== caller.profile.uid;
+    if (isReviewerEdit) {
+      const SKIP = new Set(['updatedAt', 'debtAmount']); // derived fields
+      const changes = Object.entries(updates)
+        .filter(([k]) => !SKIP.has(k))
+        .filter(([k, v]) => tx[k] !== v)
+        .map(([field, newValue]) => ({ field, oldValue: tx[field] ?? null, newValue }));
+      if (changes.length > 0) {
+        void writeSalesAuditBatch(db, tx.batchId, id, changes, {
+          uid: caller.profile.uid,
+          name: caller.actorName,
+        });
+      }
+    }
 
     const newDoc = await txRef.get();
     return NextResponse.json({ ok: true, transaction: serializeTransaction(newDoc.id, newDoc.data() ?? {}) });
