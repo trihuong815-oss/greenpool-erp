@@ -10,7 +10,7 @@ import { Plus, Save, Send, AlertCircle, Loader2 } from 'lucide-react';
 import type { SalesDailyBatch, SalesTransaction, SalesTransactionInput, BatchStatus } from '@/lib/types/sales-v2';
 import type { SalesV2Package } from '@/lib/sales-v2/packages';
 import type { BranchId } from '@/lib/branches';
-import SalesGrid, { type LocalRow, makeEmptyRow, validateRow } from './_components/SalesGrid';
+import SalesGrid, { type LocalRow, makeEmptyRow, validateRow, isRowEmpty } from './_components/SalesGrid';
 
 interface Props {
   branchId: BranchId;
@@ -157,7 +157,8 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
     }
   }, [showToast]);
 
-  /** Lưu tạm: POST các localRows hợp lệ → thành rows. Báo lỗi rows không hợp lệ. */
+  /** Lưu tạm: POST các localRows hợp lệ → thành rows. Báo lỗi rows không hợp lệ.
+   *  Row hoàn toàn rỗng (do auto-add trailing) → giữ lại làm placeholder, KHÔNG count. */
   const handleSaveDraft = useCallback(async (): Promise<{ savedCount: number; invalidCount: number; failedCount: number }> => {
     if (!batch) return { savedCount: 0, invalidCount: 0, failedCount: 0 };
     setSaving(true);
@@ -165,6 +166,11 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
     let savedCount = 0, invalidCount = 0, failedCount = 0;
     const newSavedRows: SalesTransaction[] = [];
     for (const lr of localRows) {
+      // Skip row trống — auto-add trailing chưa nhập gì, không phải lỗi
+      if (isRowEmpty(lr)) {
+        stillLocal.push(lr);
+        continue;
+      }
       const v = validateRow(lr);
       if (!v.ok) {
         invalidCount++;
@@ -221,7 +227,7 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
     } else if (res.invalidCount + res.failedCount > 0) {
       showToast('err', `${res.invalidCount + res.failedCount} dòng chưa hợp lệ — xem chi tiết ở mỗi dòng`);
     } else {
-      showToast('ok', 'Không có gì để lưu');
+      showToast('ok', 'Chưa có dòng nào để lưu');
     }
   }, [handleSaveDraft, showToast]);
 

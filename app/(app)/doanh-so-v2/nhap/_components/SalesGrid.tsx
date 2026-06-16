@@ -56,6 +56,20 @@ export function makeEmptyRow(): LocalRow {
   };
 }
 
+/** Row hoàn toàn rỗng — Sale chưa nhập gì (vd row auto-add trailing). KHÔNG validate + KHÔNG báo lỗi. */
+export function isRowEmpty(r: LocalRow): boolean {
+  return !r.customerName.trim()
+    && !r.phone.trim()
+    && !r.guardianName.trim()
+    && !r.source
+    && !r.packageId
+    && !r.transactionType
+    && !r.paymentMethod
+    && !r.packageValue.trim()
+    && !r.collectedToday.trim()
+    && !r.note.trim();
+}
+
 /** Validate 1 local row đủ điều kiện POST chưa. */
 export function validateRow(r: LocalRow): { ok: true } | { ok: false; error: string } {
   if (!r.customerName.trim()) return { ok: false, error: 'Thiếu tên khách hàng' };
@@ -273,7 +287,8 @@ function LocalRowItem({ idx, row, packages, canEdit, onUpdate, onRemove }: {
   const pv = Number(row.packageValue) || 0;
   const ct = Number(row.collectedToday) || 0;
   const debt = Math.max(0, pv - ct);
-  const validation = useMemo(() => validateRow(row), [row]);
+  const rowEmpty = useMemo(() => isRowEmpty(row), [row]);
+  const validation = useMemo(() => (rowEmpty ? { ok: true as const } : validateRow(row)), [row, rowEmpty]);
 
   return (
     <tr className={`bg-amber-50/40 hover:bg-amber-50/70 ${!validation.ok ? 'border-l-2 border-amber-400' : ''}`}>
