@@ -26,12 +26,12 @@ export const TRANSACTION_TYPE_LABEL: Record<TransactionType, string> = {
   thanh_toan_not: 'Thanh toán nốt',
 };
 
-export type PaymentMethod = 'tien_mat' | 'chuyen_khoan' | 'qr' | 'pos';
+// 2026-06-17 anh chốt: bỏ QR (Sale tại Green Pool không dùng riêng).
+export type PaymentMethod = 'tien_mat' | 'chuyen_khoan' | 'pos';
 
 export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
   tien_mat: 'Tiền mặt',
   chuyen_khoan: 'Chuyển khoản',
-  qr: 'QR',
   pos: 'POS',
 };
 

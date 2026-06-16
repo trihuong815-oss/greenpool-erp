@@ -32,8 +32,11 @@ function detectChildPackage(packageName: string, groupName: string): boolean {
       .replace(/[̀-ͯ]/g, '') // bỏ dấu
       .replace(/\s+/g, ' ').trim();
   const text = `${norm(packageName)} ${norm(groupName)}`;
-  // "tre em" sau khi bỏ dấu, hoặc keyword khác cho trẻ em
-  return text.includes('tre em') || text.includes('thieu nhi') || text.includes('kid');
+  if (text.includes('tre em') || text.includes('thieu nhi') || text.includes('kid')) return true;
+  // Viết tắt " TE" (đứng riêng — vd "Học bơi chất lượng cao TE"). Word boundary để
+  // không match "thiết", "kết",... Case-sensitive vì "TE" viết hoa convention.
+  if (/\bTE\b/.test(packageName)) return true;
+  return false;
 }
 
 /** List packages "khả dụng" của 1 branch. Loose filter: chấp nhận active=true/undefined

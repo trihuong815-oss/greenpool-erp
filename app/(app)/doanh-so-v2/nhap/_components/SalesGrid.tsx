@@ -97,7 +97,6 @@ const SOURCE_TONE: Record<SalesV2Source, string> = {
 const PAY_TONE: Record<PaymentMethod, string> = {
   tien_mat:      'bg-emerald-50 text-emerald-700 ring-emerald-200',
   chuyen_khoan:  'bg-sky-50 text-sky-700 ring-sky-200',
-  qr:            'bg-violet-50 text-violet-700 ring-violet-200',
   pos:           'bg-amber-50 text-amber-700 ring-amber-200',
 };
 

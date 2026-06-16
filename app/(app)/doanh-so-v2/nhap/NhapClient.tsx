@@ -82,6 +82,20 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
     return batch.status === 'draft' || batch.status === 'returned';
   }, [batch]);
 
+  // V6 (2026-06-17): Auto-ensure trailing empty row khi có thể edit — Sale không cần
+  // kéo lên bấm "+ Thêm dòng" mỗi lần. Khi row cuối có dữ liệu → tự thêm 1 empty row
+  // ngay sau để typing tiếp. Initial mount + sau Lưu tạm (localRows về []) cũng add 1 empty.
+  useEffect(() => {
+    if (!canEdit) return;
+    setLocalRows((prev) => {
+      if (prev.length === 0) return [makeEmptyRow()];
+      const last = prev[prev.length - 1];
+      const hasData = last.customerName.trim() || last.phone.trim() || last.packageId;
+      if (hasData) return [...prev, makeEmptyRow()];
+      return prev;
+    });
+  }, [localRows, canEdit]);
+
   const totals = useMemo(() => {
     let sales = 0, collected = 0, count = 0;
     for (const r of rows) {

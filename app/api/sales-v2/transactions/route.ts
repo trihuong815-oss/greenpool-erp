@@ -21,7 +21,7 @@ export const dynamic = 'force-dynamic';
 
 const VALID_SOURCES = new Set<SalesV2Source>(['ca_nhan', 'walkin', 'mkt', 'renew', 'ref']);
 const VALID_TXN_TYPES = new Set<TransactionType>(['dat_coc', 'thanh_toan_full', 'thanh_toan_not']);
-const VALID_PAY = new Set<PaymentMethod>(['tien_mat', 'chuyen_khoan', 'qr', 'pos']);
+const VALID_PAY = new Set<PaymentMethod>(['tien_mat', 'chuyen_khoan', 'pos']);
 
 export async function GET(req: NextRequest) {
   try {
