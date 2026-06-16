@@ -330,117 +330,110 @@ export default function DexuatDashboard({
         </div>
       )}
 
-      {/* V6.5 (2026-06-15): 1 CARD CHA — chia đôi bên trong (trái: bar value, phải: donut kind).
-          Divider dọc ở giữa (md:border-l). Mobile <768px → xếp dọc. */}
-      <div className="rounded-xl border border-slate-200 bg-white p-5">
-        <div className="flex flex-col md:flex-row md:divide-x md:divide-slate-200">
-          {/* NỬA TRÁI — Đề xuất theo giá trị */}
-          <div className="flex-1 md:pr-5">
-            <h3 className="mb-4 text-sm font-semibold text-slate-700">Đề xuất theo giá trị</h3>
-            {(stats.tierBuckets.t1 + stats.tierBuckets.t2 + stats.tierBuckets.t3 + stats.tierBuckets.t4) > 0 ? (
-              <div className="space-y-3">
-                {[
-                  { label: 'Dưới 5 triệu', n: stats.tierBuckets.t1, color: 'emerald', range: '< 5 tr' },
-                  { label: '5 – 50 triệu', n: stats.tierBuckets.t2, color: 'sky', range: '5–50 tr' },
-                  { label: '50 – 200 triệu', n: stats.tierBuckets.t3, color: 'amber', range: '50–200 tr' },
-                  { label: 'Từ 200 triệu', n: stats.tierBuckets.t4, color: 'rose', range: '≥ 200 tr' },
-                ].map((b) => {
-                  const tot = stats.tierBuckets.t1 + stats.tierBuckets.t2 + stats.tierBuckets.t3 + stats.tierBuckets.t4;
-                  const pct = tot === 0 ? 0 : Math.round((b.n / tot) * 100);
-                  const colorMap: Record<string, { bar: string; text: string; bg: string }> = {
-                    emerald: { bar: 'linear-gradient(90deg, #34d399, #10b981)', text: 'text-emerald-700', bg: 'bg-emerald-50' },
-                    sky:     { bar: 'linear-gradient(90deg, #60a5fa, #3b82f6)', text: 'text-sky-700', bg: 'bg-sky-50' },
-                    amber:   { bar: 'linear-gradient(90deg, #fbbf24, #f59e0b)', text: 'text-amber-700', bg: 'bg-amber-50' },
-                    rose:    { bar: 'linear-gradient(90deg, #fb7185, #e11d48)', text: 'text-rose-700', bg: 'bg-rose-50' },
-                  };
-                  const c = colorMap[b.color];
-                  return (
-                    <div key={b.label}>
-                      <div className="flex items-center justify-between mb-1 text-xs">
-                        <div className="flex items-center gap-2">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-md font-semibold ${c.bg} ${c.text}`}>
-                            {b.range}
-                          </span>
-                          <span className="text-slate-600">{b.label}</span>
-                        </div>
-                        <span className="tabular-nums text-slate-700 font-medium">
-                          {b.n} đề xuất <span className="text-slate-400">({pct}%)</span>
-                        </span>
-                      </div>
-                      <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden shadow-inner">
-                        <div className="h-full rounded-full shadow-sm transition-all" style={{ width: `${pct}%`, background: c.bar }} />
-                      </div>
+      {/* V6.5 (2026-06-15): Row 1 — Bar "Đề xuất theo giá trị" standalone full width.
+          Hover effect: nhẹ nhấc + shadow để feel tương tác. */}
+      <div className="rounded-xl border border-slate-200 bg-white p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md">
+        <h3 className="mb-4 text-sm font-semibold text-slate-700">Đề xuất theo giá trị</h3>
+        {(stats.tierBuckets.t1 + stats.tierBuckets.t2 + stats.tierBuckets.t3 + stats.tierBuckets.t4) > 0 ? (
+          <div className="space-y-3">
+            {[
+              { label: 'Dưới 5 triệu', n: stats.tierBuckets.t1, color: 'emerald', range: '< 5 tr' },
+              { label: '5 – 50 triệu', n: stats.tierBuckets.t2, color: 'sky', range: '5–50 tr' },
+              { label: '50 – 200 triệu', n: stats.tierBuckets.t3, color: 'amber', range: '50–200 tr' },
+              { label: 'Từ 200 triệu', n: stats.tierBuckets.t4, color: 'rose', range: '≥ 200 tr' },
+            ].map((b) => {
+              const tot = stats.tierBuckets.t1 + stats.tierBuckets.t2 + stats.tierBuckets.t3 + stats.tierBuckets.t4;
+              const pct = tot === 0 ? 0 : Math.round((b.n / tot) * 100);
+              const colorMap: Record<string, { bar: string; text: string; bg: string }> = {
+                emerald: { bar: 'linear-gradient(90deg, #34d399, #10b981)', text: 'text-emerald-700', bg: 'bg-emerald-50' },
+                sky:     { bar: 'linear-gradient(90deg, #60a5fa, #3b82f6)', text: 'text-sky-700', bg: 'bg-sky-50' },
+                amber:   { bar: 'linear-gradient(90deg, #fbbf24, #f59e0b)', text: 'text-amber-700', bg: 'bg-amber-50' },
+                rose:    { bar: 'linear-gradient(90deg, #fb7185, #e11d48)', text: 'text-rose-700', bg: 'bg-rose-50' },
+              };
+              const c = colorMap[b.color];
+              return (
+                <div key={b.label}>
+                  <div className="flex items-center justify-between mb-1 text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-md font-semibold ${c.bg} ${c.text}`}>
+                        {b.range}
+                      </span>
+                      <span className="text-slate-600">{b.label}</span>
                     </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="flex items-center justify-center py-8 text-sm text-slate-400 italic">
-                Chưa có đề xuất có giá trị tài chính
-              </div>
-            )}
+                    <span className="tabular-nums text-slate-700 font-medium">
+                      {b.n} đề xuất <span className="text-slate-400">({pct}%)</span>
+                    </span>
+                  </div>
+                  <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden shadow-inner">
+                    <div className="h-full rounded-full shadow-sm transition-all" style={{ width: `${pct}%`, background: c.bar }} />
+                  </div>
+                </div>
+              );
+            })}
           </div>
-
-          {/* NỬA PHẢI — Cơ cấu đề xuất theo loại */}
-          <div className="flex-1 mt-5 md:mt-0 md:pl-5 pt-5 md:pt-0 border-t border-slate-200 md:border-t-0">
-            <h3 className="mb-4 text-sm font-semibold text-slate-700">
-              Cơ cấu đề xuất theo loại
-            </h3>
-            <div className="grid grid-cols-1 items-center gap-4 sm:grid-cols-2">
-              <div className="flex justify-center sm:justify-start">
-                <DonutChart
-                  segments={(Object.keys(stats.kindCount) as ProposalKindV6[]).map(
-                    (k) => ({
-                      value: stats.kindCount[k],
-                      color: KIND_COLOR[k],
-                      label: KIND_LABEL[k],
-                    })
-                  )}
-                  total={stats.totalKind}
-                />
-              </div>
-              <ul className="space-y-2 text-sm">
-                {(Object.keys(stats.kindCount) as ProposalKindV6[]).map((k) => {
-                  const c = stats.kindCount[k];
-                  const pct =
-                    stats.totalKind > 0
-                      ? Math.round((c / stats.totalKind) * 100)
-                      : 0;
-                  return (
-                    <li key={k} className="flex items-center gap-2">
-                      <span
-                        className="h-3 w-3 rounded-sm shrink-0"
-                        style={{ backgroundColor: KIND_COLOR[k] }}
-                      />
-                      <span className="flex-1 truncate text-slate-700 text-xs">
-                        {KIND_LABEL[k]}
-                      </span>
-                      <span className="tabular-nums font-semibold text-slate-800 text-sm">
-                        {c}
-                      </span>
-                      <span className="w-10 text-right text-[11px] tabular-nums text-slate-500">
-                        {pct}%
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
+        ) : (
+          <div className="flex items-center justify-center py-8 text-sm text-slate-400 italic">
+            Chưa có đề xuất có giá trị tài chính
           </div>
-        </div>
+        )}
       </div>
 
-      {/* Tầng 3 — Donut "Cơ cấu đề xuất theo khối" + Bảng "Điểm nghẽn đề xuất" */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      {/* V6.5 (2026-06-15): Row 2 — 2 DONUT CÙNG HÀNG (theo loại | theo khối).
+          Mỗi card có hover effect. Mobile <768px → xếp dọc. */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {/* Donut A — theo loại */}
+        <div className="rounded-xl border border-slate-200 bg-white p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md">
+          <h3 className="mb-4 text-sm font-semibold text-slate-700">
+            Cơ cấu đề xuất theo loại
+          </h3>
+          <div className="grid grid-cols-1 items-center gap-4 sm:grid-cols-2">
+            <div className="flex justify-center sm:justify-start">
+              <DonutChart
+                segments={(Object.keys(stats.kindCount) as ProposalKindV6[]).map(
+                  (k) => ({
+                    value: stats.kindCount[k],
+                    color: KIND_COLOR[k],
+                    label: KIND_LABEL[k],
+                  })
+                )}
+                total={stats.totalKind}
+              />
+            </div>
+            <ul className="space-y-2 text-sm">
+              {(Object.keys(stats.kindCount) as ProposalKindV6[]).map((k) => {
+                const c = stats.kindCount[k];
+                const pct =
+                  stats.totalKind > 0
+                    ? Math.round((c / stats.totalKind) * 100)
+                    : 0;
+                return (
+                  <li key={k} className="flex items-center gap-2">
+                    <span
+                      className="h-3 w-3 rounded-sm shrink-0"
+                      style={{ backgroundColor: KIND_COLOR[k] }}
+                    />
+                    <span className="flex-1 truncate text-slate-700 text-xs">
+                      {KIND_LABEL[k]}
+                    </span>
+                    <span className="tabular-nums font-semibold text-slate-800 text-sm">
+                      {c}
+                    </span>
+                    <span className="w-10 text-right text-[11px] tabular-nums text-slate-500">
+                      {pct}%
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </div>
 
-        {/* A — Donut theo khối */}
-        <div className="rounded-xl border border-slate-200 bg-white p-5">
+        {/* Donut B — theo khối (move từ Tầng 3 lên cạnh donut A) */}
+        <div className="rounded-xl border border-slate-200 bg-white p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md">
           <h3 className="mb-4 text-sm font-semibold text-slate-700">
             Cơ cấu đề xuất theo khối
           </h3>
           {(() => {
-            // V6.5 (2026-06-14): bỏ tính qua relatedUnits (deprecated). Dùng `crossBlock`
-            // flag (đã set bởi backend dựa vào recipient + creator block).
             let kd = 0, vp = 0, cross = 0;
             for (const p of proposals as any[]) {
               if (p.crossBlock === true) cross++;
@@ -454,19 +447,19 @@ export default function DexuatDashboard({
               { value: cross, color: '#f59e0b', label: 'Liên khối' },
             ];
             return (
-              <div className="grid grid-cols-1 items-center gap-6 md:grid-cols-2">
-                <div className="flex justify-center md:justify-start">
+              <div className="grid grid-cols-1 items-center gap-4 sm:grid-cols-2">
+                <div className="flex justify-center sm:justify-start">
                   <DonutChart segments={segs} total={total} />
                 </div>
-                <ul className="space-y-2.5 text-sm">
+                <ul className="space-y-2 text-sm">
                   {segs.map((s) => {
                     const pct = total > 0 ? Math.round((s.value / total) * 100) : 0;
                     return (
-                      <li key={s.label} className="flex items-center gap-3">
-                        <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: s.color }} />
-                        <span className="flex-1 truncate text-slate-700">{s.label}</span>
-                        <span className="tabular-nums font-semibold text-slate-800">{s.value}</span>
-                        <span className="w-12 text-right text-xs tabular-nums text-slate-500">{pct}%</span>
+                      <li key={s.label} className="flex items-center gap-2">
+                        <span className="h-3 w-3 rounded-sm shrink-0" style={{ backgroundColor: s.color }} />
+                        <span className="flex-1 truncate text-slate-700 text-xs">{s.label}</span>
+                        <span className="tabular-nums font-semibold text-slate-800 text-sm">{s.value}</span>
+                        <span className="w-10 text-right text-[11px] tabular-nums text-slate-500">{pct}%</span>
                       </li>
                     );
                   })}
@@ -475,9 +468,11 @@ export default function DexuatDashboard({
             );
           })()}
         </div>
+      </div>
 
-        {/* B — Điểm nghẽn đề xuất — V6.5 (2026-06-13) mở rộng 3 mục */}
-        <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+      {/* V6.5 (2026-06-15): Row 3 — Điểm nghẽn đề xuất full width.
+          Donut "theo khối" đã chuyển lên Row 2 cạnh donut "theo loại". */}
+      <div className="rounded-xl border border-slate-200 bg-white overflow-hidden transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md">
           <div className="bg-rose-50/60 px-4 py-2.5 border-b border-rose-100">
             <h3 className="text-[11px] font-bold uppercase tracking-wider text-rose-700">
               Điểm nghẽn đề xuất
@@ -588,7 +583,6 @@ export default function DexuatDashboard({
             );
           })()}
         </div>
-      </div>
     </div>
   );
 }
