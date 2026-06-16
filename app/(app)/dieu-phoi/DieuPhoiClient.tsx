@@ -752,6 +752,7 @@ export default function DieuPhoiClient({
               <MobileDispatchView
                 tasks={tasks}
                 currentUserUid={currentUserUid}
+                currentUserRole={currentUserRole}
                 currentUserDeptId={currentUserDeptId}
                 currentUserFacilityId={currentUserFacilityId}
                 canCreate={canCreate}

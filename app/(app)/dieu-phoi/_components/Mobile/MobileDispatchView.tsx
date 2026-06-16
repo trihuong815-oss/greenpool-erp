@@ -7,6 +7,7 @@ import SwipeKpiBar, { type MobileKpiKey } from './SwipeKpiBar';
 import TabsMobile, { type MobileTabKey } from './TabsMobile';
 import FilterSheet, { type FilterState, DEFAULT_FILTER } from './FilterSheet';
 import DispatchCard from './DispatchCard';
+import { isWriteAdmin } from '@/lib/auth/roles';
 
 // V6.4 (2026-06-13): Mobile shell điều phối — spec anh chốt
 //   Header (TopBar đã có sẵn) → KPI swipe → Tìm kiếm + Filter → Tabs sticky → Card list
@@ -38,6 +39,7 @@ function isThisMonth(d: string | undefined | null): boolean {
 interface Props {
   tasks: CoordTask[];
   currentUserUid: string;
+  currentUserRole: string;
   currentUserDeptId: string | null;
   currentUserFacilityId: string | null;
   canCreate: boolean;
@@ -46,8 +48,12 @@ interface Props {
 }
 
 export default function MobileDispatchView({
-  tasks, currentUserUid, currentUserDeptId, currentUserFacilityId, canCreate, onCreate, onRowClick,
+  tasks, currentUserUid, currentUserRole, currentUserDeptId, currentUserFacilityId, canCreate, onCreate, onRowClick,
 }: Props) {
+  // V6.5 (2026-06-16): ADMIN/CEO/GD_KD/GD_VP nhìn toàn bộ task hệ thống (giống desktop).
+  // Trước đây mobile hardcoded `!isOwner && !isCol => skip` → top role thấy trống vì
+  // không trực tiếp là owner/collab của task nào.
+  const canSeeAll = isWriteAdmin(currentUserRole);
   const [kpiKey, setKpiKey] = useState<MobileKpiKey | null>(null);
   const [tab, setTab] = useState<MobileTabKey>('all');
   const [search, setSearch] = useState('');
@@ -75,13 +81,15 @@ export default function MobileDispatchView({
     return false;
   };
 
-  // Tab counts (chỉ task user liên quan)
+  // Tab counts. canSeeAll (ADMIN/CEO/GD): tab 'all' = tất cả task hệ thống;
+  // tab mine/collab/waiting vẫn theo user (để bảng filter cá nhân hoá có ý nghĩa).
   const counts: Record<MobileTabKey, number> = useMemo(() => {
     let all = 0, mine = 0, collab = 0, waiting = 0, overdue = 0;
     for (const t of tasks) {
       const isOwner = t.ownerUid === currentUserUid;
       const isCol = isMyCollab(t);
-      if (!isOwner && !isCol) continue;
+      const include = canSeeAll || isOwner || isCol;
+      if (!include) continue;
       all += 1;
       if (isOwner) mine += 1;
       if (isCol) collab += 1;
@@ -98,14 +106,15 @@ export default function MobileDispatchView({
     }
     return { all, mine, collab, waiting, overdue };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tasks, currentUserUid, currentUserDeptId, currentUserFacilityId]);
+  }, [tasks, currentUserUid, currentUserDeptId, currentUserFacilityId, canSeeAll]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return tasks.filter((t) => {
       const isOwner = t.ownerUid === currentUserUid;
       const isCol = isMyCollab(t);
-      if (!isOwner && !isCol) return false;
+      // canSeeAll bypass scope filter — admin/CEO/GD nhìn toàn bộ hệ thống.
+      if (!canSeeAll && !isOwner && !isCol) return false;
       const status = String(t.status);
       const terminal = TERMINAL.has(status);
       // Tab
@@ -134,7 +143,7 @@ export default function MobileDispatchView({
       if (filter.deadline === 'this-month' && !isThisMonth(t.dueDate)) return false;
       return true;
     });
-  }, [tasks, tab, search, filter, currentUserUid, currentUserDeptId, currentUserFacilityId]);
+  }, [tasks, tab, search, filter, currentUserUid, currentUserDeptId, currentUserFacilityId, canSeeAll]);
 
   const activeFilterCount = (filter.status !== 'all' ? 1 : 0) + (filter.severity !== 'all' ? 1 : 0)
     + (filter.scope !== 'all' ? 1 : 0) + (filter.deadline !== 'all' ? 1 : 0);
