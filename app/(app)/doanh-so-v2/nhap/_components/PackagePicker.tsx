@@ -1,0 +1,142 @@
+'use client';
+
+// Autocomplete picker cho gói dịch vụ.
+// Phase 1 (2026-06-17).
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Search, Check } from 'lucide-react';
+import type { SalesV2Package } from '@/lib/sales-v2/packages';
+
+interface Props {
+  packages: SalesV2Package[];
+  value: string | null; // packageId
+  disabled?: boolean;
+  onChange: (pkg: SalesV2Package | null) => void;
+}
+
+const MAX_RESULTS = 8;
+
+export default function PackagePicker({ packages, value, disabled, onChange }: Props) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const [highlightIdx, setHighlightIdx] = useState(0);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const selected = useMemo(() => packages.find((p) => p.id === value) ?? null, [packages, value]);
+  const displayValue = open ? query : (selected ? `${selected.code} ${selected.name}` : '');
+
+  const results = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return packages.slice(0, MAX_RESULTS);
+    return packages
+      .filter((p) =>
+        p.code.toLowerCase().includes(q) ||
+        p.name.toLowerCase().includes(q) ||
+        `${p.code} ${p.name}`.toLowerCase().includes(q),
+      )
+      .slice(0, MAX_RESULTS);
+  }, [packages, query]);
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setQuery('');
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  // Reset highlight khi danh sách đổi
+  useEffect(() => {
+    setHighlightIdx(0);
+  }, [query]);
+
+  const handleSelect = useCallback((pkg: SalesV2Package) => {
+    onChange(pkg);
+    setOpen(false);
+    setQuery('');
+    inputRef.current?.blur();
+  }, [onChange]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!open) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightIdx((i) => Math.min(i + 1, results.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightIdx((i) => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const pick = results[highlightIdx];
+      if (pick) handleSelect(pick);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setOpen(false);
+      setQuery('');
+    }
+  }, [open, results, highlightIdx, handleSelect]);
+
+  return (
+    <div ref={wrapRef} className="relative w-full">
+      <div className="relative">
+        <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+        <input
+          ref={inputRef}
+          type="text"
+          value={displayValue}
+          disabled={disabled}
+          onFocus={() => { if (!disabled) setOpen(true); }}
+          onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+          onKeyDown={handleKeyDown}
+          placeholder={selected ? '' : 'HBTE, YOGA, PT...'}
+          className="w-full pl-6 pr-2 py-1 rounded border border-slate-200 bg-white text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:bg-slate-50"
+        />
+      </div>
+
+      {open && results.length > 0 && (
+        <div className="absolute z-30 mt-1 left-0 right-0 max-h-64 overflow-y-auto rounded-lg bg-white shadow-lg ring-1 ring-slate-200">
+          {results.map((p, i) => {
+            const isHighlight = i === highlightIdx;
+            const isSelected = p.id === value;
+            return (
+              <button
+                type="button"
+                key={p.id}
+                onMouseDown={(e) => e.preventDefault()} // tránh blur input trước click
+                onClick={() => handleSelect(p)}
+                onMouseEnter={() => setHighlightIdx(i)}
+                className={`w-full px-3 py-2 text-left text-xs flex items-center gap-2 ${
+                  isHighlight ? 'bg-emerald-50' : 'bg-white'
+                }`}
+              >
+                <span className="shrink-0 inline-flex items-center justify-center min-w-[44px] px-1.5 py-0.5 rounded font-bold text-[10px] bg-emerald-100 text-emerald-700">
+                  {p.code}
+                </span>
+                <span className="flex-1 truncate text-slate-700 font-medium">{p.name}</span>
+                <span className="shrink-0 tabular-nums text-slate-500">{p.defaultPrice.toLocaleString()}đ</span>
+                {p.isChildPackage && (
+                  <span className="shrink-0 text-[9px] uppercase font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
+                    Trẻ em
+                  </span>
+                )}
+                {isSelected && <Check size={12} className="text-emerald-600" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {open && results.length === 0 && (
+        <div className="absolute z-30 mt-1 left-0 right-0 rounded-lg bg-white shadow-lg ring-1 ring-slate-200 px-3 py-2 text-xs text-slate-400">
+          Không tìm thấy gói khớp <strong>"{query}"</strong>
+        </div>
+      )}
+    </div>
+  );
+}
