@@ -7,12 +7,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Plus, Save, Send, AlertCircle, Loader2 } from 'lucide-react';
+import { Plus, Save, Send, AlertCircle, Loader2, FileSpreadsheet } from 'lucide-react';
 import type { SalesDailyBatch, SalesTransaction, SalesTransactionInput, BatchStatus } from '@/lib/types/sales-v2';
 import type { SalesV2Package } from '@/lib/sales-v2/packages';
 import type { BranchId } from '@/lib/branches';
 import SalesGrid, { type LocalRow, makeEmptyRow, validateRow, isRowEmpty, isValidPhone } from './_components/SalesGrid';
 import MobileNhapView from './_components/MobileNhapView';
+import ExcelImportModal from './_components/ExcelImportModal';
 import { showConfirm } from '@/components/ui/imperative-modal';
 
 interface Props {
@@ -70,6 +71,7 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showToast = useCallback((kind: 'ok' | 'err', msg: string) => {
@@ -459,6 +461,15 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
             </button>
             <button
               type="button"
+              disabled={!canEdit || saving || submitting}
+              onClick={() => setImportOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white text-sm font-medium text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Paste nhiều dòng từ Excel/Google Sheets"
+            >
+              <FileSpreadsheet size={16} /> Nhập từ Excel
+            </button>
+            <button
+              type="button"
               disabled={!canEdit || saving || submitting || localRows.length === 0}
               onClick={handleSaveDraftClick}
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white text-sm font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -525,6 +536,23 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
         }`}>
           {toast.msg}
         </div>
+      )}
+
+      {/* Excel import modal */}
+      {importOpen && (
+        <ExcelImportModal
+          packages={packages}
+          onClose={() => setImportOpen(false)}
+          onImport={(newRows) => {
+            // Push trước row trống cuối (auto-add trailing)
+            setLocalRows((prev) => {
+              const trailing = prev.length > 0 && isRowEmpty(prev[prev.length - 1]) ? prev.slice(-1) : [];
+              const head = trailing.length > 0 ? prev.slice(0, -1) : prev;
+              return [...head, ...newRows, ...trailing];
+            });
+            showToast('ok', `Đã thêm ${newRows.length} dòng từ Excel`);
+          }}
+        />
       )}
     </div>
   );
