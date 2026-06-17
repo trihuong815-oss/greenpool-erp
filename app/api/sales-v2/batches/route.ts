@@ -56,9 +56,15 @@ export async function GET(req: NextRequest) {
 
     // Sort client-side để tránh composite index (~200 docs).
     const snap = await query.limit(limit).get();
-    const batches = snap.docs
+    let batches = snap.docs
       .map((d) => serializeBatch(d.id, d.data()))
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+
+    // 2026-06-17: KHÔNG show batch draft + 0 GD (orphan/placeholder Sale chưa nhập).
+    // Sale tự thấy batch của mình ở /nhap. Kế toán/QLCS/top không cần xem batch trống.
+    // EXCEPT: nếu Sale tự gọi (role=sale) thì vẫn show draft của mình ở /nhap (qua API
+    // get-or-create riêng, không qua endpoint này).
+    batches = batches.filter((b) => !(b.status === 'draft' && b.totalTransactions === 0));
 
     return NextResponse.json({ ok: true, batches });
   } catch (err: any) {

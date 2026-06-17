@@ -29,11 +29,24 @@ const STATUS_LABEL: Record<BatchStatus, { label: string; cls: string }> = {
   locked:          { label: 'Đã khoá',           cls: 'bg-slate-200 text-slate-600 ring-slate-300' },
 };
 
-function todayDisplay(): string {
-  // VN time UTC+7, format DD/MM/YYYY
+function todayInVN(): string {
+  // YYYY-MM-DD theo VN timezone (UTC+7)
   const ms = Date.now() + 7 * 3600 * 1000;
   const d = new Date(ms);
-  return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`;
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+}
+
+function fmtDateVi(iso: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+const MAX_PAST_DAYS = 7;
+function minSelectableDate(): string {
+  const ms = Date.now() + 7 * 3600 * 1000 - MAX_PAST_DAYS * 24 * 3600 * 1000;
+  const d = new Date(ms);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
 }
 
 // V6 (2026-06-17): persist local rows (typing chưa save) qua reload bằng localStorage.
@@ -42,6 +55,7 @@ const STORAGE_PREFIX = 'gp-sales-v2-draft-';
 const storageKey = (batchId: string) => `${STORAGE_PREFIX}${batchId}`;
 
 export default function NhapClient({ branchId, branchName, saleName, packages }: Props) {
+  const [selectedDate, setSelectedDate] = useState<string>(todayInVN());
   const [batch, setBatch] = useState<SalesDailyBatch | null>(null);
   const [rows, setRows] = useState<SalesTransaction[]>([]);
   const [localRows, setLocalRows] = useState<LocalRow[]>([]);
@@ -59,12 +73,22 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
     toastTimerRef.current = setTimeout(() => setToast(null), 3500);
   }, []);
 
-  // === Boot: get-or-create batch hôm nay + load transactions ===
+  // === Boot/reload khi đổi ngày: get-or-create batch + load transactions ===
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setBatch(null);
+    setRows([]);
+    setLocalRows([]);
+    setHydrated(false); // reset để rehydrate cho batch mới
     (async () => {
       try {
-        const r = await fetch('/api/sales-v2/batches/today', { method: 'POST' });
+        const r = await fetch('/api/sales-v2/batches/by-date', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ date: selectedDate }),
+        });
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
         const j = await r.json();
         if (cancelled) return;
@@ -82,7 +106,7 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [selectedDate]);
 
   // === Derived ===
   const canEdit = useMemo(() => {
@@ -364,8 +388,32 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
                 <span className="text-slate-300">·</span>
                 <span><span className="text-slate-400">Sale:</span> <strong>{saleName}</strong></span>
                 <span className="text-slate-300">·</span>
-                <span><span className="text-slate-400">Ngày:</span> <strong>{todayDisplay()}</strong></span>
+                <label className="inline-flex items-center gap-2">
+                  <span className="text-slate-400">Ngày:</span>
+                  <input
+                    type="date"
+                    value={selectedDate}
+                    min={minSelectableDate()}
+                    max={todayInVN()}
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    className="px-2 py-1 rounded border border-slate-200 bg-white text-sm font-semibold focus:outline-none focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100"
+                  />
+                  {selectedDate !== todayInVN() && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDate(todayInVN())}
+                      className="text-xs text-emerald-600 hover:text-emerald-700 underline"
+                    >
+                      → Hôm nay
+                    </button>
+                  )}
+                </label>
               </div>
+              {selectedDate !== todayInVN() && (
+                <div className="mt-1 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-50 ring-1 ring-amber-200 text-[11px] text-amber-700">
+                  ⚠️ Đang nhập cho ngày <strong>{fmtDateVi(selectedDate)}</strong> (không phải hôm nay)
+                </div>
+              )}
               <p className="mt-2 text-xs text-slate-500">
                 💡 Gõ tên thẻ/gói (vd "Thẻ học bơi", "120 lượt") để tìm nhanh. Chọn gói trẻ em sẽ hiện ô Người giám hộ. Sau khi nhập xong bấm <strong>Gửi đối chiếu ngày</strong>.
               </p>
