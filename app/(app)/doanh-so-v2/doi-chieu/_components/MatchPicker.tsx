@@ -170,7 +170,7 @@ export function MatchStatusBadge({ tx, onClick }: { tx: SalesTransaction; onClic
         type="button"
         onClick={onClick}
         className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[11px] font-semibold ring-1 ring-emerald-200 hover:bg-emerald-100"
-        title={`Đã link với GD #${tx.matchedTransactionId?.slice(-6)}`}
+        title={tx.matchedTargetSummary ? `Đã link → ${tx.matchedTargetSummary}` : 'Đã link với GD cũ'}
       >
         <LinkIcon size={11} /> Đã link
       </button>

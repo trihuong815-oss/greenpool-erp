@@ -15,6 +15,7 @@ import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-aut
 import { canAccountantReview, getScopeRole } from '@/lib/sales-v2/scope';
 import { writeSalesAudit } from '@/lib/sales-v2/audit';
 import { sendNotificationEvent } from '@/lib/firebase/noti-engine';
+import { markActionDoneForEntity } from '@/lib/firebase/notifications-store';
 import { fmtDateVi } from '@/lib/sales-v2/recipients';
 import { runAutoMatchForBatch } from '@/lib/sales-v2/auto-match';
 
@@ -101,6 +102,9 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       changedByName: caller.actorName,
     });
 
+    // Audit BUG-1 fix 2026-06-17: mark noti của caller (kế toán) done — clear badge sidebar.
+    void markActionDoneForEntity(caller.profile.uid, id);
+
     // V6.5 Notification (Phase 3 wire): gửi cho Sale "Batch đã duyệt"
     try {
       const batchSnap = await batchRef.get();
@@ -113,7 +117,8 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
           entityCode: batch.date,
           title: `Bảng doanh số ${fmtDateVi(batch.date)} đã đối chiếu ✓`,
           message: `${caller.actorName} đã duyệt ${batch.totalTransactions} giao dịch (DS ${Number(batch.totalSalesAmount ?? 0).toLocaleString()}đ)`,
-          linkUrl: '/doanh-so-v2/tong-ket',
+          // BUG-2 audit fix: /tong-ket chưa build (Phase 5) → tạm trỏ /nhap với date param
+          linkUrl: `/doanh-so-v2/nhap?date=${encodeURIComponent(batch.date)}`,
           recipients: [batch.saleId],
           priority: 'normal',
           pushTag: `sales-batch-${id}`,

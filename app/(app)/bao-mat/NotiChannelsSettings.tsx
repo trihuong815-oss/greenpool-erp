@@ -18,24 +18,28 @@ import { Loader2, Bell, Smartphone, Mail, Check, AlertCircle } from 'lucide-reac
 type Channels = {
   proposal: { inApp: boolean; push: boolean; email: boolean };
   dispatch: { inApp: boolean; push: boolean; email: boolean };
+  sales:    { inApp: boolean; push: boolean; email: boolean };
   system:   { inApp: boolean; push: boolean; email: boolean };
 };
 
 const DEFAULT: Channels = {
   proposal: { inApp: true, push: true, email: true },
   dispatch: { inApp: true, push: true, email: true },
+  sales:    { inApp: true, push: true, email: false },
   system:   { inApp: true, push: true, email: false },
 };
 
 const MODULE_LABELS: Record<keyof Channels, string> = {
   proposal: 'Đề xuất',
   dispatch: 'Điều phối',
+  sales: 'Doanh số v2',
   system: 'Hệ thống',
 };
 
 const MODULE_DESC: Record<keyof Channels, string> = {
   proposal: 'Thông báo đề xuất chờ duyệt, được duyệt, bị từ chối, quá SLA…',
   dispatch: 'Thông báo công việc được giao, phối hợp, hoàn thành, quá hạn…',
+  sales: 'Sale gửi batch chờ đối chiếu, kế toán duyệt/trả lại bảng doanh số daily…',
   system: 'Cảnh báo lỗi hệ thống, bảo trì, cập nhật phiên bản…',
 };
 

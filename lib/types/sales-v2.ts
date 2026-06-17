@@ -120,6 +120,7 @@ export interface SalesTransaction {
   reviewedBy?: string | null;
   // Auto-link (chỉ chạy khi batch approved)
   matchedTransactionId?: string | null;
+  matchedTargetSummary?: string | null; // "DD/MM/YYYY · Tên KH" — denormalize cho UI tooltip
   matchStatus: MatchStatus;
   createdAt: string;
   updatedAt: string;

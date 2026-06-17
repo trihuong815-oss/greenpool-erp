@@ -12,6 +12,7 @@ import { COLLECTIONS } from '@/lib/firebase/collections';
 import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-auth';
 import { canSaleEnter } from '@/lib/sales-v2/scope';
 import { sendNotificationEvent } from '@/lib/firebase/noti-engine';
+import { markActionDoneForEntity } from '@/lib/firebase/notifications-store';
 import { resolveAccountantsByBranch, fmtDateVi } from '@/lib/sales-v2/recipients';
 import { branchName } from '@/lib/branches';
 
@@ -109,6 +110,9 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     if ('error' in result) {
       return NextResponse.json({ error: result.error }, { status: result.status });
     }
+
+    // Audit BUG-1 fix: Sale resubmit batch returned → mark noti returned của Sale done
+    void markActionDoneForEntity(caller.profile.uid, id);
 
     // V6.5 Notification (Phase 3 wire 2026-06-17): gửi cho kế toán cơ sở
     void FieldValue; // silence import

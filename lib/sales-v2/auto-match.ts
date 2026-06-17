@@ -34,20 +34,21 @@ function normalizeName(s: string): string {
   return String(s ?? '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
 
-/** Tìm candidates cho 1 tx 'thanh_toan_not'. */
+/** Tìm candidates cho 1 tx 'thanh_toan_not'.
+ *  Audit BUG-3 fix 2026-06-17: match EXACT packageId (không phải packageCode/group).
+ *  Tránh khách mua gói A đặt cọc, Sale nhập nốt cho gói B cùng group → link sai.
+ */
 export async function findMatchCandidates(
   db: Firestore,
   tx: {
     id: string;
     branchId: string;
     phone: string;
-    packageCode: string;
+    packageId: string;
     customerName: string;
   },
 ): Promise<MatchCandidate[]> {
-  if (!tx.phone || !tx.packageCode) return [];
-  // Query Firestore: where(phone) + where(packageCode) — 2 equality OK index auto
-  // Hoặc 1 where + filter. Em chọn 1 where (phone) cho safe (no composite needed).
+  if (!tx.phone || !tx.packageId) return [];
   const snap = await db.collection(COLLECTIONS.SALES_TRANSACTIONS)
     .where('phone', '==', tx.phone)
     .get();
@@ -58,9 +59,9 @@ export async function findMatchCandidates(
     if (d.id === tx.id) continue;
     const x = d.data() as Record<string, any>;
     if (x.branchId !== tx.branchId) continue;
-    if (String(x.packageCode ?? '') !== tx.packageCode) continue;
+    // EXACT packageId match (không match packageCode/group)
+    if (String(x.packageId ?? '') !== tx.packageId) continue;
     if (normalizeName(x.customerName) !== targetName) continue;
-    // Chỉ match tx đã được kế toán duyệt + còn debt
     if (x.reviewStatus !== 'approved') continue;
     const debt = Number(x.debtAmount ?? 0);
     if (debt <= 0) continue;
@@ -76,7 +77,6 @@ export async function findMatchCandidates(
       createdAt: x.createdAt?.toDate?.()?.toISOString?.() ?? String(x.createdAt ?? ''),
     });
   }
-  // Sort: cũ nhất trước (FIFO — link công nợ cũ nhất trước)
   out.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   return out;
 }
@@ -109,7 +109,7 @@ export async function runAutoMatchForBatch(
         id: doc.id,
         branchId: String(x.branchId ?? ''),
         phone: String(x.phone ?? ''),
-        packageCode: String(x.packageCode ?? ''),
+        packageId: String(x.packageId ?? ''),
         customerName: String(x.customerName ?? ''),
       };
       const collectedToday = Number(x.collectedToday ?? 0);
@@ -121,14 +121,22 @@ export async function runAutoMatchForBatch(
         result.noMatch++;
       } else if (candidates.length === 1) {
         const target = candidates[0];
-        // Atomic: link + giảm target debt
+        // BUG-4 audit fix 2026-06-17: re-fetch target trong transaction + check
+        // matchedTransactionId/debtAmount để tránh race với /approve song song.
+        // BUG-5 audit fix: denormalize matchedTargetSummary = "DD/MM/YYYY · KH" để
+        // UI hiển thị tooltip rõ không cần fetch lại.
+        let didMatch = false;
         await db.runTransaction(async (t) => {
           const targetRef = db.collection(COLLECTIONS.SALES_TRANSACTIONS).doc(target.id);
           const targetSnap = await t.get(targetRef);
           if (!targetSnap.exists) return;
           const tData = targetSnap.data() ?? {};
+          const currentDebt = Number(tData.debtAmount ?? 0);
+          if (currentDebt <= 0) return; // race: tx khác đã link, debt về 0
           const newCollected = Number(tData.collectedToday ?? 0) + collectedToday;
           const newDebt = Math.max(0, Number(tData.packageValue ?? 0) - newCollected);
+          const dateStr = String(tData.date ?? '');
+          const targetSummary = `${dateStr.split('-').reverse().join('/')} · ${String(tData.customerName ?? '?')}`;
           t.update(targetRef, {
             collectedToday: newCollected,
             debtAmount: newDebt,
@@ -137,16 +145,24 @@ export async function runAutoMatchForBatch(
           t.update(doc.ref, {
             matchStatus: 'matched',
             matchedTransactionId: target.id,
+            matchedTargetSummary: targetSummary,
             updatedAt: now,
           });
+          didMatch = true;
         });
-        result.matched++;
-        void writeSalesAudit({
-          db, batchId, transactionId: doc.id,
-          action: 'auto_match', field: 'matchedTransactionId',
-          oldValue: null, newValue: target.id,
-          changedBy: actor.uid, changedByName: actor.name,
-        });
+        if (didMatch) {
+          result.matched++;
+          void writeSalesAudit({
+            db, batchId, transactionId: doc.id,
+            action: 'auto_match', field: 'matchedTransactionId',
+            oldValue: null, newValue: target.id,
+            changedBy: actor.uid, changedByName: actor.name,
+          });
+        } else {
+          // Race: target đã hết debt → đánh dấu cần kiểm tra
+          await doc.ref.update({ matchStatus: 'needs_review', updatedAt: now });
+          result.needsReview++;
+        }
       } else {
         await doc.ref.update({ matchStatus: 'needs_review', updatedAt: now });
         result.needsReview++;
@@ -175,8 +191,8 @@ export async function linkTransaction(
       if (!targetSnap.exists) throw new Error('Target transaction không tồn tại');
       const tx = txSnap.data() ?? {};
       const target = targetSnap.data() ?? {};
-      // Validate cùng cơ sở + phone + package
-      if (tx.branchId !== target.branchId || tx.phone !== target.phone || tx.packageCode !== target.packageCode) {
+      // Validate cùng cơ sở + phone + package (EXACT packageId — BUG-3 fix)
+      if (tx.branchId !== target.branchId || tx.phone !== target.phone || tx.packageId !== target.packageId) {
         throw new Error('Candidate không khớp branch/phone/gói');
       }
       oldMatchedId = tx.matchedTransactionId ?? null;
@@ -196,10 +212,13 @@ export async function linkTransaction(
       const newCollected = Number(target.collectedToday ?? 0) + collectedToday;
       const newDebt = Math.max(0, Number(target.packageValue ?? 0) - newCollected);
       const now = Timestamp.now();
+      const dateStr = String(target.date ?? '');
+      const targetSummary = `${dateStr.split('-').reverse().join('/')} · ${String(target.customerName ?? '?')}`;
       t.update(targetRef, { collectedToday: newCollected, debtAmount: newDebt, updatedAt: now });
       t.update(txRef, {
         matchStatus: 'matched',
         matchedTransactionId: targetTxId,
+        matchedTargetSummary: targetSummary,
         updatedAt: now,
       });
     });

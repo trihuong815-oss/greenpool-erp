@@ -15,12 +15,13 @@ import { getFirebaseAdminDb } from '@/lib/firebase/admin';
 import { COLLECTIONS } from '@/lib/firebase/collections';
 import { getCurrentProfile } from '@/lib/firebase/current-profile';
 
-const VALID_MODULES = ['proposal', 'dispatch', 'system'] as const;
+const VALID_MODULES = ['proposal', 'dispatch', 'sales', 'system'] as const;
 type ModuleKey = typeof VALID_MODULES[number];
 
 const DEFAULT_CHANNELS = {
   proposal: { inApp: true, push: true, email: true },
   dispatch: { inApp: true, push: true, email: true },
+  sales:    { inApp: true, push: true, email: false }, // 2026-06-17: noti sales daily — không email
   system:   { inApp: true, push: true, email: false },
 };
 

@@ -6,6 +6,7 @@
 // Action: Thêm dòng / Lưu tạm / Gửi đối chiếu.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Plus, Save, Send, AlertCircle, Loader2 } from 'lucide-react';
 import type { SalesDailyBatch, SalesTransaction, SalesTransactionInput, BatchStatus } from '@/lib/types/sales-v2';
 import type { SalesV2Package } from '@/lib/sales-v2/packages';
@@ -55,7 +56,11 @@ const STORAGE_PREFIX = 'gp-sales-v2-draft-';
 const storageKey = (batchId: string) => `${STORAGE_PREFIX}${batchId}`;
 
 export default function NhapClient({ branchId, branchName, saleName, packages }: Props) {
-  const [selectedDate, setSelectedDate] = useState<string>(todayInVN());
+  // BUG-2 audit fix: init selectedDate từ URL ?date=YYYY-MM-DD (vd link từ noti approve)
+  const searchParams = useSearchParams();
+  const dateParam = searchParams?.get('date') ?? '';
+  const initDate = /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : todayInVN();
+  const [selectedDate, setSelectedDate] = useState<string>(initDate);
   const [batch, setBatch] = useState<SalesDailyBatch | null>(null);
   const [rows, setRows] = useState<SalesTransaction[]>([]);
   const [localRows, setLocalRows] = useState<LocalRow[]>([]);

@@ -42,7 +42,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       id,
       branchId: String(tx.branchId ?? ''),
       phone: String(tx.phone ?? ''),
-      packageCode: String(tx.packageCode ?? ''),
+      packageId: String(tx.packageId ?? ''),
       customerName: String(tx.customerName ?? ''),
     });
 

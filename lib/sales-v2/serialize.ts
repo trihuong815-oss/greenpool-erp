@@ -77,6 +77,7 @@ export function serializeTransaction(id: string, raw: Record<string, any>): Sale
     reviewedAt: tsToIsoOrNull(raw.reviewedAt),
     reviewedBy: raw.reviewedBy ?? null,
     matchedTransactionId: raw.matchedTransactionId ?? null,
+    matchedTargetSummary: raw.matchedTargetSummary ?? null,
     matchStatus: raw.matchStatus ?? 'not_applicable',
     createdAt: tsToIso(raw.createdAt),
     updatedAt: tsToIso(raw.updatedAt),

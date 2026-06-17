@@ -14,6 +14,7 @@ import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-aut
 import { canAccountantReview, getScopeRole } from '@/lib/sales-v2/scope';
 import { writeSalesAudit } from '@/lib/sales-v2/audit';
 import { sendNotificationEvent } from '@/lib/firebase/noti-engine';
+import { markActionDoneForEntity } from '@/lib/firebase/notifications-store';
 import { fmtDateVi } from '@/lib/sales-v2/recipients';
 
 export const runtime = 'nodejs';
@@ -97,6 +98,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       changedByName: caller.actorName,
       reason: generalReason || null,
     });
+
+    // Audit BUG-1 fix: kế toán đã xử lý → mark noti done
+    void markActionDoneForEntity(caller.profile.uid, id);
 
     // V6.5 Notification (Phase 3 wire): gửi cho Sale "Bảng bị trả lại"
     try {
