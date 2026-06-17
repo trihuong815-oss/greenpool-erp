@@ -11,15 +11,17 @@ import { COLLECTIONS } from '@/lib/firebase/collections';
 
 export type ScopeRole =
   | 'sale'            // NV_SALE, NV_SALE_PT — chỉ batch của mình
-  | 'accountant'      // NV_KE, TP_KE — review batch trong cơ sở mình
+  | 'accountant'      // NV_KE — kế toán cơ sở, review batch trong cơ sở mình
   | 'qlcs'            // QLCS_* — view batch trong cơ sở mình
-  | 'top';            // ADMIN, CEO, GD_KD, GD_VP — view all
+  | 'top';            // ADMIN, CEO, GD_KD, GD_VP, TP_KE — view + review all
 
 export function getScopeRole(roleCode: string): ScopeRole | null {
   if (roleCode === 'NV_SALE' || roleCode === 'NV_SALE_PT') return 'sale';
-  if (roleCode === 'NV_KE' || roleCode === 'TP_KE') return 'accountant';
+  if (roleCode === 'NV_KE') return 'accountant';
   if (roleCode.startsWith('QLCS_')) return 'qlcs';
-  if (isTopAdmin(roleCode) || roleCode === 'GD_KD' || roleCode === 'GD_VP') return 'top';
+  // BUG-2 audit fix 2026-06-17: TP_KE = HQ kế toán → top scope (xem + duyệt all branches).
+  // Trước đây map TP_KE → 'accountant' → API check facility_id null → 400 error.
+  if (isTopAdmin(roleCode) || roleCode === 'GD_KD' || roleCode === 'GD_VP' || roleCode === 'TP_KE') return 'top';
   return null;
 }
 
@@ -56,12 +58,14 @@ export function canEditTransaction(
   if (role === 'sale') {
     return batch.saleId === caller.profile.uid && (batch.status === 'draft' || batch.status === 'returned');
   }
-  // Kế toán + top: sửa khi đang pending_review hoặc returned (sửa & duyệt)
+  // Kế toán + top: sửa CHỈ khi batch ở pending_review.
+  // BUG-3 audit fix 2026-06-17: bỏ 'returned' khỏi điều kiện vì returned = Sale đang
+  // sửa lại để resubmit → kế toán không được edit lúc này (race conflict).
   if (role === 'accountant' || role === 'top') {
     if (role === 'accountant') {
       if (!caller.profile.facility_id || batch.branchId !== caller.profile.facility_id) return false;
     }
-    return batch.status === 'pending_review' || batch.status === 'returned';
+    return batch.status === 'pending_review';
   }
   return false;
 }
