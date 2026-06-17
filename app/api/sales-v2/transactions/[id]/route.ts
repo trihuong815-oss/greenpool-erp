@@ -101,6 +101,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if ('contractNo' in updates) {
       updates.contractNo = updates.contractNo ? String(updates.contractNo).trim().slice(0, 50) : null;
     }
+    // ISSUE-3 audit fix 2026-06-17: nếu đổi transactionType → AUTO-CLEAR field chứng từ
+    // không thuộc loại mới để tránh dirty data + sai logic auto-match.
+    if ('transactionType' in updates) {
+      const newType = updates.transactionType;
+      // thanh_toan_full không có Số PT → clear
+      if (newType === 'thanh_toan_full' && !('receiptNo' in updates)) {
+        updates.receiptNo = null;
+      }
+      // dat_coc không có Số HĐ → clear
+      if (newType === 'dat_coc' && !('contractNo' in updates)) {
+        updates.contractNo = null;
+      }
+    }
 
     // Nếu đổi packageId → re-resolve package info
     if ('packageId' in updates) {

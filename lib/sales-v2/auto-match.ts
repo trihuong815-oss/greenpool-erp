@@ -27,6 +27,7 @@ export interface MatchCandidate {
   collectedToday: number;
   debtAmount: number;
   transactionType: string;
+  receiptNo?: string | null;
   createdAt: string;
 }
 
@@ -74,6 +75,7 @@ export async function findMatchCandidates(
         collectedToday: Number(x.collectedToday ?? 0),
         debtAmount: debt,
         transactionType: String(x.transactionType ?? ''),
+        receiptNo: x.receiptNo ?? null,
         createdAt: x.createdAt?.toDate?.()?.toISOString?.() ?? String(x.createdAt ?? ''),
       });
     }

@@ -323,7 +323,17 @@ function SavedRow({ idx, row, packages, canEdit, batchStatus, onUpdate, onRemove
         />
       </Td>
       <Td>
-        <TxnTypeSelect value={row.transactionType} disabled={!canEdit} onChange={(v) => onUpdate({ transactionType: v })} />
+        <TxnTypeSelect
+          value={row.transactionType}
+          disabled={!canEdit}
+          onChange={(v) => {
+            // ISSUE-1 audit fix: clear field chứng từ không thuộc loại mới để tránh dirty data
+            const patch: Record<string, any> = { transactionType: v };
+            if (v === 'thanh_toan_full') patch.receiptNo = null;
+            if (v === 'dat_coc') patch.contractNo = null;
+            onUpdate(patch as any);
+          }}
+        />
       </Td>
       <Td>
         <PayMethodSelect value={row.paymentMethod} disabled={!canEdit} onChange={(v) => onUpdate({ paymentMethod: v })} />
@@ -466,7 +476,17 @@ function LocalRowItem({ idx, row, packages, canEdit, onUpdate, onRemove, autoFoc
         />
       </Td>
       <Td>
-        <TxnTypeSelect value={row.transactionType} disabled={!canEdit} onChange={(v) => onUpdate({ transactionType: v })} />
+        <TxnTypeSelect
+          value={row.transactionType}
+          disabled={!canEdit}
+          onChange={(v) => {
+            // ISSUE-1 audit fix: clear field chứng từ không thuộc loại mới để tránh dirty data
+            const patch: Record<string, any> = { transactionType: v };
+            if (v === 'thanh_toan_full') patch.receiptNo = null;
+            if (v === 'dat_coc') patch.contractNo = null;
+            onUpdate(patch as any);
+          }}
+        />
       </Td>
       <Td>
         <PayMethodSelect value={row.paymentMethod} disabled={!canEdit} onChange={(v) => onUpdate({ paymentMethod: v })} />

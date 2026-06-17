@@ -17,6 +17,7 @@ interface Candidate {
   collectedToday: number;
   debtAmount: number;
   transactionType: string;
+  receiptNo?: string | null;
   createdAt: string;
 }
 
@@ -82,6 +83,11 @@ export default function MatchPicker({ tx, onClose, onLinked }: Props) {
             <div className="mt-1 text-xs text-slate-500">
               {tx.customerName} · {tx.phone} · {tx.packageName} · Thu nốt {tx.collectedToday.toLocaleString()}đ
             </div>
+            {tx.receiptNo && (
+              <div className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[11px] font-semibold ring-1 ring-emerald-200">
+                Sale nhập Số PT: <strong>{tx.receiptNo}</strong> → khớp by Số PT
+              </div>
+            )}
           </div>
           <button onClick={onClose} className="p-1 rounded hover:bg-slate-100 text-slate-400">
             <X size={16} />
@@ -136,6 +142,9 @@ export default function MatchPicker({ tx, onClose, onLinked }: Props) {
                       <span>Giá gói: <strong className="text-slate-800">{c.packageValue.toLocaleString()}đ</strong></span>
                       <span>Đã thu: <strong className="text-sky-700">{c.collectedToday.toLocaleString()}đ</strong></span>
                       <span>Còn nợ: <strong className="text-rose-700">{c.debtAmount.toLocaleString()}đ</strong></span>
+                      {c.receiptNo && (
+                        <span className="text-emerald-700">Số PT: <strong>{c.receiptNo}</strong></span>
+                      )}
                     </div>
                   </button>
                 );
@@ -165,12 +174,15 @@ export function MatchStatusBadge({ tx, onClick }: { tx: SalesTransaction; onClic
   }
   const ms = tx.matchStatus;
   if (ms === 'matched') {
+    const tip = tx.matchedTargetSummary
+      ? `Đã link → ${tx.matchedTargetSummary}${tx.receiptNo ? ` (qua Số PT ${tx.receiptNo})` : ''}`
+      : 'Đã link với GD cũ';
     return (
       <button
         type="button"
         onClick={onClick}
         className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[11px] font-semibold ring-1 ring-emerald-200 hover:bg-emerald-100"
-        title={tx.matchedTargetSummary ? `Đã link → ${tx.matchedTargetSummary}` : 'Đã link với GD cũ'}
+        title={tip}
       >
         <LinkIcon size={11} /> Đã link
       </button>
