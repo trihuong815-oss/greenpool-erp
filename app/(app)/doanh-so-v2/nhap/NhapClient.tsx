@@ -168,14 +168,15 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
       collected += r.collectedToday;
       count++;
     }
-    // Cộng cả localRows hợp lệ để user thấy preview
+    // Preview cộng localRows có dữ liệu (KHÔNG cần valid full để user thấy
+    // tiền ngay khi vừa gõ; validate đủ fields chỉ check khi bấm Lưu tạm/Gửi).
     for (const lr of localRows) {
-      const v = validateRow(lr);
-      if (v.ok) {
-        sales += Number(lr.packageValue) || 0;
-        collected += Number(lr.collectedToday) || 0;
-        count++;
-      }
+      if (isRowEmpty(lr)) continue; // skip row trống auto-add
+      const pv = Number(lr.packageValue) || 0;
+      const ct = Number(lr.collectedToday) || 0;
+      sales += pv;
+      collected += ct;
+      count++;
     }
     return { sales, collected, debt: Math.max(0, sales - collected), count };
   }, [rows, localRows]);
