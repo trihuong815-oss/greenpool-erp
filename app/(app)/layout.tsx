@@ -2,6 +2,7 @@ import { AppShell } from '@/components/AppShell';
 import { SessionRefresher } from '@/components/SessionRefresher';
 import { FeatureFlagsProvider } from '@/lib/feature-flags/client';
 import { loadAllFlags } from '@/lib/feature-flags/server';
+import { ImperativeModalHost } from '@/components/ui/imperative-modal';
 // Phase 13.7 (2026-06-05): bỏ IdleAutoLogout theo yêu cầu anh — UX giống FB/Zalo.
 // Bảo mật giữ qua: auth + 2FA TOTP + Firestore rules + audit log + rate limit + CSP.
 // Session cookie 14d tự renew qua SessionRefresher mỗi 24h.
@@ -62,6 +63,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           {children}
         </AppShell>
       </FeatureFlagsProvider>
+      <ImperativeModalHost />
     </>
   );
 }

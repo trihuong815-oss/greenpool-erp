@@ -3,7 +3,7 @@
 // Sales grid — 11 cột Excel-like cho Sale nhập daily transactions.
 // Phase 1 (2026-06-17).
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Trash2, AlertCircle } from 'lucide-react';
 import type {
   SalesTransaction,
@@ -14,6 +14,7 @@ import type {
 import { SOURCE_LABEL, TRANSACTION_TYPE_LABEL, PAYMENT_METHOD_LABEL } from '@/lib/types/sales-v2';
 import type { SalesV2Package } from '@/lib/sales-v2/packages';
 import PackagePicker from './PackagePicker';
+import { showConfirm } from '@/components/ui/imperative-modal';
 
 export interface LocalRow {
   tempId: string;
@@ -162,17 +163,24 @@ export default function SalesGrid({
                 onRemove={() => onRemoveSaved(r.id)}
               />
             ))}
-            {localRows.map((r, i) => (
-              <LocalRowItem
-                key={r.tempId}
-                idx={rows.length + i + 1}
-                row={r}
-                packages={packages}
-                canEdit={canEdit}
-                onUpdate={(patch) => onUpdateLocal(r.tempId, patch)}
-                onRemove={() => onRemoveLocal(r.tempId)}
-              />
-            ))}
+            {localRows.map((r, i) => {
+              // Auto-focus row cuối nếu nó vừa được auto-add (rỗng + là last + có row trước có data)
+              const isLast = i === localRows.length - 1;
+              const prevHasData = i > 0 && !isRowEmpty(localRows[i - 1]);
+              const shouldFocus = isLast && isRowEmpty(r) && prevHasData;
+              return (
+                <LocalRowItem
+                  key={r.tempId}
+                  idx={rows.length + i + 1}
+                  row={r}
+                  packages={packages}
+                  canEdit={canEdit}
+                  onUpdate={(patch) => onUpdateLocal(r.tempId, patch)}
+                  onRemove={() => onRemoveLocal(r.tempId)}
+                  autoFocusFirstCell={shouldFocus}
+                />
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -276,19 +284,31 @@ function SavedRow({ idx, row, packages, canEdit, onUpdate, onRemove }: {
 }
 
 /** Row local (chưa save). Edit cập nhật state cha. */
-function LocalRowItem({ idx, row, packages, canEdit, onUpdate, onRemove }: {
+function LocalRowItem({ idx, row, packages, canEdit, onUpdate, onRemove, autoFocusFirstCell }: {
   idx: number;
   row: LocalRow;
   packages: SalesV2Package[];
   canEdit: boolean;
   onUpdate: (patch: Partial<LocalRow>) => void;
   onRemove: () => void;
+  autoFocusFirstCell?: boolean;
 }) {
   const pv = Number(row.packageValue) || 0;
   const ct = Number(row.collectedToday) || 0;
   const debt = Math.max(0, pv - ct);
   const rowEmpty = useMemo(() => isRowEmpty(row), [row]);
   const validation = useMemo(() => (rowEmpty ? { ok: true as const } : validateRow(row)), [row, rowEmpty]);
+  const firstCellRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (autoFocusFirstCell) {
+      const el = firstCellRef.current;
+      if (el) {
+        el.focus();
+        try { el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch {}
+      }
+    }
+  }, [autoFocusFirstCell]);
 
   return (
     <tr className={`bg-amber-50/40 hover:bg-amber-50/70 ${!validation.ok ? 'border-l-2 border-amber-400' : ''}`}>
@@ -299,7 +319,7 @@ function LocalRowItem({ idx, row, packages, canEdit, onUpdate, onRemove }: {
         </div>
       </Td>
       <Td>
-        <TextCell value={row.customerName} disabled={!canEdit} onCommit={(v) => onUpdate({ customerName: v })} placeholder="Tên KH..." />
+        <TextCell value={row.customerName} disabled={!canEdit} onCommit={(v) => onUpdate({ customerName: v })} placeholder="Tên KH..." inputRef={firstCellRef} />
       </Td>
       <Td>
         <TextCell value={row.phone} disabled={!canEdit} onCommit={(v) => onUpdate({ phone: v })} placeholder="SĐT..." />
@@ -319,20 +339,35 @@ function LocalRowItem({ idx, row, packages, canEdit, onUpdate, onRemove }: {
           packages={packages}
           value={row.packageId}
           disabled={!canEdit}
-          onChange={(pkg) => {
-            if (pkg) {
-              onUpdate({
-                packageId: pkg.id,
-                packageCode: pkg.code,
-                packageName: pkg.name,
-                serviceGroup: pkg.serviceGroup,
-                isChildPackage: pkg.isChildPackage,
-                // auto fill giá trị gói nếu chưa nhập
-                packageValue: row.packageValue || String(pkg.defaultPrice),
-              });
-            } else {
+          onChange={async (pkg) => {
+            if (!pkg) {
               onUpdate({ packageId: null, packageCode: '', packageName: '', serviceGroup: '', isChildPackage: false });
+              return;
             }
+            const currentPv = Number(row.packageValue) || 0;
+            const newPv = pkg.defaultPrice;
+            // Nếu chưa có giá hoặc giá khớp → set/giữ nguyên không hỏi
+            let packageValueToSet = row.packageValue;
+            if (!currentPv && newPv > 0) {
+              packageValueToSet = String(newPv);
+            } else if (currentPv > 0 && newPv > 0 && currentPv !== newPv) {
+              // Đổi gói có defaultPrice khác giá hiện tại → hỏi
+              const ok = await showConfirm({
+                title: 'Cập nhật giá theo gói mới?',
+                description: `Giá hiện tại: ${currentPv.toLocaleString()}đ\nGiá mặc định của "${pkg.name}": ${newPv.toLocaleString()}đ`,
+                confirmText: 'Cập nhật giá',
+                cancelText: 'Giữ giá cũ',
+              });
+              if (ok) packageValueToSet = String(newPv);
+            }
+            onUpdate({
+              packageId: pkg.id,
+              packageCode: pkg.code,
+              packageName: pkg.name,
+              serviceGroup: pkg.serviceGroup,
+              isChildPackage: pkg.isChildPackage,
+              packageValue: packageValueToSet,
+            });
           }}
         />
       </Td>
@@ -373,15 +408,17 @@ function LocalRowItem({ idx, row, packages, canEdit, onUpdate, onRemove }: {
 // ─── Atomic cell components ────────────────────────────────────────
 
 function TextCell({
-  value, disabled, onCommit, placeholder,
+  value, disabled, onCommit, placeholder, inputRef,
 }: {
   value: string;
   disabled: boolean;
   onCommit: (v: string) => void;
   placeholder?: string;
+  inputRef?: React.MutableRefObject<HTMLInputElement | null>;
 }) {
   return (
     <input
+      ref={(el) => { if (inputRef) inputRef.current = el; }}
       type="text"
       defaultValue={value}
       disabled={disabled}
@@ -402,14 +439,24 @@ function NumberCell({
   disabled: boolean;
   onCommit: (v: number) => void;
 }) {
+  // Format thousand separator khi blur; khi focus hiển thị raw số để dễ edit.
+  const [editing, setEditing] = useState(false);
+  const [raw, setRaw] = useState<string>(value > 0 ? String(value) : '');
+  useEffect(() => {
+    if (!editing) setRaw(value > 0 ? String(value) : '');
+  }, [value, editing]);
+  const display = editing ? raw : (value > 0 ? value.toLocaleString() : '');
   return (
     <input
-      type="number"
-      min={0}
-      defaultValue={value || ''}
+      type="text"
+      inputMode="numeric"
+      value={display}
       disabled={disabled}
-      onBlur={(e) => {
-        const v = Number(e.target.value) || 0;
+      onFocus={() => setEditing(true)}
+      onChange={(e) => setRaw(e.target.value.replace(/[^\d]/g, ''))}
+      onBlur={() => {
+        setEditing(false);
+        const v = Number(raw) || 0;
         if (v !== value) onCommit(v);
       }}
       className="w-full px-2 py-1 rounded border border-transparent bg-transparent text-sm text-right tabular-nums focus:bg-white focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100 focus:outline-none disabled:cursor-not-allowed"

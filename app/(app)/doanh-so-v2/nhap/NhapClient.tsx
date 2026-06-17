@@ -11,6 +11,7 @@ import type { SalesDailyBatch, SalesTransaction, SalesTransactionInput, BatchSta
 import type { SalesV2Package } from '@/lib/sales-v2/packages';
 import type { BranchId } from '@/lib/branches';
 import SalesGrid, { type LocalRow, makeEmptyRow, validateRow, isRowEmpty } from './_components/SalesGrid';
+import { showConfirm } from '@/components/ui/imperative-modal';
 
 interface Props {
   branchId: BranchId;
@@ -186,7 +187,14 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
   }, [showToast]);
 
   const handleRemoveSaved = useCallback(async (id: string) => {
-    if (!confirm('Xoá dòng này?')) return;
+    const ok = await showConfirm({
+      title: 'Xoá dòng này?',
+      description: 'Giao dịch đã lưu sẽ bị xoá khỏi batch.',
+      confirmText: 'Xoá',
+      cancelText: 'Huỷ',
+      variant: 'danger',
+    });
+    if (!ok) return;
     setRows((prev) => prev.filter((r) => r.id !== id));
     try {
       const r = await fetch(`/api/sales-v2/transactions/${encodeURIComponent(id)}`, { method: 'DELETE' });
@@ -276,13 +284,19 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
       showToast('err', 'Chưa có giao dịch nào để gửi');
       return;
     }
-    if (!confirm(
-      `Gửi đối chiếu ngày ${batch.date}?\n\n` +
-      `Tổng giao dịch: ${totals.count}\n` +
-      `Doanh số: ${totals.sales.toLocaleString()} VND\n` +
-      `Thực thu: ${totals.collected.toLocaleString()} VND\n\n` +
-      `Sau khi gửi, bạn không sửa được nữa trừ khi kế toán trả lại.`
-    )) return;
+    const ok = await showConfirm({
+      title: `Gửi đối chiếu ngày ${batch.date}?`,
+      description:
+        `Tổng giao dịch: ${totals.count}\n` +
+        `Doanh số: ${totals.sales.toLocaleString()} VND\n` +
+        `Thực thu: ${totals.collected.toLocaleString()} VND\n` +
+        `Công nợ: ${totals.debt.toLocaleString()} VND\n\n` +
+        `Sau khi gửi, bạn không sửa được nữa trừ khi kế toán trả lại.`,
+      confirmText: 'Gửi đối chiếu',
+      cancelText: 'Huỷ',
+      variant: 'success',
+    });
+    if (!ok) return;
 
     setSubmitting(true);
     try {

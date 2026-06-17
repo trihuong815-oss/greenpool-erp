@@ -15,6 +15,7 @@ import type {
   PaymentMethod,
 } from '@/lib/types/sales-v2';
 import { SOURCE_LABEL, TRANSACTION_TYPE_LABEL, PAYMENT_METHOD_LABEL } from '@/lib/types/sales-v2';
+import { showConfirm, showPrompt } from '@/components/ui/imperative-modal';
 
 const STATUS_META: Record<BatchStatus, { label: string; cls: string }> = {
   draft:           { label: 'Nháp',              cls: 'bg-slate-100 text-slate-700 ring-slate-200' },
@@ -84,42 +85,76 @@ export default function BatchDetailModal({ batch, canReview, onClose, onAfterAct
       const j = await r.json();
       setRows((prev) => prev.map((r) => (r.id === id ? (j.transaction as SalesTransaction) : r)));
     } catch (e: any) {
-      alert(`Lưu lỗi: ${e?.message ?? 'unknown'}`);
+      await showConfirm({
+        title: 'Lưu lỗi',
+        description: e?.message ?? 'unknown',
+        confirmText: 'OK',
+        cancelText: '',
+        variant: 'danger',
+      });
     }
   }, []);
 
   const handleApprove = useCallback(async () => {
-    if (!confirm(
-      `Duyệt batch ngày ${batch.date} của ${batch.saleName}?\n\n` +
-      `${totals.count} giao dịch · DS ${totals.sales.toLocaleString()}đ · Thực thu ${totals.collected.toLocaleString()}đ · Công nợ ${totals.debt.toLocaleString()}đ\n\n` +
-      `Sau khi duyệt, dữ liệu trở thành chính thức cho dashboard + báo cáo.`
-    )) return;
+    const ok = await showConfirm({
+      title: `Duyệt batch ngày ${batch.date}?`,
+      description:
+        `Sale: ${batch.saleName}\n` +
+        `${totals.count} giao dịch · DS ${totals.sales.toLocaleString()}đ · Thực thu ${totals.collected.toLocaleString()}đ · Công nợ ${totals.debt.toLocaleString()}đ\n\n` +
+        `Sau khi duyệt, dữ liệu trở thành chính thức cho dashboard + báo cáo.`,
+      confirmText: 'Duyệt',
+      cancelText: 'Huỷ',
+      variant: 'success',
+    });
+    if (!ok) return;
     setBusy('approve');
     try {
       const r = await fetch(`/api/sales-v2/batches/${encodeURIComponent(batch.id)}/approve`, { method: 'POST' });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
       onAfterAction();
     } catch (e: any) {
-      alert(`Duyệt lỗi: ${e?.message ?? 'unknown'}`);
+      await showConfirm({
+        title: 'Duyệt lỗi',
+        description: e?.message ?? 'unknown',
+        confirmText: 'OK',
+        cancelText: '',
+        variant: 'danger',
+      });
     } finally {
       setBusy(null);
     }
   }, [batch, totals, onAfterAction]);
 
   const handleReturn = useCallback(async () => {
-    const reason = prompt(`Trả lại Sale ${batch.saleName}\n\nLý do (Sale sẽ thấy):`);
-    if (!reason || !reason.trim()) return;
+    const reason = await showPrompt({
+      title: `Trả lại Sale ${batch.saleName}`,
+      description: 'Sale sẽ thấy lý do này khi mở /nhap. Tối thiểu 5 ký tự.',
+      placeholder: 'VD: Sai gói khách hàng — kiểm tra lại HBTE 24B vs 36B',
+      multiline: true,
+      minLength: 5,
+      maxLength: 500,
+      confirmText: 'Trả lại',
+      cancelText: 'Huỷ',
+      variant: 'danger',
+    });
+    if (!reason) return;
     setBusy('return');
     try {
       const r = await fetch(`/api/sales-v2/batches/${encodeURIComponent(batch.id)}/return`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ reason: reason.trim() }),
+        body: JSON.stringify({ reason }),
       });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
       onAfterAction();
     } catch (e: any) {
-      alert(`Trả lại lỗi: ${e?.message ?? 'unknown'}`);
+      await showConfirm({
+        title: 'Trả lại lỗi',
+        description: e?.message ?? 'unknown',
+        confirmText: 'OK',
+        cancelText: '',
+        variant: 'danger',
+      });
     } finally {
       setBusy(null);
     }
