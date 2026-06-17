@@ -393,6 +393,63 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ---- Sales v2 (2026-06-17) — Doanh số v2 module ----
+    // Workflow: Sale nhập daily batch → kế toán/TP_KE/QLCS xem → kế toán/top duyệt.
+    // WRITE: 100% server-side (Admin SDK qua /api/sales-v2/*) — client write deny.
+    // READ scope:
+    //   - isAdmin() (CEO/ADMIN/GD_KD/GD_VP): all
+    //   - TP_KE (HQ kế toán): all
+    //   - Sale owner: only mình
+    //   - NV_KE / QLCS: branch của mình
+
+    // salesDailyBatches: meta theo Sale × ngày
+    match /salesDailyBatches/{batchId} {
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        userRole() == 'TP_KE' ||
+        request.auth.uid == resource.data.saleId ||
+        ((userRole() == 'NV_KE' || isQLCS()) &&
+         resource.data.branchId == userFacility())
+      );
+      allow write: if false; // Admin SDK only
+    }
+
+    // salesTransactions: 1 doc / dòng grid
+    match /salesTransactions/{txId} {
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        userRole() == 'TP_KE' ||
+        request.auth.uid == resource.data.saleId ||
+        ((userRole() == 'NV_KE' || isQLCS()) &&
+         resource.data.branchId == userFacility())
+      );
+      allow write: if false;
+    }
+
+    // salesAuditLogs: append-only, đọc giới hạn (audit trail).
+    // Admin + TP_KE + chính actor đọc được. Sale không cần đọc audit của batch mình
+    // (đã có UI hiển thị status/lý do trả lại trên batch doc).
+    match /salesAuditLogs/{logId} {
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        userRole() == 'TP_KE' ||
+        request.auth.uid == resource.data.changedBy
+      );
+      allow write: if false;
+    }
+
+    // salesMonthlySummary: rebuild via cron daily — read theo cùng scope batch.
+    match /salesMonthlySummary/{id} {
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        userRole() == 'TP_KE' ||
+        request.auth.uid == resource.data.saleId ||
+        ((userRole() == 'NV_KE' || isQLCS()) &&
+         resource.data.branchId == userFacility())
+      );
+      allow write: if false;
+    }
+
     // ---- Catch-all deny ----
     match /{document=**} {
       allow read, write: if false;
