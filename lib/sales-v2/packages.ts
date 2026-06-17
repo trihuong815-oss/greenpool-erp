@@ -39,25 +39,27 @@ function detectChildPackage(packageName: string, groupName: string): boolean {
   return false;
 }
 
-/** List packages "khả dụng" của 1 branch. Loose filter: chấp nhận active=true/undefined
- *  (chỉ filter active === false). Sort theo group → name. */
+/** List packages "khả dụng" của 1 branch — CHỈ những gói + group đang BẬT (active=true).
+ *  User 2026-06-17: Sale autocomplete chỉ thấy gói đang sử dụng, gói đã TẮT ẩn hoàn toàn.
+ *  Sort theo group name → package name. */
 export async function listPackagesForBranch(branchId: BranchId): Promise<SalesV2Package[]> {
   const db = getFirebaseAdminDb();
-  // 1. Fetch tất cả groups của branch (filter client-side để bỏ active === false)
+  // 1. Fetch groups BẬT của branch (active === true strict, không nhận undefined)
   const groupsSnap = await db.collection(COLLECTIONS.PACKAGE_GROUPS)
     .where('branchId', '==', branchId)
+    .where('active', '==', true)
     .get();
-  const groupById = new Map<string, { name: string; sortOrder: number; active: boolean }>();
+  const groupById = new Map<string, { name: string; sortOrder: number }>();
   groupsSnap.forEach((d) => {
     const data = d.data();
     groupById.set(d.id, {
       name: String(data.name ?? ''),
       sortOrder: Number(data.sortOrder ?? 0),
-      active: data.active !== false, // undefined → coi như active
     });
   });
 
-  // 2. Fetch packages của branch
+  // 2. Fetch packages BẬT của branch — single where(branchId), filter client active=true
+  // (tránh composite index where(branchId)+where(active))
   const pkgSnap = await db.collection(COLLECTIONS.PACKAGES)
     .where('branchId', '==', branchId)
     .get();
@@ -65,10 +67,10 @@ export async function listPackagesForBranch(branchId: BranchId): Promise<SalesV2
   const results: SalesV2Package[] = [];
   pkgSnap.forEach((d) => {
     const data = d.data();
-    if (data.active === false) return; // skip explicit disabled
+    if (data.active !== true) return; // STRICT — chỉ gói BẬT
     const groupId = String(data.groupId ?? '');
     const group = groupById.get(groupId);
-    if (!group || !group.active) return; // skip nếu group disabled/missing
+    if (!group) return; // group đã tắt hoặc không tồn tại
     const name = String(data.name ?? '');
     const groupName = group.name;
     results.push({
@@ -81,26 +83,27 @@ export async function listPackagesForBranch(branchId: BranchId): Promise<SalesV2
     });
   });
 
-  // Sort: theo sortOrder của group rồi theo name
+  // Sort: theo group name rồi theo package name (alphabetical)
   results.sort((a, b) => {
-    if (a.code !== b.code) return a.code.localeCompare(b.code);
-    return a.name.localeCompare(b.name);
+    if (a.code !== b.code) return a.code.localeCompare(b.code, 'vi');
+    return a.name.localeCompare(b.name, 'vi');
   });
   return results;
 }
 
-/** Lookup 1 package by id (validate khi Sale POST transaction). */
+/** Lookup 1 package by id (validate khi Sale POST transaction).
+ *  STRICT active=true: từ chối gói đã tắt hoặc group đã tắt. */
 export async function getPackageById(packageId: string): Promise<SalesV2Package | null> {
   const db = getFirebaseAdminDb();
   const pkgDoc = await db.collection(COLLECTIONS.PACKAGES).doc(packageId).get();
   if (!pkgDoc.exists) return null;
   const data = pkgDoc.data() ?? {};
-  if (data.active === false) return null;
+  if (data.active !== true) return null; // STRICT
   const groupId = String(data.groupId ?? '');
   const groupDoc = await db.collection(COLLECTIONS.PACKAGE_GROUPS).doc(groupId).get();
   if (!groupDoc.exists) return null;
   const group = groupDoc.data() ?? {};
-  if (group.active === false) return null;
+  if (group.active !== true) return null; // STRICT
   const groupName = String(group.name ?? '');
   const name = String(data.name ?? '');
   return {
