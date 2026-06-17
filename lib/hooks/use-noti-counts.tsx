@@ -14,7 +14,7 @@ import { collection, onSnapshot, query, where, Timestamp, limit as fbLimit } fro
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { getFirebaseClient, getFirebaseClientDb } from '@/lib/firebase/client';
 
-export type NotiSource = 'chat' | 'approval' | 'assigned' | 'kt_proposal' | 'kt_task' | 'checklist';
+export type NotiSource = 'chat' | 'approval' | 'assigned' | 'kt_proposal' | 'kt_task' | 'checklist' | 'sales';
 
 export interface NotiItem {
   id: string;
@@ -243,6 +243,24 @@ export function NotiCountsProvider({ children }: { children: ReactNode }) {
               subtitle: `Từ ${n.submittedByName ?? '?'} @ ${n.branchId ?? '?'}`,
               time: n.submittedAt,
               link: '/checklist-v2',
+            })),
+          };
+        },
+      },
+      // 2026-06-17 Phase 3.4: Sales v2 inbox cho bell dropdown
+      { source: 'sales', url: '/api/sales-v2/inbox',
+        parse: (j) => {
+          const rows = Array.isArray(j?.rows) ? j.rows : [];
+          return {
+            count: rows.length,
+            items: rows.slice(0, 10).map((b: any) => ({
+              id: `sales-${b.id}`, source: 'sales' as NotiSource,
+              title: b.status === 'returned'
+                ? `Bảng ${b.date} bị trả lại — cần sửa`
+                : `${b.saleName} gửi đối chiếu ${b.date}`,
+              subtitle: `${b.totalTransactions} GD · DS ${b.totalSalesAmount.toLocaleString()}đ${b.status === 'pending_review' ? ` @ ${b.branchName}` : ''}`,
+              time: b.updatedAt,
+              link: b.status === 'returned' ? '/doanh-so-v2/nhap' : '/doanh-so-v2/doi-chieu',
             })),
           };
         },

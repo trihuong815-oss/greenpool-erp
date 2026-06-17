@@ -33,9 +33,10 @@ const SOURCE_META: Record<NotiSource, { label: string; icon: typeof Inbox; color
   kt_proposal: { label: 'Đề xuất kỹ thuật chờ duyệt',    icon: Wrench,         color: 'text-violet-600 bg-violet-50' },
   kt_task:     { label: 'Nhiệm vụ kỹ thuật chờ tôi',     icon: Wrench,         color: 'text-violet-600 bg-violet-50' },
   checklist:   { label: 'Checklist cần kiểm',            icon: CheckSquare,    color: 'text-emerald-600 bg-emerald-50' },
+  sales:       { label: 'Doanh số v2',                   icon: Inbox,          color: 'text-emerald-600 bg-emerald-50' },
 };
 
-const SECTION_ORDER: NotiSource[] = ['chat', 'approval', 'assigned', 'kt_proposal', 'kt_task', 'checklist'];
+const SECTION_ORDER: NotiSource[] = ['chat', 'approval', 'assigned', 'kt_proposal', 'kt_task', 'checklist', 'sales'];
 
 type TabKey = 'all' | 'action' | 'read';
 
@@ -60,10 +61,12 @@ export function NotificationBell() {
   const {
     items, total, loading, refresh,
     chat, tasksApproval, tasksAssigned, techProposal, techTask, checklist,
+    salesSubmit, salesReview,
   } = useNotiCounts();
   const rawCount: Record<NotiSource, number> = {
     chat, approval: tasksApproval, assigned: tasksAssigned,
     kt_proposal: techProposal, kt_task: techTask, checklist,
+    sales: salesSubmit + salesReview,
   };
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<TabKey>('all');
