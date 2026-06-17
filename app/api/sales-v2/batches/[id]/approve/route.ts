@@ -16,6 +16,7 @@ import { canAccountantReview, getScopeRole } from '@/lib/sales-v2/scope';
 import { writeSalesAudit } from '@/lib/sales-v2/audit';
 import { sendNotificationEvent } from '@/lib/firebase/noti-engine';
 import { fmtDateVi } from '@/lib/sales-v2/recipients';
+import { runAutoMatchForBatch } from '@/lib/sales-v2/auto-match';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -122,9 +123,19 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       console.warn('[sales-v2/approve] noti send fail:', e?.message);
     }
 
-    // TODO Phase 4: trigger auto-link cho thanh_toan_not transactions
+    // V6 Phase 4 (2026-06-17): trigger auto-link cho tx thanh_toan_not.
+    // Chạy fire-and-forget, không block response. Kết quả trả về stats.
+    let matchStats = { matched: 0, needsReview: 0, noMatch: 0 };
+    try {
+      matchStats = await runAutoMatchForBatch(db, id, {
+        uid: caller.profile.uid,
+        name: caller.actorName,
+      });
+    } catch (e: any) {
+      console.warn('[approve] auto-match fail:', e?.message);
+    }
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, autoMatch: matchStats });
   } catch (err: any) {
     if (err instanceof UnauthorizedError) {
       return NextResponse.json({ error: err.message }, { status: err.status });
