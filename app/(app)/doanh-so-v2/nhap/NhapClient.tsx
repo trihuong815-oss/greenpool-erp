@@ -11,6 +11,7 @@ import type { SalesDailyBatch, SalesTransaction, SalesTransactionInput, BatchSta
 import type { SalesV2Package } from '@/lib/sales-v2/packages';
 import type { BranchId } from '@/lib/branches';
 import SalesGrid, { type LocalRow, makeEmptyRow, validateRow, isRowEmpty } from './_components/SalesGrid';
+import MobileNhapView from './_components/MobileNhapView';
 import { showConfirm } from '@/components/ui/imperative-modal';
 
 interface Props {
@@ -419,17 +420,33 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
           </div>
         </div>
 
-        {/* Data grid */}
-        <SalesGrid
-          packages={packages}
-          rows={rows}
-          localRows={localRows}
-          canEdit={canEdit}
-          onUpdateLocal={handleUpdateLocal}
-          onRemoveLocal={handleRemoveLocal}
-          onUpdateSaved={handleUpdateSaved}
-          onRemoveSaved={handleRemoveSaved}
-        />
+        {/* Data grid — desktop (md+) */}
+        <div className="hidden md:block">
+          <SalesGrid
+            packages={packages}
+            rows={rows}
+            localRows={localRows}
+            canEdit={canEdit}
+            onUpdateLocal={handleUpdateLocal}
+            onRemoveLocal={handleRemoveLocal}
+            onUpdateSaved={handleUpdateSaved}
+            onRemoveSaved={handleRemoveSaved}
+          />
+        </div>
+
+        {/* Mobile card view (<md) */}
+        <div className="md:hidden">
+          <MobileNhapView
+            packages={packages}
+            rows={rows}
+            localRows={localRows}
+            canEdit={canEdit}
+            onUpdateLocal={handleUpdateLocal}
+            onRemoveLocal={handleRemoveLocal}
+            onUpdateSaved={handleUpdateSaved}
+            onRemoveSaved={handleRemoveSaved}
+          />
+        </div>
       </div>
 
       {/* Toast */}
