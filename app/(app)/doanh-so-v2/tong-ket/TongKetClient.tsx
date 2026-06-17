@@ -4,12 +4,13 @@
 // Phase 5 (2026-06-17).
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2, ChevronLeft, ChevronRight, TrendingUp, Wallet, AlertTriangle, Users } from 'lucide-react';
+import { ChevronLeft, ChevronRight, TrendingUp, Wallet, AlertTriangle, Users } from 'lucide-react';
 import { BRANCHES } from '@/lib/branches';
 import type { BranchId } from '@/lib/branches';
 import type { ScopeRole } from '@/lib/sales-v2/scope';
 import type { SalesV2Source } from '@/lib/types/sales-v2';
 import { SOURCE_LABEL } from '@/lib/types/sales-v2';
+import { SkeletonKpiGrid, SkeletonCard } from '@/components/ui/Skeleton';
 
 interface Summary {
   ok: true;
@@ -158,8 +159,12 @@ export default function TongKetClient({ scope }: Props) {
 
         {/* KPI cards */}
         {loading ? (
-          <div className="card flex items-center justify-center py-12 text-slate-400">
-            <Loader2 className="animate-spin mr-2" size={20} /> Đang tính tổng kết…
+          <div className="space-y-3">
+            <SkeletonKpiGrid count={5} />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <SkeletonCard lines={4} />
+              <SkeletonCard lines={4} />
+            </div>
           </div>
         ) : error ? (
           <div className="card text-center py-12 text-rose-600 text-sm">⚠️ {error}</div>

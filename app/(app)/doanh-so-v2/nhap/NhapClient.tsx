@@ -190,6 +190,27 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
     return { sales, collected, debt: Math.max(0, sales - collected), count };
   }, [rows, localRows]);
 
+  // Phase 6 edge case: warn trùng SĐT KHÁC TÊN trong cùng batch (có thể nhập nhầm).
+  const duplicatePhoneWarnings = useMemo(() => {
+    const byPhone = new Map<string, Set<string>>(); // phone → unique names
+    const allTxs = [
+      ...rows.map((r) => ({ phone: r.phone, name: r.customerName })),
+      ...localRows.filter((r) => !isRowEmpty(r)).map((r) => ({ phone: r.phone, name: r.customerName })),
+    ];
+    for (const t of allTxs) {
+      const p = t.phone?.trim();
+      const n = t.name?.trim();
+      if (!p || !n || !/^0\d{9}$/.test(p)) continue;
+      if (!byPhone.has(p)) byPhone.set(p, new Set());
+      byPhone.get(p)!.add(n.toLowerCase());
+    }
+    const warns: Array<{ phone: string; names: string[] }> = [];
+    for (const [phone, names] of byPhone.entries()) {
+      if (names.size > 1) warns.push({ phone, names: [...names] });
+    }
+    return warns;
+  }, [rows, localRows]);
+
   // === Handlers ===
   const handleAddRow = useCallback(() => {
     setLocalRows((prev) => [...prev, makeEmptyRow()]);
@@ -493,6 +514,22 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
               <div className="min-w-0 flex-1">
                 <div className="font-bold mb-1">Kế toán trả lại — sửa các dòng dưới rồi bấm "Gửi đối chiếu" lại:</div>
                 <div className="whitespace-pre-line leading-relaxed">{batch.returnReason}</div>
+              </div>
+            </div>
+          )}
+          {duplicatePhoneWarnings.length > 0 && (
+            <div className="mt-3 flex items-start gap-2 px-3 py-2.5 rounded-lg bg-amber-50 ring-1 ring-amber-200 text-xs text-amber-800">
+              <AlertCircle size={16} className="shrink-0 mt-0.5" />
+              <div className="min-w-0 flex-1">
+                <div className="font-bold mb-1">Cảnh báo: {duplicatePhoneWarnings.length} SĐT có nhiều tên khác nhau — có thể nhập nhầm:</div>
+                <ul className="space-y-0.5">
+                  {duplicatePhoneWarnings.slice(0, 5).map((w) => (
+                    <li key={w.phone} className="tabular-nums">
+                      <strong>{w.phone}</strong>: {w.names.join(' / ')}
+                    </li>
+                  ))}
+                  {duplicatePhoneWarnings.length > 5 && <li>… và {duplicatePhoneWarnings.length - 5} SĐT khác</li>}
+                </ul>
               </div>
             </div>
           )}

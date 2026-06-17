@@ -8,6 +8,7 @@ import { Loader2, Search, RefreshCw } from 'lucide-react';
 import { BRANCHES } from '@/lib/branches';
 import type { BranchId } from '@/lib/branches';
 import type { ScopeRole } from '@/lib/sales-v2/scope';
+import { SkeletonTable } from '@/components/ui/Skeleton';
 
 interface DebtRow {
   id: string;
@@ -164,8 +165,8 @@ export default function CongNoClient({ scope }: Props) {
         {/* Table */}
         <div className="card overflow-hidden p-0">
           {loading && rows.length === 0 ? (
-            <div className="flex items-center justify-center py-12 text-slate-400">
-              <Loader2 className="animate-spin mr-2" size={18} /> Đang tải…
+            <div className="p-4">
+              <SkeletonTable rows={6} cols={scope === 'top' ? 9 : 8} />
             </div>
           ) : filtered.length === 0 ? (
             <div className="text-center py-12 text-slate-400 text-sm">
