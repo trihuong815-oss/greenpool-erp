@@ -46,8 +46,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const batchDoc = await db.collection(COLLECTIONS.SALES_DAILY_BATCHES).doc(tx.batchId).get();
     if (!batchDoc.exists) return NextResponse.json({ error: 'Batch không tồn tại' }, { status: 404 });
     const batch = batchDoc.data() ?? {};
-    if (!canEditTransaction(caller, { saleId: batch.saleId, branchId: batch.branchId, status: batch.status })) {
-      return NextResponse.json({ error: 'Không có quyền sửa' }, { status: 403 });
+    if (!canEditTransaction(
+      caller,
+      { saleId: batch.saleId, branchId: batch.branchId, status: batch.status },
+      { reviewStatus: tx.reviewStatus },
+    )) {
+      return NextResponse.json({ error: 'Không có quyền sửa giao dịch này (có thể đã được kế toán duyệt)' }, { status: 403 });
     }
 
     const updates: Record<string, any> = {};
@@ -164,8 +168,12 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     const batchDoc = await db.collection(COLLECTIONS.SALES_DAILY_BATCHES).doc(tx.batchId).get();
     if (!batchDoc.exists) return NextResponse.json({ error: 'Batch không tồn tại' }, { status: 404 });
     const batch = batchDoc.data() ?? {};
-    if (!canEditTransaction(caller, { saleId: batch.saleId, branchId: batch.branchId, status: batch.status })) {
-      return NextResponse.json({ error: 'Không có quyền xoá' }, { status: 403 });
+    if (!canEditTransaction(
+      caller,
+      { saleId: batch.saleId, branchId: batch.branchId, status: batch.status },
+      { reviewStatus: tx.reviewStatus },
+    )) {
+      return NextResponse.json({ error: 'Không có quyền xoá (giao dịch đã được kế toán duyệt)' }, { status: 403 });
     }
 
     await txRef.delete();

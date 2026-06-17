@@ -57,17 +57,23 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       });
       const totalDebt = totalSales - totalCollected;
 
-      // V6 2026-06-17: reset reviewStatus all tx về pending để kế toán review lại từ đầu
-      // (kể cả tx trước đó đã approved/rejected lần submit trước)
+      // V6 2026-06-17 (revised): CHỈ reset tx có reviewStatus='rejected' về 'pending'.
+      // Tx 'approved' giữ approved → kế toán không cần review lại.
+      // Tx 'pending' giữ pending (chưa review).
+      // → Sale chỉ phải sửa các tx bị từ chối; kế toán chỉ review các tx pending mới.
       const now = Timestamp.now();
       txSnap.forEach((d) => {
-        tx.update(d.ref, {
-          reviewStatus: 'pending',
-          rejectReason: null,
-          reviewedAt: null,
-          reviewedBy: null,
-          updatedAt: now,
-        });
+        const x = d.data();
+        const rs = x.reviewStatus ?? 'pending';
+        if (rs === 'rejected') {
+          tx.update(d.ref, {
+            reviewStatus: 'pending',
+            rejectReason: null,
+            reviewedAt: null,
+            reviewedBy: null,
+            updatedAt: now,
+          });
+        }
       });
 
       tx.update(batchRef, {

@@ -23,14 +23,21 @@ interface Props {
   rows: SalesTransaction[];
   localRows: LocalRow[];
   canEdit: boolean;
+  batchStatus: string;
   onUpdateLocal: (tempId: string, patch: Partial<LocalRow>) => void;
   onRemoveLocal: (tempId: string) => void;
   onUpdateSaved: (id: string, patch: Partial<SalesTransaction>) => void;
   onRemoveSaved: (id: string) => void;
 }
 
+function canSaleEditSavedRow(batchStatus: string, reviewStatus?: string): boolean {
+  if (batchStatus === 'draft') return true;
+  if (batchStatus === 'returned') return (reviewStatus ?? 'pending') === 'rejected';
+  return false;
+}
+
 export default function MobileNhapView({
-  packages, rows, localRows, canEdit,
+  packages, rows, localRows, canEdit, batchStatus,
   onUpdateLocal, onRemoveLocal, onUpdateSaved, onRemoveSaved,
 }: Props) {
   const totalRows = rows.length + localRows.length;
@@ -46,17 +53,21 @@ export default function MobileNhapView({
 
   return (
     <div className="space-y-2 pb-20">
-      {rows.map((r, i) => (
-        <SavedCard
-          key={r.id}
-          idx={i + 1}
-          row={r}
-          packages={packages}
-          canEdit={canEdit}
-          onUpdate={(patch) => onUpdateSaved(r.id, patch)}
-          onRemove={() => onRemoveSaved(r.id)}
-        />
-      ))}
+      {rows.map((r, i) => {
+        const rowEditable = canEdit && canSaleEditSavedRow(batchStatus, r.reviewStatus);
+        return (
+          <SavedCard
+            key={r.id}
+            idx={i + 1}
+            row={r}
+            packages={packages}
+            canEdit={rowEditable}
+            batchStatus={batchStatus}
+            onUpdate={(patch) => onUpdateSaved(r.id, patch)}
+            onRemove={() => onRemoveSaved(r.id)}
+          />
+        );
+      })}
       {localRows.map((r, i) => {
         const isLast = i === localRows.length - 1;
         const prevHasData = i > 0 && !isRowEmpty(localRows[i - 1]);
@@ -80,17 +91,34 @@ export default function MobileNhapView({
 
 // ─── Saved card (đã PATCH lên server) ─────────────────────────────
 
-function SavedCard({ idx, row, packages, canEdit, onUpdate, onRemove }: {
+function SavedCard({ idx, row, packages, canEdit, batchStatus, onUpdate, onRemove }: {
   idx: number;
   row: SalesTransaction;
   packages: SalesV2Package[];
   canEdit: boolean;
+  batchStatus: string;
   onUpdate: (patch: Partial<SalesTransaction>) => void;
   onRemove: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const showBadge = batchStatus === 'returned';
+  const rs = row.reviewStatus ?? 'pending';
+  const cardRing =
+    showBadge && rs === 'rejected' ? 'ring-rose-300 bg-rose-50/40' :
+    showBadge && rs === 'approved' ? 'ring-emerald-300 bg-emerald-50/40' :
+                                     'ring-slate-200';
   return (
-    <div className="rounded-xl bg-white ring-1 ring-slate-200 overflow-hidden">
+    <div className={`rounded-xl bg-white ring-1 overflow-hidden ${cardRing}`}>
+      {showBadge && rs === 'rejected' && row.rejectReason && (
+        <div className="px-3 py-1.5 bg-rose-100/60 text-[11px] text-rose-700">
+          <strong>✗ Cần sửa:</strong> {row.rejectReason}
+        </div>
+      )}
+      {showBadge && rs === 'approved' && (
+        <div className="px-3 py-1 bg-emerald-100/60 text-[11px] text-emerald-700">
+          <strong>✓ Kế toán đã duyệt</strong> — không sửa được
+        </div>
+      )}
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}

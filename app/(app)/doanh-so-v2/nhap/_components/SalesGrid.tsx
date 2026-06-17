@@ -101,7 +101,8 @@ interface Props {
   packages: SalesV2Package[];
   rows: SalesTransaction[];
   localRows: LocalRow[];
-  canEdit: boolean;
+  canEdit: boolean;                  // Sale có thể edit row mới (add/lock-free)
+  batchStatus: string;               // V6: dùng để quyết định row nào lock khi returned
   onUpdateLocal: (tempId: string, patch: Partial<LocalRow>) => void;
   onRemoveLocal: (tempId: string) => void;
   onUpdateSaved: (id: string, patch: Partial<SalesTransaction>) => void;
@@ -122,8 +123,15 @@ const PAY_TONE: Record<PaymentMethod, string> = {
   pos:           'bg-amber-50 text-amber-700 ring-amber-200',
 };
 
+/** Sale có sửa được tx này không? (theo workflow per-tx review) */
+function canSaleEditRow(batchStatus: string, reviewStatus?: string): boolean {
+  if (batchStatus === 'draft') return true;
+  if (batchStatus === 'returned') return (reviewStatus ?? 'pending') === 'rejected';
+  return false;
+}
+
 export default function SalesGrid({
-  packages, rows, localRows, canEdit,
+  packages, rows, localRows, canEdit, batchStatus,
   onUpdateLocal, onRemoveLocal, onUpdateSaved, onRemoveSaved,
 }: Props) {
   const totalRows = rows.length + localRows.length;
@@ -159,17 +167,22 @@ export default function SalesGrid({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {rows.map((r, i) => (
-              <SavedRow
-                key={r.id}
-                idx={i + 1}
-                row={r}
-                packages={packages}
-                canEdit={canEdit}
-                onUpdate={(patch) => onUpdateSaved(r.id, patch)}
-                onRemove={() => onRemoveSaved(r.id)}
-              />
-            ))}
+            {rows.map((r, i) => {
+              // V6 per-tx edit: Sale chỉ sửa được tx có reviewStatus=rejected khi batch=returned
+              const rowEditable = canEdit && canSaleEditRow(batchStatus, r.reviewStatus);
+              return (
+                <SavedRow
+                  key={r.id}
+                  idx={i + 1}
+                  row={r}
+                  packages={packages}
+                  canEdit={rowEditable}
+                  batchStatus={batchStatus}
+                  onUpdate={(patch) => onUpdateSaved(r.id, patch)}
+                  onRemove={() => onRemoveSaved(r.id)}
+                />
+              );
+            })}
             {localRows.map((r, i) => {
               // Auto-focus row cuối nếu nó vừa được auto-add (rỗng + là last + có row trước có data)
               const isLast = i === localRows.length - 1;
@@ -215,18 +228,46 @@ function Td({ children, align = 'left', className = '' }: { children?: React.Rea
 }
 
 /** Row đã save (có id Firestore). Edit gửi PATCH ngay. */
-function SavedRow({ idx, row, packages, canEdit, onUpdate, onRemove }: {
+function SavedRow({ idx, row, packages, canEdit, batchStatus, onUpdate, onRemove }: {
   idx: number;
   row: SalesTransaction;
   packages: SalesV2Package[];
   canEdit: boolean;
+  batchStatus: string;
   onUpdate: (patch: Partial<SalesTransaction>) => void;
   onRemove: () => void;
 }) {
   const debt = Math.max(0, row.packageValue - row.collectedToday);
+  // V6 review status visual indicator: chỉ hiển thị badge khi batch returned
+  const showBadge = batchStatus === 'returned';
+  const rs = row.reviewStatus ?? 'pending';
+  const rowBg = !canEdit && batchStatus === 'returned'
+    ? (rs === 'approved' ? 'bg-emerald-50/40' : 'bg-slate-50/40')
+    : rs === 'rejected' && batchStatus === 'returned'
+      ? 'bg-rose-50/40 hover:bg-rose-50/60'
+      : 'hover:bg-slate-50/60';
   return (
-    <tr className="hover:bg-slate-50/60">
-      <Td align="center" className="text-slate-400 tabular-nums">{idx}</Td>
+    <tr className={rowBg} title={showBadge && rs === 'rejected' && row.rejectReason ? `Kế toán đánh dấu lỗi: ${row.rejectReason}` : undefined}>
+      <Td align="center" className="text-slate-400 tabular-nums">
+        <div className="flex flex-col items-center">
+          <span>{idx}</span>
+          {showBadge && rs === 'rejected' && (
+            <span className="mt-0.5 text-[8px] uppercase font-bold text-rose-600 bg-rose-100 px-1 py-0.5 rounded">
+              Sửa
+            </span>
+          )}
+          {showBadge && rs === 'approved' && (
+            <span className="mt-0.5 text-[8px] uppercase font-bold text-emerald-600 bg-emerald-100 px-1 py-0.5 rounded">
+              OK
+            </span>
+          )}
+          {showBadge && rs === 'pending' && (
+            <span className="mt-0.5 text-[8px] uppercase font-bold text-amber-600 bg-amber-100 px-1 py-0.5 rounded">
+              Chờ
+            </span>
+          )}
+        </div>
+      </Td>
       <Td>
         <TextCell value={row.customerName} disabled={!canEdit} onCommit={(v) => onUpdate({ customerName: v })} />
       </Td>

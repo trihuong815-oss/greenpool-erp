@@ -48,19 +48,30 @@ export function canReadBatch(caller: AuthedCaller, batch: { saleId: string; bran
   return false;
 }
 
-/** Sale + Kế toán có thể chỉnh sửa transaction (khi batch ở status cho phép). */
+/** Sale + Kế toán có thể chỉnh sửa transaction (khi batch ở status cho phép).
+ *
+ *  V6 (2026-06-17): khi batch='returned' + Sale → CHỈ edit tx có reviewStatus='rejected'.
+ *  Tx approved/pending → readonly (kế toán đã OK, không cho sửa để tránh re-review).
+ *  Khi không truyền `tx` → fallback hành vi cũ (cho phép theo batch.status).
+ */
 export function canEditTransaction(
   caller: AuthedCaller,
   batch: { saleId: string; branchId: string; status: string },
+  tx?: { reviewStatus?: string },
 ): boolean {
   const role = getScopeRole(caller.profile.role_code);
-  // Sale: chỉ sửa batch của mình khi đang draft hoặc returned
   if (role === 'sale') {
-    return batch.saleId === caller.profile.uid && (batch.status === 'draft' || batch.status === 'returned');
+    if (batch.saleId !== caller.profile.uid) return false;
+    if (batch.status === 'draft') return true; // draft = Sale đang nhập, edit tất cả
+    if (batch.status === 'returned') {
+      // Chỉ sửa tx bị reject. Tx approved/pending lock.
+      // Nếu không truyền tx (vd add new row trong returned mode) → cho phép (tạo mới = pending).
+      if (!tx) return true;
+      return (tx.reviewStatus ?? 'pending') === 'rejected';
+    }
+    return false;
   }
   // Kế toán + top: sửa CHỈ khi batch ở pending_review.
-  // BUG-3 audit fix 2026-06-17: bỏ 'returned' khỏi điều kiện vì returned = Sale đang
-  // sửa lại để resubmit → kế toán không được edit lúc này (race conflict).
   if (role === 'accountant' || role === 'top') {
     if (role === 'accountant') {
       if (!caller.profile.facility_id || batch.branchId !== caller.profile.facility_id) return false;

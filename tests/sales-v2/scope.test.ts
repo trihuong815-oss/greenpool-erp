@@ -133,8 +133,11 @@ describe('canEditTransaction', () => {
 
   describe('Sale owner', () => {
     const saleCaller = caller('NV_SALE', 'sale1');
-    it('draft → edit OK', () => expect(canEditTransaction(saleCaller, draftBatch)).toBe(true));
-    it('returned → edit OK (sửa lại để resubmit)', () => expect(canEditTransaction(saleCaller, returnedBatch)).toBe(true));
+    it('draft → edit OK (mọi tx)', () => expect(canEditTransaction(saleCaller, draftBatch)).toBe(true));
+    it('returned + tx rejected → edit OK', () => expect(canEditTransaction(saleCaller, returnedBatch, { reviewStatus: 'rejected' })).toBe(true));
+    it('returned + tx approved → KHÔNG edit (lock, kế toán đã OK)', () => expect(canEditTransaction(saleCaller, returnedBatch, { reviewStatus: 'approved' })).toBe(false));
+    it('returned + tx pending → KHÔNG edit', () => expect(canEditTransaction(saleCaller, returnedBatch, { reviewStatus: 'pending' })).toBe(false));
+    it('returned không truyền tx → edit OK (fallback, dùng cho add new row)', () => expect(canEditTransaction(saleCaller, returnedBatch)).toBe(true));
     it('pending_review → KHÔNG edit (đã gửi cho kế toán)', () => expect(canEditTransaction(saleCaller, pendingBatch)).toBe(false));
     it('approved → KHÔNG edit', () => expect(canEditTransaction(saleCaller, approvedBatch)).toBe(false));
   });
