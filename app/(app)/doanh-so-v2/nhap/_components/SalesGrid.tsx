@@ -86,11 +86,16 @@ export function validateRow(r: LocalRow): { ok: true } | { ok: false; error: str
   if (!r.packageId) return { ok: false, error: 'Thiếu gói' };
   if (!r.transactionType) return { ok: false, error: 'Thiếu loại giao dịch' };
   if (!r.paymentMethod) return { ok: false, error: 'Thiếu hình thức thu' };
-  const pv = Number(r.packageValue);
-  if (!Number.isFinite(pv) || pv < 0) return { ok: false, error: 'Giá trị gói không hợp lệ' };
   const ct = Number(r.collectedToday);
   if (!Number.isFinite(ct) || ct < 0) return { ok: false, error: 'Thu hôm nay không hợp lệ' };
   if (r.isChildPackage && !r.guardianName.trim()) return { ok: false, error: 'Gói trẻ em bắt buộc Người giám hộ' };
+  // 'thanh_toan_not' = trả nốt nợ cũ → chỉ cần collectedToday > 0, packageValue ignore
+  if (r.transactionType === 'thanh_toan_not') {
+    if (ct <= 0) return { ok: false, error: 'Thanh toán nốt phải có số tiền thu' };
+    return { ok: true };
+  }
+  const pv = Number(r.packageValue);
+  if (!Number.isFinite(pv) || pv <= 0) return { ok: false, error: 'Giá trị gói phải > 0' };
   if (r.transactionType === 'thanh_toan_full' && ct < pv) {
     return { ok: false, error: 'Thanh toán full phải thu đủ giá trị gói' };
   }
@@ -309,7 +314,11 @@ function SavedRow({ idx, row, packages, canEdit, batchStatus, onUpdate, onRemove
         <PayMethodSelect value={row.paymentMethod} disabled={!canEdit} onChange={(v) => onUpdate({ paymentMethod: v })} />
       </Td>
       <Td align="right">
-        <NumberCell value={row.packageValue} disabled={!canEdit} onCommit={(v) => onUpdate({ packageValue: v })} />
+        {row.transactionType === 'thanh_toan_not' ? (
+          <span className="text-slate-300 text-xs" title="Thanh toán nốt — không tính doanh số mới">—</span>
+        ) : (
+          <NumberCell value={row.packageValue} disabled={!canEdit} onCommit={(v) => onUpdate({ packageValue: v })} />
+        )}
       </Td>
       <Td align="right">
         <NumberCell value={row.collectedToday} disabled={!canEdit} onCommit={(v) => onUpdate({ collectedToday: v })} />
@@ -341,9 +350,11 @@ function LocalRowItem({ idx, row, packages, canEdit, onUpdate, onRemove, autoFoc
   onRemove: () => void;
   autoFocusFirstCell?: boolean;
 }) {
-  const pv = Number(row.packageValue) || 0;
+  // 'thanh_toan_not' = trả nốt → KHÔNG tính doanh số mới + debt = 0 (sẽ link gd cũ)
+  const isThanhToanNot = row.transactionType === 'thanh_toan_not';
+  const pv = isThanhToanNot ? 0 : (Number(row.packageValue) || 0);
   const ct = Number(row.collectedToday) || 0;
-  const debt = Math.max(0, pv - ct);
+  const debt = isThanhToanNot ? 0 : Math.max(0, pv - ct);
   const rowEmpty = useMemo(() => isRowEmpty(row), [row]);
   const validation = useMemo(() => (rowEmpty ? { ok: true as const } : validateRow(row)), [row, rowEmpty]);
   const firstCellRef = useRef<HTMLInputElement | null>(null);
@@ -426,7 +437,11 @@ function LocalRowItem({ idx, row, packages, canEdit, onUpdate, onRemove, autoFoc
         <PayMethodSelect value={row.paymentMethod} disabled={!canEdit} onChange={(v) => onUpdate({ paymentMethod: v })} />
       </Td>
       <Td align="right">
-        <NumberCell value={pv} disabled={!canEdit} onCommit={(v) => onUpdate({ packageValue: String(v) })} />
+        {row.transactionType === 'thanh_toan_not' ? (
+          <span className="text-slate-300 text-xs" title="Thanh toán nốt — không tính doanh số mới (sẽ link với GD cũ)">—</span>
+        ) : (
+          <NumberCell value={pv} disabled={!canEdit} onCommit={(v) => onUpdate({ packageValue: String(v) })} />
+        )}
       </Td>
       <Td align="right">
         <NumberCell value={ct} disabled={!canEdit} onCommit={(v) => onUpdate({ collectedToday: String(v) })} />

@@ -259,9 +259,10 @@ function CardEditor({
   const updateStr = (k: string, v: string) => onUpdate({ [k]: v || null } as any);
 
   // packageValue / collectedToday saved row dạng number, local row dạng string
-  const pvNum = row.savedRow ? (row.packageValue ?? 0) : (Number(row.packageValue) || 0);
+  const isThanhToanNot = (row as any).transactionType === 'thanh_toan_not';
+  const pvNum = isThanhToanNot ? 0 : (row.savedRow ? (row.packageValue ?? 0) : (Number(row.packageValue) || 0));
   const ctNum = row.savedRow ? (row.collectedToday ?? 0) : (Number(row.collectedToday) || 0);
-  const debt = Math.max(0, pvNum - ctNum);
+  const debt = isThanhToanNot ? 0 : Math.max(0, pvNum - ctNum);
 
   const setNum = (k: 'packageValue' | 'collectedToday', n: number) => {
     if (row.savedRow) onUpdate({ [k]: n } as any);
@@ -384,8 +385,14 @@ function CardEditor({
       </div>
 
       <div className="grid grid-cols-2 gap-2">
-        <FieldLabel label="Giá trị gói *">
-          <MoneyInput value={pvNum} disabled={!canEdit} onCommit={(n) => setNum('packageValue', n)} />
+        <FieldLabel label={isThanhToanNot ? 'Giá trị gói' : 'Giá trị gói *'}>
+          {isThanhToanNot ? (
+            <div className="w-full px-3 py-2 rounded-lg ring-1 ring-slate-200 bg-slate-50 text-xs text-slate-400 italic">
+              Không tính (sẽ link với GD cũ)
+            </div>
+          ) : (
+            <MoneyInput value={pvNum} disabled={!canEdit} onCommit={(n) => setNum('packageValue', n)} />
+          )}
         </FieldLabel>
         <FieldLabel label="Thu hôm nay *">
           <MoneyInput value={ctNum} disabled={!canEdit} onCommit={(n) => setNum('collectedToday', n)} />

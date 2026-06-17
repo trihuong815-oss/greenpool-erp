@@ -106,10 +106,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       updates.isChildPackage = pkg.isChildPackage;
     }
 
-    // Recompute debtAmount nếu thay đổi packageValue/collectedToday
-    const finalPackageValue = 'packageValue' in updates ? updates.packageValue : Number(tx.packageValue ?? 0);
+    // 2026-06-17: 'thanh_toan_not' = trả nốt → packageValue effective = 0 + debt = 0.
+    const finalTxnType = 'transactionType' in updates ? updates.transactionType : tx.transactionType;
     const finalCollected = 'collectedToday' in updates ? updates.collectedToday : Number(tx.collectedToday ?? 0);
-    updates.debtAmount = Math.max(0, finalPackageValue - finalCollected);
+    let finalPackageValue: number;
+    if (finalTxnType === 'thanh_toan_not') {
+      finalPackageValue = 0;
+      updates.packageValue = 0; // force ghi đè dù user gửi giá trị khác
+      updates.debtAmount = 0;
+    } else {
+      finalPackageValue = 'packageValue' in updates ? updates.packageValue : Number(tx.packageValue ?? 0);
+      updates.debtAmount = Math.max(0, finalPackageValue - finalCollected);
+    }
 
     // Validate guardianName nếu isChildPackage
     const finalIsChild = 'isChildPackage' in updates ? updates.isChildPackage : !!tx.isChildPackage;
@@ -118,8 +126,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       return NextResponse.json({ error: 'Gói trẻ em bắt buộc Người giám hộ' }, { status: 400 });
     }
 
-    // Validate transactionType=thanh_toan_full → collected >= packageValue (cho phép nốt vượt)
-    const finalTxnType = 'transactionType' in updates ? updates.transactionType : tx.transactionType;
+    // Validate thanh_toan_full → collected >= packageValue (KHÔNG áp dụng cho thanh_toan_not)
     if (finalTxnType === 'thanh_toan_full' && finalCollected < finalPackageValue) {
       return NextResponse.json({ error: 'Thanh toán full phải thu đủ giá trị gói' }, { status: 400 });
     }

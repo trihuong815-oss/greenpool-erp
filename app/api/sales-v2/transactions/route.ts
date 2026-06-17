@@ -107,9 +107,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Gói trẻ em bắt buộc Người giám hộ' }, { status: 400 });
     }
 
-    const debtAmount = Math.max(0, packageValue - collectedToday);
+    // 2026-06-17: tx 'thanh_toan_not' = trả nốt công nợ cũ → KHÔNG tạo doanh số mới
+    // → packageValue effective = 0 (không cộng vào doanh số batch), debt = 0.
+    // Số tiền nốt chỉ ghi nhận ở collectedToday + sẽ link với tx cũ qua auto-match.
+    const isThanhToanNot = transactionType === 'thanh_toan_not';
+    const effectivePackageValue = isThanhToanNot ? 0 : packageValue;
+    const debtAmount = isThanhToanNot ? 0 : Math.max(0, effectivePackageValue - collectedToday);
     const now = Timestamp.now();
-    const matchStatus: MatchStatus = transactionType === 'thanh_toan_not' ? 'pending' : 'not_applicable';
+    const matchStatus: MatchStatus = isThanhToanNot ? 'pending' : 'not_applicable';
 
     const ref = db.collection(COLLECTIONS.SALES_TRANSACTIONS).doc();
     const data = {
@@ -131,7 +136,7 @@ export async function POST(req: NextRequest) {
       isChildPackage: pkg.isChildPackage,
       transactionType,
       paymentMethod,
-      packageValue,
+      packageValue: effectivePackageValue,
       collectedToday,
       debtAmount,
       note,

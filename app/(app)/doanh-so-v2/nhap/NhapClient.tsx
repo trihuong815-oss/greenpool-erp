@@ -175,9 +175,11 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
     }
     // Preview cộng localRows có dữ liệu (KHÔNG cần valid full để user thấy
     // tiền ngay khi vừa gõ; validate đủ fields chỉ check khi bấm Lưu tạm/Gửi).
+    // 'thanh_toan_not' KHÔNG tính packageValue (không tạo doanh số mới — sẽ link gd cũ).
     for (const lr of localRows) {
-      if (isRowEmpty(lr)) continue; // skip row trống auto-add
-      const pv = Number(lr.packageValue) || 0;
+      if (isRowEmpty(lr)) continue;
+      const isThanhToanNot = lr.transactionType === 'thanh_toan_not';
+      const pv = isThanhToanNot ? 0 : (Number(lr.packageValue) || 0);
       const ct = Number(lr.collectedToday) || 0;
       sales += pv;
       collected += ct;
