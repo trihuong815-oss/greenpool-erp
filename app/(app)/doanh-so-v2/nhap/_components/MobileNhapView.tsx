@@ -360,7 +360,13 @@ function CardEditor({
           <select
             value={(row.transactionType ?? '') as string}
             disabled={!canEdit}
-            onChange={(e) => onUpdate({ transactionType: e.target.value as TransactionType } as any)}
+            onChange={(e) => {
+              const v = e.target.value as TransactionType;
+              const patch: Record<string, any> = { transactionType: v };
+              if (v === 'thanh_toan_full') patch.receiptNo = '';
+              if (v === 'dat_coc') patch.contractNo = '';
+              onUpdate(patch as any);
+            }}
             className="w-full px-3 py-2 rounded-lg ring-1 ring-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
           >
             <option value="">— Chọn —</option>

@@ -327,10 +327,11 @@ function SavedRow({ idx, row, packages, canEdit, batchStatus, onUpdate, onRemove
           value={row.transactionType}
           disabled={!canEdit}
           onChange={(v) => {
-            // ISSUE-1 audit fix: clear field chứng từ không thuộc loại mới để tránh dirty data
+            // ISSUE-1 audit fix: clear field chứng từ không thuộc loại mới (dùng '' để
+            // tương thích cả LocalRow string lẫn SavedRow nullable; server normalize → null).
             const patch: Record<string, any> = { transactionType: v };
-            if (v === 'thanh_toan_full') patch.receiptNo = null;
-            if (v === 'dat_coc') patch.contractNo = null;
+            if (v === 'thanh_toan_full') patch.receiptNo = '';
+            if (v === 'dat_coc') patch.contractNo = '';
             onUpdate(patch as any);
           }}
         />
@@ -480,10 +481,11 @@ function LocalRowItem({ idx, row, packages, canEdit, onUpdate, onRemove, autoFoc
           value={row.transactionType}
           disabled={!canEdit}
           onChange={(v) => {
-            // ISSUE-1 audit fix: clear field chứng từ không thuộc loại mới để tránh dirty data
+            // ISSUE-1 audit fix: clear field chứng từ không thuộc loại mới (dùng '' để
+            // tương thích cả LocalRow string lẫn SavedRow nullable; server normalize → null).
             const patch: Record<string, any> = { transactionType: v };
-            if (v === 'thanh_toan_full') patch.receiptNo = null;
-            if (v === 'dat_coc') patch.contractNo = null;
+            if (v === 'thanh_toan_full') patch.receiptNo = '';
+            if (v === 'dat_coc') patch.contractNo = '';
             onUpdate(patch as any);
           }}
         />
@@ -618,15 +620,19 @@ function DocCell({
   if (hideForType) {
     return <span className="text-slate-300 text-xs px-2">—</span>;
   }
-  const isEmpty = !value.trim();
+  // Defensive: caller có thể truyền null/undefined dù type khai báo string
+  const v = (value ?? '') as string;
+  const isEmpty = !v.trim();
   return (
     <input
       type="text"
-      defaultValue={value}
+      // key=v forces re-mount khi giá trị từ ngoài thay đổi (vd auto-clear sau đổi loại GD)
+      key={v}
+      defaultValue={v}
       disabled={disabled}
       placeholder={placeholder}
       maxLength={50}
-      onBlur={(e) => { const v = e.target.value.trim(); if (v !== value) onCommit(v); }}
+      onBlur={(e) => { const nv = e.target.value.trim(); if (nv !== v) onCommit(nv); }}
       title={required && isEmpty ? 'Bắt buộc nhập' : ''}
       className={`w-full px-2 py-1 rounded border text-xs focus:bg-white focus:ring-2 focus:outline-none disabled:cursor-not-allowed ${
         required && isEmpty
