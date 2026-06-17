@@ -5,7 +5,7 @@
 // Phase 2 (2026-06-17).
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { X, Check, RotateCcw, Loader2, Pencil, Save } from 'lucide-react';
+import { X, Check, XCircle, CheckCircle2, RotateCcw, Loader2, Pencil, Save } from 'lucide-react';
 import type {
   SalesDailyBatch,
   SalesTransaction,
@@ -13,6 +13,7 @@ import type {
   SalesV2Source,
   TransactionType,
   PaymentMethod,
+  TxReviewStatus,
 } from '@/lib/types/sales-v2';
 import { SOURCE_LABEL, TRANSACTION_TYPE_LABEL, PAYMENT_METHOD_LABEL } from '@/lib/types/sales-v2';
 import { showConfirm, showPrompt } from '@/components/ui/imperative-modal';
@@ -74,6 +75,21 @@ export default function BatchDetailModal({ batch, canReview, onClose, onAfterAct
     return { sales, collected, debt: Math.max(0, sales - collected), count: rows.length };
   }, [rows]);
 
+  // V6 2026-06-17: review counts cho footer auto-enable
+  const reviewCounts = useMemo(() => {
+    let pending = 0, approved = 0, rejected = 0;
+    for (const r of rows) {
+      const s = r.reviewStatus ?? 'pending';
+      if (s === 'approved') approved++;
+      else if (s === 'rejected') rejected++;
+      else pending++;
+    }
+    return { pending, approved, rejected, total: rows.length };
+  }, [rows]);
+
+  const canApprove = canAction && reviewCounts.total > 0 && reviewCounts.pending === 0 && reviewCounts.rejected === 0;
+  const canReturn = canAction && reviewCounts.rejected > 0;
+
   const handleUpdateRow = useCallback(async (id: string, patch: Partial<SalesTransaction>) => {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
     try {
@@ -96,13 +112,57 @@ export default function BatchDetailModal({ batch, canReview, onClose, onAfterAct
     }
   }, []);
 
+  const handleReview = useCallback(async (id: string, status: TxReviewStatus, currentReason?: string | null) => {
+    let reason: string | null = null;
+    if (status === 'rejected') {
+      const r = await showPrompt({
+        title: 'Đánh dấu lỗi giao dịch',
+        description: 'Nhập lý do để Sale biết cần sửa gì. Tối thiểu 5 ký tự.',
+        defaultValue: currentReason ?? '',
+        placeholder: 'VD: Sai gói (HBTE 24B thay vì 36B), giá nhập thiếu 0...',
+        multiline: true,
+        minLength: 5,
+        maxLength: 500,
+        confirmText: 'Đánh dấu lỗi',
+        cancelText: 'Huỷ',
+        variant: 'danger',
+      });
+      if (!r) return;
+      reason = r;
+    }
+    // Optimistic
+    setRows((prev) => prev.map((row) =>
+      row.id === id
+        ? { ...row, reviewStatus: status, rejectReason: status === 'rejected' ? reason : null }
+        : row,
+    ));
+    try {
+      const r = await fetch(`/api/sales-v2/transactions/${encodeURIComponent(id)}/review`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ status, reason }),
+      });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
+      const j = await r.json();
+      setRows((prev) => prev.map((row) => (row.id === id ? (j.transaction as SalesTransaction) : row)));
+    } catch (e: any) {
+      await showConfirm({
+        title: 'Review lỗi',
+        description: e?.message ?? 'unknown',
+        confirmText: 'OK',
+        cancelText: '',
+        variant: 'danger',
+      });
+    }
+  }, []);
+
   const handleApprove = useCallback(async () => {
     const ok = await showConfirm({
-      title: `Duyệt batch ngày ${batch.date}?`,
+      title: `Duyệt ${reviewCounts.approved} giao dịch ngày ${batch.date}?`,
       description:
         `Sale: ${batch.saleName}\n` +
         `${totals.count} giao dịch · DS ${totals.sales.toLocaleString()}đ · Thực thu ${totals.collected.toLocaleString()}đ · Công nợ ${totals.debt.toLocaleString()}đ\n\n` +
-        `Sau khi duyệt, dữ liệu trở thành chính thức cho dashboard + báo cáo.`,
+        `Toàn bộ giao dịch đã tick ✓. Sau khi duyệt, dữ liệu trở thành chính thức cho dashboard + báo cáo.`,
       confirmText: 'Duyệt',
       cancelText: 'Huỷ',
       variant: 'success',
@@ -124,27 +184,26 @@ export default function BatchDetailModal({ batch, canReview, onClose, onAfterAct
     } finally {
       setBusy(null);
     }
-  }, [batch, totals, onAfterAction]);
+  }, [batch, totals, reviewCounts, onAfterAction]);
 
   const handleReturn = useCallback(async () => {
-    const reason = await showPrompt({
-      title: `Trả lại Sale ${batch.saleName}`,
-      description: 'Sale sẽ thấy lý do này khi mở /nhap. Tối thiểu 5 ký tự.',
-      placeholder: 'VD: Sai gói khách hàng — kiểm tra lại HBTE 24B vs 36B',
-      multiline: true,
-      minLength: 5,
-      maxLength: 500,
-      confirmText: 'Trả lại',
+    const ok = await showConfirm({
+      title: `Trả lại ${reviewCounts.rejected} giao dịch lỗi?`,
+      description:
+        `Sale: ${batch.saleName}\n` +
+        `Có ${reviewCounts.rejected} giao dịch đã tick ✗ (lý do từng dòng đã ghi).\n\n` +
+        `Sale sẽ thấy danh sách lỗi + sửa rồi gửi đối chiếu lại.`,
+      confirmText: 'Trả lại Sale',
       cancelText: 'Huỷ',
       variant: 'danger',
     });
-    if (!reason) return;
+    if (!ok) return;
     setBusy('return');
     try {
       const r = await fetch(`/api/sales-v2/batches/${encodeURIComponent(batch.id)}/return`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ reason }),
+        body: JSON.stringify({}), // server gom từng tx.rejectReason
       });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
       onAfterAction();
@@ -159,7 +218,7 @@ export default function BatchDetailModal({ batch, canReview, onClose, onAfterAct
     } finally {
       setBusy(null);
     }
-  }, [batch, onAfterAction]);
+  }, [batch, reviewCounts, onAfterAction]);
 
   const meta = STATUS_META[batch.status];
 
@@ -197,6 +256,28 @@ export default function BatchDetailModal({ batch, canReview, onClose, onAfterAct
           <Kpi label="Công nợ" value={totals.debt.toLocaleString() + ' đ'} tone="rose" />
         </div>
 
+        {/* V6 2026-06-17: Review progress strip (chỉ hiện khi pending_review) */}
+        {canAction && reviewCounts.total > 0 && (
+          <div className="px-5 py-2 bg-white border-b border-slate-200 flex items-center gap-3 text-xs">
+            <span className="text-slate-500 font-semibold uppercase tracking-wider">Tiến độ review</span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+              <span className="font-bold tabular-nums">{reviewCounts.approved}</span>
+              <span>/ {reviewCounts.total}</span>
+              <CheckCircle2 size={11} className="text-emerald-600" />
+            </span>
+            {reviewCounts.rejected > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-50 text-rose-700">
+                <span className="font-bold tabular-nums">{reviewCounts.rejected}</span> ✗
+              </span>
+            )}
+            {reviewCounts.pending > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">
+                <span className="font-bold tabular-nums">{reviewCounts.pending}</span> chưa tick
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Body */}
         <div className="flex-1 overflow-auto px-2 md:px-4 py-3">
           {loading ? (
@@ -208,7 +289,13 @@ export default function BatchDetailModal({ batch, canReview, onClose, onAfterAct
           ) : rows.length === 0 ? (
             <div className="text-center py-12 text-slate-400 text-sm">Batch không có giao dịch nào.</div>
           ) : (
-            <TransactionsTable rows={rows} editMode={editMode && canAction} onUpdate={handleUpdateRow} />
+            <TransactionsTable
+              rows={rows}
+              editMode={editMode && canAction}
+              canReview={canAction}
+              onUpdate={handleUpdateRow}
+              onReview={handleReview}
+            />
           )}
         </div>
 
@@ -246,20 +333,26 @@ export default function BatchDetailModal({ batch, canReview, onClose, onAfterAct
               <button
                 type="button"
                 onClick={handleReturn}
-                disabled={busy !== null}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white text-sm font-medium text-rose-700 ring-1 ring-rose-200 hover:bg-rose-50 disabled:opacity-50"
+                disabled={busy !== null || !canReturn}
+                title={canReturn ? `Trả lại ${reviewCounts.rejected} giao dịch lỗi` : 'Tick ✗ ít nhất 1 giao dịch lỗi để trả lại'}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white text-sm font-medium text-rose-700 ring-1 ring-rose-200 hover:bg-rose-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {busy === 'return' ? <Loader2 className="animate-spin" size={14} /> : <RotateCcw size={14} />}
-                Trả lại Sale
+                Trả lại Sale{canReturn && ` (${reviewCounts.rejected})`}
               </button>
               <button
                 type="button"
                 onClick={handleApprove}
-                disabled={busy !== null}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gradient-to-b from-emerald-500 to-emerald-600 text-sm font-semibold text-white shadow-sm hover:from-emerald-600 hover:to-emerald-700 disabled:opacity-50"
+                disabled={busy !== null || !canApprove}
+                title={canApprove
+                  ? `Duyệt ${reviewCounts.approved} giao dịch`
+                  : reviewCounts.rejected > 0
+                    ? 'Có giao dịch lỗi — phải Trả lại Sale trước'
+                    : 'Tick ✓ tất cả giao dịch để duyệt'}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gradient-to-b from-emerald-500 to-emerald-600 text-sm font-semibold text-white shadow-sm hover:from-emerald-600 hover:to-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {busy === 'approve' ? <Loader2 className="animate-spin" size={14} /> : <Check size={14} />}
-                Duyệt toàn bộ
+                Duyệt toàn bộ{canApprove && ` (${reviewCounts.approved})`}
               </button>
             </div>
           ) : (
@@ -289,16 +382,19 @@ function Kpi({ label, value, tone }: { label: string; value: string; tone: 'slat
 }
 
 function TransactionsTable({
-  rows, editMode, onUpdate,
+  rows, editMode, canReview, onUpdate, onReview,
 }: {
   rows: SalesTransaction[];
   editMode: boolean;
+  canReview: boolean;
   onUpdate: (id: string, patch: Partial<SalesTransaction>) => void;
+  onReview: (id: string, status: TxReviewStatus, currentReason?: string | null) => void;
 }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[1620px] text-sm table-fixed">
+      <table className="w-full min-w-[1720px] text-sm table-fixed">
         <colgroup>
+          <col style={{ width: 100 }} />  {/* Review ✓ ✗ */}
           <col style={{ width: 40 }} />   {/* # */}
           <col style={{ width: 200 }} />  {/* Tên KH */}
           <col style={{ width: 130 }} />  {/* SĐT */}
@@ -314,6 +410,7 @@ function TransactionsTable({
         </colgroup>
         <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
           <tr>
+            <th className="px-2 py-2 text-center">Review</th>
             <th className="px-2 py-2 text-center">#</th>
             <th className="px-2 py-2 text-left">Tên KH</th>
             <th className="px-2 py-2 text-left">SĐT</th>
@@ -329,8 +426,24 @@ function TransactionsTable({
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
-          {rows.map((r, i) => (
-            <tr key={r.id} className="hover:bg-slate-50/60">
+          {rows.map((r, i) => {
+            const rs = r.reviewStatus ?? 'pending';
+            const rowBg =
+              rs === 'approved' ? 'bg-emerald-50/40 hover:bg-emerald-50/70' :
+              rs === 'rejected' ? 'bg-rose-50/40 hover:bg-rose-50/70' :
+                                  'hover:bg-slate-50/60';
+            return (
+            <tr key={r.id} className={rowBg}>
+              <td className="px-2 py-1.5 text-center">
+                <ReviewToggle
+                  status={rs}
+                  rejectReason={r.rejectReason ?? null}
+                  disabled={!canReview}
+                  onApprove={() => onReview(r.id, 'approved')}
+                  onReject={() => onReview(r.id, 'rejected', r.rejectReason)}
+                  onReset={() => onReview(r.id, 'pending')}
+                />
+              </td>
               <td className="px-2 py-1.5 text-center text-slate-400 tabular-nums">{i + 1}</td>
               <td className="px-2 py-1.5"><EditableText value={r.customerName} disabled={!editMode} onCommit={(v) => onUpdate(r.id, { customerName: v })} /></td>
               <td className="px-2 py-1.5"><EditableText value={r.phone} disabled={!editMode} onCommit={(v) => onUpdate(r.id, { phone: v })} /></td>
@@ -390,9 +503,73 @@ function TransactionsTable({
                 <EditableText value={r.note ?? ''} disabled={!editMode} onCommit={(v) => onUpdate(r.id, { note: v || null })} />
               </td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+/** Cụm 2 nút ✓ / ✗ per row. Click ✗ mở prompt nhập lý do.
+ *  Nếu row đã approved/rejected, hiển thị badge + nút "↺ Reset". */
+function ReviewToggle({
+  status, rejectReason, disabled, onApprove, onReject, onReset,
+}: {
+  status: TxReviewStatus;
+  rejectReason: string | null;
+  disabled: boolean;
+  onApprove: () => void;
+  onReject: () => void;
+  onReset: () => void;
+}) {
+  if (status === 'approved') {
+    return (
+      <button
+        type="button"
+        onClick={disabled ? undefined : onReset}
+        disabled={disabled}
+        title={disabled ? 'Đã duyệt' : 'Bỏ tick (về chưa review)'}
+        className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-100 text-emerald-700 text-xs font-bold ring-1 ring-emerald-300 hover:bg-emerald-200 disabled:cursor-not-allowed"
+      >
+        <CheckCircle2 size={14} /> OK
+      </button>
+    );
+  }
+  if (status === 'rejected') {
+    return (
+      <button
+        type="button"
+        onClick={disabled ? undefined : onReject}
+        disabled={disabled}
+        title={rejectReason ? `Lý do: ${rejectReason}\n\nClick để sửa lý do` : 'Click để sửa lý do'}
+        className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-rose-100 text-rose-700 text-xs font-bold ring-1 ring-rose-300 hover:bg-rose-200 disabled:cursor-not-allowed"
+      >
+        <XCircle size={14} /> Lỗi
+      </button>
+    );
+  }
+  // pending
+  return (
+    <div className="inline-flex items-center gap-0.5">
+      <button
+        type="button"
+        onClick={onApprove}
+        disabled={disabled}
+        title="Đánh dấu OK"
+        className="p-1.5 rounded-md bg-white ring-1 ring-slate-200 text-slate-400 hover:bg-emerald-50 hover:text-emerald-700 hover:ring-emerald-300 disabled:opacity-50 disabled:cursor-not-allowed transition"
+      >
+        <Check size={14} />
+      </button>
+      <button
+        type="button"
+        onClick={onReject}
+        disabled={disabled}
+        title="Đánh dấu lỗi"
+        className="p-1.5 rounded-md bg-white ring-1 ring-slate-200 text-slate-400 hover:bg-rose-50 hover:text-rose-700 hover:ring-rose-300 disabled:opacity-50 disabled:cursor-not-allowed transition"
+      >
+        <X size={14} />
+      </button>
     </div>
   );
 }

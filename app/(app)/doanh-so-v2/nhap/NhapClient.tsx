@@ -411,13 +411,16 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
               {submitting ? <Loader2 className="animate-spin" size={16} /> : <Send size={16} />}
               Gửi đối chiếu ngày
             </button>
-            {batch.status === 'returned' && batch.returnReason && (
-              <div className="ml-auto inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-rose-50 ring-1 ring-rose-200 text-xs text-rose-700 max-w-md">
-                <AlertCircle size={14} className="shrink-0" />
-                <span className="truncate"><strong>Kế toán trả lại:</strong> {batch.returnReason}</span>
-              </div>
-            )}
           </div>
+          {batch.status === 'returned' && batch.returnReason && (
+            <div className="mt-3 flex items-start gap-2 px-3 py-2.5 rounded-lg bg-rose-50 ring-1 ring-rose-200 text-xs text-rose-700">
+              <AlertCircle size={16} className="shrink-0 mt-0.5" />
+              <div className="min-w-0 flex-1">
+                <div className="font-bold mb-1">Kế toán trả lại — sửa các dòng dưới rồi bấm "Gửi đối chiếu" lại:</div>
+                <div className="whitespace-pre-line leading-relaxed">{batch.returnReason}</div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Data grid — desktop (md+) */}
