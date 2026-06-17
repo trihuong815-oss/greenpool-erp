@@ -196,7 +196,7 @@ export function UsersClient({ currentUserId, currentUserRole, isAdminUser, facil
   // Tier 1-2 (CEO/GĐ) · Tier 3 (TP + QLCS) · Tier 4 (PP) · Tier 5 (Tổ trưởng) · Tier 6 (NV)
   interface TierGroup { label: string; subtitle: string; minTier: number; maxTier: number; cls: string }
   const TIER_GROUPS: TierGroup[] = [
-    { label: 'Giám đốc & Chủ đầu tư', subtitle: 'CEO · GĐ Khối',          minTier: 1, maxTier: 2, cls: 'from-amber-50 to-yellow-50 border-amber-200 text-amber-900' },
+    { label: 'Chủ tịch · Giám đốc & Chủ đầu tư', subtitle: 'Chủ tịch HĐQT · CEO · GĐ Khối', minTier: 1, maxTier: 2, cls: 'from-amber-50 to-yellow-50 border-amber-200 text-amber-900' },
     { label: 'Trưởng phòng & Quản lý',subtitle: 'TP · QLCS',               minTier: 3, maxTier: 3, cls: 'from-violet-50 to-fuchsia-50 border-violet-200 text-violet-900' },
     { label: 'Phó phòng',             subtitle: 'PP',                       minTier: 4, maxTier: 4, cls: 'from-cyan-50 to-teal-50 border-cyan-200 text-cyan-900' },
     { label: 'Tổ trưởng',             subtitle: 'TT',                       minTier: 5, maxTier: 5, cls: 'from-emerald-50 to-green-50 border-emerald-200 text-emerald-900' },
@@ -214,9 +214,12 @@ export function UsersClient({ currentUserId, currentUserRole, isAdminUser, facil
       arr.push(u);
       map.set(key, arr);
     }
-    // Sort trong mỗi nhóm theo tier asc rồi tên
+    // Sort trong mỗi nhóm: CHU_TICH priority đầu (cao nhất, chủ đầu tư), sau đó tier asc rồi tên
     for (const arr of map.values()) {
       arr.sort((a, b) => {
+        // CHU_TICH luôn đầu (chủ đầu tư, quyền cao nhất)
+        if (a.role_code === 'CHU_TICH' && b.role_code !== 'CHU_TICH') return -1;
+        if (b.role_code === 'CHU_TICH' && a.role_code !== 'CHU_TICH') return 1;
         const ta = roles.find(r => r.code === a.role_code)?.tier ?? 99;
         const tb = roles.find(r => r.code === b.role_code)?.tier ?? 99;
         if (ta !== tb) return ta - tb;
