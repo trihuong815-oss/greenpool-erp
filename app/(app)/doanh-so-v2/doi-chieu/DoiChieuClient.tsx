@@ -4,7 +4,7 @@
 // Phase 2 (2026-06-17): list batches + filter + click row → mở detail modal với 3 action.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2, Filter as FilterIcon, RefreshCw } from 'lucide-react';
+import { Loader2, RefreshCw } from 'lucide-react';
 import type { SalesDailyBatch, BatchStatus } from '@/lib/types/sales-v2';
 import type { BranchId } from '@/lib/branches';
 import { BRANCHES } from '@/lib/branches';
@@ -19,34 +19,35 @@ interface Props {
   canReview: boolean; // NV_KE / TP_KE / top role
 }
 
-const STATUS_FILTER_OPTIONS: Array<{ value: BatchStatus | 'all'; label: string }> = [
-  { value: 'pending_review', label: 'Chờ đối chiếu' },
-  { value: 'approved',       label: 'Đã đối chiếu' },
-  { value: 'returned',       label: 'Đã trả lại' },
-  { value: 'draft',          label: 'Đang nhập' },
-  { value: 'all',            label: 'Tất cả' },
+const TABS: Array<{ value: BatchStatus | 'all'; label: string; cls: string }> = [
+  { value: 'pending_review', label: 'Chờ đối chiếu',     cls: 'data-[active=true]:bg-amber-50 data-[active=true]:text-amber-700 data-[active=true]:ring-amber-300' },
+  { value: 'approved',       label: 'Đã đối chiếu',      cls: 'data-[active=true]:bg-emerald-50 data-[active=true]:text-emerald-700 data-[active=true]:ring-emerald-300' },
+  { value: 'returned',       label: 'Đã trả lại',        cls: 'data-[active=true]:bg-rose-50 data-[active=true]:text-rose-700 data-[active=true]:ring-rose-300' },
+  { value: 'draft',          label: 'Đang nhập',         cls: 'data-[active=true]:bg-slate-100 data-[active=true]:text-slate-700 data-[active=true]:ring-slate-300' },
+  { value: 'all',            label: 'Tất cả',            cls: 'data-[active=true]:bg-violet-50 data-[active=true]:text-violet-700 data-[active=true]:ring-violet-300' },
 ];
 
 export default function DoiChieuClient({ scope, canReview, myBranchId }: Props) {
-  const [status, setStatus] = useState<BatchStatus | 'all'>('pending_review');
+  const [tab, setTab] = useState<BatchStatus | 'all'>('pending_review');
   const [branchId, setBranchId] = useState<BranchId | 'all'>(
     scope === 'top' ? 'all' : ((myBranchId as BranchId) ?? 'all'),
   );
   const [date, setDate] = useState(''); // YYYY-MM-DD optional
-  const [batches, setBatches] = useState<SalesDailyBatch[]>([]);
+  const [allBatches, setAllBatches] = useState<SalesDailyBatch[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedBatch, setSelectedBatch] = useState<SalesDailyBatch | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
 
-  const showBranchFilter = scope === 'top'; // kế toán/QLCS auto scope cơ sở mình
+  const showBranchFilter = scope === 'top';
 
+  // Fetch all status 1 lần → count + filter client-side. Endpoint trả limit 200.
   const fetchBatches = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const qs = new URLSearchParams();
-      if (status !== 'all') qs.set('status', status);
+      qs.set('limit', '200');
       if (branchId !== 'all' && scope === 'top') qs.set('branchId', branchId);
       if (date) qs.set('date', date);
       const r = await fetch(`/api/sales-v2/batches?${qs.toString()}`);
@@ -55,13 +56,13 @@ export default function DoiChieuClient({ scope, canReview, myBranchId }: Props) 
         throw new Error(j?.error ?? `HTTP ${r.status}`);
       }
       const j = await r.json();
-      setBatches(j.batches as SalesDailyBatch[]);
+      setAllBatches(j.batches as SalesDailyBatch[]);
     } catch (e: any) {
       setError(e?.message ?? 'Lỗi tải danh sách');
     } finally {
       setLoading(false);
     }
-  }, [status, branchId, date, scope]);
+  }, [branchId, date, scope]);
 
   useEffect(() => {
     void fetchBatches();
@@ -72,14 +73,27 @@ export default function DoiChieuClient({ scope, canReview, myBranchId }: Props) 
     setRefreshTick((t) => t + 1);
   }, []);
 
+  // Counts per tab + filtered batches theo tab active
+  const counts = useMemo(() => {
+    const c: Record<BatchStatus | 'all', number> = {
+      draft: 0, pending_review: 0, approved: 0, returned: 0, locked: 0, all: allBatches.length,
+    };
+    for (const b of allBatches) c[b.status]++;
+    return c;
+  }, [allBatches]);
+
+  const batches = useMemo(() => {
+    if (tab === 'all') return allBatches;
+    return allBatches.filter((b) => b.status === tab);
+  }, [allBatches, tab]);
+
   const summary = useMemo(() => {
-    let count = batches.length;
     let sales = 0, collected = 0;
     for (const b of batches) {
       sales += b.totalSalesAmount;
       collected += b.totalCollectedAmount;
     }
-    return { count, sales, collected, debt: Math.max(0, sales - collected) };
+    return { count: batches.length, sales, collected, debt: Math.max(0, sales - collected) };
   }, [batches]);
 
   return (
@@ -107,63 +121,73 @@ export default function DoiChieuClient({ scope, canReview, myBranchId }: Props) 
             </button>
           </div>
 
-          {/* Filters */}
-          <div className="mt-4 flex flex-wrap items-end gap-3">
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
-                <FilterIcon size={12} className="inline mr-1" /> Trạng thái
-              </label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as BatchStatus | 'all')}
-                className="px-3 py-2 rounded-lg bg-white text-sm ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              >
-                {STATUS_FILTER_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </div>
-            {showBranchFilter && (
+          {/* Filters: branch + date (status đã chuyển sang tab) */}
+          {(showBranchFilter || true) && (
+            <div className="mt-4 flex flex-wrap items-end gap-3">
+              {showBranchFilter && (
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
+                    Cơ sở
+                  </label>
+                  <select
+                    value={branchId}
+                    onChange={(e) => setBranchId(e.target.value as BranchId | 'all')}
+                    className="px-3 py-2 rounded-lg bg-white text-sm ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="all">Tất cả cơ sở</option>
+                    {BRANCHES.map((b) => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
-                  Cơ sở
+                  Ngày
                 </label>
-                <select
-                  value={branchId}
-                  onChange={(e) => setBranchId(e.target.value as BranchId | 'all')}
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
                   className="px-3 py-2 rounded-lg bg-white text-sm ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                >
-                  <option value="all">Tất cả cơ sở</option>
-                  {BRANCHES.map((b) => (
-                    <option key={b.id} value={b.id}>{b.name}</option>
-                  ))}
-                </select>
+                />
               </div>
-            )}
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
-                Ngày
-              </label>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="px-3 py-2 rounded-lg bg-white text-sm ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
+              {date && (
+                <button
+                  type="button"
+                  onClick={() => setDate('')}
+                  className="px-2 py-2 text-xs text-slate-500 hover:text-slate-700 self-end"
+                >
+                  Bỏ lọc ngày
+                </button>
+              )}
             </div>
-            {date && (
-              <button
-                type="button"
-                onClick={() => setDate('')}
-                className="px-2 py-2 text-xs text-slate-500 hover:text-slate-700"
-              >
-                Bỏ lọc ngày
-              </button>
-            )}
+          )}
+
+          {/* Tabs theo status với count badge */}
+          <div className="mt-4 flex flex-wrap gap-1.5">
+            {TABS.map((t) => {
+              const active = tab === t.value;
+              const n = counts[t.value];
+              return (
+                <button
+                  key={t.value}
+                  type="button"
+                  data-active={active}
+                  onClick={() => setTab(t.value)}
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium ring-1 ring-transparent bg-white text-slate-600 hover:bg-slate-50 transition ${t.cls}`}
+                >
+                  <span>{t.label}</span>
+                  <span className={`inline-flex items-center justify-center min-w-[20px] h-[20px] px-1.5 rounded-full text-[10px] font-bold tabular-nums ${
+                    active ? 'bg-white/70 text-slate-700' : 'bg-slate-100 text-slate-500'
+                  }`}>{n}</span>
+                </button>
+              );
+            })}
           </div>
 
-          {/* Summary KPI */}
-          <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3">
+          {/* Summary KPI (theo tab active) */}
+          <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3">
             <Kpi label="Số batch" value={summary.count.toString()} tone="slate" />
             <Kpi label="Tổng doanh số" value={summary.sales.toLocaleString() + ' đ'} tone="emerald" />
             <Kpi label="Tổng thực thu" value={summary.collected.toLocaleString() + ' đ'} tone="sky" />
