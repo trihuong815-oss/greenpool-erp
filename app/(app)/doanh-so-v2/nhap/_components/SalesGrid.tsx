@@ -136,11 +136,11 @@ export default function SalesGrid({
           <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
             <tr>
               <Th width={40}>#</Th>
-              <Th width={230}>Tên khách hàng *</Th>
+              <Th width={270}>Tên khách hàng *</Th>
               <Th width={150}>SĐT *</Th>
               <Th width={170}>Người giám hộ</Th>
               <Th width={130}>Nguồn *</Th>
-              <Th width={230}>Gói *</Th>
+              <Th width={190}>Gói *</Th>
               <Th width={150}>Loại GD *</Th>
               <Th width={140}>HT thu *</Th>
               <Th width={130} align="right">Giá trị gói *</Th>
