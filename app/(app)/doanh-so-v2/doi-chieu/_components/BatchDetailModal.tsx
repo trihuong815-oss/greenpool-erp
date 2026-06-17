@@ -16,6 +16,7 @@ import type {
   TxReviewStatus,
 } from '@/lib/types/sales-v2';
 import { SOURCE_LABEL, TRANSACTION_TYPE_LABEL, PAYMENT_METHOD_LABEL } from '@/lib/types/sales-v2';
+import { branchName } from '@/lib/branches';
 import { showConfirm, showPrompt } from '@/components/ui/imperative-modal';
 import AuditHistory from './AuditHistory';
 
@@ -240,7 +241,7 @@ export default function BatchDetailModal({ batch, canReview, onClose, onAfterAct
               </span>
             </div>
             <div className="mt-1 text-sm text-slate-500">
-              {batch.branchName} · {totals.count} giao dịch
+              {branchName(batch.branchId)} · {totals.count} giao dịch
             </div>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700">

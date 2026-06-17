@@ -5,6 +5,7 @@
 
 import { Loader2, ChevronRight } from 'lucide-react';
 import type { SalesDailyBatch, BatchStatus } from '@/lib/types/sales-v2';
+import { branchName } from '@/lib/branches';
 
 const STATUS_META: Record<BatchStatus, { label: string; cls: string }> = {
   draft:           { label: 'Nháp',              cls: 'bg-slate-100 text-slate-700 ring-slate-200' },
@@ -80,7 +81,7 @@ export default function BatchList({ batches, loading, onSelect }: Props) {
                   className="hover:bg-slate-50/60 cursor-pointer transition group"
                 >
                   <td className="px-3 py-2.5 font-medium text-slate-800 tabular-nums">{fmtDate(b.date)}</td>
-                  <td className="px-3 py-2.5 text-slate-600">{b.branchName}</td>
+                  <td className="px-3 py-2.5 text-slate-600">{branchName(b.branchId)}</td>
                   <td className="px-3 py-2.5 text-slate-700 font-medium">{b.saleName}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-slate-700">{b.totalTransactions}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums font-semibold text-emerald-700">
