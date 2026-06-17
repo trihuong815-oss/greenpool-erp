@@ -297,10 +297,24 @@ function TransactionsTable({
 }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[1500px] text-sm">
+      <table className="w-full min-w-[1620px] text-sm table-fixed">
+        <colgroup>
+          <col style={{ width: 40 }} />   {/* # */}
+          <col style={{ width: 200 }} />  {/* Tên KH */}
+          <col style={{ width: 130 }} />  {/* SĐT */}
+          <col style={{ width: 150 }} />  {/* Người giám hộ */}
+          <col style={{ width: 140 }} />  {/* Nguồn */}
+          <col style={{ width: 200 }} />  {/* Gói */}
+          <col style={{ width: 140 }} />  {/* Loại GD */}
+          <col style={{ width: 140 }} />  {/* HT thu */}
+          <col style={{ width: 120 }} />  {/* Giá trị */}
+          <col style={{ width: 120 }} />  {/* Thu */}
+          <col style={{ width: 110 }} />  {/* Công nợ */}
+          <col style={{ width: 140 }} />  {/* Ghi chú */}
+        </colgroup>
         <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
           <tr>
-            <th className="px-2 py-2 text-left">#</th>
+            <th className="px-2 py-2 text-center">#</th>
             <th className="px-2 py-2 text-left">Tên KH</th>
             <th className="px-2 py-2 text-left">SĐT</th>
             <th className="px-2 py-2 text-left">Người giám hộ</th>
@@ -396,13 +410,23 @@ function EditableText({ value, disabled, onCommit }: { value: string; disabled: 
 }
 
 function EditableNumber({ value, disabled, onCommit }: { value: number; disabled: boolean; onCommit: (v: number) => void }) {
-  if (disabled) return <span className="text-slate-700">{value.toLocaleString()}</span>;
+  const [editing, setEditing] = useState(false);
+  const [raw, setRaw] = useState<string>(value > 0 ? String(value) : '');
+  useEffect(() => { if (!editing) setRaw(value > 0 ? String(value) : ''); }, [value, editing]);
+  if (disabled) return <span className="text-slate-700 tabular-nums">{value.toLocaleString()}</span>;
+  const display = editing ? raw : (value > 0 ? value.toLocaleString() : '');
   return (
     <input
-      type="number"
-      min={0}
-      defaultValue={value || ''}
-      onBlur={(e) => { const n = Number(e.target.value) || 0; if (n !== value) onCommit(n); }}
+      type="text"
+      inputMode="numeric"
+      value={display}
+      onFocus={() => setEditing(true)}
+      onChange={(e) => setRaw(e.target.value.replace(/[^\d]/g, ''))}
+      onBlur={() => {
+        setEditing(false);
+        const n = Number(raw) || 0;
+        if (n !== value) onCommit(n);
+      }}
       className="w-full px-2 py-1 rounded border border-slate-200 text-sm text-right tabular-nums focus:bg-white focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100 focus:outline-none"
     />
   );
