@@ -49,12 +49,26 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       if (txSnap.empty) {
         return { error: 'Chưa có giao dịch nào', status: 400 } as const;
       }
+      // V6 2026-06-17: validate SĐT tất cả tx hợp lệ (10 số bắt đầu 0) trước khi submit
+      const invalidPhones: string[] = [];
       let totalSales = 0, totalCollected = 0;
       txSnap.forEach((d) => {
         const x = d.data();
         totalSales += Number(x.packageValue ?? 0);
         totalCollected += Number(x.collectedToday ?? 0);
+        const phone = String(x.phone ?? '');
+        if (!/^0\d{9}$/.test(phone)) {
+          invalidPhones.push(String(x.customerName ?? '?'));
+        }
       });
+      if (invalidPhones.length > 0) {
+        const sample = invalidPhones.slice(0, 3).join(', ');
+        const more = invalidPhones.length > 3 ? `... (+${invalidPhones.length - 3})` : '';
+        return {
+          error: `Có ${invalidPhones.length} giao dịch SĐT chưa hợp lệ (cần 10 số bắt đầu 0): ${sample}${more}`,
+          status: 400,
+        } as const;
+      }
       const totalDebt = totalSales - totalCollected;
 
       // V6 2026-06-17 (revised): CHỈ reset tx có reviewStatus='rejected' về 'pending'.

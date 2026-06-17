@@ -10,7 +10,7 @@ import { Plus, Save, Send, AlertCircle, Loader2 } from 'lucide-react';
 import type { SalesDailyBatch, SalesTransaction, SalesTransactionInput, BatchStatus } from '@/lib/types/sales-v2';
 import type { SalesV2Package } from '@/lib/sales-v2/packages';
 import type { BranchId } from '@/lib/branches';
-import SalesGrid, { type LocalRow, makeEmptyRow, validateRow, isRowEmpty } from './_components/SalesGrid';
+import SalesGrid, { type LocalRow, makeEmptyRow, validateRow, isRowEmpty, isValidPhone } from './_components/SalesGrid';
 import MobileNhapView from './_components/MobileNhapView';
 import { showConfirm } from '@/components/ui/imperative-modal';
 
@@ -194,7 +194,14 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
   }, []);
 
   const handleUpdateSaved = useCallback(async (id: string, patch: Partial<SalesTransaction>) => {
-    // Optimistic update
+    // Validate phone trước khi PATCH (server cũng check nhưng pre-empt để rõ UX)
+    if (patch.phone !== undefined && patch.phone !== null && patch.phone.trim() && !isValidPhone(patch.phone)) {
+      showToast('err', 'SĐT phải 10 số bắt đầu bằng 0');
+      // Force re-render input về giá trị cũ (state không đổi nên defaultValue input vẫn cũ)
+      return;
+    }
+    // Lưu old state để rollback nếu server reject
+    const oldRow = rows.find((r) => r.id === id) ?? null;
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
     try {
       const r = await fetch(`/api/sales-v2/transactions/${encodeURIComponent(id)}`, {
@@ -204,12 +211,13 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
       });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
       const j = await r.json();
-      // Replace with server-canonical (recompute debt, ...)
       setRows((prev) => prev.map((row) => (row.id === id ? (j.transaction as SalesTransaction) : row)));
     } catch (e: any) {
+      // Rollback optimistic → tránh client hiển thị giá trị sai lệch với server
+      if (oldRow) setRows((prev) => prev.map((r) => (r.id === id ? oldRow : r)));
       showToast('err', `Lưu lỗi: ${e?.message ?? 'unknown'}`);
     }
-  }, [showToast]);
+  }, [rows, showToast]);
 
   const handleRemoveSaved = useCallback(async (id: string) => {
     const ok = await showConfirm({
