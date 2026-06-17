@@ -111,7 +111,10 @@ export interface SalesTransaction {
   paymentMethod: PaymentMethod;
   packageValue: number;          // giá trị gói (doanh số)
   collectedToday: number;        // thực thu hôm nay
-  debtAmount: number;            // packageValue - collectedToday
+  debtAmount: number;            // packageValue - collectedToday (HIỆN TẠI — giảm khi auto-link)
+  // V6 (2026-06-17 audit BUG-1): snapshot debt LÚC TẠO (chỉ cho dat_coc). Không đổi
+  // khi auto-match link → dùng cho "Công nợ phát sinh" trong dashboard tháng.
+  originalDebt?: number;
   // V6 (2026-06-17): chứng từ tracking
   // - receiptNo: số phiếu thu — required cho 'dat_coc' (mới), optional+link key cho 'thanh_toan_not'
   // - contractNo: số hợp đồng — required cho 'thanh_toan_full' và 'thanh_toan_not'

@@ -81,12 +81,11 @@ export async function GET(req: NextRequest) {
     }
 
     const db = getFirebaseAdminDb();
-    // Query month — single field where, filter rest client
-    let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.SALES_TRANSACTIONS)
-      .where('month', '==', month);
-    // Apply 1 more where nếu có (Firestore auto handle 2 equality without composite index thường)
-    if (scopeBranchId) q = q.where('branchId', '==', scopeBranchId);
-    const snap = await q.limit(5000).get();
+    // BUG-2 audit fix: bỏ where(branchId) tránh cần composite index. Filter client.
+    const snap = await db.collection(COLLECTIONS.SALES_TRANSACTIONS)
+      .where('month', '==', month)
+      .limit(5000)
+      .get();
 
     // Aggregate
     const totals = { sales: 0, collected: 0, debtGenerated: 0, debtRemaining: 0, transactions: 0 };
@@ -97,40 +96,47 @@ export async function GET(req: NextRequest) {
 
     for (const d of snap.docs) {
       const x = d.data() as Record<string, any>;
-      // Filter approved
       if (x.reviewStatus !== 'approved') continue;
-      // Apply saleId filter client-side
+      // BUG-2: filter branchId client-side
+      if (scopeBranchId && x.branchId !== scopeBranchId) continue;
       if (scopeSaleId && x.saleId !== scopeSaleId) continue;
 
       const pv = Number(x.packageValue ?? 0);
       const ct = Number(x.collectedToday ?? 0);
       const debt = Number(x.debtAmount ?? 0);
+      const originalDebt = Number(x.originalDebt ?? debt); // fallback debt nếu doc cũ
       const src = (x.source ?? 'ca_nhan') as SalesV2Source;
       const txType = String(x.transactionType ?? '');
+      const isThanhToanNot = txType === 'thanh_toan_not';
 
-      totals.sales += pv; // packageValue đã = 0 cho thanh_toan_not (server enforce)
+      totals.sales += pv; // pv = 0 cho thanh_toan_not (server enforce)
       totals.collected += ct;
-      // Công nợ phát sinh = chỉ tx dat_coc còn debt (tx thanh_toan_full debt=0, thanh_toan_not debt=0)
-      if (txType === 'dat_coc') totals.debtGenerated += debt;
       totals.transactions += 1;
-
-      // By source
-      if (SOURCES.includes(src)) {
-        bySource[src].count += 1;
-        bySource[src].sales += pv;
-        bySource[src].collected += ct;
+      // BUG-1 audit fix: debtGenerated = snapshot ORIGINAL debt (tx dat_coc tạo nợ)
+      // debtRemaining = debt HIỆN TẠI (sau khi auto-match link đã giảm)
+      if (txType === 'dat_coc') {
+        totals.debtGenerated += originalDebt;
+        totals.debtRemaining += debt;
       }
 
-      // By package
-      const pid = String(x.packageId ?? '');
-      if (pid) {
-        if (!byPackage[pid]) byPackage[pid] = { name: String(x.packageName ?? ''), count: 0, sales: 0, collected: 0 };
-        byPackage[pid].count += 1;
-        byPackage[pid].sales += pv;
-        byPackage[pid].collected += ct;
+      // BUG-4 audit fix: thanh_toan_not = trả nốt, KHÔNG tính vào bySource/byPackage
+      // (không phải doanh số mới — đã ghi nhận ở tx dat_coc cũ).
+      if (!isThanhToanNot) {
+        if (SOURCES.includes(src)) {
+          bySource[src].count += 1;
+          bySource[src].sales += pv;
+          bySource[src].collected += ct;
+        }
+        const pid = String(x.packageId ?? '');
+        if (pid) {
+          if (!byPackage[pid]) byPackage[pid] = { name: String(x.packageName ?? ''), count: 0, sales: 0, collected: 0 };
+          byPackage[pid].count += 1;
+          byPackage[pid].sales += pv;
+          byPackage[pid].collected += ct;
+        }
       }
 
-      // By sale + branch (cho top role có nhiều scope)
+      // By sale + branch: count tất cả tx (kể cả nốt — vì nốt cũng là thực thu)
       if (role === 'top' || role === 'accountant' || role === 'qlcs') {
         const sid = String(x.saleId ?? '');
         if (sid) {
@@ -148,12 +154,6 @@ export async function GET(req: NextRequest) {
         }
       }
     }
-
-    // Công nợ còn lại = sum(debtAmount of dat_coc still > 0) — tính từ ALL months (không filter month)
-    // Simpler approach: trong tháng này, debtRemaining = debtGenerated trừ phần đã thu nốt (qua link).
-    // → debtRemaining query riêng all month theo scope: where status='approved' + debt>0
-    // → để Phase 5 simpler: skip query thứ 2, lấy debtGenerated làm proxy. /cong-no có query riêng.
-    totals.debtRemaining = totals.debtGenerated;
 
     return NextResponse.json({
       ok: true,

@@ -148,6 +148,8 @@ export async function POST(req: NextRequest) {
       packageValue: effectivePackageValue,
       collectedToday,
       debtAmount,
+      // BUG-1 audit fix: snapshot debt cho 'dat_coc' (không đổi khi auto-match link)
+      originalDebt: transactionType === 'dat_coc' ? debtAmount : 0,
       receiptNo,
       contractNo,
       note,

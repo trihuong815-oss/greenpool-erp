@@ -76,12 +76,14 @@ export default function CongNoClient({ scope }: Props) {
 
   const totals = useMemo(() => {
     let totalDebt = 0, totalSales = 0, totalCollected = 0;
+    const customers = new Set<string>();
     for (const r of filtered) {
       totalDebt += r.debtAmount;
       totalSales += r.packageValue;
       totalCollected += r.collectedToday;
+      customers.add(`${r.phone}|${r.customerName.toLowerCase()}`); // dedupe theo phone+name
     }
-    return { totalDebt, totalSales, totalCollected, count: filtered.length };
+    return { totalDebt, totalSales, totalCollected, count: filtered.length, uniqueCustomers: customers.size };
   }, [filtered]);
 
   return (
@@ -145,7 +147,7 @@ export default function CongNoClient({ scope }: Props) {
 
           {/* Totals summary */}
           <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-2">
-            <Kpi label="Số khách nợ" value={totals.count.toString()} tone="slate" />
+            <Kpi label={`Số GD còn nợ${totals.uniqueCustomers > 0 ? ` (${totals.uniqueCustomers} KH)` : ''}`} value={totals.count.toString()} tone="slate" />
             <Kpi label="Tổng giá gói" value={totals.totalSales.toLocaleString() + 'đ'} tone="emerald" />
             <Kpi label="Đã thu" value={totals.totalCollected.toLocaleString() + 'đ'} tone="sky" />
             <Kpi label="Còn nợ" value={totals.totalDebt.toLocaleString() + 'đ'} tone="rose" />

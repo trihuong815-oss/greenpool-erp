@@ -46,12 +46,11 @@ export async function GET(req: NextRequest) {
     }
 
     const db = getFirebaseAdminDb();
-    // Query 'transactionType' = 'dat_coc' (vì chỉ dat_coc tạo công nợ).
-    // Single field where → no composite index. Filter status/debt client.
-    let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.SALES_TRANSACTIONS)
-      .where('transactionType', '==', 'dat_coc');
-    if (scopeBranchId) q = q.where('branchId', '==', scopeBranchId);
-    const snap = await q.limit(2000).get();
+    // BUG-2 audit fix: chỉ where(transactionType) — bỏ where(branchId) tránh composite index.
+    const snap = await db.collection(COLLECTIONS.SALES_TRANSACTIONS)
+      .where('transactionType', '==', 'dat_coc')
+      .limit(2000)
+      .get();
 
     const rows = snap.docs
       .map((d) => {
@@ -77,6 +76,7 @@ export async function GET(req: NextRequest) {
         };
       })
       .filter((r) => r.reviewStatus === 'approved' && r.debtAmount > 0)
+      .filter((r) => !scopeBranchId || r.branchId === scopeBranchId)
       .filter((r) => !scopeSaleId || r.saleId === scopeSaleId)
       .filter((r) => !monthFilter || r.month === monthFilter)
       .sort((a, b) => b.debtAmount - a.debtAmount)

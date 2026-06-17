@@ -163,7 +163,13 @@ export default function TongKetClient({ scope }: Props) {
           </div>
         ) : error ? (
           <div className="card text-center py-12 text-rose-600 text-sm">⚠️ {error}</div>
-        ) : !data ? null : (
+        ) : !data ? null : data.totals.transactions === 0 ? (
+          <div className="card text-center py-16 text-slate-400">
+            <div className="text-5xl mb-3">📭</div>
+            <div className="text-base font-medium text-slate-600">Tháng {fmtMonth(month)} chưa có giao dịch nào đã đối chiếu</div>
+            <div className="text-sm mt-1.5">Dashboard chỉ tính dữ liệu đã được kế toán duyệt chính thức.</div>
+          </div>
+        ) : (
           <>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               <KpiCard label="Số giao dịch" value={data.totals.transactions.toString()} icon={<Users size={18} />} tone="slate" />
