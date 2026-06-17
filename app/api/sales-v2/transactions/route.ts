@@ -75,6 +75,8 @@ export async function POST(req: NextRequest) {
     const paymentMethod = body.paymentMethod as PaymentMethod;
     const packageValue = Number(body.packageValue ?? 0);
     const collectedToday = Number(body.collectedToday ?? 0);
+    const receiptNo = body.receiptNo ? String(body.receiptNo).trim().slice(0, 50) : null;
+    const contractNo = body.contractNo ? String(body.contractNo).trim().slice(0, 50) : null;
     const note = body.note ? String(body.note).slice(0, 500) : null;
 
     if (!customerName) return NextResponse.json({ error: 'Thiếu tên khách hàng' }, { status: 400 });
@@ -88,6 +90,13 @@ export async function POST(req: NextRequest) {
     if (!Number.isFinite(collectedToday) || collectedToday < 0) return NextResponse.json({ error: 'Thu hôm nay không hợp lệ' }, { status: 400 });
     if (collectedToday > packageValue && transactionType !== 'thanh_toan_not') {
       return NextResponse.json({ error: 'Thu hôm nay không thể lớn hơn giá trị gói' }, { status: 400 });
+    }
+    // V6 2026-06-17: validate chứng từ theo transactionType
+    if (transactionType === 'dat_coc' && !receiptNo) {
+      return NextResponse.json({ error: 'Đặt cọc bắt buộc nhập Số phiếu thu' }, { status: 400 });
+    }
+    if ((transactionType === 'thanh_toan_full' || transactionType === 'thanh_toan_not') && !contractNo) {
+      return NextResponse.json({ error: 'Thanh toán (full/nốt) bắt buộc nhập Số hợp đồng' }, { status: 400 });
     }
 
     const db = getFirebaseAdminDb();
@@ -139,6 +148,8 @@ export async function POST(req: NextRequest) {
       packageValue: effectivePackageValue,
       collectedToday,
       debtAmount,
+      receiptNo,
+      contractNo,
       note,
       reviewStatus: 'pending',
       rejectReason: null,

@@ -31,6 +31,8 @@ export interface LocalRow {
   paymentMethod: PaymentMethod | null;
   packageValue: string;     // dạng string để input hiển thị OK
   collectedToday: string;
+  receiptNo: string;
+  contractNo: string;
   note: string;
   errorMessage?: string;
 }
@@ -53,6 +55,8 @@ export function makeEmptyRow(): LocalRow {
     paymentMethod: null,
     packageValue: '',
     collectedToday: '',
+    receiptNo: '',
+    contractNo: '',
     note: '',
   };
 }
@@ -74,6 +78,8 @@ export function isRowEmpty(r: LocalRow): boolean {
     && !r.paymentMethod
     && !r.packageValue.trim()
     && !r.collectedToday.trim()
+    && !r.receiptNo.trim()
+    && !r.contractNo.trim()
     && !r.note.trim();
 }
 
@@ -89,6 +95,13 @@ export function validateRow(r: LocalRow): { ok: true } | { ok: false; error: str
   const ct = Number(r.collectedToday);
   if (!Number.isFinite(ct) || ct < 0) return { ok: false, error: 'Thu hôm nay không hợp lệ' };
   if (r.isChildPackage && !r.guardianName.trim()) return { ok: false, error: 'Gói trẻ em bắt buộc Người giám hộ' };
+  // Validate chứng từ
+  if (r.transactionType === 'dat_coc' && !r.receiptNo.trim()) {
+    return { ok: false, error: 'Đặt cọc bắt buộc Số phiếu thu' };
+  }
+  if ((r.transactionType === 'thanh_toan_full' || r.transactionType === 'thanh_toan_not') && !r.contractNo.trim()) {
+    return { ok: false, error: 'Thanh toán bắt buộc Số hợp đồng' };
+  }
   // 'thanh_toan_not' = trả nốt nợ cũ → chỉ cần collectedToday > 0, packageValue ignore
   if (r.transactionType === 'thanh_toan_not') {
     if (ct <= 0) return { ok: false, error: 'Thanh toán nốt phải có số tiền thu' };
@@ -153,21 +166,23 @@ export default function SalesGrid({
   return (
     <div className="card overflow-hidden p-0">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1900px] text-sm">
+        <table className="w-full min-w-[2160px] text-sm">
           <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
             <tr>
               <Th width={40}>#</Th>
-              <Th width={270}>Tên khách hàng *</Th>
-              <Th width={150}>SĐT *</Th>
-              <Th width={170}>Người giám hộ</Th>
-              <Th width={130}>Nguồn *</Th>
-              <Th width={190}>Gói *</Th>
-              <Th width={150}>Loại GD *</Th>
-              <Th width={140}>HT thu *</Th>
-              <Th width={130} align="right">Giá trị gói *</Th>
-              <Th width={130} align="right">Thu hôm nay *</Th>
-              <Th width={130} align="right">Công nợ</Th>
-              <Th width={180}>Ghi chú</Th>
+              <Th width={230}>Tên khách hàng *</Th>
+              <Th width={140}>SĐT *</Th>
+              <Th width={150}>Người giám hộ</Th>
+              <Th width={120}>Nguồn *</Th>
+              <Th width={180}>Gói *</Th>
+              <Th width={140}>Loại GD *</Th>
+              <Th width={130}>HT thu *</Th>
+              <Th width={120}>Số phiếu thu</Th>
+              <Th width={120}>Số HĐ</Th>
+              <Th width={120} align="right">Giá trị gói *</Th>
+              <Th width={120} align="right">Thu hôm nay *</Th>
+              <Th width={120} align="right">Công nợ</Th>
+              <Th width={140}>Ghi chú</Th>
               <Th width={44}></Th>
             </tr>
           </thead>
@@ -313,6 +328,26 @@ function SavedRow({ idx, row, packages, canEdit, batchStatus, onUpdate, onRemove
       <Td>
         <PayMethodSelect value={row.paymentMethod} disabled={!canEdit} onChange={(v) => onUpdate({ paymentMethod: v })} />
       </Td>
+      <Td>
+        <DocCell
+          value={row.receiptNo ?? ''}
+          disabled={!canEdit}
+          required={row.transactionType === 'dat_coc'}
+          hideForType={row.transactionType === 'thanh_toan_full'}
+          placeholder={row.transactionType === 'thanh_toan_not' ? 'Số PT cũ (để link)' : 'PT...'}
+          onCommit={(v) => onUpdate({ receiptNo: v || null })}
+        />
+      </Td>
+      <Td>
+        <DocCell
+          value={row.contractNo ?? ''}
+          disabled={!canEdit}
+          required={row.transactionType === 'thanh_toan_full' || row.transactionType === 'thanh_toan_not'}
+          hideForType={row.transactionType === 'dat_coc'}
+          placeholder="HĐ..."
+          onCommit={(v) => onUpdate({ contractNo: v || null })}
+        />
+      </Td>
       <Td align="right">
         {row.transactionType === 'thanh_toan_not' ? (
           <span className="text-slate-300 text-xs" title="Thanh toán nốt — không tính doanh số mới">—</span>
@@ -436,6 +471,26 @@ function LocalRowItem({ idx, row, packages, canEdit, onUpdate, onRemove, autoFoc
       <Td>
         <PayMethodSelect value={row.paymentMethod} disabled={!canEdit} onChange={(v) => onUpdate({ paymentMethod: v })} />
       </Td>
+      <Td>
+        <DocCell
+          value={row.receiptNo}
+          disabled={!canEdit}
+          required={row.transactionType === 'dat_coc'}
+          hideForType={row.transactionType === 'thanh_toan_full'}
+          placeholder={row.transactionType === 'thanh_toan_not' ? 'Số PT cũ (để link)' : 'PT...'}
+          onCommit={(v) => onUpdate({ receiptNo: v })}
+        />
+      </Td>
+      <Td>
+        <DocCell
+          value={row.contractNo}
+          disabled={!canEdit}
+          required={row.transactionType === 'thanh_toan_full' || row.transactionType === 'thanh_toan_not'}
+          hideForType={row.transactionType === 'dat_coc'}
+          placeholder="HĐ..."
+          onCommit={(v) => onUpdate({ contractNo: v })}
+        />
+      </Td>
       <Td align="right">
         {row.transactionType === 'thanh_toan_not' ? (
           <span className="text-slate-300 text-xs" title="Thanh toán nốt — không tính doanh số mới (sẽ link với GD cũ)">—</span>
@@ -523,6 +578,39 @@ function PhoneCell({
       className={`w-full px-2 py-1 rounded border text-sm focus:bg-white focus:ring-2 focus:outline-none disabled:cursor-not-allowed ${
         invalid
           ? 'border-rose-400 bg-rose-50 text-rose-700 focus:border-rose-500 focus:ring-rose-100'
+          : 'border-transparent bg-transparent focus:border-emerald-300 focus:ring-emerald-100'
+      }`}
+    />
+  );
+}
+
+/** Số phiếu thu / Số HĐ. Required màu amber khi cần điền. Hide cho loại không cần. */
+function DocCell({
+  value, disabled, required, hideForType, placeholder, onCommit,
+}: {
+  value: string;
+  disabled: boolean;
+  required: boolean;
+  hideForType: boolean;
+  placeholder?: string;
+  onCommit: (v: string) => void;
+}) {
+  if (hideForType) {
+    return <span className="text-slate-300 text-xs px-2">—</span>;
+  }
+  const isEmpty = !value.trim();
+  return (
+    <input
+      type="text"
+      defaultValue={value}
+      disabled={disabled}
+      placeholder={placeholder}
+      maxLength={50}
+      onBlur={(e) => { const v = e.target.value.trim(); if (v !== value) onCommit(v); }}
+      title={required && isEmpty ? 'Bắt buộc nhập' : ''}
+      className={`w-full px-2 py-1 rounded border text-xs focus:bg-white focus:ring-2 focus:outline-none disabled:cursor-not-allowed ${
+        required && isEmpty
+          ? 'border-amber-300 bg-amber-50/40 placeholder-amber-500 focus:border-amber-400 focus:ring-amber-100'
           : 'border-transparent bg-transparent focus:border-emerald-300 focus:ring-emerald-100'
       }`}
     />

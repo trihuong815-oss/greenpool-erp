@@ -44,6 +44,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       phone: String(tx.phone ?? ''),
       packageId: String(tx.packageId ?? ''),
       customerName: String(tx.customerName ?? ''),
+      receiptNo: tx.receiptNo ?? null,
     });
 
     return NextResponse.json({ ok: true, candidates });

@@ -411,21 +411,23 @@ function TransactionsTable({
 }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[1820px] text-sm table-fixed">
+      <table className="w-full min-w-[2040px] text-sm table-fixed">
         <colgroup>
           <col style={{ width: 100 }} />  {/* Review ✓ ✗ */}
           <col style={{ width: 40 }} />   {/* # */}
           <col style={{ width: 200 }} />  {/* Tên KH */}
           <col style={{ width: 130 }} />  {/* SĐT */}
           <col style={{ width: 150 }} />  {/* Người giám hộ */}
-          <col style={{ width: 140 }} />  {/* Nguồn */}
-          <col style={{ width: 200 }} />  {/* Gói */}
+          <col style={{ width: 130 }} />  {/* Nguồn */}
+          <col style={{ width: 180 }} />  {/* Gói */}
           <col style={{ width: 140 }} />  {/* Loại GD */}
-          <col style={{ width: 140 }} />  {/* HT thu */}
-          <col style={{ width: 120 }} />  {/* Giá trị */}
-          <col style={{ width: 120 }} />  {/* Thu */}
-          <col style={{ width: 110 }} />  {/* Công nợ */}
-          <col style={{ width: 100 }} />  {/* Link (Phase 4) */}
+          <col style={{ width: 130 }} />  {/* HT thu */}
+          <col style={{ width: 110 }} />  {/* Số PT */}
+          <col style={{ width: 110 }} />  {/* Số HĐ */}
+          <col style={{ width: 110 }} />  {/* Giá trị */}
+          <col style={{ width: 110 }} />  {/* Thu */}
+          <col style={{ width: 100 }} />  {/* Công nợ */}
+          <col style={{ width: 100 }} />  {/* Link */}
           <col style={{ width: 140 }} />  {/* Ghi chú */}
         </colgroup>
         <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
@@ -439,6 +441,8 @@ function TransactionsTable({
             <th className="px-2 py-2 text-left">Gói</th>
             <th className="px-2 py-2 text-left">Loại GD</th>
             <th className="px-2 py-2 text-left">HT thu</th>
+            <th className="px-2 py-2 text-left">Số PT</th>
+            <th className="px-2 py-2 text-left">Số HĐ</th>
             <th className="px-2 py-2 text-right">Giá trị</th>
             <th className="px-2 py-2 text-right">Thu</th>
             <th className="px-2 py-2 text-right">Công nợ</th>
@@ -508,6 +512,12 @@ function TransactionsTable({
                     ))}
                   </select>
                 ) : <span className="text-xs">{PAYMENT_METHOD_LABEL[r.paymentMethod]}</span>}
+              </td>
+              <td className="px-2 py-1.5">
+                <EditableText value={r.receiptNo ?? ''} disabled={!editMode} onCommit={(v) => onUpdate(r.id, { receiptNo: v || null })} />
+              </td>
+              <td className="px-2 py-1.5">
+                <EditableText value={r.contractNo ?? ''} disabled={!editMode} onCommit={(v) => onUpdate(r.id, { contractNo: v || null })} />
               </td>
               <td className="px-2 py-1.5 text-right tabular-nums">
                 <EditableNumber value={r.packageValue} disabled={!editMode} onCommit={(v) => onUpdate(r.id, { packageValue: v })} />

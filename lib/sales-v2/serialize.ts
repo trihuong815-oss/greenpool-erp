@@ -70,6 +70,8 @@ export function serializeTransaction(id: string, raw: Record<string, any>): Sale
     packageValue: Number(raw.packageValue ?? 0),
     collectedToday: Number(raw.collectedToday ?? 0),
     debtAmount: Number(raw.debtAmount ?? 0),
+    receiptNo: raw.receiptNo ?? null,
+    contractNo: raw.contractNo ?? null,
     note: raw.note ?? null,
     // V6 2026-06-17: per-tx review (fallback pending nếu doc cũ chưa có field)
     reviewStatus: raw.reviewStatus ?? 'pending',

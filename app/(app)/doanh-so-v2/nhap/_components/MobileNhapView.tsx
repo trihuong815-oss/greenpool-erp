@@ -404,6 +404,47 @@ function CardEditor({
         <span className={`font-bold tabular-nums ${debt > 0 ? 'text-rose-600' : 'text-slate-400'}`}>{debt.toLocaleString()}đ</span>
       </div>
 
+      {/* Chứng từ */}
+      {(row as any).transactionType === 'dat_coc' && (
+        <FieldLabel label="Số phiếu thu *">
+          <input
+            type="text"
+            defaultValue={getStr('receiptNo')}
+            disabled={!canEdit}
+            onBlur={(e) => { if (e.target.value !== getStr('receiptNo')) updateStr('receiptNo', e.target.value); }}
+            maxLength={50}
+            placeholder="VD: PT001"
+            className="w-full px-3 py-2 rounded-lg ring-1 ring-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+        </FieldLabel>
+      )}
+      {(row as any).transactionType === 'thanh_toan_not' && (
+        <FieldLabel label="Số phiếu thu cũ (để auto-link)">
+          <input
+            type="text"
+            defaultValue={getStr('receiptNo')}
+            disabled={!canEdit}
+            onBlur={(e) => { if (e.target.value !== getStr('receiptNo')) updateStr('receiptNo', e.target.value); }}
+            maxLength={50}
+            placeholder="Nhập số PT đặt cọc cũ"
+            className="w-full px-3 py-2 rounded-lg ring-1 ring-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+        </FieldLabel>
+      )}
+      {((row as any).transactionType === 'thanh_toan_full' || (row as any).transactionType === 'thanh_toan_not') && (
+        <FieldLabel label="Số hợp đồng *">
+          <input
+            type="text"
+            defaultValue={getStr('contractNo')}
+            disabled={!canEdit}
+            onBlur={(e) => { if (e.target.value !== getStr('contractNo')) updateStr('contractNo', e.target.value); }}
+            maxLength={50}
+            placeholder="VD: HĐ001"
+            className="w-full px-3 py-2 rounded-lg ring-1 ring-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+        </FieldLabel>
+      )}
+
       <FieldLabel label="Ghi chú">
         <input
           type="text"

@@ -112,6 +112,11 @@ export interface SalesTransaction {
   packageValue: number;          // giá trị gói (doanh số)
   collectedToday: number;        // thực thu hôm nay
   debtAmount: number;            // packageValue - collectedToday
+  // V6 (2026-06-17): chứng từ tracking
+  // - receiptNo: số phiếu thu — required cho 'dat_coc' (mới), optional+link key cho 'thanh_toan_not'
+  // - contractNo: số hợp đồng — required cho 'thanh_toan_full' và 'thanh_toan_not'
+  receiptNo?: string | null;
+  contractNo?: string | null;
   note?: string | null;
   // Per-tx review (V6 2026-06-17)
   reviewStatus: TxReviewStatus;
@@ -170,6 +175,8 @@ export interface SalesTransactionInput {
   paymentMethod: PaymentMethod;
   packageValue: number;
   collectedToday: number;
+  receiptNo?: string | null;
+  contractNo?: string | null;
   note?: string | null;
 }
 

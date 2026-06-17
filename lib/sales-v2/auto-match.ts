@@ -35,8 +35,11 @@ function normalizeName(s: string): string {
 }
 
 /** Tìm candidates cho 1 tx 'thanh_toan_not'.
- *  Audit BUG-3 fix 2026-06-17: match EXACT packageId (không phải packageCode/group).
- *  Tránh khách mua gói A đặt cọc, Sale nhập nốt cho gói B cùng group → link sai.
+ *  V6 (2026-06-17) workflow link:
+ *    1. ƯU TIÊN: nếu tx có receiptNo → tìm tx cũ approved cùng branchId + receiptNo
+ *       (chính xác nhất — Sale nhập số phiếu thu cũ để link)
+ *    2. Fallback: branchId + phone + packageId + customerName (cho trường hợp Sale
+ *       không có/quên số phiếu thu)
  */
 export async function findMatchCandidates(
   db: Firestore,
@@ -46,8 +49,42 @@ export async function findMatchCandidates(
     phone: string;
     packageId: string;
     customerName: string;
+    receiptNo?: string | null;
   },
 ): Promise<MatchCandidate[]> {
+  // CÁCH 1: match by receiptNo (Sale nhập số phiếu thu cũ)
+  if (tx.receiptNo) {
+    const snap = await db.collection(COLLECTIONS.SALES_TRANSACTIONS)
+      .where('receiptNo', '==', tx.receiptNo)
+      .get();
+    const out: MatchCandidate[] = [];
+    for (const d of snap.docs) {
+      if (d.id === tx.id) continue;
+      const x = d.data() as Record<string, any>;
+      if (x.branchId !== tx.branchId) continue;
+      if (x.reviewStatus !== 'approved') continue;
+      const debt = Number(x.debtAmount ?? 0);
+      if (debt <= 0) continue;
+      out.push({
+        id: d.id,
+        date: String(x.date ?? ''),
+        customerName: String(x.customerName ?? ''),
+        packageName: String(x.packageName ?? ''),
+        packageValue: Number(x.packageValue ?? 0),
+        collectedToday: Number(x.collectedToday ?? 0),
+        debtAmount: debt,
+        transactionType: String(x.transactionType ?? ''),
+        createdAt: x.createdAt?.toDate?.()?.toISOString?.() ?? String(x.createdAt ?? ''),
+      });
+    }
+    if (out.length > 0) {
+      out.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      return out;
+    }
+    // receiptNo nhập sai → fallback tìm theo cách cũ
+  }
+
+  // CÁCH 2 (fallback): branchId + phone + packageId + customerName
   if (!tx.phone || !tx.packageId) return [];
   const snap = await db.collection(COLLECTIONS.SALES_TRANSACTIONS)
     .where('phone', '==', tx.phone)
@@ -59,7 +96,6 @@ export async function findMatchCandidates(
     if (d.id === tx.id) continue;
     const x = d.data() as Record<string, any>;
     if (x.branchId !== tx.branchId) continue;
-    // EXACT packageId match (không match packageCode/group)
     if (String(x.packageId ?? '') !== tx.packageId) continue;
     if (normalizeName(x.customerName) !== targetName) continue;
     if (x.reviewStatus !== 'approved') continue;
@@ -111,6 +147,7 @@ export async function runAutoMatchForBatch(
         phone: String(x.phone ?? ''),
         packageId: String(x.packageId ?? ''),
         customerName: String(x.customerName ?? ''),
+        receiptNo: x.receiptNo ?? null,
       };
       const collectedToday = Number(x.collectedToday ?? 0);
       const candidates = await findMatchCandidates(db, tx);

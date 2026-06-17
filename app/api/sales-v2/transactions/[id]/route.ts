@@ -24,7 +24,8 @@ const VALID_PAY = new Set<PaymentMethod>(['tien_mat', 'chuyen_khoan', 'pos']);
 
 const EDITABLE_FIELDS = new Set([
   'customerName', 'phone', 'guardianName', 'source', 'packageId',
-  'transactionType', 'paymentMethod', 'packageValue', 'collectedToday', 'note',
+  'transactionType', 'paymentMethod', 'packageValue', 'collectedToday',
+  'receiptNo', 'contractNo', 'note',
 ]);
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -94,6 +95,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if ('note' in updates) {
       updates.note = updates.note ? String(updates.note).slice(0, 500) : null;
     }
+    if ('receiptNo' in updates) {
+      updates.receiptNo = updates.receiptNo ? String(updates.receiptNo).trim().slice(0, 50) : null;
+    }
+    if ('contractNo' in updates) {
+      updates.contractNo = updates.contractNo ? String(updates.contractNo).trim().slice(0, 50) : null;
+    }
 
     // Nếu đổi packageId → re-resolve package info
     if ('packageId' in updates) {
@@ -129,6 +136,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     // Validate thanh_toan_full → collected >= packageValue (KHÔNG áp dụng cho thanh_toan_not)
     if (finalTxnType === 'thanh_toan_full' && finalCollected < finalPackageValue) {
       return NextResponse.json({ error: 'Thanh toán full phải thu đủ giá trị gói' }, { status: 400 });
+    }
+    // V6 2026-06-17: validate chứng từ theo finalTxnType
+    const finalReceiptNo = 'receiptNo' in updates ? updates.receiptNo : (tx.receiptNo ?? null);
+    const finalContractNo = 'contractNo' in updates ? updates.contractNo : (tx.contractNo ?? null);
+    if (finalTxnType === 'dat_coc' && !finalReceiptNo) {
+      return NextResponse.json({ error: 'Đặt cọc bắt buộc Số phiếu thu' }, { status: 400 });
+    }
+    if ((finalTxnType === 'thanh_toan_full' || finalTxnType === 'thanh_toan_not') && !finalContractNo) {
+      return NextResponse.json({ error: 'Thanh toán (full/nốt) bắt buộc Số hợp đồng' }, { status: 400 });
     }
 
     updates.updatedAt = Timestamp.now();
