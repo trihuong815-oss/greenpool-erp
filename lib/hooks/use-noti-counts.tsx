@@ -40,6 +40,12 @@ interface NotiCounts {
   proposals: number;
   dispatch: number;
 
+  // Sales v2 (2026-06-17): noti module='sales' action_required
+  //   salesSubmit = sales_batch_returned cho Sale (cần sửa & gửi lại)
+  //   salesReview = sales_batch_submitted cho kế toán (cần đối chiếu)
+  salesSubmit: number;
+  salesReview: number;
+
   // Derived (cho UI hiển thị từng mục sidebar)
   tasks: number;        // = proposals + dispatch (backward compat — mục "Giao việc" cũ)
   techWork: number;     // = techProposal + techTask (mục "Kỹ thuật vận hành")
@@ -61,6 +67,7 @@ const NotiCountsContext = createContext<NotiCounts | null>(null);
 const DEFAULT_VALUE: NotiCounts = {
   chat: 0, tasksApproval: 0, tasksAssigned: 0, techProposal: 0, techTask: 0, checklist: 0,
   proposals: 0, dispatch: 0,
+  salesSubmit: 0, salesReview: 0,
   tasks: 0, techWork: 0, totalNonChat: 0, total: 0,
   items: [], loading: false, refresh: () => {},
 };
@@ -81,6 +88,9 @@ export function NotiCountsProvider({ children }: { children: ReactNode }) {
   // V6.4 (2026-06-13): TÁCH counter theo module — spec sidebar 2 badge riêng.
   const [proposalsCount, setProposalsCount] = useState(0);
   const [dispatchCount, setDispatchCount] = useState(0);
+  // Sales v2 (2026-06-17): counters tách theo type cho 2 menu khác nhau
+  const [salesSubmit, setSalesSubmit] = useState(0);
+  const [salesReview, setSalesReview] = useState(0);
   const [bizItems, setBizItems] = useState<NotiItem[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -341,7 +351,17 @@ export function NotiCountsProvider({ children }: { children: ReactNode }) {
           where('actionStatus', '==', 'pending'),
           fbLimit(100),
         );
-        unsubNoti = onSnapshot(q, () => {
+        unsubNoti = onSnapshot(q, (snap) => {
+          // Sales v2 counters: derive trực tiếp từ snapshot (no extra endpoint).
+          let sSubmit = 0, sReview = 0;
+          snap.forEach((d) => {
+            const x = d.data() as { module?: string; type?: string };
+            if (x.module !== 'sales') return;
+            if (x.type === 'sales_batch_returned') sSubmit++;
+            else if (x.type === 'sales_batch_submitted') sReview++;
+          });
+          setSalesSubmit(sSubmit);
+          setSalesReview(sReview);
           // Có change → trigger refetch counters. Debounce nhẹ 150ms để batch nhiều
           // doc change cùng lúc (vd: server batch persist 5 noti cho 5 user).
           if ((window as any).__notiCountsDebounce) clearTimeout((window as any).__notiCountsDebounce);
@@ -373,6 +393,8 @@ export function NotiCountsProvider({ children }: { children: ReactNode }) {
         setChecklist(0);
         setProposalsCount(0);
         setDispatchCount(0);
+        setSalesSubmit(0);
+        setSalesReview(0);
         setBizItems([]);
         prevUid = newUid;
         if (newUid) {
@@ -398,11 +420,12 @@ export function NotiCountsProvider({ children }: { children: ReactNode }) {
     return {
       chat, tasksApproval, tasksAssigned, techProposal, techTask, checklist,
       proposals, dispatch,
+      salesSubmit, salesReview,
       tasks, techWork, totalNonChat, total, items,
       loading,
       refresh: fetchBiz,
     };
-  }, [chat, chatItems, tasksApproval, tasksAssigned, techProposal, techTask, checklist, proposalsCount, dispatchCount, bizItems, loading, fetchBiz]);
+  }, [chat, chatItems, tasksApproval, tasksAssigned, techProposal, techTask, checklist, proposalsCount, dispatchCount, salesSubmit, salesReview, bizItems, loading, fetchBiz]);
 
   // ─── App badge OS + SW sync ───
   useEffect(() => {

@@ -14,6 +14,8 @@ import { COLLECTIONS } from '@/lib/firebase/collections';
 import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-auth';
 import { canAccountantReview, getScopeRole } from '@/lib/sales-v2/scope';
 import { writeSalesAudit } from '@/lib/sales-v2/audit';
+import { sendNotificationEvent } from '@/lib/firebase/noti-engine';
+import { fmtDateVi } from '@/lib/sales-v2/recipients';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -98,7 +100,28 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       changedByName: caller.actorName,
     });
 
-    // TODO Phase 3: gửi noti cho Sale "Batch đã được duyệt"
+    // V6.5 Notification (Phase 3 wire): gửi cho Sale "Batch đã duyệt"
+    try {
+      const batchSnap = await batchRef.get();
+      const batch = batchSnap.data() ?? {};
+      if (batch.saleId && batch.saleId !== caller.profile.uid) {
+        await sendNotificationEvent({
+          type: 'sales_batch_approved',
+          module: 'sales',
+          entityId: id,
+          entityCode: batch.date,
+          title: `Bảng doanh số ${fmtDateVi(batch.date)} đã đối chiếu ✓`,
+          message: `${caller.actorName} đã duyệt ${batch.totalTransactions} giao dịch (DS ${Number(batch.totalSalesAmount ?? 0).toLocaleString()}đ)`,
+          linkUrl: '/doanh-so-v2/tong-ket',
+          recipients: [batch.saleId],
+          priority: 'normal',
+          pushTag: `sales-batch-${id}`,
+        });
+      }
+    } catch (e: any) {
+      console.warn('[sales-v2/approve] noti send fail:', e?.message);
+    }
+
     // TODO Phase 4: trigger auto-link cho thanh_toan_not transactions
 
     return NextResponse.json({ ok: true });

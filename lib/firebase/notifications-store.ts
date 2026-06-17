@@ -42,6 +42,9 @@ export const ACTION_REQUIRED_TYPES = new Set<NotiType>([
   // V6.5 Phase C.1: KT events action_required
   'kt_task_assigned',          // KT viên được giao task → cần làm
   'kt_proposal_pending',       // approver cần duyệt đề xuất KT
+  // Sales v2 (2026-06-17): kế toán cần duyệt + Sale cần sửa
+  'sales_batch_submitted',     // kế toán nhận → cần đối chiếu
+  'sales_batch_returned',      // Sale nhận → cần sửa các dòng lỗi
 ]);
 
 export type NotiType =
@@ -71,9 +74,13 @@ export type NotiType =
   | 'kt_report_created'
   | 'kt_proposal_pending'
   | 'kt_status_changed'
-  | 'kt_proposal_decided';
+  | 'kt_proposal_decided'
+  // Sales v2 (2026-06-17): daily batch workflow
+  | 'sales_batch_submitted'    // → kế toán cơ sở (action_required)
+  | 'sales_batch_approved'     // → Sale (informational)
+  | 'sales_batch_returned';    // → Sale (action_required)
 
-export type NotiModule = 'proposal' | 'dispatch' | 'chat' | 'kt';
+export type NotiModule = 'proposal' | 'dispatch' | 'chat' | 'kt' | 'sales';
 export type NotiPriority = 'low' | 'normal' | 'high' | 'urgent';
 export type NotiActionStatus = 'pending' | 'done' | 'dismissed';
 

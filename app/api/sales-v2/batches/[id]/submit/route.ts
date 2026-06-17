@@ -11,6 +11,9 @@ import { getFirebaseAdminDb } from '@/lib/firebase/admin';
 import { COLLECTIONS } from '@/lib/firebase/collections';
 import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-auth';
 import { canSaleEnter } from '@/lib/sales-v2/scope';
+import { sendNotificationEvent } from '@/lib/firebase/noti-engine';
+import { resolveAccountantsByBranch, fmtDateVi } from '@/lib/sales-v2/recipients';
+import { branchName } from '@/lib/branches';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -87,10 +90,32 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       return NextResponse.json({ error: result.error }, { status: result.status });
     }
 
-    // TODO Phase 3: gửi notification cho kế toán cơ sở
-    // import { sendNotificationEvent } from '@/lib/firebase/noti-engine';
-    // await sendNotificationEvent({ type: 'sales_batch_submitted', ... });
-    void FieldValue; // silence unused import warning (sẽ dùng Phase 2)
+    // V6.5 Notification (Phase 3 wire 2026-06-17): gửi cho kế toán cơ sở
+    void FieldValue; // silence import
+    try {
+      // Re-fetch batch để có thông tin sau update
+      const batchSnap = await batchRef.get();
+      const batch = batchSnap.data() ?? {};
+      const branchId = String(batch.branchId ?? '');
+      const accountantUids = await resolveAccountantsByBranch(branchId);
+      if (accountantUids.length > 0) {
+        await sendNotificationEvent({
+          type: 'sales_batch_submitted',
+          module: 'sales',
+          entityId: id,
+          entityCode: batch.date,
+          title: `${batch.saleName} gửi đối chiếu ${fmtDateVi(batch.date)}`,
+          message: `${batch.totalTransactions} giao dịch · DS ${Number(batch.totalSalesAmount ?? 0).toLocaleString()}đ — cần đối chiếu (${branchName(branchId)})`,
+          linkUrl: '/doanh-so-v2/doi-chieu',
+          recipients: accountantUids,
+          priority: 'high',
+          pushTag: `sales-batch-${id}`,
+        });
+      }
+    } catch (e: any) {
+      console.warn('[sales-v2/submit] noti send fail:', e?.message);
+      // KHÔNG fail flow nếu noti lỗi — Sale vẫn submit thành công
+    }
 
     return NextResponse.json({ ok: true });
   } catch (err: any) {

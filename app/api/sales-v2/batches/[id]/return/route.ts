@@ -13,6 +13,8 @@ import { COLLECTIONS } from '@/lib/firebase/collections';
 import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-auth';
 import { canAccountantReview, getScopeRole } from '@/lib/sales-v2/scope';
 import { writeSalesAudit } from '@/lib/sales-v2/audit';
+import { sendNotificationEvent } from '@/lib/firebase/noti-engine';
+import { fmtDateVi } from '@/lib/sales-v2/recipients';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -96,7 +98,30 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       reason: generalReason || null,
     });
 
-    // TODO Phase 3: gửi noti cho Sale "Bảng bị trả lại: <reason>"
+    // V6.5 Notification (Phase 3 wire): gửi cho Sale "Bảng bị trả lại"
+    try {
+      const batchSnap = await batchRef.get();
+      const batch = batchSnap.data() ?? {};
+      if (batch.saleId && batch.saleId !== caller.profile.uid) {
+        const rejCount = result.rejectedCount ?? 0;
+        await sendNotificationEvent({
+          type: 'sales_batch_returned',
+          module: 'sales',
+          entityId: id,
+          entityCode: batch.date,
+          title: `Bảng ${fmtDateVi(batch.date)} bị trả lại ✗`,
+          message: rejCount > 0
+            ? `${caller.actorName} trả lại — ${rejCount} giao dịch cần sửa. Mở /nhap xem chi tiết.`
+            : `${caller.actorName} trả lại bảng. Mở /nhap để xem lý do.`,
+          linkUrl: '/doanh-so-v2/nhap',
+          recipients: [batch.saleId],
+          priority: 'high',
+          pushTag: `sales-batch-${id}`,
+        });
+      }
+    } catch (e: any) {
+      console.warn('[sales-v2/return] noti send fail:', e?.message);
+    }
 
     return NextResponse.json({ ok: true });
   } catch (err: any) {

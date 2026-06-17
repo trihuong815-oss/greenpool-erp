@@ -15,6 +15,7 @@ import { ProposalsBadge } from './ProposalsBadge';
 import { ChatUnreadBadge } from './ChatUnreadBadge';
 import { ChecklistBadge } from './ChecklistBadge';
 import { TechWorkBadge } from './TechWorkBadge';
+import { SalesV2Badge } from './SalesV2Badge';
 import { useMobileNav } from './MobileNavContext';
 import { useCommandPalette } from './ui/CommandPalette';
 
@@ -212,6 +213,8 @@ export function Sidebar({ userName, userRole, roleCode, avatarUrl, menuOverrides
                       {item.route === 'tin-nhan' && <ChatUnreadBadge />}
                       {item.route === 'checklist-v2' && <ChecklistBadge />}
                       {item.route === 'ky-thuat' && <TechWorkBadge />}
+                      {item.route === 'doanh-so-v2/nhap' && <SalesV2Badge kind="submit" />}
+                      {item.route === 'doanh-so-v2/doi-chieu' && <SalesV2Badge kind="review" />}
                     </Link>
                   </li>
                 );
