@@ -11,8 +11,9 @@ interface BranchRef { id: string; name: string; }
 interface Props { allowedBranches: BranchRef[]; }
 
 // ===== Helpers VND format =====
-function formatVND(n: number): string {
-  return n.toLocaleString('vi-VN');
+function formatVND(n: number | null | undefined): string {
+  // Defensive: package có thể có defaultPrice=undefined (vd "PT Gym tùy chỉnh")
+  return Number(n ?? 0).toLocaleString('vi-VN');
 }
 function parseVNDInput(s: string): number {
   // Strip non-digit. Cap at 999 tỷ.
@@ -264,7 +265,7 @@ export function PackagesClient({ allowedBranches }: Props) {
                         <td className="p-1 font-medium text-slate-800">{p.name}</td>
                         <td className="p-1 text-right tabular-nums">
                           {showPrice
-                            ? p.defaultPrice.toLocaleString('vi-VN')
+                            ? (p.defaultPrice ?? 0).toLocaleString('vi-VN')
                             : <span className="text-slate-300 select-none">•••</span>}
                         </td>
                         <td className="p-1 text-center">

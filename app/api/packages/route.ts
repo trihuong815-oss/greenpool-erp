@@ -16,6 +16,10 @@ function serialize(id: string, data: Record<string, any>): Record<string, any> {
     if (v && typeof v === 'object' && typeof v.toDate === 'function') out[k] = v.toDate().toISOString();
     else out[k] = v;
   }
+  // Defensive normalize (2026-06-17): tránh undefined gây crash UI .toLocaleString()/.map()
+  out.defaultPrice = Number(data.defaultPrice ?? 0);
+  out.sortOrder = Number(data.sortOrder ?? 0);
+  out.active = data.active !== false;
   return out;
 }
 
