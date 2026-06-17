@@ -24,7 +24,7 @@ export default function PackagePicker({ packages, value, disabled, onChange }: P
   const inputRef = useRef<HTMLInputElement>(null);
 
   const selected = useMemo(() => packages.find((p) => p.id === value) ?? null, [packages, value]);
-  const displayValue = open ? query : (selected ? `${selected.code} ${selected.name}` : '');
+  const displayValue = open ? query : (selected ? selected.name : '');
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -102,7 +102,7 @@ export default function PackagePicker({ packages, value, disabled, onChange }: P
       </div>
 
       {open && results.length > 0 && (
-        <div className="absolute z-30 mt-1 left-0 right-0 max-h-64 overflow-y-auto rounded-lg bg-white shadow-lg ring-1 ring-slate-200">
+        <div className="absolute z-30 mt-1 left-0 min-w-[320px] max-w-[420px] max-h-72 overflow-y-auto rounded-lg bg-white shadow-lg ring-1 ring-slate-200">
           {results.map((p, i) => {
             const isHighlight = i === highlightIdx;
             const isSelected = p.id === value;
@@ -110,24 +110,23 @@ export default function PackagePicker({ packages, value, disabled, onChange }: P
               <button
                 type="button"
                 key={p.id}
-                onMouseDown={(e) => e.preventDefault()} // tránh blur input trước click
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => handleSelect(p)}
                 onMouseEnter={() => setHighlightIdx(i)}
                 className={`w-full px-3 py-2 text-left text-xs flex items-center gap-2 ${
                   isHighlight ? 'bg-emerald-50' : 'bg-white'
                 }`}
               >
-                <span className="shrink-0 inline-flex items-center justify-center min-w-[44px] px-1.5 py-0.5 rounded font-bold text-[10px] bg-emerald-100 text-emerald-700">
-                  {p.code}
+                {/* Chỉ tên gói (full, wrap nếu dài) — không hiển thị tên nhóm + giá tiền */}
+                <span className="flex-1 text-slate-700 font-medium whitespace-normal break-words leading-snug">
+                  {p.name}
                 </span>
-                <span className="flex-1 truncate text-slate-700 font-medium">{p.name}</span>
-                <span className="shrink-0 tabular-nums text-slate-500">{p.defaultPrice.toLocaleString()}đ</span>
                 {p.isChildPackage && (
                   <span className="shrink-0 text-[9px] uppercase font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
                     Trẻ em
                   </span>
                 )}
-                {isSelected && <Check size={12} className="text-emerald-600" />}
+                {isSelected && <Check size={12} className="text-emerald-600 shrink-0" />}
               </button>
             );
           })}
@@ -135,7 +134,7 @@ export default function PackagePicker({ packages, value, disabled, onChange }: P
       )}
 
       {open && results.length === 0 && (
-        <div className="absolute z-30 mt-1 left-0 right-0 rounded-lg bg-white shadow-lg ring-1 ring-slate-200 px-3 py-2 text-xs text-slate-400">
+        <div className="absolute z-30 mt-1 left-0 min-w-[320px] rounded-lg bg-white shadow-lg ring-1 ring-slate-200 px-3 py-2 text-xs text-slate-400">
           Không tìm thấy gói khớp <strong>"{query}"</strong>
         </div>
       )}
