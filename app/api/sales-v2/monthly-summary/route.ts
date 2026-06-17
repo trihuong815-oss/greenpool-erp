@@ -93,6 +93,10 @@ export async function GET(req: NextRequest) {
     const byPackage: Record<string, NamedBucket> = {};
     const bySale: Record<string, NamedBucket> = {};
     const byBranch: Record<string, NamedBucket> = {};
+    // V6 PT (2026-06-17): gói tính theo buổi. Aggregate riêng để báo cáo dịch vụ buổi.
+    // Chỉ tính tx có packageIsCustomQuantity=true, KHÔNG bao gồm thanh_toan_not.
+    const ptTotals = { transactions: 0, sessions: 0, sales: 0 };
+    const ptByPackage: Record<string, NamedBucket & { sessions: number; unitName: string }> = {};
 
     for (const d of snap.docs) {
       const x = d.data() as Record<string, any>;
@@ -134,6 +138,25 @@ export async function GET(req: NextRequest) {
           byPackage[pid].sales += pv;
           byPackage[pid].collected += ct;
         }
+        // V6 PT: gói buổi → aggregate riêng. Snapshot ở tx doc (packageIsCustomQuantity)
+        // → đảm bảo invariant kể cả khi admin tắt toggle gói sau khi tx đã tạo.
+        if (x.packageIsCustomQuantity === true) {
+          const sessions = Number(x.quantity ?? 0);
+          ptTotals.transactions += 1;
+          ptTotals.sessions += sessions;
+          ptTotals.sales += pv;
+          if (pid) {
+            if (!ptByPackage[pid]) ptByPackage[pid] = {
+              name: String(x.packageName ?? ''),
+              count: 0, sessions: 0, sales: 0, collected: 0,
+              unitName: String(x.packageUnitName ?? '') || 'buổi',
+            };
+            ptByPackage[pid].count += 1;
+            ptByPackage[pid].sessions += sessions;
+            ptByPackage[pid].sales += pv;
+            ptByPackage[pid].collected += ct;
+          }
+        }
       }
 
       // By sale + branch: count tất cả tx (kể cả nốt — vì nốt cũng là thực thu)
@@ -164,6 +187,9 @@ export async function GET(req: NextRequest) {
       byPackage,
       bySale: role === 'sale' ? {} : bySale, // Sale không cần thấy người khác
       byBranch: role === 'top' ? byBranch : {},
+      // V6 PT (2026-06-17): block riêng cho gói dịch vụ buổi
+      ptTotals,
+      ptByPackage,
     });
   } catch (err: any) {
     if (err instanceof UnauthorizedError) {

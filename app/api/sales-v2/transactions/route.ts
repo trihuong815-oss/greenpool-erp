@@ -73,11 +73,14 @@ export async function POST(req: NextRequest) {
     const packageId = String(body.packageId ?? '');
     const transactionType = body.transactionType as TransactionType;
     const paymentMethod = body.paymentMethod as PaymentMethod;
-    const packageValue = Number(body.packageValue ?? 0);
+    const inputPackageValue = Number(body.packageValue ?? 0);
     const collectedToday = Number(body.collectedToday ?? 0);
     const receiptNo = body.receiptNo ? String(body.receiptNo).trim().slice(0, 50) : null;
     const contractNo = body.contractNo ? String(body.contractNo).trim().slice(0, 50) : null;
     const note = body.note ? String(body.note).slice(0, 500) : null;
+    // V6 (PT): nếu gói tính theo buổi → Sale gửi quantity + unitPrice, server auto packageValue
+    const inputQuantity = body.quantity != null ? Number(body.quantity) : null;
+    const inputUnitPrice = body.unitPrice != null ? Number(body.unitPrice) : null;
 
     if (!customerName) return NextResponse.json({ error: 'Thiếu tên khách hàng' }, { status: 400 });
     if (!phone) return NextResponse.json({ error: 'Thiếu SĐT' }, { status: 400 });
@@ -86,11 +89,8 @@ export async function POST(req: NextRequest) {
     if (!packageId) return NextResponse.json({ error: 'Thiếu gói' }, { status: 400 });
     if (!VALID_TXN_TYPES.has(transactionType)) return NextResponse.json({ error: 'Sai loại giao dịch' }, { status: 400 });
     if (!VALID_PAY.has(paymentMethod)) return NextResponse.json({ error: 'Sai hình thức thu' }, { status: 400 });
-    if (!Number.isFinite(packageValue) || packageValue < 0) return NextResponse.json({ error: 'Giá trị gói không hợp lệ' }, { status: 400 });
+    if (!Number.isFinite(inputPackageValue) || inputPackageValue < 0) return NextResponse.json({ error: 'Giá trị gói không hợp lệ' }, { status: 400 });
     if (!Number.isFinite(collectedToday) || collectedToday < 0) return NextResponse.json({ error: 'Thu hôm nay không hợp lệ' }, { status: 400 });
-    if (collectedToday > packageValue && transactionType !== 'thanh_toan_not') {
-      return NextResponse.json({ error: 'Thu hôm nay không thể lớn hơn giá trị gói' }, { status: 400 });
-    }
     // V6 2026-06-17: validate chứng từ theo transactionType
     if (transactionType === 'dat_coc' && !receiptNo) {
       return NextResponse.json({ error: 'Đặt cọc bắt buộc nhập Số phiếu thu' }, { status: 400 });
@@ -116,11 +116,30 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Gói trẻ em bắt buộc Người giám hộ' }, { status: 400 });
     }
 
+    // V6 PT: nếu gói isCustomQuantity → server enforce packageValue = quantity × unitPrice
+    let finalPackageValue = inputPackageValue;
+    let finalQuantity: number | null = null;
+    let finalUnitPrice: number | null = null;
+    if (pkg.isCustomQuantity && transactionType !== 'thanh_toan_not') {
+      if (inputQuantity == null || !Number.isFinite(inputQuantity) || inputQuantity <= 0) {
+        return NextResponse.json({ error: `Gói tính theo ${pkg.unitName ?? 'buổi'} — phải nhập số ${pkg.unitName ?? 'buổi'}` }, { status: 400 });
+      }
+      if (inputUnitPrice == null || !Number.isFinite(inputUnitPrice) || inputUnitPrice < 0) {
+        return NextResponse.json({ error: 'Đơn giá / buổi không hợp lệ' }, { status: 400 });
+      }
+      finalQuantity = inputQuantity;
+      finalUnitPrice = inputUnitPrice;
+      finalPackageValue = inputQuantity * inputUnitPrice;
+    }
+    if (collectedToday > finalPackageValue && transactionType !== 'thanh_toan_not') {
+      return NextResponse.json({ error: 'Thu hôm nay không thể lớn hơn giá trị gói' }, { status: 400 });
+    }
+
     // 2026-06-17: tx 'thanh_toan_not' = trả nốt công nợ cũ → KHÔNG tạo doanh số mới
     // → packageValue effective = 0 (không cộng vào doanh số batch), debt = 0.
     // Số tiền nốt chỉ ghi nhận ở collectedToday + sẽ link với tx cũ qua auto-match.
     const isThanhToanNot = transactionType === 'thanh_toan_not';
-    const effectivePackageValue = isThanhToanNot ? 0 : packageValue;
+    const effectivePackageValue = isThanhToanNot ? 0 : finalPackageValue;
     const debtAmount = isThanhToanNot ? 0 : Math.max(0, effectivePackageValue - collectedToday);
     const now = Timestamp.now();
     const matchStatus: MatchStatus = isThanhToanNot ? 'pending' : 'not_applicable';
@@ -150,6 +169,10 @@ export async function POST(req: NextRequest) {
       debtAmount,
       // BUG-1 audit fix: snapshot debt cho 'dat_coc' (không đổi khi auto-match link)
       originalDebt: transactionType === 'dat_coc' ? debtAmount : 0,
+      quantity: finalQuantity,
+      unitPrice: finalUnitPrice,
+      packageIsCustomQuantity: pkg.isCustomQuantity === true,
+      packageUnitName: pkg.unitName ?? '',
       receiptNo,
       contractNo,
       note,

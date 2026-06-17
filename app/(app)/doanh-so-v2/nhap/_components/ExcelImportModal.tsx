@@ -181,9 +181,15 @@ export default function ExcelImportModal({ packages, onClose, onImport }: Props)
       lr.packageName = r.resolvedPackage!.name;
       lr.serviceGroup = r.resolvedPackage!.serviceGroup;
       lr.isChildPackage = r.resolvedPackage!.isChildPackage;
+      // V6 PT: import từ Excel mà gói là PT → set flag, nhưng quantity/unitPrice
+      // không có trong file Excel cũ → giữ rỗng để validateRow chặn POST (Sale phải
+      // mở row sửa, nhập số buổi). Tránh import nhầm = mất doanh số.
+      lr.packageIsCustomQuantity = r.resolvedPackage!.isCustomQuantity === true;
       lr.transactionType = r.resolvedTxnType!;
       lr.paymentMethod = r.resolvedPayMethod!;
-      lr.packageValue = r.resolvedTxnType === 'thanh_toan_not' ? '' : String(r.packageValue);
+      lr.packageValue = r.resolvedTxnType === 'thanh_toan_not' || r.resolvedPackage!.isCustomQuantity
+        ? ''
+        : String(r.packageValue);
       lr.collectedToday = String(r.collectedToday);
       lr.receiptNo = r.receiptNo;
       lr.contractNo = r.contractNo;

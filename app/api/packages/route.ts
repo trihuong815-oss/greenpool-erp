@@ -20,6 +20,10 @@ function serialize(id: string, data: Record<string, any>): Record<string, any> {
   out.defaultPrice = Number(data.defaultPrice ?? 0);
   out.sortOrder = Number(data.sortOrder ?? 0);
   out.active = data.active !== false;
+  // V6 PT (2026-06-17): gói tính theo buổi
+  out.isCustomQuantity = data.isCustomQuantity === true;
+  out.unitName = data.unitName ? String(data.unitName) : '';
+  out.defaultUnitPrice = data.defaultUnitPrice != null ? Number(data.defaultUnitPrice) : 0;
   return out;
 }
 
@@ -65,12 +69,21 @@ export async function POST(req: NextRequest) {
     const groupId: string = body?.groupId;
     const defaultPrice: number = Number(body?.defaultPrice ?? 0);
     const sortOrder: number = Number(body?.sortOrder ?? 999);
+    // V6 PT (2026-06-17): gói tính theo buổi
+    const isCustomQuantity: boolean = body?.isCustomQuantity === true;
+    const unitName: string = isCustomQuantity
+      ? (String(body?.unitName ?? '').trim() || 'buổi').slice(0, 20)
+      : '';
+    const defaultUnitPrice: number = isCustomQuantity ? Number(body?.defaultUnitPrice ?? 0) : 0;
 
     if (!name || !branchId || !groupId) {
       return NextResponse.json({ error: 'Thiếu name/branchId/groupId' }, { status: 400 });
     }
     if (defaultPrice < 0 || !Number.isFinite(defaultPrice)) {
       return NextResponse.json({ error: 'defaultPrice không hợp lệ' }, { status: 400 });
+    }
+    if (isCustomQuantity && (defaultUnitPrice < 0 || !Number.isFinite(defaultUnitPrice))) {
+      return NextResponse.json({ error: 'defaultUnitPrice không hợp lệ' }, { status: 400 });
     }
 
     if (!canCreatePackage(caller.profile, { branchId })) {
@@ -88,6 +101,7 @@ export async function POST(req: NextRequest) {
     const now = new Date();
     const ref = await db.collection(COL).add({
       name, groupId, branchId, defaultPrice, sortOrder, active: true,
+      isCustomQuantity, unitName, defaultUnitPrice,
       createdAt: now, createdBy: caller.profile.uid,
       updatedAt: now, updatedBy: caller.profile.uid,
     });
@@ -99,7 +113,7 @@ export async function POST(req: NextRequest) {
       userId: caller.profile.uid,
       branchId,
       before: null,
-      after: { id: ref.id, name, groupId, defaultPrice, sortOrder },
+      after: { id: ref.id, name, groupId, defaultPrice, sortOrder, isCustomQuantity, unitName, defaultUnitPrice },
       actorName: caller.actorName,
       actorRole: caller.actorRole,
       source: 'api',

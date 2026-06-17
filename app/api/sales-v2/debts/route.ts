@@ -66,6 +66,11 @@ export async function GET(req: NextRequest) {
           packageValue: Number(x.packageValue ?? 0),
           collectedToday: Number(x.collectedToday ?? 0),
           debtAmount: Number(x.debtAmount ?? 0),
+          // V6 PT (2026-06-17): bao gồm thông tin gói buổi cho hiển thị
+          packageIsCustomQuantity: x.packageIsCustomQuantity === true,
+          packageUnitName: String(x.packageUnitName ?? ''),
+          quantity: x.quantity != null ? Number(x.quantity) : null,
+          unitPrice: x.unitPrice != null ? Number(x.unitPrice) : null,
           receiptNo: x.receiptNo ?? null,
           contractNo: x.contractNo ?? null,
           saleId: String(x.saleId ?? ''),

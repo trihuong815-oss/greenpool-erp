@@ -25,6 +25,7 @@ const VALID_PAY = new Set<PaymentMethod>(['tien_mat', 'chuyen_khoan', 'pos']);
 const EDITABLE_FIELDS = new Set([
   'customerName', 'phone', 'guardianName', 'source', 'packageId',
   'transactionType', 'paymentMethod', 'packageValue', 'collectedToday',
+  'quantity', 'unitPrice',
   'receiptNo', 'contractNo', 'note',
 ]);
 
@@ -116,6 +117,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     // Nếu đổi packageId → re-resolve package info
+    let resolvedIsCustomQty: boolean | undefined;
     if ('packageId' in updates) {
       const pkg = await getPackageById(String(updates.packageId));
       if (!pkg) return NextResponse.json({ error: 'Gói không tồn tại' }, { status: 400 });
@@ -124,16 +126,41 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       updates.packageName = pkg.name;
       updates.serviceGroup = pkg.serviceGroup;
       updates.isChildPackage = pkg.isChildPackage;
+      updates.packageIsCustomQuantity = pkg.isCustomQuantity === true;
+      updates.packageUnitName = pkg.unitName ?? '';
+      resolvedIsCustomQty = pkg.isCustomQuantity;
+    }
+    // Validate + sanitize quantity/unitPrice
+    if ('quantity' in updates) {
+      const q = Number(updates.quantity);
+      updates.quantity = Number.isFinite(q) && q > 0 ? q : null;
+    }
+    if ('unitPrice' in updates) {
+      const u = Number(updates.unitPrice);
+      updates.unitPrice = Number.isFinite(u) && u >= 0 ? u : null;
     }
 
     // 2026-06-17: 'thanh_toan_not' = trả nốt → packageValue effective = 0 + debt = 0.
     const finalTxnType = 'transactionType' in updates ? updates.transactionType : tx.transactionType;
     const finalCollected = 'collectedToday' in updates ? updates.collectedToday : Number(tx.collectedToday ?? 0);
+    // PT: auto-compute packageValue khi gói tính theo buổi (resolvedIsCustomQty hoặc đã lưu)
+    const isCustomQty = resolvedIsCustomQty ?? (tx.packageIsCustomQuantity === true);
+    const finalQuantity = 'quantity' in updates ? updates.quantity : (tx.quantity ?? null);
+    const finalUnitPrice = 'unitPrice' in updates ? updates.unitPrice : (tx.unitPrice ?? null);
     let finalPackageValue: number;
     if (finalTxnType === 'thanh_toan_not') {
       finalPackageValue = 0;
-      updates.packageValue = 0; // force ghi đè dù user gửi giá trị khác
+      updates.packageValue = 0;
       updates.debtAmount = 0;
+    } else if (isCustomQty) {
+      // V6 PT: ALWAYS auto-compute (kể cả khi chưa đủ qty/up → packageValue=0).
+      // KHÔNG bao giờ fallback về tx.packageValue stale (đề phòng đổi non-PT → PT
+      // mà chưa nhập đủ → stale data gây sai aggregation/debt).
+      const q = finalQuantity != null ? Number(finalQuantity) : 0;
+      const u = finalUnitPrice != null ? Number(finalUnitPrice) : 0;
+      finalPackageValue = (q > 0 && u >= 0) ? q * u : 0;
+      updates.packageValue = finalPackageValue;
+      updates.debtAmount = Math.max(0, finalPackageValue - finalCollected);
     } else {
       finalPackageValue = 'packageValue' in updates ? updates.packageValue : Number(tx.packageValue ?? 0);
       updates.debtAmount = Math.max(0, finalPackageValue - finalCollected);

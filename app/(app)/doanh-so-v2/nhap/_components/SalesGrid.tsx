@@ -27,10 +27,15 @@ export interface LocalRow {
   packageName: string;
   serviceGroup: string;
   isChildPackage: boolean;
+  // V6 2026-06-17 PT: snapshot từ pkg.isCustomQuantity khi chọn gói (resolve client-side)
+  packageIsCustomQuantity: boolean;
   transactionType: TransactionType | null;
   paymentMethod: PaymentMethod | null;
   packageValue: string;     // dạng string để input hiển thị OK
   collectedToday: string;
+  // V6 PT: số buổi + đơn giá / buổi. Chỉ dùng khi packageIsCustomQuantity=true.
+  quantity: string;
+  unitPrice: string;
   receiptNo: string;
   contractNo: string;
   note: string;
@@ -51,10 +56,13 @@ export function makeEmptyRow(): LocalRow {
     packageName: '',
     serviceGroup: '',
     isChildPackage: false,
+    packageIsCustomQuantity: false,
     transactionType: null,
     paymentMethod: null,
     packageValue: '',
     collectedToday: '',
+    quantity: '',
+    unitPrice: '',
     receiptNo: '',
     contractNo: '',
     note: '',
@@ -78,9 +86,23 @@ export function isRowEmpty(r: LocalRow): boolean {
     && !r.paymentMethod
     && !r.packageValue.trim()
     && !r.collectedToday.trim()
+    && !r.quantity.trim()
+    && !r.unitPrice.trim()
     && !r.receiptNo.trim()
     && !r.contractNo.trim()
     && !r.note.trim();
+}
+
+/** Tính packageValue effective cho 1 row — auto-compute nếu PT, ngược lại lấy field. */
+export function effectivePackageValue(r: LocalRow): number {
+  if (r.transactionType === 'thanh_toan_not') return 0;
+  if (r.packageIsCustomQuantity) {
+    const q = Number(r.quantity);
+    const u = Number(r.unitPrice);
+    if (!Number.isFinite(q) || !Number.isFinite(u) || q <= 0 || u < 0) return 0;
+    return q * u;
+  }
+  return Number(r.packageValue) || 0;
 }
 
 /** Validate 1 local row đủ điều kiện POST chưa. */
@@ -105,6 +127,19 @@ export function validateRow(r: LocalRow): { ok: true } | { ok: false; error: str
   // 'thanh_toan_not' = trả nốt nợ cũ → chỉ cần collectedToday > 0, packageValue ignore
   if (r.transactionType === 'thanh_toan_not') {
     if (ct <= 0) return { ok: false, error: 'Thanh toán nốt phải có số tiền thu' };
+    return { ok: true };
+  }
+  // V6 PT: gói tính theo buổi → bắt buộc số buổi + đơn giá
+  if (r.packageIsCustomQuantity) {
+    const q = Number(r.quantity);
+    if (!Number.isFinite(q) || q <= 0) return { ok: false, error: 'Gói PT — phải nhập số buổi (> 0)' };
+    const u = Number(r.unitPrice);
+    if (!Number.isFinite(u) || u < 0) return { ok: false, error: 'Gói PT — đơn giá / buổi không hợp lệ' };
+    const pv = q * u;
+    if (pv <= 0) return { ok: false, error: 'Giá trị gói (số buổi × đơn giá) phải > 0' };
+    if (r.transactionType === 'thanh_toan_full' && ct < pv) {
+      return { ok: false, error: 'Thanh toán full phải thu đủ giá trị gói' };
+    }
     return { ok: true };
   }
   const pv = Number(r.packageValue);
@@ -166,7 +201,7 @@ export default function SalesGrid({
   return (
     <div className="card overflow-hidden p-0">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[2160px] text-sm">
+        <table className="w-full min-w-[2400px] text-sm">
           <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
             <tr>
               <Th width={40}>#</Th>
@@ -179,6 +214,8 @@ export default function SalesGrid({
               <Th width={130}>HT thu *</Th>
               <Th width={120}>Số phiếu thu</Th>
               <Th width={120}>Số HĐ</Th>
+              <Th width={90} align="right">Số buổi</Th>
+              <Th width={130} align="right">Đơn giá / buổi</Th>
               <Th width={120} align="right">Giá trị gói *</Th>
               <Th width={120} align="right">Thu hôm nay *</Th>
               <Th width={120} align="right">Công nợ</Th>
@@ -257,7 +294,13 @@ function SavedRow({ idx, row, packages, canEdit, batchStatus, onUpdate, onRemove
   onUpdate: (patch: Partial<SalesTransaction>) => void;
   onRemove: () => void;
 }) {
-  const debt = Math.max(0, row.packageValue - row.collectedToday);
+  // PT mode: snapshot từ doc (packageIsCustomQuantity). Doc cũ chưa có field → false.
+  const isPT = row.packageIsCustomQuantity === true;
+  const qty = row.quantity ?? 0;
+  const up = row.unitPrice ?? 0;
+  // PT: pv tính lại từ qty/up (tránh stale khi user vừa edit qty, server PATCH chưa response)
+  const effectivePv = row.transactionType === 'thanh_toan_not' ? 0 : (isPT ? qty * up : row.packageValue);
+  const debt = Math.max(0, effectivePv - row.collectedToday);
   // V6 review status visual indicator: chỉ hiển thị badge khi batch returned
   const showBadge = batchStatus === 'returned';
   const rs = row.reviewStatus ?? 'pending';
@@ -311,13 +354,24 @@ function SavedRow({ idx, row, packages, canEdit, batchStatus, onUpdate, onRemove
           disabled={!canEdit}
           onChange={(pkg) => {
             if (pkg) {
-              onUpdate({
+              const patch: Partial<SalesTransaction> = {
                 packageId: pkg.id,
                 packageCode: pkg.code,
                 packageName: pkg.name,
                 serviceGroup: pkg.serviceGroup,
                 isChildPackage: pkg.isChildPackage,
-              });
+                packageIsCustomQuantity: pkg.isCustomQuantity === true,
+              };
+              // PT → seed unitPrice from default nếu doc chưa có; clear quantity
+              if (pkg.isCustomQuantity) {
+                patch.unitPrice = up > 0 ? up : (pkg.defaultUnitPrice ?? null);
+                patch.quantity = null;
+              } else {
+                // Không phải PT → clear PT fields để server không auto-compute
+                patch.quantity = null;
+                patch.unitPrice = null;
+              }
+              onUpdate(patch);
             }
           }}
         />
@@ -360,8 +414,27 @@ function SavedRow({ idx, row, packages, canEdit, batchStatus, onUpdate, onRemove
         />
       </Td>
       <Td align="right">
+        {isPT && row.transactionType !== 'thanh_toan_not'
+          ? <NumberCell value={qty} disabled={!canEdit} onCommit={(v) => onUpdate({ quantity: v > 0 ? v : null })} />
+          : <span className="text-slate-300 text-xs">—</span>
+        }
+      </Td>
+      <Td align="right">
+        {isPT && row.transactionType !== 'thanh_toan_not'
+          ? <NumberCell value={up} disabled={!canEdit} onCommit={(v) => onUpdate({ unitPrice: v >= 0 ? v : null })} />
+          : <span className="text-slate-300 text-xs">—</span>
+        }
+      </Td>
+      <Td align="right">
         {row.transactionType === 'thanh_toan_not' ? (
           <span className="text-slate-300 text-xs" title="Thanh toán nốt — không tính doanh số mới">—</span>
+        ) : isPT ? (
+          <span
+            className="block text-right tabular-nums text-slate-700 font-medium px-2 py-1 bg-slate-50 rounded"
+            title="Auto = Số buổi × Đơn giá / buổi"
+          >
+            {(qty * up || 0).toLocaleString()}
+          </span>
         ) : (
           <NumberCell value={row.packageValue} disabled={!canEdit} onCommit={(v) => onUpdate({ packageValue: v })} />
         )}
@@ -398,7 +471,11 @@ function LocalRowItem({ idx, row, packages, canEdit, onUpdate, onRemove, autoFoc
 }) {
   // 'thanh_toan_not' = trả nốt → KHÔNG tính doanh số mới + debt = 0 (sẽ link gd cũ)
   const isThanhToanNot = row.transactionType === 'thanh_toan_not';
-  const pv = isThanhToanNot ? 0 : (Number(row.packageValue) || 0);
+  const isPT = row.packageIsCustomQuantity;
+  const qty = Number(row.quantity) || 0;
+  const up = Number(row.unitPrice) || 0;
+  // PT: pv = qty × up (computed). Non-PT: lấy từ field.
+  const pv = isThanhToanNot ? 0 : (isPT ? qty * up : (Number(row.packageValue) || 0));
   const ct = Number(row.collectedToday) || 0;
   const debt = isThanhToanNot ? 0 : Math.max(0, pv - ct);
   const rowEmpty = useMemo(() => isRowEmpty(row), [row]);
@@ -446,17 +523,39 @@ function LocalRowItem({ idx, row, packages, canEdit, onUpdate, onRemove, autoFoc
           disabled={!canEdit}
           onChange={async (pkg) => {
             if (!pkg) {
-              onUpdate({ packageId: null, packageCode: '', packageName: '', serviceGroup: '', isChildPackage: false });
+              onUpdate({
+                packageId: null, packageCode: '', packageName: '', serviceGroup: '',
+                isChildPackage: false, packageIsCustomQuantity: false,
+                quantity: '', unitPrice: '',
+              });
               return;
             }
+            // V6 PT: gói tính theo buổi → KHÔNG dùng packageValue/defaultPrice trực tiếp.
+            // Seed unitPrice từ pkg.defaultUnitPrice nếu user chưa nhập. Clear packageValue (auto).
+            if (pkg.isCustomQuantity) {
+              const seededUnitPrice = (Number(row.unitPrice) || 0) > 0
+                ? row.unitPrice
+                : (pkg.defaultUnitPrice != null ? String(pkg.defaultUnitPrice) : '');
+              onUpdate({
+                packageId: pkg.id,
+                packageCode: pkg.code,
+                packageName: pkg.name,
+                serviceGroup: pkg.serviceGroup,
+                isChildPackage: pkg.isChildPackage,
+                packageIsCustomQuantity: true,
+                packageValue: '', // auto-compute, không dùng
+                unitPrice: seededUnitPrice,
+                // Giữ nguyên row.quantity nếu user đã nhập (vd đổi gói PT khác)
+              });
+              return;
+            }
+            // Gói cố định: logic gốc + clear PT fields
             const currentPv = Number(row.packageValue) || 0;
             const newPv = pkg.defaultPrice;
-            // Nếu chưa có giá hoặc giá khớp → set/giữ nguyên không hỏi
             let packageValueToSet = row.packageValue;
             if (!currentPv && newPv > 0) {
               packageValueToSet = String(newPv);
             } else if (currentPv > 0 && newPv > 0 && currentPv !== newPv) {
-              // Đổi gói có defaultPrice khác giá hiện tại → hỏi
               const ok = await showConfirm({
                 title: 'Cập nhật giá theo gói mới?',
                 description: `Giá hiện tại: ${currentPv.toLocaleString()}đ\nGiá mặc định của "${pkg.name}": ${newPv.toLocaleString()}đ`,
@@ -471,7 +570,10 @@ function LocalRowItem({ idx, row, packages, canEdit, onUpdate, onRemove, autoFoc
               packageName: pkg.name,
               serviceGroup: pkg.serviceGroup,
               isChildPackage: pkg.isChildPackage,
+              packageIsCustomQuantity: false,
               packageValue: packageValueToSet,
+              quantity: '',
+              unitPrice: '',
             });
           }}
         />
@@ -514,8 +616,27 @@ function LocalRowItem({ idx, row, packages, canEdit, onUpdate, onRemove, autoFoc
         />
       </Td>
       <Td align="right">
-        {row.transactionType === 'thanh_toan_not' ? (
+        {isPT && !isThanhToanNot
+          ? <NumberCell value={qty} disabled={!canEdit} onCommit={(v) => onUpdate({ quantity: v > 0 ? String(v) : '' })} />
+          : <span className="text-slate-300 text-xs">—</span>
+        }
+      </Td>
+      <Td align="right">
+        {isPT && !isThanhToanNot
+          ? <NumberCell value={up} disabled={!canEdit} onCommit={(v) => onUpdate({ unitPrice: v >= 0 ? String(v) : '' })} />
+          : <span className="text-slate-300 text-xs">—</span>
+        }
+      </Td>
+      <Td align="right">
+        {isThanhToanNot ? (
           <span className="text-slate-300 text-xs" title="Thanh toán nốt — không tính doanh số mới (sẽ link với GD cũ)">—</span>
+        ) : isPT ? (
+          <span
+            className="block text-right tabular-nums text-slate-700 font-medium px-2 py-1 bg-slate-50 rounded"
+            title="Auto = Số buổi × Đơn giá / buổi"
+          >
+            {pv.toLocaleString()}
+          </span>
         ) : (
           <NumberCell value={pv} disabled={!canEdit} onCommit={(v) => onUpdate({ packageValue: String(v) })} />
         )}

@@ -11,7 +11,7 @@ import { Plus, Save, Send, AlertCircle, Loader2, FileSpreadsheet } from 'lucide-
 import type { SalesDailyBatch, SalesTransaction, SalesTransactionInput, BatchStatus } from '@/lib/types/sales-v2';
 import type { SalesV2Package } from '@/lib/sales-v2/packages';
 import type { BranchId } from '@/lib/branches';
-import SalesGrid, { type LocalRow, makeEmptyRow, validateRow, isRowEmpty, isValidPhone } from './_components/SalesGrid';
+import SalesGrid, { type LocalRow, makeEmptyRow, validateRow, isRowEmpty, isValidPhone, effectivePackageValue } from './_components/SalesGrid';
 import MobileNhapView from './_components/MobileNhapView';
 import ExcelImportModal from './_components/ExcelImportModal';
 import { showConfirm } from '@/components/ui/imperative-modal';
@@ -181,7 +181,9 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
     for (const lr of localRows) {
       if (isRowEmpty(lr)) continue;
       const isThanhToanNot = lr.transactionType === 'thanh_toan_not';
-      const pv = isThanhToanNot ? 0 : (Number(lr.packageValue) || 0);
+      // V6 PT: gói tính theo buổi → pv = qty × up (dùng helper effectivePackageValue
+      // để 1 nguồn duy nhất, KPI luôn khớp với server-computed sau khi POST)
+      const pv = isThanhToanNot ? 0 : effectivePackageValue(lr);
       const ct = Number(lr.collectedToday) || 0;
       sales += pv;
       collected += ct;
@@ -298,8 +300,15 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
           packageId: lr.packageId!,
           transactionType: lr.transactionType!,
           paymentMethod: lr.paymentMethod!,
-          packageValue: Number(lr.packageValue),
-          collectedToday: Number(lr.collectedToday),
+          // V6 PT: gói tính theo buổi → server auto packageValue = qty × up.
+          //  Client gửi 0 cho packageValue (server sẽ override). Non-PT: gửi field.
+          packageValue: lr.packageIsCustomQuantity ? 0 : (Number(lr.packageValue) || 0),
+          collectedToday: Number(lr.collectedToday) || 0,
+          quantity: lr.packageIsCustomQuantity ? (Number(lr.quantity) || null) : null,
+          unitPrice: lr.packageIsCustomQuantity ? (Number(lr.unitPrice) || null) : null,
+          // Chứng từ — server V6 yêu cầu theo transactionType
+          receiptNo: lr.receiptNo.trim() || null,
+          contractNo: lr.contractNo.trim() || null,
           note: lr.note || null,
         };
         const r = await fetch('/api/sales-v2/transactions', {

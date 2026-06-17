@@ -9,16 +9,24 @@ import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-aut
 import { canDeletePackage, canUpdatePackage } from '@/lib/firebase/packages-scope';
 
 const COL = COLLECTIONS.PACKAGES;
-const PATCH_FIELDS = new Set(['name', 'defaultPrice', 'sortOrder', 'active']);
+const PATCH_FIELDS = new Set([
+  'name', 'defaultPrice', 'sortOrder', 'active',
+  // V6 PT (2026-06-17): gói tính theo buổi
+  'isCustomQuantity', 'unitName', 'defaultUnitPrice',
+]);
 
 function sanitize(patch: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(patch)) {
     if (!PATCH_FIELDS.has(k)) continue;
-    if (k === 'defaultPrice') {
+    if (k === 'defaultPrice' || k === 'defaultUnitPrice') {
       const n = Number(v);
       if (n < 0 || !Number.isFinite(n)) continue;
       out[k] = n;
+    } else if (k === 'isCustomQuantity') {
+      out[k] = v === true;
+    } else if (k === 'unitName') {
+      out[k] = String(v ?? '').trim().slice(0, 20);
     } else out[k] = v;
   }
   return out;

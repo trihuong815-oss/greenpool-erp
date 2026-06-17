@@ -20,6 +20,11 @@ export interface PackageItem {
   active: boolean;
   createdAt: string;
   updatedAt: string;
+  // V6 PT (2026-06-17): gói tính theo buổi (PT Gym, học bơi PT...).
+  // Khi true: doanh số = số buổi × đơn giá / buổi (Sale nhập tại lúc bán).
+  isCustomQuantity?: boolean;
+  unitName?: string;           // 'buổi' / 'lượt' / ...
+  defaultUnitPrice?: number;   // đơn giá / buổi gợi ý
 }
 
 async function jsonOrThrow<T>(res: Response): Promise<T> {
@@ -127,7 +132,10 @@ export const packagesApi = {
     const url = `/api/packages${qs.toString() ? '?' + qs.toString() : ''}`;
     return (await jsonOrThrow<{ rows: PackageItem[] }>(await fetch(url, { cache: 'no-store' }))).rows;
   },
-  async create(payload: { name: string; branchId: string; groupId: string; defaultPrice: number; sortOrder?: number }): Promise<PackageItem> {
+  async create(payload: {
+    name: string; branchId: string; groupId: string; defaultPrice: number; sortOrder?: number;
+    isCustomQuantity?: boolean; unitName?: string; defaultUnitPrice?: number;
+  }): Promise<PackageItem> {
     const res = await fetch('/api/packages', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),

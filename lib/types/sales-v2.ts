@@ -115,6 +115,16 @@ export interface SalesTransaction {
   // V6 (2026-06-17 audit BUG-1): snapshot debt LÚC TẠO (chỉ cho dat_coc). Không đổi
   // khi auto-match link → dùng cho "Công nợ phát sinh" trong dashboard tháng.
   originalDebt?: number;
+  // V6 (2026-06-17) PT/Bơi PT: gói tính theo buổi. Nếu package.isCustomQuantity:
+  //   quantity = số buổi (vd 10 buổi PT)
+  //   unitPrice = đơn giá/buổi (vd 500.000)
+  //   packageValue = auto = quantity × unitPrice (server enforce)
+  // Gói cố định: cả 2 = null.
+  quantity?: number | null;
+  unitPrice?: number | null;
+  // Snapshot tại lúc tạo — dùng cho PATCH/report sau này biết tx này có thuộc PT mode không
+  // (kể cả gói gốc sau này bị tắt isCustomQuantity).
+  packageIsCustomQuantity?: boolean;
   // V6 (2026-06-17): chứng từ tracking
   // - receiptNo: số phiếu thu — required cho 'dat_coc' (mới), optional+link key cho 'thanh_toan_not'
   // - contractNo: số hợp đồng — required cho 'thanh_toan_full' và 'thanh_toan_not'
@@ -181,6 +191,9 @@ export interface SalesTransactionInput {
   receiptNo?: string | null;
   contractNo?: string | null;
   note?: string | null;
+  // PT/Bơi PT — số buổi + đơn giá / buổi
+  quantity?: number | null;
+  unitPrice?: number | null;
 }
 
 export interface SalesBatchSubmitInput {

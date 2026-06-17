@@ -23,6 +23,11 @@ interface DebtRow {
   receiptNo: string | null;
   saleName: string;
   branchName: string;
+  // V6 PT (2026-06-17): gói tính theo buổi
+  packageIsCustomQuantity?: boolean;
+  packageUnitName?: string;
+  quantity?: number | null;
+  unitPrice?: number | null;
 }
 
 interface Props {
@@ -166,7 +171,7 @@ export default function CongNoClient({ scope }: Props) {
         <div className="card overflow-hidden p-0">
           {loading && rows.length === 0 ? (
             <div className="p-4">
-              <SkeletonTable rows={6} cols={scope === 'top' ? 9 : 8} />
+              <SkeletonTable rows={6} cols={scope === 'top' ? 10 : 9} />
             </div>
           ) : filtered.length === 0 ? (
             <div className="text-center py-12 text-slate-400 text-sm">
@@ -175,7 +180,7 @@ export default function CongNoClient({ scope }: Props) {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1100px] text-sm">
+              <table className="w-full min-w-[1200px] text-sm">
                 <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
                   <tr>
                     <th className="px-3 py-2.5 text-left">Ngày tạo nợ</th>
@@ -185,26 +190,46 @@ export default function CongNoClient({ scope }: Props) {
                     <th className="px-3 py-2.5 text-left">Số PT</th>
                     {scope !== 'sale' && <th className="px-3 py-2.5 text-left">Sale</th>}
                     {scope === 'top' && <th className="px-3 py-2.5 text-left">Cơ sở</th>}
+                    <th className="px-3 py-2.5 text-right">Số buổi</th>
                     <th className="px-3 py-2.5 text-right">Giá gói</th>
                     <th className="px-3 py-2.5 text-right">Đã thu</th>
                     <th className="px-3 py-2.5 text-right">Còn nợ</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filtered.map((r) => (
-                    <tr key={r.id} className="hover:bg-slate-50/60">
-                      <td className="px-3 py-2 text-slate-600 tabular-nums">{fmtDate(r.date)}</td>
-                      <td className="px-3 py-2 text-slate-800 font-medium">{r.customerName}</td>
-                      <td className="px-3 py-2 text-slate-600 tabular-nums">{r.phone}</td>
-                      <td className="px-3 py-2 text-slate-600 truncate max-w-[200px]">{r.packageName}</td>
-                      <td className="px-3 py-2 text-slate-600 font-mono text-xs">{r.receiptNo ?? '—'}</td>
-                      {scope !== 'sale' && <td className="px-3 py-2 text-slate-600">{r.saleName}</td>}
-                      {scope === 'top' && <td className="px-3 py-2 text-slate-600">{r.branchName}</td>}
-                      <td className="px-3 py-2 text-right tabular-nums text-slate-700">{r.packageValue.toLocaleString()}</td>
-                      <td className="px-3 py-2 text-right tabular-nums text-sky-700">{r.collectedToday.toLocaleString()}</td>
-                      <td className="px-3 py-2 text-right tabular-nums font-bold text-rose-700">{r.debtAmount.toLocaleString()}</td>
-                    </tr>
-                  ))}
+                  {filtered.map((r) => {
+                    const isPT = r.packageIsCustomQuantity === true;
+                    const unit = r.packageUnitName || 'buổi';
+                    return (
+                      <tr key={r.id} className="hover:bg-slate-50/60">
+                        <td className="px-3 py-2 text-slate-600 tabular-nums">{fmtDate(r.date)}</td>
+                        <td className="px-3 py-2 text-slate-800 font-medium">{r.customerName}</td>
+                        <td className="px-3 py-2 text-slate-600 tabular-nums">{r.phone}</td>
+                        <td className="px-3 py-2 text-slate-600 truncate max-w-[200px]">
+                          <div className="flex items-center gap-1.5">
+                            <span className="truncate">{r.packageName}</span>
+                            {isPT && (
+                              <span className="shrink-0 text-[9px] uppercase font-bold text-violet-700 bg-violet-100 px-1 py-0.5 rounded ring-1 ring-violet-200">
+                                PT
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-slate-600 font-mono text-xs">{r.receiptNo ?? '—'}</td>
+                        {scope !== 'sale' && <td className="px-3 py-2 text-slate-600">{r.saleName}</td>}
+                        {scope === 'top' && <td className="px-3 py-2 text-slate-600">{r.branchName}</td>}
+                        <td className="px-3 py-2 text-right tabular-nums">
+                          {isPT && r.quantity != null
+                            ? <span className="text-violet-700 font-semibold">{r.quantity.toLocaleString()}<span className="text-[10px] text-slate-400 ml-0.5">{unit}</span></span>
+                            : <span className="text-slate-300">—</span>
+                          }
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums text-slate-700">{r.packageValue.toLocaleString()}</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-sky-700">{r.collectedToday.toLocaleString()}</td>
+                        <td className="px-3 py-2 text-right tabular-nums font-bold text-rose-700">{r.debtAmount.toLocaleString()}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

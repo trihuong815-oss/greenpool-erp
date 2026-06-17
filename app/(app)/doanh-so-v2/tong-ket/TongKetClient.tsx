@@ -4,7 +4,7 @@
 // Phase 5 (2026-06-17).
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, TrendingUp, Wallet, AlertTriangle, Users } from 'lucide-react';
+import { ChevronLeft, ChevronRight, TrendingUp, Wallet, AlertTriangle, Users, Dumbbell } from 'lucide-react';
 import { BRANCHES } from '@/lib/branches';
 import type { BranchId } from '@/lib/branches';
 import type { ScopeRole } from '@/lib/sales-v2/scope';
@@ -21,6 +21,9 @@ interface Summary {
   byPackage: Record<string, { name: string; count: number; sales: number; collected: number }>;
   bySale: Record<string, { name: string; count: number; sales: number; collected: number }>;
   byBranch: Record<string, { name: string; count: number; sales: number; collected: number }>;
+  // V6 PT (2026-06-17)
+  ptTotals?: { transactions: number; sessions: number; sales: number };
+  ptByPackage?: Record<string, { name: string; count: number; sessions: number; sales: number; collected: number; unitName: string }>;
 }
 
 interface Props {
@@ -101,6 +104,20 @@ export default function TongKetClient({ scope }: Props) {
     if (!data) return 0;
     return Math.max(...Object.values(data.bySource).map((s) => s.sales), 1);
   }, [data]);
+
+  // V6 PT (2026-06-17): top gói PT theo doanh số (chỉ hiển thị card khi có data PT)
+  const ptTopPackages = useMemo(() => {
+    if (!data?.ptByPackage) return [];
+    return Object.entries(data.ptByPackage)
+      .map(([id, v]) => ({ id, ...v }))
+      .sort((a, b) => b.sales - a.sales)
+      .slice(0, 5);
+  }, [data]);
+  const ptAvgUnitPrice = useMemo(() => {
+    if (!data?.ptTotals || data.ptTotals.sessions <= 0) return 0;
+    return Math.round(data.ptTotals.sales / data.ptTotals.sessions);
+  }, [data]);
+  const hasPtData = (data?.ptTotals?.transactions ?? 0) > 0;
 
   return (
     <div className="flex-1 p-3 md:p-5 bg-slate-50 overflow-y-auto">
@@ -229,6 +246,59 @@ export default function TongKetClient({ scope }: Props) {
               </div>
             </div>
 
+            {/* V6 PT (2026-06-17): card riêng cho gói dịch vụ theo buổi */}
+            {hasPtData && data?.ptTotals && (
+              <div className="card">
+                <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
+                  <Dumbbell size={16} className="text-violet-600" />
+                  Doanh số gói PT (theo buổi)
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                  <KpiCard label="Số giao dịch PT" value={data.ptTotals.transactions.toString()} icon={<Users size={18} />} tone="violet" />
+                  <KpiCard label="Tổng số buổi bán" value={data.ptTotals.sessions.toLocaleString()} icon={<Dumbbell size={18} />} tone="violet" />
+                  <KpiCard label="Doanh số PT" value={fmtMoney(data.ptTotals.sales)} icon={<TrendingUp size={18} />} tone="violet" />
+                  <KpiCard label="Đơn giá / buổi TB" value={fmtMoney(ptAvgUnitPrice)} icon={<Wallet size={18} />} tone="violet" />
+                </div>
+                {ptTopPackages.length > 0 && (
+                  <div>
+                    <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-2">Top gói PT theo doanh số</div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+                          <tr>
+                            <th className="px-2 py-2 text-left w-10">#</th>
+                            <th className="px-2 py-2 text-left">Tên gói</th>
+                            <th className="px-2 py-2 text-right">Số GD</th>
+                            <th className="px-2 py-2 text-right">Tổng số buổi</th>
+                            <th className="px-2 py-2 text-right">Doanh số</th>
+                            <th className="px-2 py-2 text-right">Đơn giá / buổi TB</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {ptTopPackages.map((p, i) => {
+                            const avg = p.sessions > 0 ? Math.round(p.sales / p.sessions) : 0;
+                            return (
+                              <tr key={p.id} className="hover:bg-slate-50/60">
+                                <td className="px-2 py-1.5 tabular-nums text-slate-400">{i + 1}</td>
+                                <td className="px-2 py-1.5 text-slate-700 font-medium">{p.name}</td>
+                                <td className="px-2 py-1.5 text-right tabular-nums">{p.count}</td>
+                                <td className="px-2 py-1.5 text-right tabular-nums text-violet-700">
+                                  {p.sessions.toLocaleString()}
+                                  <span className="text-[10px] text-slate-400 ml-0.5">{p.unitName}</span>
+                                </td>
+                                <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-emerald-700">{fmtMoney(p.sales)}</td>
+                                <td className="px-2 py-1.5 text-right tabular-nums text-slate-600">{fmtMoney(avg)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Top Sale / Top branch — chỉ top role + accountant + qlcs */}
             {(scope === 'top' || scope === 'accountant' || scope === 'qlcs') && Object.keys(data.bySale).length > 0 && (
               <div className="card">
@@ -302,7 +372,7 @@ function KpiCard({ label, value, icon, tone }: {
   label: string;
   value: string;
   icon: React.ReactNode;
-  tone: 'slate' | 'emerald' | 'sky' | 'amber' | 'rose';
+  tone: 'slate' | 'emerald' | 'sky' | 'amber' | 'rose' | 'violet';
 }) {
   const cls = {
     slate:   'bg-white text-slate-700 ring-slate-200',
@@ -310,6 +380,7 @@ function KpiCard({ label, value, icon, tone }: {
     sky:     'bg-sky-50 text-sky-700 ring-sky-200',
     amber:   'bg-amber-50 text-amber-700 ring-amber-200',
     rose:    'bg-rose-50 text-rose-700 ring-rose-200',
+    violet:  'bg-violet-50 text-violet-700 ring-violet-200',
   }[tone];
   return (
     <div className={`rounded-xl px-3 py-3 ring-1 ${cls}`}>

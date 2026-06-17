@@ -16,7 +16,7 @@ import { SOURCE_LABEL, TRANSACTION_TYPE_LABEL, PAYMENT_METHOD_LABEL } from '@/li
 import type { SalesV2Package } from '@/lib/sales-v2/packages';
 import PackagePicker from './PackagePicker';
 import { showConfirm } from '@/components/ui/imperative-modal';
-import { type LocalRow, isRowEmpty, validateRow, isValidPhone } from './SalesGrid';
+import { type LocalRow, isRowEmpty, validateRow, isValidPhone, effectivePackageValue } from './SalesGrid';
 
 interface Props {
   packages: SalesV2Package[];
@@ -181,7 +181,9 @@ function LocalCard({ idx, row, packages, canEdit, onUpdate, onRemove, autoExpand
     }
   }, [rowEmpty, expanded, autoExpand]);
 
-  const debt = Math.max(0, (Number(row.packageValue) || 0) - (Number(row.collectedToday) || 0));
+  // PT: pv = qty × up (compute). Non-PT: lấy từ field. Tránh hiển thị 0 cho PT row.
+  const pvPreview = effectivePackageValue(row);
+  const debt = Math.max(0, pvPreview - (Number(row.collectedToday) || 0));
 
   return (
     <div className={`rounded-xl bg-amber-50/40 ring-1 ${!validation.ok ? 'ring-amber-300' : 'ring-amber-200'} overflow-hidden`}>
@@ -201,7 +203,7 @@ function LocalCard({ idx, row, packages, canEdit, onUpdate, onRemove, autoExpand
                 {row.isChildPackage && <span className="text-[9px] uppercase font-bold text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded shrink-0">Trẻ em</span>}
               </div>
               <div className="text-xs text-slate-500 truncate">
-                {row.phone} · {row.packageName || '(chưa chọn gói)'} · <span className="text-emerald-700 font-medium">{(Number(row.packageValue) || 0).toLocaleString()}đ</span>
+                {row.phone} · {row.packageName || '(chưa chọn gói)'} · <span className="text-emerald-700 font-medium">{pvPreview.toLocaleString()}đ</span>
               </div>
             </>
           )}
@@ -260,13 +262,37 @@ function CardEditor({
 
   // packageValue / collectedToday saved row dạng number, local row dạng string
   const isThanhToanNot = (row as any).transactionType === 'thanh_toan_not';
-  const pvNum = isThanhToanNot ? 0 : (row.savedRow ? (row.packageValue ?? 0) : (Number(row.packageValue) || 0));
+  const isPT = row.savedRow
+    ? (row.packageIsCustomQuantity === true)
+    : (row.packageIsCustomQuantity);
+  const qtyNum = row.savedRow ? (row.quantity ?? 0) : (Number(row.quantity) || 0);
+  const upNum = row.savedRow ? (row.unitPrice ?? 0) : (Number(row.unitPrice) || 0);
+  // PT: pv = qty × up (auto). Không PT: pv lấy từ field.
+  const pvNum = isThanhToanNot
+    ? 0
+    : isPT
+      ? qtyNum * upNum
+      : (row.savedRow ? (row.packageValue ?? 0) : (Number(row.packageValue) || 0));
   const ctNum = row.savedRow ? (row.collectedToday ?? 0) : (Number(row.collectedToday) || 0);
   const debt = isThanhToanNot ? 0 : Math.max(0, pvNum - ctNum);
 
-  const setNum = (k: 'packageValue' | 'collectedToday', n: number) => {
-    if (row.savedRow) onUpdate({ [k]: n } as any);
-    else onUpdate({ [k]: String(n) } as any);
+  const setNum = (k: 'packageValue' | 'collectedToday' | 'quantity' | 'unitPrice', n: number) => {
+    if (row.savedRow) {
+      // SavedRow: quantity/unitPrice nullable number (null khi user clear ô)
+      if (k === 'quantity' || k === 'unitPrice') {
+        onUpdate({ [k]: n > 0 ? n : null } as any);
+      } else {
+        onUpdate({ [k]: n } as any);
+      }
+    } else {
+      // LocalRow tất cả lưu string. Giữ original behavior packageValue/collectedToday
+      // (String(n) cả 0); quantity/unitPrice clear thành '' khi 0 (rỗng = chưa nhập).
+      if (k === 'quantity' || k === 'unitPrice') {
+        onUpdate({ [k]: n > 0 ? String(n) : '' } as any);
+      } else {
+        onUpdate({ [k]: String(n) } as any);
+      }
+    }
   };
 
   return (
@@ -314,9 +340,31 @@ function CardEditor({
           disabled={!canEdit}
           onChange={async (pkg) => {
             if (!pkg) {
-              onUpdate({ packageId: null, packageCode: '', packageName: '', serviceGroup: '', isChildPackage: false } as any);
+              onUpdate({
+                packageId: null, packageCode: '', packageName: '', serviceGroup: '',
+                isChildPackage: false, packageIsCustomQuantity: false,
+                quantity: row.savedRow ? null : '', unitPrice: row.savedRow ? null : '',
+              } as any);
               return;
             }
+            // V6 PT: gói tính theo buổi → seed unitPrice từ default; clear packageValue (auto).
+            if (pkg.isCustomQuantity) {
+              const seededUnitPrice = upNum > 0
+                ? (row.savedRow ? upNum : String(upNum))
+                : (pkg.defaultUnitPrice != null ? (row.savedRow ? pkg.defaultUnitPrice : String(pkg.defaultUnitPrice)) : (row.savedRow ? null : ''));
+              onUpdate({
+                packageId: pkg.id,
+                packageCode: pkg.code,
+                packageName: pkg.name,
+                serviceGroup: pkg.serviceGroup,
+                isChildPackage: pkg.isChildPackage,
+                packageIsCustomQuantity: true,
+                packageValue: row.savedRow ? 0 : '',
+                unitPrice: seededUnitPrice,
+              } as any);
+              return;
+            }
+            // Gói cố định
             const newPv = pkg.defaultPrice;
             let packageValueToSet: any = row.savedRow ? row.packageValue : row.packageValue;
             const currentPv = pvNum;
@@ -337,7 +385,10 @@ function CardEditor({
               packageName: pkg.name,
               serviceGroup: pkg.serviceGroup,
               isChildPackage: pkg.isChildPackage,
+              packageIsCustomQuantity: false,
               packageValue: packageValueToSet,
+              quantity: row.savedRow ? null : '',
+              unitPrice: row.savedRow ? null : '',
             } as any);
           }}
         />
@@ -390,11 +441,30 @@ function CardEditor({
         </FieldLabel>
       </div>
 
+      {/* V6 PT (2026-06-17): gói tính theo buổi → 2 ô riêng, packageValue auto-readonly */}
+      {isPT && !isThanhToanNot && (
+        <div className="grid grid-cols-2 gap-2">
+          <FieldLabel label="Số buổi *">
+            <MoneyInput value={qtyNum} disabled={!canEdit} onCommit={(n) => setNum('quantity', n)} />
+          </FieldLabel>
+          <FieldLabel label="Đơn giá / buổi *">
+            <MoneyInput value={upNum} disabled={!canEdit} onCommit={(n) => setNum('unitPrice', n)} />
+          </FieldLabel>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-2">
         <FieldLabel label={isThanhToanNot ? 'Giá trị gói' : 'Giá trị gói *'}>
           {isThanhToanNot ? (
             <div className="w-full px-3 py-2 rounded-lg ring-1 ring-slate-200 bg-slate-50 text-xs text-slate-400 italic">
               Không tính (sẽ link với GD cũ)
+            </div>
+          ) : isPT ? (
+            <div
+              className="w-full px-3 py-2 rounded-lg ring-1 ring-slate-200 bg-slate-50 text-sm text-right tabular-nums text-slate-700 font-medium"
+              title="Auto = Số buổi × Đơn giá / buổi"
+            >
+              {pvNum.toLocaleString()}đ
             </div>
           ) : (
             <MoneyInput value={pvNum} disabled={!canEdit} onCommit={(n) => setNum('packageValue', n)} />

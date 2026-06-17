@@ -131,18 +131,28 @@ export function PackagesClient({ allowedBranches }: Props) {
   }
 
   // ===== Package CRUD =====
-  async function savePackage(name: string, defaultPrice: number) {
+  async function savePackage(payload: {
+    name: string;
+    defaultPrice: number;
+    isCustomQuantity: boolean;
+    unitName: string;
+    defaultUnitPrice: number;
+  }) {
     if (!packageModal) return;
+    const { name, defaultPrice, isCustomQuantity, unitName, defaultUnitPrice } = payload;
     try {
       if (packageModal.mode === 'add') {
         const next = (packages[packageModal.groupId] ?? []).at(-1)?.sortOrder ?? 0;
         await packagesApi.create({
           name, branchId, groupId: packageModal.groupId, defaultPrice,
           sortOrder: next + 1,
+          isCustomQuantity, unitName, defaultUnitPrice,
         });
         showToast('success', 'Đã thêm gói');
       } else {
-        await packagesApi.update(packageModal.pkg.id, { name, defaultPrice });
+        await packagesApi.update(packageModal.pkg.id, {
+          name, defaultPrice, isCustomQuantity, unitName, defaultUnitPrice,
+        });
         showToast('success', 'Đã cập nhật gói');
       }
       setPackageModal(null);
@@ -262,11 +272,30 @@ export function PackagesClient({ allowedBranches }: Props) {
                     {packages[g.id]?.map((p, i) => (
                       <tr key={p.id} className={`border-t border-slate-100 ${!p.active ? 'opacity-50' : ''}`}>
                         <td className="p-1 text-slate-400">{i + 1}</td>
-                        <td className="p-1 font-medium text-slate-800">{p.name}</td>
+                        <td className="p-1 font-medium text-slate-800">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span>{p.name}</span>
+                            {p.isCustomQuantity && (
+                              <span
+                                className="text-[10px] uppercase font-bold text-violet-700 bg-violet-100 px-1.5 py-0.5 rounded ring-1 ring-violet-200"
+                                title={`Tính theo ${p.unitName || 'buổi'} (PT) — Sale nhập số ${p.unitName || 'buổi'} × đơn giá`}
+                              >
+                                PT · {p.unitName || 'buổi'}
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="p-1 text-right tabular-nums">
-                          {showPrice
-                            ? (p.defaultPrice ?? 0).toLocaleString('vi-VN')
-                            : <span className="text-slate-300 select-none">•••</span>}
+                          {!showPrice ? (
+                            <span className="text-slate-300 select-none">•••</span>
+                          ) : p.isCustomQuantity ? (
+                            <span className="text-emerald-700 font-medium" title="Đơn giá / buổi gợi ý — Sale có thể chỉnh">
+                              {(p.defaultUnitPrice ?? 0).toLocaleString('vi-VN')}
+                              <span className="text-[10px] text-slate-400 ml-0.5">/{p.unitName || 'buổi'}</span>
+                            </span>
+                          ) : (
+                            (p.defaultPrice ?? 0).toLocaleString('vi-VN')
+                          )}
                         </td>
                         <td className="p-1 text-center">
                           <span className={`text-xs px-2 py-0.5 rounded ${p.active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>
@@ -360,21 +389,37 @@ function GroupModal({ state, onClose, onSave }: {
   );
 }
 
-// ===== PackageModal: add/edit gói (name + price VND) =====
+// ===== PackageModal: add/edit gói (name + price VND + PT mode) =====
 function PackageModal({ state, onClose, onSave }: {
   state: PackageModalState;
   onClose: () => void;
-  onSave: (name: string, defaultPrice: number) => Promise<void>;
+  onSave: (payload: {
+    name: string;
+    defaultPrice: number;
+    isCustomQuantity: boolean;
+    unitName: string;
+    defaultUnitPrice: number;
+  }) => Promise<void>;
 }) {
   const isEdit = state.mode === 'edit';
   const [name, setName] = useState(isEdit ? state.pkg.name : '');
   const [priceStr, setPriceStr] = useState(isEdit ? formatVND(state.pkg.defaultPrice) : '');
+  // V6 PT (2026-06-17)
+  const [isCustomQuantity, setIsCustomQuantity] = useState(isEdit ? (state.pkg.isCustomQuantity === true) : false);
+  const [unitName, setUnitName] = useState(isEdit ? (state.pkg.unitName ?? 'buổi') : 'buổi');
+  const [unitPriceStr, setUnitPriceStr] = useState(
+    isEdit && state.pkg.defaultUnitPrice ? formatVND(state.pkg.defaultUnitPrice) : ''
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   function handlePriceChange(s: string) {
     const n = parseVNDInput(s);
     setPriceStr(n === 0 && s.replace(/\D/g, '') === '' ? '' : formatVND(n));
+  }
+  function handleUnitPriceChange(s: string) {
+    const n = parseVNDInput(s);
+    setUnitPriceStr(n === 0 && s.replace(/\D/g, '') === '' ? '' : formatVND(n));
   }
 
   async function handleSave() {
@@ -383,10 +428,20 @@ function PackageModal({ state, onClose, onSave }: {
     if (trimmed.length > 100) { setError('Tên gói tối đa 100 ký tự'); return; }
     const price = parseVNDInput(priceStr);
     if (price < 0) { setError('Đơn giá phải ≥ 0'); return; }
+    const unitPrice = parseVNDInput(unitPriceStr);
+    if (isCustomQuantity && unitPrice < 0) { setError('Đơn giá / buổi phải ≥ 0'); return; }
+    const cleanUnitName = (unitName.trim() || 'buổi').slice(0, 20);
     setSaving(true);
     setError(null);
-    try { await onSave(trimmed, price); }
-    catch (e: any) { setError(e.message); setSaving(false); }
+    try {
+      await onSave({
+        name: trimmed,
+        defaultPrice: price,
+        isCustomQuantity,
+        unitName: isCustomQuantity ? cleanUnitName : '',
+        defaultUnitPrice: isCustomQuantity ? unitPrice : 0,
+      });
+    } catch (e: any) { setError(e.message); setSaving(false); }
   }
 
   return (
@@ -407,23 +462,79 @@ function PackageModal({ state, onClose, onSave }: {
             className={inputCls}
           />
         </FieldLabel>
-        <FieldLabel label="Đơn giá mặc định (VND)" hint="Có thể chỉnh khi nhập doanh số. Format tự động theo VND.">
-          <div className="relative">
+
+        {/* V6 PT toggle */}
+        <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3 space-y-2">
+          <label className="flex items-start gap-2.5 cursor-pointer select-none">
             <input
-              value={priceStr}
-              onChange={(e) => handlePriceChange(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !saving) { e.preventDefault(); handleSave(); }
-                else if (e.key === 'Escape') { e.preventDefault(); onClose(); }
-              }}
-              placeholder="0"
-              inputMode="numeric"
+              type="checkbox"
+              checked={isCustomQuantity}
+              onChange={(e) => setIsCustomQuantity(e.target.checked)}
               disabled={saving}
-              className={`${inputCls} pr-12 text-right tabular-nums font-semibold text-blue-700`}
+              className="mt-0.5 w-4 h-4 accent-emerald-600"
             />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-medium">VND</span>
+            <div className="flex-1">
+              <div className="text-sm font-semibold text-slate-800">Gói tính theo buổi / lượt (PT, học PT)</div>
+              <div className="text-xs text-slate-500 mt-0.5">
+                Sale sẽ nhập <strong>số buổi × đơn giá / buổi</strong> tại thời điểm bán. Doanh số = số buổi × đơn giá.
+                Dùng cho gói PT GYM, học bơi PT, ... — số buổi linh hoạt theo từng khách.
+              </div>
+            </div>
+          </label>
+        </div>
+
+        {!isCustomQuantity && (
+          <FieldLabel label="Đơn giá mặc định (VND)" hint="Có thể chỉnh khi nhập doanh số. Format tự động theo VND.">
+            <div className="relative">
+              <input
+                value={priceStr}
+                onChange={(e) => handlePriceChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !saving) { e.preventDefault(); handleSave(); }
+                  else if (e.key === 'Escape') { e.preventDefault(); onClose(); }
+                }}
+                placeholder="0"
+                inputMode="numeric"
+                disabled={saving}
+                className={`${inputCls} pr-12 text-right tabular-nums font-semibold text-blue-700`}
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-medium">VND</span>
+            </div>
+          </FieldLabel>
+        )}
+
+        {isCustomQuantity && (
+          <div className="grid grid-cols-2 gap-3">
+            <FieldLabel label="Tên đơn vị" hint="Vd: buổi, lượt">
+              <input
+                value={unitName}
+                onChange={(e) => setUnitName(e.target.value)}
+                placeholder="buổi"
+                disabled={saving}
+                maxLength={20}
+                className={inputCls}
+              />
+            </FieldLabel>
+            <FieldLabel label="Đơn giá / buổi gợi ý (VND)" hint="Sale có thể chỉnh từng khách.">
+              <div className="relative">
+                <input
+                  value={unitPriceStr}
+                  onChange={(e) => handleUnitPriceChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !saving) { e.preventDefault(); handleSave(); }
+                    else if (e.key === 'Escape') { e.preventDefault(); onClose(); }
+                  }}
+                  placeholder="0"
+                  inputMode="numeric"
+                  disabled={saving}
+                  className={`${inputCls} pr-12 text-right tabular-nums font-semibold text-emerald-700`}
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-medium">VND</span>
+              </div>
+            </FieldLabel>
           </div>
-        </FieldLabel>
+        )}
+
         {error && <ErrorBanner msg={error} />}
       </div>
       <ModalFooter onCancel={onClose} onSave={handleSave} saving={saving} saveDisabled={!name.trim()} />
