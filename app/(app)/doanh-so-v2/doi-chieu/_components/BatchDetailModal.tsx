@@ -16,6 +16,7 @@ import type {
 } from '@/lib/types/sales-v2';
 import { SOURCE_LABEL, TRANSACTION_TYPE_LABEL, PAYMENT_METHOD_LABEL } from '@/lib/types/sales-v2';
 import { showConfirm, showPrompt } from '@/components/ui/imperative-modal';
+import AuditHistory from './AuditHistory';
 
 const STATUS_META: Record<BatchStatus, { label: string; cls: string }> = {
   draft:           { label: 'Nháp',              cls: 'bg-slate-100 text-slate-700 ring-slate-200' },
@@ -210,6 +211,9 @@ export default function BatchDetailModal({ batch, canReview, onClose, onAfterAct
             <TransactionsTable rows={rows} editMode={editMode && canAction} onUpdate={handleUpdateRow} />
           )}
         </div>
+
+        {/* Audit history (collapsed) */}
+        <AuditHistory batchId={batch.id} />
 
         {/* Footer actions */}
         <div className="px-5 py-3 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2">
