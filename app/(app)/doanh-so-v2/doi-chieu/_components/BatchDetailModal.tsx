@@ -19,6 +19,7 @@ import { SOURCE_LABEL, TRANSACTION_TYPE_LABEL, PAYMENT_METHOD_LABEL } from '@/li
 import { branchName } from '@/lib/branches';
 import { showConfirm, showPrompt } from '@/components/ui/imperative-modal';
 import AuditHistory from './AuditHistory';
+import MatchPicker, { MatchStatusBadge } from './MatchPicker';
 
 const STATUS_META: Record<BatchStatus, { label: string; cls: string }> = {
   draft:           { label: 'Nháp',              cls: 'bg-slate-100 text-slate-700 ring-slate-200' },
@@ -47,6 +48,7 @@ export default function BatchDetailModal({ batch, canReview, onClose, onAfterAct
   const [editMode, setEditMode] = useState(false);
   const [busy, setBusy] = useState<null | 'approve' | 'return'>(null);
   const [error, setError] = useState<string | null>(null);
+  const [matchPickerTx, setMatchPickerTx] = useState<SalesTransaction | null>(null);
 
   const canAction = canReview && batch.status === 'pending_review';
 
@@ -294,14 +296,28 @@ export default function BatchDetailModal({ batch, canReview, onClose, onAfterAct
               rows={rows}
               editMode={editMode && canAction}
               canReview={canAction}
+              canManualLink={canReview && batch.status === 'approved'}
               onUpdate={handleUpdateRow}
               onReview={handleReview}
+              onOpenMatchPicker={(tx) => setMatchPickerTx(tx)}
             />
           )}
         </div>
 
         {/* Audit history (collapsed) */}
         <AuditHistory batchId={batch.id} />
+
+        {/* Match picker modal (Phase 4) — overlay khi click cột Link */}
+        {matchPickerTx && (
+          <MatchPicker
+            tx={matchPickerTx}
+            onClose={() => setMatchPickerTx(null)}
+            onLinked={(newTx) => {
+              setRows((prev) => prev.map((r) => (r.id === newTx.id ? newTx : r)));
+              setMatchPickerTx(null);
+            }}
+          />
+        )}
 
         {/* Footer actions */}
         <div className="px-5 py-3 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2">
@@ -383,17 +399,19 @@ function Kpi({ label, value, tone }: { label: string; value: string; tone: 'slat
 }
 
 function TransactionsTable({
-  rows, editMode, canReview, onUpdate, onReview,
+  rows, editMode, canReview, canManualLink, onUpdate, onReview, onOpenMatchPicker,
 }: {
   rows: SalesTransaction[];
   editMode: boolean;
   canReview: boolean;
+  canManualLink: boolean;
   onUpdate: (id: string, patch: Partial<SalesTransaction>) => void;
   onReview: (id: string, status: TxReviewStatus, currentReason?: string | null) => void;
+  onOpenMatchPicker: (tx: SalesTransaction) => void;
 }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[1720px] text-sm table-fixed">
+      <table className="w-full min-w-[1820px] text-sm table-fixed">
         <colgroup>
           <col style={{ width: 100 }} />  {/* Review ✓ ✗ */}
           <col style={{ width: 40 }} />   {/* # */}
@@ -407,6 +425,7 @@ function TransactionsTable({
           <col style={{ width: 120 }} />  {/* Giá trị */}
           <col style={{ width: 120 }} />  {/* Thu */}
           <col style={{ width: 110 }} />  {/* Công nợ */}
+          <col style={{ width: 100 }} />  {/* Link (Phase 4) */}
           <col style={{ width: 140 }} />  {/* Ghi chú */}
         </colgroup>
         <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
@@ -423,6 +442,7 @@ function TransactionsTable({
             <th className="px-2 py-2 text-right">Giá trị</th>
             <th className="px-2 py-2 text-right">Thu</th>
             <th className="px-2 py-2 text-right">Công nợ</th>
+            <th className="px-2 py-2 text-center">Link</th>
             <th className="px-2 py-2 text-left">Ghi chú</th>
           </tr>
         </thead>
@@ -499,6 +519,12 @@ function TransactionsTable({
                 {r.debtAmount > 0
                   ? <span className="text-rose-600">{r.debtAmount.toLocaleString()}</span>
                   : <span className="text-slate-300">0</span>}
+              </td>
+              <td className="px-2 py-1.5 text-center">
+                <MatchStatusBadge
+                  tx={r}
+                  onClick={canManualLink && r.transactionType === 'thanh_toan_not' ? () => onOpenMatchPicker(r) : undefined}
+                />
               </td>
               <td className="px-2 py-1.5">
                 <EditableText value={r.note ?? ''} disabled={!editMode} onCommit={(v) => onUpdate(r.id, { note: v || null })} />
