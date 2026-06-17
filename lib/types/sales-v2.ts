@@ -49,6 +49,16 @@ export type MatchStatus =
   | 'needs_review'   // tìm thấy N>1 candidate → kế toán chọn
   | 'no_match';      // không tìm thấy → "cần kiểm tra"
 
+// V6 (2026-06-17): per-transaction review state cho kế toán đối chiếu.
+//   pending  — chưa tick (mặc định sau Sale submit)
+//   approved — kế toán tick ✓
+//   rejected — kế toán tick ✗ + nhập rejectReason
+// Logic batch:
+//   - All tx approved → cho phép "Duyệt toàn bộ" (batch.status=approved)
+//   - Có ≥1 rejected → cho phép "Trả lại Sale" (batch.status=returned, gom reason)
+//   - Còn pending → block cả 2 action (chưa review xong)
+export type TxReviewStatus = 'pending' | 'approved' | 'rejected';
+
 // ─── Documents ───────────────────────────────────────────────────────
 
 /** salesDailyBatches/{id} — 1 doc / sale / ngày. */
@@ -103,6 +113,11 @@ export interface SalesTransaction {
   collectedToday: number;        // thực thu hôm nay
   debtAmount: number;            // packageValue - collectedToday
   note?: string | null;
+  // Per-tx review (V6 2026-06-17)
+  reviewStatus: TxReviewStatus;
+  rejectReason?: string | null;
+  reviewedAt?: string | null;
+  reviewedBy?: string | null;
   // Auto-link (chỉ chạy khi batch approved)
   matchedTransactionId?: string | null;
   matchStatus: MatchStatus;

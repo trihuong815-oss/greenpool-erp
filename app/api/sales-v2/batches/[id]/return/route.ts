@@ -26,8 +26,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     const body = await req.json().catch(() => null);
-    const reason = String(body?.reason ?? '').trim().slice(0, 500);
-    if (!reason) return NextResponse.json({ error: 'Phải nhập lý do trả lại' }, { status: 400 });
+    // V6 2026-06-17: reason tổng giờ optional — UI có thể chỉ tick ✗ per row.
+    // Backend gom rejected reasons từ từng tx + general reason (nếu có).
+    const generalReason = String(body?.reason ?? '').trim().slice(0, 500);
 
     const db = getFirebaseAdminDb();
     const batchRef = db.collection(COLLECTIONS.SALES_DAILY_BATCHES).doc(id);
@@ -48,15 +49,38 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         return { error: `Batch đang ở trạng thái ${batch.status}, không thể trả lại`, status: 400 } as const;
       }
 
+      // Gom rejected reasons từ tx có reviewStatus='rejected'
+      const txSnap = await db.collection(COLLECTIONS.SALES_TRANSACTIONS)
+        .where('batchId', '==', id)
+        .get();
+      const rejected: Array<{ customerName: string; rejectReason: string }> = [];
+      txSnap.forEach((d) => {
+        const x = d.data();
+        if (x.reviewStatus === 'rejected' && x.rejectReason) {
+          rejected.push({ customerName: String(x.customerName ?? '(?)'), rejectReason: String(x.rejectReason) });
+        }
+      });
+      if (rejected.length === 0 && !generalReason) {
+        return { error: 'Phải tick ✗ ít nhất 1 giao dịch hoặc nhập lý do tổng', status: 400 } as const;
+      }
+
+      // Compose returnReason: general + danh sách per-tx
+      const lines: string[] = [];
+      if (generalReason) lines.push(generalReason);
+      if (rejected.length > 0) {
+        lines.push(`${rejected.length} giao dịch bị đánh dấu lỗi:`);
+        for (const r of rejected) lines.push(`• ${r.customerName}: ${r.rejectReason}`);
+      }
+      const composedReason = lines.join('\n').slice(0, 2000);
+
       const now = Timestamp.now();
       tx.update(batchRef, {
         status: 'returned',
         returnedAt: now,
-        returnReason: reason,
+        returnReason: composedReason,
         updatedAt: now,
-        // Giữ submittedAt/reviewedAt để có lịch sử
       });
-      return { ok: true } as const;
+      return { ok: true, rejectedCount: rejected.length } as const;
     });
 
     if ('error' in result) {
@@ -69,7 +93,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       action: 'return',
       changedBy: caller.profile.uid,
       changedByName: caller.actorName,
-      reason,
+      reason: generalReason || null,
     });
 
     // TODO Phase 3: gửi noti cho Sale "Bảng bị trả lại: <reason>"

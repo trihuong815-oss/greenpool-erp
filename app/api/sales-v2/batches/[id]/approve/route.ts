@@ -46,16 +46,29 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
         return { error: `Batch đang ở trạng thái ${batch.status}, không thể duyệt`, status: 400 } as const;
       }
 
-      // Recompute totals
+      // V6 2026-06-17: validate TẤT CẢ tx có reviewStatus='approved'
       const txSnap = await db.collection(COLLECTIONS.SALES_TRANSACTIONS)
         .where('batchId', '==', id)
         .get();
+      if (txSnap.empty) {
+        return { error: 'Batch không có giao dịch', status: 400 } as const;
+      }
       let totalSales = 0, totalCollected = 0;
+      let pendingCount = 0, rejectedCount = 0;
       txSnap.forEach((d) => {
         const x = d.data();
         totalSales += Number(x.packageValue ?? 0);
         totalCollected += Number(x.collectedToday ?? 0);
+        const rs = x.reviewStatus ?? 'pending';
+        if (rs === 'pending') pendingCount++;
+        else if (rs === 'rejected') rejectedCount++;
       });
+      if (pendingCount > 0) {
+        return { error: `Còn ${pendingCount} giao dịch chưa review`, status: 400 } as const;
+      }
+      if (rejectedCount > 0) {
+        return { error: `Có ${rejectedCount} giao dịch bị đánh dấu lỗi — phải Trả lại Sale thay vì Duyệt`, status: 400 } as const;
+      }
       const totalDebt = totalSales - totalCollected;
 
       const now = Timestamp.now();

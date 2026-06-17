@@ -39,7 +39,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
         return { error: `Batch đang ở trạng thái ${batch.status}, không thể gửi`, status: 400 } as const;
       }
 
-      // Recompute totals từ transactions
+      // Recompute totals từ transactions + reset reviewStatus về pending
       const txSnap = await db.collection(COLLECTIONS.SALES_TRANSACTIONS)
         .where('batchId', '==', id)
         .get();
@@ -54,7 +54,19 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       });
       const totalDebt = totalSales - totalCollected;
 
+      // V6 2026-06-17: reset reviewStatus all tx về pending để kế toán review lại từ đầu
+      // (kể cả tx trước đó đã approved/rejected lần submit trước)
       const now = Timestamp.now();
+      txSnap.forEach((d) => {
+        tx.update(d.ref, {
+          reviewStatus: 'pending',
+          rejectReason: null,
+          reviewedAt: null,
+          reviewedBy: null,
+          updatedAt: now,
+        });
+      });
+
       tx.update(batchRef, {
         status: 'pending_review',
         totalTransactions: txSnap.size,

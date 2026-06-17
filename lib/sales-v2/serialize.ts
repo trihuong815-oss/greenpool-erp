@@ -71,6 +71,11 @@ export function serializeTransaction(id: string, raw: Record<string, any>): Sale
     collectedToday: Number(raw.collectedToday ?? 0),
     debtAmount: Number(raw.debtAmount ?? 0),
     note: raw.note ?? null,
+    // V6 2026-06-17: per-tx review (fallback pending nếu doc cũ chưa có field)
+    reviewStatus: raw.reviewStatus ?? 'pending',
+    rejectReason: raw.rejectReason ?? null,
+    reviewedAt: tsToIsoOrNull(raw.reviewedAt),
+    reviewedBy: raw.reviewedBy ?? null,
     matchedTransactionId: raw.matchedTransactionId ?? null,
     matchStatus: raw.matchStatus ?? 'not_applicable',
     createdAt: tsToIso(raw.createdAt),
