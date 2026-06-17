@@ -57,6 +57,12 @@ export function makeEmptyRow(): LocalRow {
   };
 }
 
+/** Validate SĐT VN: 10 số, bắt đầu 0. Empty → false (trống = chưa nhập, không phải sai). */
+export function isValidPhone(phone: string): boolean {
+  const t = phone.trim();
+  return /^0\d{9}$/.test(t);
+}
+
 /** Row hoàn toàn rỗng — Sale chưa nhập gì (vd row auto-add trailing). KHÔNG validate + KHÔNG báo lỗi. */
 export function isRowEmpty(r: LocalRow): boolean {
   return !r.customerName.trim()
@@ -75,6 +81,7 @@ export function isRowEmpty(r: LocalRow): boolean {
 export function validateRow(r: LocalRow): { ok: true } | { ok: false; error: string } {
   if (!r.customerName.trim()) return { ok: false, error: 'Thiếu tên khách hàng' };
   if (!r.phone.trim()) return { ok: false, error: 'Thiếu SĐT' };
+  if (!isValidPhone(r.phone)) return { ok: false, error: 'SĐT phải 10 số bắt đầu bằng 0' };
   if (!r.source) return { ok: false, error: 'Thiếu nguồn' };
   if (!r.packageId) return { ok: false, error: 'Thiếu gói' };
   if (!r.transactionType) return { ok: false, error: 'Thiếu loại giao dịch' };
@@ -224,7 +231,7 @@ function SavedRow({ idx, row, packages, canEdit, onUpdate, onRemove }: {
         <TextCell value={row.customerName} disabled={!canEdit} onCommit={(v) => onUpdate({ customerName: v })} />
       </Td>
       <Td>
-        <TextCell value={row.phone} disabled={!canEdit} onCommit={(v) => onUpdate({ phone: v })} placeholder="0901..." />
+        <PhoneCell value={row.phone} disabled={!canEdit} onCommit={(v) => onUpdate({ phone: v })} placeholder="0901234567" />
       </Td>
       <Td>
         {row.isChildPackage ? (
@@ -322,7 +329,7 @@ function LocalRowItem({ idx, row, packages, canEdit, onUpdate, onRemove, autoFoc
         <TextCell value={row.customerName} disabled={!canEdit} onCommit={(v) => onUpdate({ customerName: v })} placeholder="Tên KH..." inputRef={firstCellRef} />
       </Td>
       <Td>
-        <TextCell value={row.phone} disabled={!canEdit} onCommit={(v) => onUpdate({ phone: v })} placeholder="SĐT..." />
+        <PhoneCell value={row.phone} disabled={!canEdit} onCommit={(v) => onUpdate({ phone: v })} placeholder="0901234567" />
       </Td>
       <Td>
         {row.isChildPackage ? (
@@ -428,6 +435,40 @@ function TextCell({
         if (v !== value) onCommit(v);
       }}
       className="w-full px-2 py-1 rounded border border-transparent bg-transparent text-sm focus:bg-white focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100 focus:outline-none disabled:cursor-not-allowed"
+    />
+  );
+}
+
+/** Phone cell: text input + đỏ ring nếu không hợp lệ (10 số bắt đầu 0). Empty không đỏ. */
+function PhoneCell({
+  value, disabled, onCommit, placeholder,
+}: {
+  value: string;
+  disabled: boolean;
+  onCommit: (v: string) => void;
+  placeholder?: string;
+}) {
+  const [local, setLocal] = useState(value);
+  useEffect(() => { setLocal(value); }, [value]);
+  const trimmed = local.trim();
+  const isEmpty = trimmed.length === 0;
+  const invalid = !isEmpty && !isValidPhone(trimmed);
+  return (
+    <input
+      type="tel"
+      inputMode="numeric"
+      maxLength={11}
+      value={local}
+      disabled={disabled}
+      placeholder={placeholder}
+      onChange={(e) => setLocal(e.target.value.replace(/[^\d]/g, ''))}
+      onBlur={() => { if (local !== value) onCommit(local); }}
+      title={invalid ? 'SĐT phải 10 số bắt đầu bằng 0 (vd: 0901234567)' : ''}
+      className={`w-full px-2 py-1 rounded border text-sm focus:bg-white focus:ring-2 focus:outline-none disabled:cursor-not-allowed ${
+        invalid
+          ? 'border-rose-400 bg-rose-50 text-rose-700 focus:border-rose-500 focus:ring-rose-100'
+          : 'border-transparent bg-transparent focus:border-emerald-300 focus:ring-emerald-100'
+      }`}
     />
   );
 }

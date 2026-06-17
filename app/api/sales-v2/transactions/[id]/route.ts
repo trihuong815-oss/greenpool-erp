@@ -77,7 +77,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       updates.collectedToday = v;
     }
     if ('customerName' in updates) updates.customerName = String(updates.customerName ?? '').trim();
-    if ('phone' in updates) updates.phone = String(updates.phone ?? '').trim();
+    if ('phone' in updates) {
+      const p = String(updates.phone ?? '').trim();
+      if (!/^0\d{9}$/.test(p)) {
+        return NextResponse.json({ error: 'SĐT phải 10 số bắt đầu bằng 0' }, { status: 400 });
+      }
+      updates.phone = p;
+    }
     if ('guardianName' in updates) {
       updates.guardianName = updates.guardianName ? String(updates.guardianName).trim() : null;
     }

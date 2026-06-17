@@ -16,7 +16,7 @@ import { SOURCE_LABEL, TRANSACTION_TYPE_LABEL, PAYMENT_METHOD_LABEL } from '@/li
 import type { SalesV2Package } from '@/lib/sales-v2/packages';
 import PackagePicker from './PackagePicker';
 import { showConfirm } from '@/components/ui/imperative-modal';
-import { type LocalRow, isRowEmpty, validateRow } from './SalesGrid';
+import { type LocalRow, isRowEmpty, validateRow, isValidPhone } from './SalesGrid';
 
 interface Props {
   packages: SalesV2Package[];
@@ -261,14 +261,7 @@ function CardEditor({
       </FieldLabel>
 
       <FieldLabel label="SĐT *">
-        <input
-          type="tel"
-          inputMode="numeric"
-          defaultValue={getStr('phone')}
-          disabled={!canEdit}
-          onBlur={(e) => { if (e.target.value !== getStr('phone')) updateStr('phone', e.target.value); }}
-          className="w-full px-3 py-2 rounded-lg ring-1 ring-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-        />
+        <PhoneInputMobile value={getStr('phone')} disabled={!canEdit} onCommit={(v) => updateStr('phone', v)} />
       </FieldLabel>
 
       <FieldLabel label="Nguồn *">
@@ -405,6 +398,38 @@ function FieldLabel({ label, children }: { label: string; children: React.ReactN
       <span className="block text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1">{label}</span>
       {children}
     </label>
+  );
+}
+
+function PhoneInputMobile({ value, disabled, onCommit }: {
+  value: string;
+  disabled: boolean;
+  onCommit: (v: string) => void;
+}) {
+  const [local, setLocal] = useState(value);
+  useEffect(() => { setLocal(value); }, [value]);
+  const trimmed = local.trim();
+  const invalid = trimmed.length > 0 && !isValidPhone(trimmed);
+  return (
+    <>
+      <input
+        type="tel"
+        inputMode="numeric"
+        maxLength={11}
+        value={local}
+        disabled={disabled}
+        onChange={(e) => setLocal(e.target.value.replace(/[^\d]/g, ''))}
+        onBlur={() => { if (local !== value) onCommit(local); }}
+        className={`w-full px-3 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 disabled:cursor-not-allowed ring-1 ${
+          invalid
+            ? 'bg-rose-50 text-rose-700 ring-rose-300 focus:ring-rose-400'
+            : 'ring-slate-200 focus:ring-emerald-500'
+        }`}
+      />
+      {invalid && (
+        <div className="mt-1 text-[11px] text-rose-600">SĐT phải 10 số bắt đầu bằng 0</div>
+      )}
+    </>
   );
 }
 

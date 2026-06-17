@@ -79,6 +79,7 @@ export async function POST(req: NextRequest) {
 
     if (!customerName) return NextResponse.json({ error: 'Thiếu tên khách hàng' }, { status: 400 });
     if (!phone) return NextResponse.json({ error: 'Thiếu SĐT' }, { status: 400 });
+    if (!/^0\d{9}$/.test(phone)) return NextResponse.json({ error: 'SĐT phải 10 số bắt đầu bằng 0' }, { status: 400 });
     if (!VALID_SOURCES.has(source)) return NextResponse.json({ error: 'Sai nguồn khách' }, { status: 400 });
     if (!packageId) return NextResponse.json({ error: 'Thiếu gói' }, { status: 400 });
     if (!VALID_TXN_TYPES.has(transactionType)) return NextResponse.json({ error: 'Sai loại giao dịch' }, { status: 400 });
