@@ -272,28 +272,20 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
 
   /** Lưu tạm: POST các localRows hợp lệ → thành rows. Báo lỗi rows không hợp lệ.
    *  Row hoàn toàn rỗng (do auto-add trailing) → giữ lại làm placeholder, KHÔNG count. */
-  const handleSaveDraft = useCallback(async (): Promise<{ savedCount: number; invalidCount: number; failedCount: number; skippedTrailing: number }> => {
-    if (!batch) return { savedCount: 0, invalidCount: 0, failedCount: 0, skippedTrailing: 0 };
+  const handleSaveDraft = useCallback(async (): Promise<{ savedCount: number; invalidCount: number; failedCount: number }> => {
+    if (!batch) return { savedCount: 0, invalidCount: 0, failedCount: 0 };
     setSaving(true);
     const stillLocal: LocalRow[] = [];
-    let savedCount = 0, invalidCount = 0, failedCount = 0, skippedTrailing = 0;
+    let savedCount = 0, invalidCount = 0, failedCount = 0;
     const newSavedRows: SalesTransaction[] = [];
-    for (let i = 0; i < localRows.length; i++) {
-      const lr = localRows[i];
-      const isLast = i === localRows.length - 1;
-      // Skip row trống — auto-add trailing chưa nhập gì, không phải lỗi
+    for (const lr of localRows) {
+      // Row hoàn toàn trống — auto-add trailing chưa gõ gì → skip silent, không count lỗi.
       if (isRowEmpty(lr)) {
         stillLocal.push(lr);
         continue;
       }
-      // V7 (2026-06-18): row CUỐI thiếu gói (auto-add user lỡ gõ vài ký tự rồi thôi)
-      // → giữ trong draft, KHÔNG count invalid, không block submit. Middle rows
-      // luôn validate strict (user chủ ý nhập từng dòng giữa).
-      if (isLast && !lr.packageId) {
-        stillLocal.push(lr);
-        skippedTrailing++;
-        continue;
-      }
+      // Row CÓ gõ NHƯNG validate fail → báo lỗi, Sale phải xoá hoặc nhập đủ.
+      // (User chốt 2026-06-18: không silent-skip dòng giữa lẫn dòng cuối nếu đã gõ).
       const v = validateRow(lr);
       if (!v.ok) {
         invalidCount++;
@@ -347,7 +339,7 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
     }
     setLocalRows(stillLocal);
     setSaving(false);
-    return { savedCount, invalidCount, failedCount, skippedTrailing };
+    return { savedCount, invalidCount, failedCount };
   }, [batch, localRows]);
 
   const handleSaveDraftClick = useCallback(async () => {
@@ -363,14 +355,11 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
     }
   }, [handleSaveDraft, showToast]);
 
-  // V7 (2026-06-18): coi row "submittable" nếu có gói. Row cuối thiếu gói = trailing auto-add.
+  // Có ít nhất 1 tx submit được: rows đã save HOẶC localRow non-empty validate ok.
   const submittableCount = useMemo(() => {
     let n = rows.length;
-    for (let i = 0; i < localRows.length; i++) {
-      const lr = localRows[i];
+    for (const lr of localRows) {
       if (isRowEmpty(lr)) continue;
-      const isLast = i === localRows.length - 1;
-      if (isLast && !lr.packageId) continue; // trailing
       if (validateRow(lr).ok) n++;
     }
     return n;
@@ -401,13 +390,9 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
       // 1. Save tạm trước (auto-save localRows hợp lệ)
       const draftRes = await handleSaveDraft();
       if (draftRes.invalidCount + draftRes.failedCount > 0) {
-        showToast('err', `Còn ${draftRes.invalidCount + draftRes.failedCount} dòng chưa hợp lệ — vui lòng kiểm tra trước khi gửi`);
+        showToast('err', `Còn ${draftRes.invalidCount + draftRes.failedCount} dòng chưa hợp lệ — vui lòng nhập đủ thông tin hoặc xoá dòng đó trước khi gửi`);
         setSubmitting(false);
         return;
-      }
-      // Info: nếu có trailing row chưa hoàn thiện → báo nhẹ, không block
-      if (draftRes.skippedTrailing > 0) {
-        showToast('ok', `Đã bỏ qua ${draftRes.skippedTrailing} dòng cuối chưa chọn gói (vẫn còn trong nháp)`);
       }
       // 2. Submit batch
       const r = await fetch(`/api/sales-v2/batches/${encodeURIComponent(batch.id)}/submit`, { method: 'POST' });
