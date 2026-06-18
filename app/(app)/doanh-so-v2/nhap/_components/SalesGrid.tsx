@@ -377,16 +377,28 @@ function SavedRow({ idx, row, packages, canEdit, batchStatus, onUpdate, onRemove
           }}
         />
       </Td>
-      {/* V6 PT (2026-06-18): 2 ô NGAY CẠNH Gói để Sale thao tác liền mạch */}
+      {/* V6 PT (2026-06-18): 2 ô NGAY CẠNH Gói — emphasis style khi PT để Sale nhận ra ô cần nhập */}
       <Td align="right">
         {isPT && row.transactionType !== 'thanh_toan_not'
-          ? <NumberCell value={qty} disabled={!canEdit} onCommit={(v) => onUpdate({ quantity: v > 0 ? v : null })} />
+          ? <NumberCell
+              value={qty}
+              disabled={!canEdit}
+              emphasis
+              placeholder="Nhập số"
+              onCommit={(v) => onUpdate({ quantity: v > 0 ? v : null })}
+            />
           : <span className="text-slate-300 text-xs">—</span>
         }
       </Td>
       <Td align="right">
         {isPT && row.transactionType !== 'thanh_toan_not'
-          ? <NumberCell value={up} disabled={!canEdit} onCommit={(v) => onUpdate({ unitPrice: v >= 0 ? v : null })} />
+          ? <NumberCell
+              value={up}
+              disabled={!canEdit}
+              emphasis
+              placeholder="Đơn giá"
+              onCommit={(v) => onUpdate({ unitPrice: v >= 0 ? v : null })}
+            />
           : <span className="text-slate-300 text-xs">—</span>
         }
       </Td>
@@ -580,16 +592,28 @@ function LocalRowItem({ idx, row, packages, canEdit, onUpdate, onRemove, autoFoc
           }}
         />
       </Td>
-      {/* V6 PT (2026-06-18): 2 ô PT NGAY CẠNH Gói để Sale thao tác liền mạch */}
+      {/* V6 PT (2026-06-18): 2 ô PT NGAY CẠNH Gói — emphasis style khi PT để Sale nhận ra ô cần nhập */}
       <Td align="right">
         {isPT && !isThanhToanNot
-          ? <NumberCell value={qty} disabled={!canEdit} onCommit={(v) => onUpdate({ quantity: v > 0 ? String(v) : '' })} />
+          ? <NumberCell
+              value={qty}
+              disabled={!canEdit}
+              emphasis
+              placeholder="Nhập số"
+              onCommit={(v) => onUpdate({ quantity: v > 0 ? String(v) : '' })}
+            />
           : <span className="text-slate-300 text-xs">—</span>
         }
       </Td>
       <Td align="right">
         {isPT && !isThanhToanNot
-          ? <NumberCell value={up} disabled={!canEdit} onCommit={(v) => onUpdate({ unitPrice: v >= 0 ? String(v) : '' })} />
+          ? <NumberCell
+              value={up}
+              disabled={!canEdit}
+              emphasis
+              placeholder="Đơn giá"
+              onCommit={(v) => onUpdate({ unitPrice: v >= 0 ? String(v) : '' })}
+            />
           : <span className="text-slate-300 text-xs">—</span>
         }
       </Td>
@@ -768,11 +792,14 @@ function DocCell({
 }
 
 function NumberCell({
-  value, disabled, onCommit,
+  value, disabled, onCommit, placeholder, emphasis,
 }: {
   value: number;
   disabled: boolean;
   onCommit: (v: number) => void;
+  placeholder?: string;
+  // emphasis=true → border + bg visible để Sale dễ thấy đây là ô cần nhập (vd: PT số buổi)
+  emphasis?: boolean;
 }) {
   // Format thousand separator khi blur; khi focus hiển thị raw số để dễ edit.
   const [editing, setEditing] = useState(false);
@@ -781,12 +808,17 @@ function NumberCell({
     if (!editing) setRaw(value > 0 ? String(value) : '');
   }, [value, editing]);
   const display = editing ? raw : (value > 0 ? value.toLocaleString() : '');
+  const baseCls = emphasis
+    // PT cell: viền tím rõ + bg trắng — Sale nhận ra ngay ô cần nhập
+    ? 'w-full px-2 py-1 rounded border border-violet-300 bg-white text-sm text-right tabular-nums text-violet-900 placeholder-violet-300 font-medium focus:border-violet-500 focus:ring-2 focus:ring-violet-100 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-50'
+    : 'w-full px-2 py-1 rounded border border-transparent bg-transparent text-sm text-right tabular-nums focus:bg-white focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100 focus:outline-none disabled:cursor-not-allowed';
   return (
     <input
       type="text"
       inputMode="numeric"
       value={display}
       disabled={disabled}
+      placeholder={placeholder}
       onFocus={() => setEditing(true)}
       onChange={(e) => setRaw(e.target.value.replace(/[^\d]/g, ''))}
       onBlur={() => {
@@ -794,7 +826,7 @@ function NumberCell({
         const v = Number(raw) || 0;
         if (v !== value) onCommit(v);
       }}
-      className="w-full px-2 py-1 rounded border border-transparent bg-transparent text-sm text-right tabular-nums focus:bg-white focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100 focus:outline-none disabled:cursor-not-allowed"
+      className={baseCls}
     />
   );
 }
