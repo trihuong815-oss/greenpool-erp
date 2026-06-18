@@ -49,6 +49,13 @@ export const COLLECTIONS = {
   // ─── V7 Promo (2026-06-18) — Chương trình khuyến mãi theo tháng × cơ sở × gói ───
   // Workflow: QLCS tạo → GD_KD duyệt → GD_VP duyệt → Kế toán cấu hình mã → Sale dùng.
   SALES_PROGRAMS: 'salesPrograms',
+  // ─── V8 Reception (2026-06-18) — Doanh thu quầy lễ tân (kế toán nhập daily) ───
+  // 1 doc/cơ sở/ngày. Kế toán nhập + self-approve. Aggregate cùng Sale's batches
+  // → báo cáo tổng hợp doanh thu ngày của cơ sở (tab mới ở /doi-chieu).
+  SALES_RECEPTION_BATCHES: 'salesReceptionBatches',
+  // 1 doc/cơ sở — đơn giá mặc định các mục quầy lễ tân (vé lẻ, thuê tủ, làm thẻ...).
+  // Admin (ADMIN/CEO/TP_KE) set 1 lần, kế toán nhập daily chỉ cần qty + thực thu.
+  SALES_RECEPTION_PRICING: 'salesReceptionPricing',
 } as const;
 
 // Subcollection names — đứng trong context của doc cha.

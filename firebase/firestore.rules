@@ -472,6 +472,39 @@ service cloud.firestore {
       allow write: if false; // Admin SDK only
     }
 
+    // ---- V8 Reception (2026-06-18) — Doanh thu quầy lễ tân ----
+    // WRITE: 100% server-side qua /api/sales-v2/reception/* (Admin SDK).
+    // READ:
+    //   - Admin (CEO/ADMIN/CHU_TICH/GD_KD/GD_VP): all
+    //   - TP_KE / TP_GS: all
+    //   - QLCS / NV_KE: branch của mình
+    match /salesReceptionBatches/{batchId} {
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        userRole() == 'CHU_TICH' ||
+        userRole() == 'TP_KE' ||
+        userRole() == 'TP_GS' ||
+        (resource.data.branchId == userFacility() && (
+          isQLCS() ||
+          userRole() == 'NV_KE'
+        ))
+      );
+      allow write: if false;
+    }
+    match /salesReceptionPricing/{branchId} {
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        userRole() == 'CHU_TICH' ||
+        userRole() == 'TP_KE' ||
+        userRole() == 'TP_GS' ||
+        (branchId == userFacility() && (
+          isQLCS() ||
+          userRole() == 'NV_KE'
+        ))
+      );
+      allow write: if false;
+    }
+
     // ---- Catch-all deny ----
     match /{document=**} {
       allow read, write: if false;

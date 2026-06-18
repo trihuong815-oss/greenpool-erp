@@ -7,7 +7,7 @@ import { effectiveMenu } from '@/lib/permissions';
 import {
   Home, BarChart3, CheckSquare, FileText, ListTodo, MessageCircle, Inbox,
   Users, DollarSign, FileBarChart, GraduationCap, Megaphone, Settings, LogOut, UserCog, Wrench, KeyRound, X, Briefcase, ShieldCheck, Search,
-  PencilLine, ClipboardCheck, CreditCard, TrendingUp, Tag,
+  PencilLine, ClipboardCheck, CreditCard, TrendingUp, Tag, Calculator, Sliders,
   type LucideIcon,
 } from 'lucide-react';
 import { DispatchBadge } from './DispatchBadge';
@@ -61,11 +61,13 @@ const MENU_SECTIONS: MenuSection[] = [
     // Sau khi user xác nhận ổn → migrate hoàn toàn + ẩn section "Vận hành > Doanh số" cũ.
     title: 'Doanh số v2',
     items: [
-      { route: 'doanh-so-v2/nhap',         label: 'Nhập doanh số ngày', icon: PencilLine },
-      { route: 'doanh-so-v2/doi-chieu',    label: 'Đối chiếu doanh số', icon: ClipboardCheck },
-      { route: 'doanh-so-v2/chuong-trinh', label: 'Chương trình KM',    icon: Tag },
-      { route: 'doanh-so-v2/cong-no',      label: 'Công nợ',            icon: CreditCard },
-      { route: 'doanh-so-v2/tong-ket',     label: 'Tổng kết tháng',     icon: TrendingUp },
+      { route: 'doanh-so-v2/nhap',                  label: 'Nhập doanh số ngày',     icon: PencilLine },
+      { route: 'doanh-so-v2/quay-le-tan/nhap',      label: 'Nhập DT quầy lễ tân',    icon: Calculator },
+      { route: 'doanh-so-v2/doi-chieu',             label: 'Đối chiếu doanh số',     icon: ClipboardCheck },
+      { route: 'doanh-so-v2/chuong-trinh',          label: 'Chương trình KM',        icon: Tag },
+      { route: 'doanh-so-v2/cong-no',               label: 'Công nợ',                icon: CreditCard },
+      { route: 'doanh-so-v2/tong-ket',              label: 'Tổng kết tháng',         icon: TrendingUp },
+      { route: 'doanh-so-v2/quay-le-tan/cau-hinh',  label: 'Cấu hình đơn giá quầy',  icon: Sliders },
     ],
   },
   {
