@@ -537,11 +537,14 @@ function ProgramFormModal({ mode, program, callerBranch, month, onClose, onSaved
     setPackageIds((cur) => cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]);
   }
 
+  // V7 (2026-06-18): tách số khỏi định dạng dot-separator (1.000.000 → 1000000)
+  const parsePromoValue = (s: string): number => Number(s.replace(/[^\d]/g, '')) || 0;
+
   async function handleSave() {
     if (!branchId) { setError('Không xác định được cơ sở'); return; }
     const trimmedName = name.trim();
     if (!trimmedName) { setError('Tên chương trình không được rỗng'); return; }
-    const n = Number(promoValue);
+    const n = parsePromoValue(promoValue);
     if (!Number.isFinite(n) || n <= 0) { setError('Giá trị phải > 0'); return; }
     if (promoType === 'percent' && n > 100) { setError('Giảm % không thể > 100'); return; }
     setSaving(true); setError(null);
@@ -619,10 +622,33 @@ function ProgramFormModal({ mode, program, callerBranch, month, onClose, onSaved
             : promoType === 'fixed_amount' ? 'Số tiền giảm (VND) *'
             : promoType === 'bonus_sessions' ? 'Số buổi tặng *'
             : 'Số ngày tặng *'
-          }>
-            <input type="number" inputMode="numeric" value={promoValue} onChange={(e) => setPromoValue(e.target.value)}
-              min={0} max={promoType === 'percent' ? 100 : undefined}
-              className="w-full px-3 py-2 rounded-lg ring-1 ring-slate-200 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          }
+          hint={promoType === 'fixed_amount' ? 'Auto-format dấu chấm phân cách hàng nghìn' : undefined}>
+            {promoType === 'fixed_amount' ? (
+              <div className="relative">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  // Format hiển thị: '1000000' → '1.000.000'. Strip ký tự non-digit khi user gõ.
+                  value={promoValue ? parsePromoValue(promoValue).toLocaleString('vi-VN') : ''}
+                  onChange={(e) => setPromoValue(String(parsePromoValue(e.target.value)))}
+                  placeholder="VD: 500.000"
+                  className="w-full px-3 py-2 pr-12 rounded-lg ring-1 ring-slate-200 text-sm tabular-nums text-right font-semibold text-blue-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-medium pointer-events-none">VND</span>
+              </div>
+            ) : (
+              <input
+                type="number"
+                inputMode="numeric"
+                value={promoValue}
+                onChange={(e) => setPromoValue(e.target.value)}
+                min={0}
+                max={promoType === 'percent' ? 100 : undefined}
+                placeholder={promoType === 'percent' ? 'VD: 10' : promoType === 'bonus_sessions' ? 'VD: 2' : 'VD: 30'}
+                className="w-full px-3 py-2 rounded-lg ring-1 ring-slate-200 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            )}
           </Field>
           <Field label={`Áp dụng cho gói${packageIds.length === 0 ? ' (Tất cả gói)' : ` (${packageIds.length} gói đã chọn)`}`}
             hint={ptOnly ? 'Loại "Tặng buổi" chỉ hiện gói PT (theo buổi)' : 'Không chọn = áp dụng MỌI gói của cơ sở'}>
