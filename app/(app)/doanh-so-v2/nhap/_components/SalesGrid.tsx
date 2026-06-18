@@ -475,7 +475,8 @@ function SavedRow({ idx, row, packages, canEdit, batchStatus, branchId, onUpdate
           disabled={!canEdit}
           required={row.transactionType === 'dat_coc'}
           hideForType={row.transactionType === 'thanh_toan_full'}
-          placeholder={row.transactionType === 'thanh_toan_not' ? 'Số PT cũ (để link)' : 'PT...'}
+          prefix="PT"
+          placeholder={row.transactionType === 'thanh_toan_not' ? 'số PT cũ' : '001'}
           onCommit={(v) => onUpdate({ receiptNo: v || null })}
         />
       </Td>
@@ -485,7 +486,8 @@ function SavedRow({ idx, row, packages, canEdit, batchStatus, branchId, onUpdate
           disabled={!canEdit}
           required={row.transactionType === 'thanh_toan_full' || row.transactionType === 'thanh_toan_not'}
           hideForType={row.transactionType === 'dat_coc'}
-          placeholder="HĐ..."
+          prefix="HĐ"
+          placeholder="001"
           onCommit={(v) => onUpdate({ contractNo: v || null })}
         />
       </Td>
@@ -697,7 +699,8 @@ function LocalRowItem({ idx, row, packages, canEdit, branchId, onUpdate, onRemov
           disabled={!canEdit}
           required={row.transactionType === 'dat_coc'}
           hideForType={row.transactionType === 'thanh_toan_full'}
-          placeholder={row.transactionType === 'thanh_toan_not' ? 'Số PT cũ (để link)' : 'PT...'}
+          prefix="PT"
+          placeholder={row.transactionType === 'thanh_toan_not' ? 'số PT cũ' : '001'}
           onCommit={(v) => onUpdate({ receiptNo: v })}
         />
       </Td>
@@ -707,7 +710,8 @@ function LocalRowItem({ idx, row, packages, canEdit, branchId, onUpdate, onRemov
           disabled={!canEdit}
           required={row.transactionType === 'thanh_toan_full' || row.transactionType === 'thanh_toan_not'}
           hideForType={row.transactionType === 'dat_coc'}
-          placeholder="HĐ..."
+          prefix="HĐ"
+          placeholder="001"
           onCommit={(v) => onUpdate({ contractNo: v })}
         />
       </Td>
@@ -841,40 +845,67 @@ function PhoneCell({
   );
 }
 
-/** Số phiếu thu / Số HĐ. Required màu amber khi cần điền. Hide cho loại không cần. */
+/** Số phiếu thu / Số HĐ. Required màu amber khi cần điền. Hide cho loại không cần.
+ *  V7 (2026-06-18): prefix cố định ('PT' hoặc 'HĐ') hiển thị bên trái — Sale chỉ gõ phần số.
+ *  Server lưu full string ('PT001'). Khi receive value đã có prefix → strip để hiển thị. */
 function DocCell({
-  value, disabled, required, hideForType, placeholder, onCommit,
+  value, disabled, required, hideForType, placeholder, prefix, onCommit,
 }: {
   value: string;
   disabled: boolean;
   required: boolean;
   hideForType: boolean;
   placeholder?: string;
+  prefix?: string;
   onCommit: (v: string) => void;
 }) {
   if (hideForType) {
     return <span className="text-slate-300 text-xs px-2">—</span>;
   }
-  // Defensive: caller có thể truyền null/undefined dù type khai báo string
   const v = (value ?? '') as string;
   const isEmpty = !v.trim();
+  // Strip prefix khỏi value khi display (vd value='PT001' + prefix='PT' → display '001')
+  const stripPrefix = (s: string) => {
+    if (!prefix) return s;
+    const trimmed = s.trim();
+    return trimmed.toUpperCase().startsWith(prefix.toUpperCase()) ? trimmed.slice(prefix.length).trim() : trimmed;
+  };
+  const displayValue = stripPrefix(v);
+  // Commit: nối lại prefix nếu user gõ thiếu (nếu user tự gõ 'PT' thì để nguyên)
+  const buildFullValue = (userInput: string): string => {
+    const t = userInput.trim();
+    if (!t) return '';
+    if (!prefix) return t;
+    if (t.toUpperCase().startsWith(prefix.toUpperCase())) return t;
+    return `${prefix}${t}`;
+  };
   return (
-    <input
-      type="text"
-      // key=v forces re-mount khi giá trị từ ngoài thay đổi (vd auto-clear sau đổi loại GD)
-      key={v}
-      defaultValue={v}
-      disabled={disabled}
-      placeholder={placeholder}
-      maxLength={50}
-      onBlur={(e) => { const nv = e.target.value.trim(); if (nv !== v) onCommit(nv); }}
-      title={required && isEmpty ? 'Bắt buộc nhập' : ''}
-      className={`w-full px-2 py-1 rounded border text-xs focus:bg-white focus:ring-2 focus:outline-none disabled:cursor-not-allowed ${
-        required && isEmpty
-          ? 'border-amber-300 bg-amber-50/40 placeholder-amber-500 focus:border-amber-400 focus:ring-amber-100'
-          : 'border-transparent bg-transparent focus:border-emerald-300 focus:ring-emerald-100'
-      }`}
-    />
+    <div className={`w-full flex items-center rounded border text-xs disabled:cursor-not-allowed ${
+      required && isEmpty
+        ? 'border-amber-300 bg-amber-50/40 focus-within:border-amber-400 focus-within:ring-2 focus-within:ring-amber-100'
+        : 'border-transparent bg-transparent focus-within:bg-white focus-within:border-emerald-300 focus-within:ring-2 focus-within:ring-emerald-100'
+    }`}
+      title={required && isEmpty ? 'Bắt buộc nhập' : ''}>
+      {prefix && (
+        <span className="px-1.5 py-1 text-slate-500 font-mono font-semibold bg-slate-100/70 rounded-l border-r border-slate-200 select-none text-[11px]">
+          {prefix}
+        </span>
+      )}
+      <input
+        type="text"
+        // key forces re-mount khi value đổi từ ngoài (vd auto-clear sau đổi loại GD)
+        key={v}
+        defaultValue={displayValue}
+        disabled={disabled}
+        placeholder={placeholder ?? '001'}
+        maxLength={50 - (prefix?.length ?? 0)}
+        onBlur={(e) => {
+          const full = buildFullValue(e.target.value);
+          if (full !== v) onCommit(full);
+        }}
+        className="flex-1 min-w-0 px-1.5 py-1 bg-transparent border-0 focus:outline-none text-xs disabled:cursor-not-allowed"
+      />
+    </div>
   );
 }
 

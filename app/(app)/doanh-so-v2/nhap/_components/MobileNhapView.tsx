@@ -500,44 +500,23 @@ function CardEditor({
         </div>
       )}
 
-      {/* Chứng từ */}
+      {/* Chứng từ — V7 (2026-06-18): prefix cố định 'PT' / 'HĐ' */}
       {(row as any).transactionType === 'dat_coc' && (
         <FieldLabel label="Số phiếu thu *">
-          <input
-            type="text"
-            defaultValue={getStr('receiptNo')}
-            disabled={!canEdit}
-            onBlur={(e) => { if (e.target.value !== getStr('receiptNo')) updateStr('receiptNo', e.target.value); }}
-            maxLength={50}
-            placeholder="VD: PT001"
-            className="w-full px-3 py-2 rounded-lg ring-1 ring-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          />
+          <PrefixedInputMobile prefix="PT" value={getStr('receiptNo')} disabled={!canEdit}
+            placeholder="001" onCommit={(v) => updateStr('receiptNo', v)} />
         </FieldLabel>
       )}
       {(row as any).transactionType === 'thanh_toan_not' && (
         <FieldLabel label="Số phiếu thu cũ (để auto-link)">
-          <input
-            type="text"
-            defaultValue={getStr('receiptNo')}
-            disabled={!canEdit}
-            onBlur={(e) => { if (e.target.value !== getStr('receiptNo')) updateStr('receiptNo', e.target.value); }}
-            maxLength={50}
-            placeholder="Nhập số PT đặt cọc cũ"
-            className="w-full px-3 py-2 rounded-lg ring-1 ring-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          />
+          <PrefixedInputMobile prefix="PT" value={getStr('receiptNo')} disabled={!canEdit}
+            placeholder="số PT đặt cọc cũ" onCommit={(v) => updateStr('receiptNo', v)} />
         </FieldLabel>
       )}
       {((row as any).transactionType === 'thanh_toan_full' || (row as any).transactionType === 'thanh_toan_not') && (
         <FieldLabel label="Số hợp đồng *">
-          <input
-            type="text"
-            defaultValue={getStr('contractNo')}
-            disabled={!canEdit}
-            onBlur={(e) => { if (e.target.value !== getStr('contractNo')) updateStr('contractNo', e.target.value); }}
-            maxLength={50}
-            placeholder="VD: HĐ001"
-            className="w-full px-3 py-2 rounded-lg ring-1 ring-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          />
+          <PrefixedInputMobile prefix="HĐ" value={getStr('contractNo')} disabled={!canEdit}
+            placeholder="001" onCommit={(v) => updateStr('contractNo', v)} />
         </FieldLabel>
       )}
 
@@ -629,6 +608,48 @@ function MoneyInput({ value, disabled, onCommit }: {
       }}
       className="w-full px-3 py-2 rounded-lg ring-1 ring-slate-200 text-sm text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-emerald-500"
     />
+  );
+}
+
+/** V7 (2026-06-18) — Input có prefix cố định 'PT'/'HĐ', mobile. */
+function PrefixedInputMobile({ prefix, value, disabled, placeholder, onCommit }: {
+  prefix: string;
+  value: string;
+  disabled: boolean;
+  placeholder?: string;
+  onCommit: (fullValue: string) => void;
+}) {
+  // Strip prefix khi display nếu value đã có
+  const stripPrefix = (s: string) => {
+    const t = (s ?? '').trim();
+    return t.toUpperCase().startsWith(prefix.toUpperCase()) ? t.slice(prefix.length).trim() : t;
+  };
+  const displayValue = stripPrefix(value);
+  const buildFull = (userInput: string): string => {
+    const t = userInput.trim();
+    if (!t) return '';
+    if (t.toUpperCase().startsWith(prefix.toUpperCase())) return t;
+    return `${prefix}${t}`;
+  };
+  return (
+    <div className="w-full flex items-center rounded-lg ring-1 ring-slate-200 focus-within:ring-2 focus-within:ring-emerald-500 overflow-hidden">
+      <span className="px-3 py-2 bg-slate-100 text-slate-600 font-mono font-semibold text-sm select-none border-r border-slate-200">
+        {prefix}
+      </span>
+      <input
+        type="text"
+        key={value}
+        defaultValue={displayValue}
+        disabled={disabled}
+        placeholder={placeholder ?? '001'}
+        maxLength={50 - prefix.length}
+        onBlur={(e) => {
+          const full = buildFull(e.target.value);
+          if (full !== value) onCommit(full);
+        }}
+        className="flex-1 min-w-0 px-3 py-2 text-sm bg-white focus:outline-none disabled:cursor-not-allowed"
+      />
+    </div>
   );
 }
 
