@@ -86,10 +86,13 @@ export async function GET(req: NextRequest) {
 
     const db = getFirebaseAdminDb();
     // BUG-2 audit fix: bỏ where(branchId) tránh cần composite index. Filter client.
+    const LIMIT = 5000;
     const snap = await db.collection(COLLECTIONS.SALES_TRANSACTIONS)
       .where('month', '==', month)
-      .limit(5000)
+      .limit(LIMIT)
       .get();
+    // V8.X audit fix: warn nếu chạm limit → số liệu KHÔNG đầy đủ.
+    const truncated = snap.size >= LIMIT;
 
     // Aggregate
     const totals = { sales: 0, collected: 0, debtGenerated: 0, debtRemaining: 0, transactions: 0 };
@@ -313,6 +316,9 @@ export async function GET(req: NextRequest) {
       promoByCode,
       // V8.X (2026-06-18): danh sách KH chi tiết theo Sale — replace PT card ở /tong-ket
       salesCustomers,
+      // V8.X audit fix: cảnh báo khi snap chạm limit (5000 tx) → số liệu thiếu
+      truncated,
+      limit: LIMIT,
     });
   } catch (err: any) {
     if (err instanceof UnauthorizedError) {

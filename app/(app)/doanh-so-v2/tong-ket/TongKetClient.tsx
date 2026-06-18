@@ -466,40 +466,58 @@ function CustomersBySaleSection({ salesCustomers }: { salesCustomers: Record<str
     [salesCustomers],
   );
   const [activeSaleId, setActiveSaleId] = useState<string>(() => salesList[0]?.saleId ?? '');
+  // U1 audit fix: reset activeSaleId khi salesList đổi (vd user đổi tháng) → tránh tab
+  // không highlight do active.saleId không còn tồn tại trong tháng mới.
+  useEffect(() => {
+    if (salesList.length === 0) return;
+    const stillExists = salesList.some((s) => s.saleId === activeSaleId);
+    if (!stillExists) setActiveSaleId(salesList[0].saleId);
+  }, [salesList, activeSaleId]);
+
   const active = salesList.find((s) => s.saleId === activeSaleId) ?? salesList[0];
   if (!active) return null;
+
+  // U3 audit fix: chỉ 1 Sale (vd Sale tự xem) → ẩn tabs row (vô nghĩa với 1 tab).
+  const showTabs = salesList.length > 1;
 
   return (
     <div className="card">
       <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
         <Users size={16} className="text-emerald-600" />
-        Khách hàng theo Sale ({salesList.length} người · {salesList.reduce((s, x) => s + x.totals.count, 0)} giao dịch)
+        {showTabs
+          ? `Khách hàng theo Sale (${salesList.length} người · ${salesList.reduce((s, x) => s + x.totals.count, 0)} giao dịch)`
+          : `Khách hàng của ${active.saleName || 'tôi'} (${active.totals.count} giao dịch)`
+        }
       </h3>
 
-      {/* Tabs ngang */}
-      <div className="flex flex-wrap gap-1.5 mb-4 border-b border-slate-200 pb-3">
-        {salesList.map((s) => {
-          const isActive = s.saleId === activeSaleId;
-          return (
-            <button key={s.saleId} type="button" onClick={() => setActiveSaleId(s.saleId)}
-              className={`inline-flex flex-col items-start gap-0.5 px-3 py-2 rounded-lg text-left transition ring-1 ${
-                isActive
-                  ? 'bg-emerald-600 text-white ring-emerald-600'
-                  : 'bg-white text-slate-700 ring-slate-200 hover:bg-slate-50'
-              }`}>
-              <span className="text-xs font-semibold flex items-center gap-1.5">
-                {s.saleName || '(chưa rõ)'}
-                <span className={`text-[10px] px-1.5 py-0.5 rounded font-normal ${isActive ? 'bg-white/20' : 'bg-slate-100 text-slate-500'}`}>
-                  {s.branchId}
+      {/* Tabs ngang — U3: ẩn khi chỉ 1 Sale; U5: overflow-x-auto cho CEO nhiều Sale */}
+      {showTabs && (
+        <div className="flex gap-1.5 mb-4 border-b border-slate-200 pb-3 overflow-x-auto" role="tablist">
+          {salesList.map((s) => {
+            const isActive = s.saleId === activeSaleId;
+            return (
+              <button key={s.saleId} type="button" onClick={() => setActiveSaleId(s.saleId)}
+                role="tab" aria-selected={isActive}
+                className={`shrink-0 inline-flex flex-col items-start gap-0.5 px-3 py-2 rounded-lg text-left transition ring-1 ${
+                  isActive
+                    ? 'bg-emerald-600 text-white ring-emerald-600'
+                    : 'bg-white text-slate-700 ring-slate-200 hover:bg-slate-50'
+                }`}>
+                <span className="text-xs font-semibold flex items-center gap-1.5">
+                  {s.saleName || '(chưa rõ)'}
+                  {/* U4 audit fix: hiển thị branchName thay vì branchId code */}
+                  <span className={`text-xs px-1.5 py-0.5 rounded font-normal ${isActive ? 'bg-white/20' : 'bg-slate-100 text-slate-500'}`}>
+                    {s.branchName || s.branchId}
+                  </span>
                 </span>
-              </span>
-              <span className={`text-[10px] tabular-nums ${isActive ? 'opacity-90' : 'text-slate-500'}`}>
-                {s.totals.count} GD · {fmtMoney(s.totals.sales)}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+                <span className={`text-xs tabular-nums ${isActive ? 'opacity-90' : 'text-slate-500'}`}>
+                  {s.totals.count} GD · {fmtMoney(s.totals.sales)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* KPI summary của Sale active */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-3">
@@ -510,20 +528,20 @@ function CustomersBySaleSection({ salesCustomers }: { salesCustomers: Record<str
         <KpiMini label="Nợ còn lại" value={fmtMoney(active.totals.debtRemaining)} tone="rose" />
       </div>
 
-      {/* Bảng chi tiết tx */}
-      <div className="overflow-x-auto rounded-lg ring-1 ring-slate-200">
+      {/* Bảng chi tiết tx — U6 audit fix: sticky thead + max-h cho scroll dọc dài */}
+      <div className="overflow-auto rounded-lg ring-1 ring-slate-200 max-h-[70vh]">
         <table className="w-full text-sm min-w-[1000px]">
-          <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500 font-semibold">
+          <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500 font-semibold sticky top-0 z-10">
             <tr>
-              <th className="px-2 py-2 text-left w-16">Ngày</th>
-              <th className="px-2 py-2 text-left">Khách hàng</th>
-              <th className="px-2 py-2 text-left">SĐT</th>
-              <th className="px-2 py-2 text-left">Gói</th>
-              <th className="px-2 py-2 text-left w-28">Loại GD</th>
-              <th className="px-2 py-2 text-left w-20">HT thu</th>
-              <th className="px-2 py-2 text-right w-28">Giá trị</th>
-              <th className="px-2 py-2 text-right w-28">Thực thu</th>
-              <th className="px-2 py-2 text-right w-28">Công nợ</th>
+              <th scope="col" className="px-2 py-2 text-left w-16">Ngày</th>
+              <th scope="col" className="px-2 py-2 text-left">Khách hàng</th>
+              <th scope="col" className="px-2 py-2 text-left">SĐT</th>
+              <th scope="col" className="px-2 py-2 text-left">Gói</th>
+              <th scope="col" className="px-2 py-2 text-left w-28">Loại GD</th>
+              <th scope="col" className="px-2 py-2 text-left w-20">HT thu</th>
+              <th scope="col" className="px-2 py-2 text-right w-28">Giá trị</th>
+              <th scope="col" className="px-2 py-2 text-right w-28">Thực thu</th>
+              <th scope="col" className="px-2 py-2 text-right w-28">Công nợ</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -536,14 +554,15 @@ function CustomersBySaleSection({ salesCustomers }: { salesCustomers: Record<str
                 const isDatCoc = tx.transactionType === 'dat_coc';
                 const isTraNot = tx.transactionType === 'thanh_toan_not';
                 const isLinked = tx.matchedTransactionId != null;
+                // U7 audit fix: row trả nốt giữ bg violet kể cả khi hover (signal phân loại quan trọng hơn hover)
                 return (
-                  <tr key={tx.id} className={`hover:bg-slate-50/60 ${isTraNot ? 'bg-violet-50/30' : ''}`}>
+                  <tr key={tx.id} className={isTraNot ? 'bg-violet-50/30 hover:bg-violet-100/40' : 'hover:bg-slate-50/60'}>
                     <td className="px-2 py-1.5 text-slate-500 tabular-nums whitespace-nowrap">{fmtDateShort(tx.date)}</td>
                     <td className="px-2 py-1.5 text-slate-800 font-medium">{tx.customerName || '—'}</td>
                     <td className="px-2 py-1.5 text-slate-600 tabular-nums">{tx.phone || '—'}</td>
-                    <td className="px-2 py-1.5 text-slate-700 truncate max-w-[200px]">{tx.packageName}</td>
+                    <td className="px-2 py-1.5 text-slate-700 truncate max-w-[200px]" title={tx.packageName}>{tx.packageName}</td>
                     <td className="px-2 py-1.5">
-                      <span className={`text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded ring-1 ${
+                      <span className={`text-xs uppercase font-semibold px-1.5 py-0.5 rounded ring-1 ${
                         isDatCoc ? 'bg-amber-50 text-amber-700 ring-amber-200'
                         : isTraNot ? 'bg-violet-50 text-violet-700 ring-violet-200'
                         : 'bg-emerald-50 text-emerald-700 ring-emerald-200'
@@ -560,7 +579,7 @@ function CustomersBySaleSection({ salesCustomers }: { salesCustomers: Record<str
                           <span className="text-rose-700 font-semibold" title={`Đã trả nốt ${(tx.originalDebt - tx.debtAmount).toLocaleString()}đ / ${tx.originalDebt.toLocaleString()}đ`}>
                             {tx.debtAmount.toLocaleString()}
                             {tx.originalDebt > tx.debtAmount && (
-                              <span className="block text-[10px] text-slate-400 font-normal">/ {tx.originalDebt.toLocaleString()}</span>
+                              <span className="block text-xs text-slate-400 font-normal">/ {tx.originalDebt.toLocaleString()}</span>
                             )}
                           </span>
                         ) : (
@@ -569,7 +588,7 @@ function CustomersBySaleSection({ salesCustomers }: { salesCustomers: Record<str
                           </span>
                         )
                       ) : isTraNot ? (
-                        <span className="text-[10px] text-violet-600 italic" title={isLinked ? `Link với tx ${tx.matchedTransactionId}` : 'Chưa link'}>
+                        <span className="text-xs text-violet-600 italic" title={isLinked ? `Link với tx ${tx.matchedTransactionId}` : 'Chưa link'}>
                           {isLinked ? '→ link tx cũ' : tx.matchStatus === 'needs_review' ? 'Cần review' : 'Chưa link'}
                         </span>
                       ) : (
@@ -597,7 +616,7 @@ function KpiMini({ label, value, tone }: { label: string; value: string; tone: '
   }[tone];
   return (
     <div className={`rounded-lg px-3 py-2 ring-1 ${cls}`}>
-      <div className="text-[10px] font-semibold uppercase tracking-wider opacity-70">{label}</div>
+      <div className="text-xs font-semibold uppercase tracking-wider opacity-70">{label}</div>
       <div className="text-sm font-bold tabular-nums mt-0.5">{value}</div>
     </div>
   );

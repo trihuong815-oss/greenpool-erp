@@ -20,8 +20,12 @@ export function getScopeRole(roleCode: string): ScopeRole | null {
   if (roleCode === 'NV_KE') return 'accountant';
   if (roleCode.startsWith('QLCS_')) return 'qlcs';
   // BUG-2 audit fix 2026-06-17: TP_KE = HQ kế toán → top scope (xem + duyệt all branches).
-  // Trước đây map TP_KE → 'accountant' → API check facility_id null → 400 error.
-  if (isTopAdmin(roleCode) || roleCode === 'GD_KD' || roleCode === 'GD_VP' || roleCode === 'TP_KE') return 'top';
+  // V8.X audit fix 2026-06-18: thêm CHU_TICH (Chủ tịch HĐQT — top mgmt) + TP_GS
+  // (Trưởng phòng Giám sát — xem toàn hệ thống theo spec /tong-ket).
+  if (isTopAdmin(roleCode)
+      || roleCode === 'CHU_TICH'
+      || roleCode === 'GD_KD' || roleCode === 'GD_VP'
+      || roleCode === 'TP_KE' || roleCode === 'TP_GS') return 'top';
   return null;
 }
 
