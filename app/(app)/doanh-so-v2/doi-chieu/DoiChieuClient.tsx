@@ -4,13 +4,14 @@
 // Phase 2 (2026-06-17): list batches + filter + click row → mở detail modal với 3 action.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2, RefreshCw } from 'lucide-react';
+import { Loader2, RefreshCw, ClipboardCheck, Calculator } from 'lucide-react';
 import type { SalesDailyBatch, BatchStatus } from '@/lib/types/sales-v2';
 import type { BranchId } from '@/lib/branches';
 import { BRANCHES } from '@/lib/branches';
 import type { ScopeRole } from '@/lib/sales-v2/scope';
 import BatchList from './_components/BatchList';
 import BatchDetailModal from './_components/BatchDetailModal';
+import DailySummaryView from './_components/DailySummaryView';
 
 interface Props {
   myRoleCode: string;
@@ -27,7 +28,11 @@ const TABS: Array<{ value: BatchStatus | 'all'; label: string; cls: string }> = 
   { value: 'all',            label: 'Tất cả',            cls: 'data-[active=true]:bg-violet-50 data-[active=true]:text-violet-700 data-[active=true]:ring-violet-300' },
 ];
 
+// V8 Phase 2 (2026-06-18): main tab switcher — 'doi-chieu' (batch review) vs 'tong-hop' (daily summary).
+type MainView = 'doi-chieu' | 'tong-hop';
+
 export default function DoiChieuClient({ scope, canReview, myBranchId }: Props) {
+  const [view, setView] = useState<MainView>('doi-chieu');
   const [tab, setTab] = useState<BatchStatus | 'all'>('pending_review');
   const [branchId, setBranchId] = useState<BranchId | 'all'>(
     scope === 'top' ? 'all' : ((myBranchId as BranchId) ?? 'all'),
@@ -99,6 +104,33 @@ export default function DoiChieuClient({ scope, canReview, myBranchId }: Props) 
   return (
     <div className="flex-1 p-3 md:p-5 bg-slate-50 overflow-y-auto">
       <div className="mx-auto max-w-[1400px] space-y-4">
+        {/* V8 Phase 2: main view switcher tabs */}
+        <div className="flex flex-wrap gap-1.5 border-b border-slate-200 -mb-2">
+          <button type="button" onClick={() => setView('doi-chieu')}
+            className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-t-lg text-sm font-medium border-b-2 transition ${
+              view === 'doi-chieu'
+                ? 'bg-white text-emerald-700 border-emerald-600 -mb-px'
+                : 'bg-transparent text-slate-500 border-transparent hover:text-slate-700'
+            }`}>
+            <ClipboardCheck size={14} /> Đối chiếu batch
+          </button>
+          <button type="button" onClick={() => setView('tong-hop')}
+            className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-t-lg text-sm font-medium border-b-2 transition ${
+              view === 'tong-hop'
+                ? 'bg-white text-emerald-700 border-emerald-600 -mb-px'
+                : 'bg-transparent text-slate-500 border-transparent hover:text-slate-700'
+            }`}>
+            <Calculator size={14} /> Tổng hợp doanh thu ngày
+          </button>
+        </div>
+
+        {view === 'tong-hop' ? (
+          <DailySummaryView
+            defaultBranch={(scope === 'top' ? 'all' : (myBranchId ?? 'all')) as BranchId | 'all'}
+            allowSwitchBranch={scope === 'top'}
+            callerBranch={myBranchId}
+          />
+        ) : (<>
         {/* Header */}
         <div className="card">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -208,9 +240,10 @@ export default function DoiChieuClient({ scope, canReview, myBranchId }: Props) 
           loading={loading}
           onSelect={(b) => setSelectedBatch(b)}
         />
+        </>)}
       </div>
 
-      {/* Detail modal */}
+      {/* Detail modal — chỉ hiện ở view 'doi-chieu' */}
       {selectedBatch && (
         <BatchDetailModal
           batch={selectedBatch}
