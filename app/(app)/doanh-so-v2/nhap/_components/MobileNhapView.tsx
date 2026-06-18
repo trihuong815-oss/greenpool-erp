@@ -368,21 +368,11 @@ function CardEditor({
               } as any);
               return;
             }
-            // Gói cố định
+            // V7 (2026-06-18): Gói cố định → AUTO-FILL từ pkg.defaultPrice. Sale KHÔNG sửa.
             const newPv = pkg.defaultPrice;
-            let packageValueToSet: any = row.savedRow ? row.packageValue : row.packageValue;
-            const currentPv = pvNum;
-            if (!currentPv && newPv > 0) {
-              packageValueToSet = row.savedRow ? newPv : String(newPv);
-            } else if (currentPv > 0 && newPv > 0 && currentPv !== newPv) {
-              const ok = await showConfirm({
-                title: 'Cập nhật giá theo gói mới?',
-                description: `Giá hiện tại: ${currentPv.toLocaleString()}đ\nGiá mặc định: ${newPv.toLocaleString()}đ`,
-                confirmText: 'Cập nhật',
-                cancelText: 'Giữ giá cũ',
-              });
-              if (ok) packageValueToSet = row.savedRow ? newPv : String(newPv);
-            }
+            const packageValueToSet = newPv > 0
+              ? (row.savedRow ? newPv : String(newPv))
+              : (row.savedRow ? 0 : '');
             onUpdate({
               packageId: pkg.id,
               packageCode: pkg.code,
@@ -470,8 +460,18 @@ function CardEditor({
             >
               {pvNum.toLocaleString()}đ
             </div>
+          ) : pvNum > 0 ? (
+            // V7 (2026-06-18): Auto-fill từ pkg.defaultPrice — Sale KHÔNG sửa.
+            <div
+              className="w-full px-3 py-2 rounded-lg ring-1 ring-slate-200 bg-slate-50 text-sm text-right tabular-nums text-slate-700 font-medium"
+              title="Giá gói lấy từ /doanh-so/packages — admin quản lý"
+            >
+              {pvNum.toLocaleString()}đ
+            </div>
           ) : (
-            <MoneyInput value={pvNum} disabled={!canEdit} onCommit={(n) => setNum('packageValue', n)} />
+            <div className="w-full px-3 py-2 rounded-lg ring-1 ring-amber-200 bg-amber-50/40 text-xs text-amber-700 italic">
+              Gói chưa có giá — báo admin cập nhật
+            </div>
           )}
         </FieldLabel>
         <FieldLabel label="Thu hôm nay *">

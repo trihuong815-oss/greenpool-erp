@@ -174,7 +174,7 @@ export function validateRow(r: LocalRow): { ok: true } | { ok: false; error: str
     if (q * u <= 0) return { ok: false, error: 'Giá trị gói (số buổi × đơn giá) phải > 0' };
   } else {
     const pv = Number(r.packageValue);
-    if (!Number.isFinite(pv) || pv <= 0) return { ok: false, error: 'Giá trị gói phải > 0' };
+    if (!Number.isFinite(pv) || pv <= 0) return { ok: false, error: 'Gói chưa có giá — báo admin cập nhật ở /doanh-so/packages' };
   }
   // V7 Promo: validate combo max 1 discount + 1 bonus
   if ((r.promoSnapshots?.length ?? 0) > 2) return { ok: false, error: 'Tối đa 2 chương trình mỗi giao dịch' };
@@ -632,21 +632,9 @@ function LocalRowItem({ idx, row, packages, canEdit, branchId, onUpdate, onRemov
               });
               return;
             }
-            // Gói cố định: logic gốc + clear PT fields
-            const currentPv = Number(row.packageValue) || 0;
-            const newPv = pkg.defaultPrice;
-            let packageValueToSet = row.packageValue;
-            if (!currentPv && newPv > 0) {
-              packageValueToSet = String(newPv);
-            } else if (currentPv > 0 && newPv > 0 && currentPv !== newPv) {
-              const ok = await showConfirm({
-                title: 'Cập nhật giá theo gói mới?',
-                description: `Giá hiện tại: ${currentPv.toLocaleString()}đ\nGiá mặc định của "${pkg.name}": ${newPv.toLocaleString()}đ`,
-                confirmText: 'Cập nhật giá',
-                cancelText: 'Giữ giá cũ',
-              });
-              if (ok) packageValueToSet = String(newPv);
-            }
+            // V7 (2026-06-18): Gói cố định → AUTO-FILL packageValue từ pkg.defaultPrice.
+            // Sale KHÔNG sửa Giá trị gói (chỉ admin set ở /packages).
+            // Nếu pkg.defaultPrice = 0 (chưa setup) → giữ '' → validateRow chặn POST + message rõ.
             onUpdate({
               packageId: pkg.id,
               packageCode: pkg.code,
@@ -654,7 +642,7 @@ function LocalRowItem({ idx, row, packages, canEdit, branchId, onUpdate, onRemov
               serviceGroup: pkg.serviceGroup,
               isChildPackage: pkg.isChildPackage,
               packageIsCustomQuantity: false,
-              packageValue: packageValueToSet,
+              packageValue: pkg.defaultPrice > 0 ? String(pkg.defaultPrice) : '',
               quantity: '',
               unitPrice: '',
             });
@@ -731,8 +719,18 @@ function LocalRowItem({ idx, row, packages, canEdit, branchId, onUpdate, onRemov
             title="Auto = Số buổi × Đơn giá / buổi (TRƯỚC khuyến mãi)">
             {base.toLocaleString()}
           </span>
+        ) : base > 0 ? (
+          // V7 (2026-06-18): Auto-fill từ pkg.defaultPrice — Sale KHÔNG sửa.
+          <span className="block text-right tabular-nums text-slate-700 font-medium px-2 py-1 bg-slate-50 rounded"
+            title="Giá gói lấy từ /doanh-so/packages — chỉ admin sửa được">
+            {base.toLocaleString()}
+          </span>
         ) : (
-          <NumberCell value={base} disabled={!canEdit} onCommit={(v) => onUpdate({ packageValue: String(v) })} />
+          // pkg chưa có defaultPrice hoặc chưa chọn gói
+          <span className="block text-right text-[11px] text-amber-600 italic px-2"
+            title="Gói chưa có giá — báo admin cập nhật giá ở /doanh-so/packages">
+            {row.packageId ? 'Gói chưa có giá' : '—'}
+          </span>
         )}
       </Td>
       {/* V7 Promo (2026-06-18) — editable cho LocalRow */}
