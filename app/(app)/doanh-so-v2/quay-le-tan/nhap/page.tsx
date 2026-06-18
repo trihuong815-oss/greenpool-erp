@@ -37,13 +37,7 @@ export default async function ReceptionNhapPage() {
   return (
     <>
       <AppTopBar title="Nhập doanh thu quầy lễ tân" icon="task" />
-      <ReceptionNhapClient
-        callerUid={profile.id}
-        callerName={profile.displayName ?? profile.email ?? ''}
-        callerRole={profile.roleCode}
-        defaultBranch={defaultBranch}
-        allowSwitchBranch={isTpKe}
-      />
+      <ReceptionNhapClient defaultBranch={defaultBranch} allowSwitchBranch={isTpKe} />
     </>
   );
 }

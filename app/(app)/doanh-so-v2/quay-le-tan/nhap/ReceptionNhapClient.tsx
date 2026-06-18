@@ -22,11 +22,8 @@ import {
 import { showConfirm } from '@/components/ui/imperative-modal';
 
 interface Props {
-  callerUid: string;
-  callerName: string;
-  callerRole: string;
   defaultBranch: BranchId;
-  allowSwitchBranch: boolean;
+  allowSwitchBranch: boolean;  // TP_KE switch branch — show banner warn
 }
 
 function todayInVN(): string {
@@ -72,7 +69,7 @@ function entryTotalOf(e: LocalEntry): number {
   return (Number(e.cash) || 0) + (Number(e.transfer) || 0) + (Number(e.card) || 0);
 }
 
-export default function ReceptionNhapClient({ callerUid, callerName, callerRole, defaultBranch, allowSwitchBranch }: Props) {
+export default function ReceptionNhapClient({ defaultBranch, allowSwitchBranch }: Props) {
   const [branchId, setBranchId] = useState<BranchId>(defaultBranch);
   const [date, setDate] = useState<string>(todayInVN());
   const [batch, setBatch] = useState<SalesReceptionBatch | null>(null);
@@ -82,11 +79,26 @@ export default function ReceptionNhapClient({ callerUid, callerName, callerRole,
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ type: 'ok' | 'err'; msg: string } | null>(null);
+  // U1+U2 audit fix: dirty guard — track changes since last save để warn user.
+  const [dirty, setDirty] = useState(false);
+  // U3 audit fix: track pricing missing để hint NV_KE báo admin setup.
+  const [pricingMissing, setPricingMissing] = useState(false);
 
   function showToast(type: 'ok' | 'err', msg: string) {
     setToast({ type, msg });
     setTimeout(() => setToast(null), 3500);
   }
+
+  // U2: beforeunload warn khi dirty
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [dirty]);
 
   const fetchBatch = useCallback(async () => {
     setLoading(true); setError(null);
@@ -99,6 +111,11 @@ export default function ReceptionNhapClient({ callerUid, callerName, callerRole,
       setBatch(b);
       setEntries(b.entries.map(toLocal));
       setNote(b.note ?? '');
+      setDirty(false);
+      // Check pricing: nếu mọi entry có unitPrice cố định (hasPrice) đều null → pricing chưa setup
+      const priceableEntries = b.entries.filter((e) => categoryHasUnitPrice(e.category));
+      const allUnpriced = priceableEntries.length > 0 && priceableEntries.every((e) => !e.unitPrice || e.unitPrice <= 0);
+      setPricingMissing(allUnpriced);
     } catch (e: any) {
       setError(e?.message ?? 'Lỗi tải');
       setBatch(null);
@@ -110,6 +127,7 @@ export default function ReceptionNhapClient({ callerUid, callerName, callerRole,
 
   const updateEntry = useCallback((idx: number, patch: Partial<LocalEntry>) => {
     setEntries((prev) => prev.map((e, i) => i === idx ? { ...e, ...patch } : e));
+    setDirty(true);
   }, []);
 
   const totals = useMemo(() => {
@@ -128,6 +146,11 @@ export default function ReceptionNhapClient({ callerUid, callerName, callerRole,
   async function handleSave(finalize: boolean) {
     if (!canEdit) { showToast('err', 'Báo cáo đã chốt — không sửa được'); return; }
     if (finalize) {
+      // U5 audit fix: chặn chốt khi tổng=0 (tránh approve doc trống không sửa được)
+      if (totals.total <= 0) {
+        showToast('err', 'Tổng thu = 0đ — không thể chốt báo cáo trống. Vui lòng nhập số liệu trước.');
+        return;
+      }
       const ok = await showConfirm({
         title: `Chốt báo cáo quầy lễ tân ngày ${fmtDate(date)}?`,
         description:
@@ -167,10 +190,39 @@ export default function ReceptionNhapClient({ callerUid, callerName, callerRole,
       const b = j.batch as SalesReceptionBatch;
       setBatch(b);
       setEntries(b.entries.map(toLocal));
+      setDirty(false);  // U1: reset dirty sau khi save success
       showToast('ok', finalize ? 'Đã chốt báo cáo' : 'Đã lưu nháp');
     } catch (e: any) {
       showToast('err', e?.message ?? 'Lỗi lưu');
     } finally { setSaving(false); }
+  }
+
+  // U1: confirm trước khi đổi date/branch nếu dirty (mất data)
+  async function safeChangeDate(newDate: string) {
+    if (dirty) {
+      const ok = await showConfirm({
+        title: 'Bạn có thay đổi chưa lưu',
+        description: 'Chuyển sang ngày khác sẽ MẤT các số liệu vừa nhập (chưa save). Tiếp tục?',
+        confirmText: 'Bỏ và chuyển',
+        cancelText: 'Ở lại',
+        variant: 'danger',
+      });
+      if (!ok) return;
+    }
+    setDate(newDate);
+  }
+  async function safeChangeBranch(newBranch: BranchId) {
+    if (dirty) {
+      const ok = await showConfirm({
+        title: 'Bạn có thay đổi chưa lưu',
+        description: 'Chuyển sang cơ sở khác sẽ MẤT các số liệu vừa nhập (chưa save). Tiếp tục?',
+        confirmText: 'Bỏ và chuyển',
+        cancelText: 'Ở lại',
+        variant: 'danger',
+      });
+      if (!ok) return;
+    }
+    setBranchId(newBranch);
   }
 
   const branchName = BRANCHES.find((b) => b.id === branchId)?.name ?? branchId;
@@ -197,20 +249,20 @@ export default function ReceptionNhapClient({ callerUid, callerName, callerRole,
               )}
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              <button type="button" onClick={() => setDate(shiftDate(date, -1))}
+              <button type="button" onClick={() => void safeChangeDate(shiftDate(date, -1))}
                 className="p-2 rounded-lg ring-1 ring-slate-200 hover:bg-slate-50" title="Ngày trước">
                 <ChevronLeft size={16} />
               </button>
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
+              <input type="date" value={date} onChange={(e) => void safeChangeDate(e.target.value)}
                 max={todayInVN()}
                 className="px-3 py-2 rounded-lg bg-white text-sm ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-              <button type="button" onClick={() => setDate(shiftDate(date, 1))}
+              <button type="button" onClick={() => void safeChangeDate(shiftDate(date, 1))}
                 disabled={date >= todayInVN()}
                 className="p-2 rounded-lg ring-1 ring-slate-200 hover:bg-slate-50 disabled:opacity-30" title="Ngày sau">
                 <ChevronRight size={16} />
               </button>
               {allowSwitchBranch && (
-                <select value={branchId} onChange={(e) => setBranchId(e.target.value as BranchId)}
+                <select value={branchId} onChange={(e) => void safeChangeBranch(e.target.value as BranchId)}
                   className="px-3 py-2 rounded-lg bg-white text-sm ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500">
                   {BRANCHES.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
                 </select>
@@ -244,6 +296,29 @@ export default function ReceptionNhapClient({ callerUid, callerName, callerRole,
           )}
         </div>
 
+        {/* U8 audit fix: banner warn cho TP_KE khi đang nhập THAY cơ sở khác */}
+        {allowSwitchBranch && (
+          <div className="rounded-lg bg-amber-50 ring-1 ring-amber-200 px-3 py-2 text-sm text-amber-800 flex items-start gap-2">
+            <Info size={14} className="shrink-0 mt-0.5" />
+            <span>
+              Bạn (<strong>TP_KE</strong>) đang nhập THAY cho cơ sở <strong>{branchName}</strong>. Ghi đè dữ liệu kế toán cơ sở đã nhập.
+              Mọi thao tác đều được audit log.
+            </span>
+          </div>
+        )}
+
+        {/* U3 audit fix: hint khi pricing chưa setup */}
+        {pricingMissing && canEdit && (
+          <div className="rounded-lg bg-sky-50 ring-1 ring-sky-200 px-3 py-2 text-sm text-sky-800 flex items-start gap-2">
+            <Info size={14} className="shrink-0 mt-0.5" />
+            <span>
+              💡 Đơn giá vé lẻ / thuê tủ / làm thẻ <strong>chưa được cấu hình</strong> cho cơ sở này.
+              Vui lòng báo <strong>ADMIN / TP_KE</strong> setup ở <strong>Cài đặt → Cấu hình đơn giá quầy</strong>
+              để hệ thống tự fill mỗi ngày.
+            </span>
+          </div>
+        )}
+
         {/* Error */}
         {error && (
           <div className="card border-rose-200 bg-rose-50/40">
@@ -262,7 +337,7 @@ export default function ReceptionNhapClient({ callerUid, callerName, callerRole,
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[900px] text-sm">
-                <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+                <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500 font-semibold">
                   <tr>
                     <th className="px-3 py-2.5 text-left w-10">#</th>
                     <th className="px-3 py-2.5 text-left">Nội dung</th>
@@ -335,7 +410,7 @@ export default function ReceptionNhapClient({ callerUid, callerName, callerRole,
         <div className="card">
           <label className="block">
             <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">Ghi chú</div>
-            <textarea value={note} onChange={(e) => setNote(e.target.value)} disabled={!canEdit}
+            <textarea value={note} onChange={(e) => { setNote(e.target.value); setDirty(true); }} disabled={!canEdit}
               rows={2} maxLength={1000}
               placeholder="Ghi chú bổ sung (tuỳ chọn)"
               className="w-full px-3 py-2 rounded-lg ring-1 ring-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:bg-slate-50" />
@@ -385,7 +460,7 @@ function Kpi({ label, value, tone }: { label: string; value: string; tone: 'emer
   }[tone];
   return (
     <div className={`rounded-lg px-3 py-2 ring-1 ${cls}`}>
-      <div className="text-[10px] font-semibold uppercase tracking-wider opacity-70">{label}</div>
+      <div className="text-xs font-semibold uppercase tracking-wider opacity-70">{label}</div>
       <div className="text-base font-bold tabular-nums mt-0.5">{value}</div>
     </div>
   );

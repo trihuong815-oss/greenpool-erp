@@ -67,7 +67,6 @@ const MENU_SECTIONS: MenuSection[] = [
       { route: 'doanh-so-v2/chuong-trinh',          label: 'Chương trình KM',        icon: Tag },
       { route: 'doanh-so-v2/cong-no',               label: 'Công nợ',                icon: CreditCard },
       { route: 'doanh-so-v2/tong-ket',              label: 'Tổng kết tháng',         icon: TrendingUp },
-      { route: 'doanh-so-v2/quay-le-tan/cau-hinh',  label: 'Cấu hình đơn giá quầy',  icon: Sliders },
     ],
   },
   {
@@ -88,9 +87,10 @@ const MENU_SECTIONS: MenuSection[] = [
   {
     title: 'Cài đặt',
     items: [
-      { route: 'bao-mat',           label: 'Bảo mật & Thông báo', icon: ShieldCheck },
-      { route: 'doanh-so/packages', label: 'Cài đặt gói dịch vụ', icon: Settings },
-      { route: 'users',             label: 'Cài đặt user',        icon: UserCog },
+      { route: 'bao-mat',                          label: 'Bảo mật & Thông báo',     icon: ShieldCheck },
+      { route: 'doanh-so/packages',                label: 'Cài đặt gói dịch vụ',     icon: Settings },
+      { route: 'doanh-so-v2/quay-le-tan/cau-hinh', label: 'Đơn giá quầy lễ tân',     icon: Sliders },
+      { route: 'users',                            label: 'Cài đặt user',            icon: UserCog },
     ],
   },
 ];

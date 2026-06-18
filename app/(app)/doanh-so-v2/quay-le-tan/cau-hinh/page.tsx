@@ -29,10 +29,7 @@ export default async function ReceptionPricingPage() {
   return (
     <>
       <AppTopBar title="Cấu hình đơn giá quầy lễ tân" icon="task" />
-      <ReceptionPricingClient
-        callerUid={profile.id}
-        callerName={profile.displayName ?? profile.email ?? ''}
-      />
+      <ReceptionPricingClient />
     </>
   );
 }

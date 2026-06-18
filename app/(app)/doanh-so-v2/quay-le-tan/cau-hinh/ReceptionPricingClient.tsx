@@ -12,12 +12,7 @@ import {
   type ReceptionCategory, type SalesReceptionPricing,
 } from '@/lib/types/sales-reception';
 
-interface Props {
-  callerUid: string;
-  callerName: string;
-}
-
-export default function ReceptionPricingClient({ callerUid, callerName }: Props) {
+export default function ReceptionPricingClient() {
   const [branchId, setBranchId] = useState<BranchId>(BRANCHES[0].id as BranchId);
   const [pricing, setPricing] = useState<SalesReceptionPricing | null>(null);
   const [prices, setPrices] = useState<Record<string, string>>({});
