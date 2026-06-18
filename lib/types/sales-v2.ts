@@ -125,6 +125,8 @@ export interface SalesTransaction {
   // Snapshot tại lúc tạo — dùng cho PATCH/report sau này biết tx này có thuộc PT mode không
   // (kể cả gói gốc sau này bị tắt isCustomQuantity).
   packageIsCustomQuantity?: boolean;
+  // Snapshot unitName ('buổi'/'lượt'/...) — UI/báo cáo dùng để hiển thị "10 buổi" / "30 lượt".
+  packageUnitName?: string;
   // V6 (2026-06-17): chứng từ tracking
   // - receiptNo: số phiếu thu — required cho 'dat_coc' (mới), optional+link key cho 'thanh_toan_not'
   // - contractNo: số hợp đồng — required cho 'thanh_toan_full' và 'thanh_toan_not'

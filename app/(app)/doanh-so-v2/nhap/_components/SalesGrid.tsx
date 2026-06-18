@@ -210,12 +210,13 @@ export default function SalesGrid({
               <Th width={150}>Người giám hộ</Th>
               <Th width={120}>Nguồn *</Th>
               <Th width={180}>Gói *</Th>
+              {/* V6 PT (2026-06-18): 2 ô PT đặt NGAY CẠNH Gói để Sale thao tác liền mạch */}
+              <Th width={90} align="right">Số buổi</Th>
+              <Th width={130} align="right">Đơn giá / buổi</Th>
               <Th width={140}>Loại GD *</Th>
               <Th width={130}>HT thu *</Th>
               <Th width={120}>Số phiếu thu</Th>
               <Th width={120}>Số HĐ</Th>
-              <Th width={90} align="right">Số buổi</Th>
-              <Th width={130} align="right">Đơn giá / buổi</Th>
               <Th width={120} align="right">Giá trị gói *</Th>
               <Th width={120} align="right">Thu hôm nay *</Th>
               <Th width={120} align="right">Công nợ</Th>
@@ -376,6 +377,19 @@ function SavedRow({ idx, row, packages, canEdit, batchStatus, onUpdate, onRemove
           }}
         />
       </Td>
+      {/* V6 PT (2026-06-18): 2 ô NGAY CẠNH Gói để Sale thao tác liền mạch */}
+      <Td align="right">
+        {isPT && row.transactionType !== 'thanh_toan_not'
+          ? <NumberCell value={qty} disabled={!canEdit} onCommit={(v) => onUpdate({ quantity: v > 0 ? v : null })} />
+          : <span className="text-slate-300 text-xs">—</span>
+        }
+      </Td>
+      <Td align="right">
+        {isPT && row.transactionType !== 'thanh_toan_not'
+          ? <NumberCell value={up} disabled={!canEdit} onCommit={(v) => onUpdate({ unitPrice: v >= 0 ? v : null })} />
+          : <span className="text-slate-300 text-xs">—</span>
+        }
+      </Td>
       <Td>
         <TxnTypeSelect
           value={row.transactionType}
@@ -412,18 +426,6 @@ function SavedRow({ idx, row, packages, canEdit, batchStatus, onUpdate, onRemove
           placeholder="HĐ..."
           onCommit={(v) => onUpdate({ contractNo: v || null })}
         />
-      </Td>
-      <Td align="right">
-        {isPT && row.transactionType !== 'thanh_toan_not'
-          ? <NumberCell value={qty} disabled={!canEdit} onCommit={(v) => onUpdate({ quantity: v > 0 ? v : null })} />
-          : <span className="text-slate-300 text-xs">—</span>
-        }
-      </Td>
-      <Td align="right">
-        {isPT && row.transactionType !== 'thanh_toan_not'
-          ? <NumberCell value={up} disabled={!canEdit} onCommit={(v) => onUpdate({ unitPrice: v >= 0 ? v : null })} />
-          : <span className="text-slate-300 text-xs">—</span>
-        }
       </Td>
       <Td align="right">
         {row.transactionType === 'thanh_toan_not' ? (
@@ -578,6 +580,19 @@ function LocalRowItem({ idx, row, packages, canEdit, onUpdate, onRemove, autoFoc
           }}
         />
       </Td>
+      {/* V6 PT (2026-06-18): 2 ô PT NGAY CẠNH Gói để Sale thao tác liền mạch */}
+      <Td align="right">
+        {isPT && !isThanhToanNot
+          ? <NumberCell value={qty} disabled={!canEdit} onCommit={(v) => onUpdate({ quantity: v > 0 ? String(v) : '' })} />
+          : <span className="text-slate-300 text-xs">—</span>
+        }
+      </Td>
+      <Td align="right">
+        {isPT && !isThanhToanNot
+          ? <NumberCell value={up} disabled={!canEdit} onCommit={(v) => onUpdate({ unitPrice: v >= 0 ? String(v) : '' })} />
+          : <span className="text-slate-300 text-xs">—</span>
+        }
+      </Td>
       <Td>
         <TxnTypeSelect
           value={row.transactionType}
@@ -614,18 +629,6 @@ function LocalRowItem({ idx, row, packages, canEdit, onUpdate, onRemove, autoFoc
           placeholder="HĐ..."
           onCommit={(v) => onUpdate({ contractNo: v })}
         />
-      </Td>
-      <Td align="right">
-        {isPT && !isThanhToanNot
-          ? <NumberCell value={qty} disabled={!canEdit} onCommit={(v) => onUpdate({ quantity: v > 0 ? String(v) : '' })} />
-          : <span className="text-slate-300 text-xs">—</span>
-        }
-      </Td>
-      <Td align="right">
-        {isPT && !isThanhToanNot
-          ? <NumberCell value={up} disabled={!canEdit} onCommit={(v) => onUpdate({ unitPrice: v >= 0 ? String(v) : '' })} />
-          : <span className="text-slate-300 text-xs">—</span>
-        }
       </Td>
       <Td align="right">
         {isThanhToanNot ? (

@@ -74,6 +74,7 @@ export function serializeTransaction(id: string, raw: Record<string, any>): Sale
     quantity: raw.quantity != null ? Number(raw.quantity) : null,
     unitPrice: raw.unitPrice != null ? Number(raw.unitPrice) : null,
     packageIsCustomQuantity: raw.packageIsCustomQuantity === true,
+    packageUnitName: raw.packageUnitName ? String(raw.packageUnitName) : '',
     receiptNo: raw.receiptNo ?? null,
     contractNo: raw.contractNo ?? null,
     note: raw.note ?? null,

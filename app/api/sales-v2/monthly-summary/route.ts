@@ -36,6 +36,10 @@ interface Bucket {
 interface NamedBucket extends Bucket {
   name: string;
 }
+interface PackageBucket extends NamedBucket {
+  isCustomQuantity?: boolean;
+  unitName?: string;
+}
 
 const SOURCES: SalesV2Source[] = ['ca_nhan', 'walkin', 'mkt', 'renew', 'ref'];
 
@@ -90,7 +94,7 @@ export async function GET(req: NextRequest) {
     // Aggregate
     const totals = { sales: 0, collected: 0, debtGenerated: 0, debtRemaining: 0, transactions: 0 };
     const bySource = emptyBySource();
-    const byPackage: Record<string, NamedBucket> = {};
+    const byPackage: Record<string, PackageBucket> = {};
     const bySale: Record<string, NamedBucket> = {};
     const byBranch: Record<string, NamedBucket> = {};
     // V6 PT (2026-06-17): gói tính theo buổi. Aggregate riêng để báo cáo dịch vụ buổi.
@@ -133,7 +137,12 @@ export async function GET(req: NextRequest) {
         }
         const pid = String(x.packageId ?? '');
         if (pid) {
-          if (!byPackage[pid]) byPackage[pid] = { name: String(x.packageName ?? ''), count: 0, sales: 0, collected: 0 };
+          if (!byPackage[pid]) byPackage[pid] = {
+            name: String(x.packageName ?? ''),
+            count: 0, sales: 0, collected: 0,
+            isCustomQuantity: x.packageIsCustomQuantity === true,
+            unitName: String(x.packageUnitName ?? ''),
+          };
           byPackage[pid].count += 1;
           byPackage[pid].sales += pv;
           byPackage[pid].collected += ct;

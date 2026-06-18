@@ -489,7 +489,17 @@ function TransactionsTable({
               </td>
               <td className="px-2 py-1.5">
                 <div className="text-xs">
-                  <div className="font-medium text-slate-700">{r.packageName}</div>
+                  <div className="font-medium text-slate-700 flex items-center gap-1.5 flex-wrap">
+                    <span>{r.packageName}</span>
+                    {r.packageIsCustomQuantity && (
+                      <span
+                        className="text-[9px] uppercase font-bold text-violet-700 bg-violet-100 px-1 py-0.5 rounded ring-1 ring-violet-200"
+                        title={`Gói tính theo ${r.packageUnitName || 'buổi'} (PT) — packageValue = số ${r.packageUnitName || 'buổi'} × đơn giá. Sale sửa qua /nhap khi batch returned.`}
+                      >
+                        PT
+                      </span>
+                    )}
+                  </div>
                   <div className="text-slate-400 text-[10px]">{r.serviceGroup}</div>
                 </div>
               </td>
@@ -520,7 +530,20 @@ function TransactionsTable({
                 <EditableText value={r.contractNo ?? ''} disabled={!editMode} onCommit={(v) => onUpdate(r.id, { contractNo: v || null })} />
               </td>
               <td className="px-2 py-1.5 text-right tabular-nums">
-                <EditableNumber value={r.packageValue} disabled={!editMode} onCommit={(v) => onUpdate(r.id, { packageValue: v })} />
+                {r.packageIsCustomQuantity ? (
+                  // PT: packageValue = qty × up (server enforce). Hiển thị readonly + breakdown nhỏ.
+                  // Kế toán muốn sửa qty/up → reject row, Sale tự sửa ở /nhap khi batch returned.
+                  <div title="Gói PT — Sale sửa số buổi / đơn giá ở /nhap (sau khi reject)">
+                    <div className="text-[10px] text-slate-400 leading-tight">
+                      {(r.quantity ?? 0).toLocaleString()} {r.packageUnitName || 'buổi'} × {(r.unitPrice ?? 0).toLocaleString()}
+                    </div>
+                    <div className="font-semibold text-slate-700 leading-tight">
+                      {r.packageValue.toLocaleString()}
+                    </div>
+                  </div>
+                ) : (
+                  <EditableNumber value={r.packageValue} disabled={!editMode} onCommit={(v) => onUpdate(r.id, { packageValue: v })} />
+                )}
               </td>
               <td className="px-2 py-1.5 text-right tabular-nums">
                 <EditableNumber value={r.collectedToday} disabled={!editMode} onCommit={(v) => onUpdate(r.id, { collectedToday: v })} />

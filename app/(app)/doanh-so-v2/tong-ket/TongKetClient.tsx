@@ -18,7 +18,7 @@ interface Summary {
   scope: { branchId: string | null; saleId: string | null };
   totals: { sales: number; collected: number; debtGenerated: number; debtRemaining: number; transactions: number };
   bySource: Record<SalesV2Source, { count: number; sales: number; collected: number }>;
-  byPackage: Record<string, { name: string; count: number; sales: number; collected: number }>;
+  byPackage: Record<string, { name: string; count: number; sales: number; collected: number; isCustomQuantity?: boolean; unitName?: string }>;
   bySale: Record<string, { name: string; count: number; sales: number; collected: number }>;
   byBranch: Record<string, { name: string; count: number; sales: number; collected: number }>;
   // V6 PT (2026-06-17)
@@ -236,7 +236,17 @@ export default function TongKetClient({ scope }: Props) {
                     {topPackages.map((p, i) => (
                       <div key={p.id} className="flex items-center gap-2 text-sm">
                         <span className="w-6 h-6 rounded-full bg-slate-100 text-slate-600 text-xs font-bold flex items-center justify-center tabular-nums">{i + 1}</span>
-                        <span className="flex-1 truncate text-slate-700">{p.name}</span>
+                        <span className="flex-1 truncate text-slate-700 flex items-center gap-1.5">
+                          <span className="truncate">{p.name}</span>
+                          {p.isCustomQuantity && (
+                            <span
+                              className="shrink-0 text-[9px] uppercase font-bold text-violet-700 bg-violet-100 px-1 py-0.5 rounded ring-1 ring-violet-200"
+                              title={`Gói PT — tính theo ${p.unitName || 'buổi'}`}
+                            >
+                              PT
+                            </span>
+                          )}
+                        </span>
                         <span className="shrink-0 text-xs text-slate-500 tabular-nums">{p.count} GD</span>
                         <span className="shrink-0 font-semibold text-emerald-700 tabular-nums">{fmtMoney(p.sales)}</span>
                       </div>
