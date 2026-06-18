@@ -10,6 +10,7 @@ import { getFirebaseAdminDb } from '@/lib/firebase/admin';
 import { COLLECTIONS } from '@/lib/firebase/collections';
 import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-auth';
 import { serializeProgram } from '@/lib/sales-v2/programs';
+import { sendNotificationEvent } from '@/lib/firebase/noti-engine';
 import { writeAuditLog } from '@/lib/firebase/audit-log';
 
 export const runtime = 'nodejs';
@@ -78,6 +79,23 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       actorName: caller.actorName,
       actorRole: caller.actorRole,
       source: 'api',
+    });
+
+    // V7 audit fix (2026-06-18): noti creator (QLCS) khi kế toán pause/resume.
+    // Tránh QLCS bị lạc: thấy promo biến mất khỏi /chuong-trinh active list mà không hiểu vì sao.
+    void sendNotificationEvent({
+      type: 'sales_program_active',
+      module: 'sales',
+      entityId: id,
+      title: action === 'pause'
+        ? `Chương trình "${data.name}" đã tạm dừng`
+        : `Chương trình "${data.name}" đã kích hoạt lại`,
+      message: `${caller.actorName}${reason ? ' · Lý do: ' + reason : ''}`,
+      linkUrl: `/doanh-so-v2/chuong-trinh?programId=${id}`,
+      recipients: [String(data.createdBy)],
+      priority: 'low',
+      pushTag: `sales-program-${id}`,
+      channels: { inApp: true, push: false, email: false },
     });
 
     const newDoc = await ref.get();

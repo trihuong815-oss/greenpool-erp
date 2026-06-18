@@ -41,10 +41,17 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Thiếu packageId' }, { status: 400 });
     }
 
-    // Sale: branch phải khớp facility_id của caller (đảm bảo không chéo cơ sở)
+    // V7 audit fix (2026-06-18): chỉ role liên quan đến /nhap workflow + admin được call
+    // → tránh info leak danh sách promo + code sang role không liên quan (KT viên, GV, NV_CH...).
     const role = String(caller.profile.role_code ?? '');
     const isSale = role === 'NV_SALE' || role === 'NV_SALE_PT';
-    if (isSale && caller.profile.facility_id !== branchId) {
+    const isAdminOrTop = ['CEO', 'ADMIN', 'CHU_TICH', 'GD_KD', 'GD_VP', 'TP_KE'].includes(role);
+    const isAccountantOrQlcs = role === 'NV_KE' || role.startsWith('QLCS_');
+    if (!isSale && !isAdminOrTop && !isAccountantOrQlcs) {
+      return NextResponse.json({ error: 'Không có quyền xem danh sách khuyến mãi' }, { status: 403 });
+    }
+    // Sale + NV_KE + QLCS: branch phải khớp facility_id của caller (đảm bảo không chéo cơ sở)
+    if ((isSale || isAccountantOrQlcs) && caller.profile.facility_id !== branchId) {
       return NextResponse.json({ error: 'Không có quyền xem chương trình của cơ sở khác' }, { status: 403 });
     }
 

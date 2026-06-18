@@ -460,6 +460,7 @@ service cloud.firestore {
     match /salesPrograms/{programId} {
       allow read: if isSignedIn() && (
         isAdmin() ||
+        userRole() == 'CHU_TICH' ||
         userRole() == 'TP_KE' ||
         (resource.data.branchId == userFacility() && (
           isQLCS() ||

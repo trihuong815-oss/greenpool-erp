@@ -95,12 +95,17 @@ export async function buildApproverChain(): Promise<{ uids: string[]; names: str
       name: String(data.displayName ?? data.email ?? ''),
     });
   });
-  const chain: Array<{ uid: string; name: string }> = [];
-  if (byRole.GD_KD[0]) chain.push(byRole.GD_KD[0]);
-  if (byRole.GD_VP[0]) chain.push(byRole.GD_VP[0]);
-  if (chain.length === 0) {
-    throw new Error('Hệ thống chưa có ai đảm nhiệm role GD_KD hoặc GD_VP để duyệt chương trình');
+  // V7 audit fix (2026-06-18): YÊU CẦU đủ CẢ GD_KD VÀ GD_VP — không silent rút ngắn.
+  // Spec anh chốt: chương trình KM phải qua 2 cấp duyệt. Thiếu cấp nào → block submit.
+  const missing: string[] = [];
+  if (!byRole.GD_KD[0]) missing.push('GD_KD');
+  if (!byRole.GD_VP[0]) missing.push('GD_VP');
+  if (missing.length > 0) {
+    throw new Error(
+      `Hệ thống chưa có người đảm nhiệm role ${missing.join(' và ')} để duyệt — báo Admin cập nhật user.`
+    );
   }
+  const chain: Array<{ uid: string; name: string }> = [byRole.GD_KD[0], byRole.GD_VP[0]];
   return { uids: chain.map((c) => c.uid), names: chain.map((c) => c.name) };
 }
 

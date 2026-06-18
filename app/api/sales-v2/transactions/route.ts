@@ -87,8 +87,9 @@ export async function POST(req: NextRequest) {
     const inputQuantity = body.quantity != null ? Number(body.quantity) : null;
     const inputUnitPrice = body.unitPrice != null ? Number(body.unitPrice) : null;
     // V7 Promo (2026-06-18): Sale gửi promoIds[] tối đa 2 (1 giảm + 1 tặng).
+    // Audit fix: dedupe id để chặn duplicate (vd ['p1','p1']) → tránh apply discount 2x.
     const inputPromoIds: string[] = Array.isArray(body.promoIds)
-      ? body.promoIds.map(String).filter((s: string) => s.length > 0).slice(0, 2)
+      ? Array.from(new Set<string>(body.promoIds.map((x: unknown) => String(x)).filter((s: string) => s.length > 0))).slice(0, 2)
       : [];
 
     if (!customerName) return NextResponse.json({ error: 'Thiếu tên khách hàng' }, { status: 400 });
@@ -197,6 +198,11 @@ export async function POST(req: NextRequest) {
 
     if (collectedToday > effectivePackageValue && !isThanhToanNot) {
       return NextResponse.json({ error: 'Thu hôm nay không thể lớn hơn giá trị gói (sau khuyến mãi)' }, { status: 400 });
+    }
+    // V7 audit fix (2026-06-18): thanh_toan_full bắt buộc collected >= effectivePackageValue
+    // (đồng bộ với PATCH route). Tránh tạo tx 'full' mà thực thu < gói.
+    if (transactionType === 'thanh_toan_full' && collectedToday < effectivePackageValue) {
+      return NextResponse.json({ error: 'Thanh toán full phải thu đủ giá trị gói (sau khuyến mãi)' }, { status: 400 });
     }
 
     const debtAmount = isThanhToanNot ? 0 : Math.max(0, effectivePackageValue - collectedToday);

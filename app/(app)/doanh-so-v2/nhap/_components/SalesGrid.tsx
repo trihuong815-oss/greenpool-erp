@@ -1094,7 +1094,7 @@ function PromoCell({ row, branchId, batchMonth, canEdit, onUpdate }: {
       setAvailable(j.programs as AvailablePromo[]);
     } catch (e: any) { setError(e?.message ?? 'Lỗi tải'); }
     finally { setLoading(false); }
-  }, [branchId, row.packageId]);
+  }, [branchId, row.packageId, batchMonth]);
 
   function openPicker() {
     if (!canEdit) return;

@@ -203,9 +203,12 @@ export default function ChuongTrinhClient({ callerUid, callerRole, callerBranch,
             <div>
               <h1 className="text-lg font-bold text-slate-800">Chương trình khuyến mãi {fmtMonth(month)}</h1>
               <p className="mt-1 text-sm text-slate-600">
-                {isQLCS && 'QLCS tạo chương trình cho cơ sở mình → gửi duyệt GD_KD → GD_VP → kế toán cài đặt mã.'}
-                {!isQLCS && isAccountant && 'Kế toán cài đặt mã promo cho chương trình đã duyệt + tạm dừng / kích hoạt.'}
-                {!isQLCS && !isAccountant && 'Tổng quan các chương trình khuyến mãi theo tháng.'}
+                {callerRole === 'GD_KD' && '👉 Bạn duyệt CẤP 1. Chương trình QLCS gửi sẽ hiện nút Duyệt/Từ chối khi đến lượt.'}
+                {callerRole === 'GD_VP' && '👉 Bạn duyệt CẤP 2 (sau GD_KD). Chương trình hiện nút Duyệt/Từ chối khi GD_KD đã duyệt.'}
+                {callerRole === 'NV_KE' && 'Cài đặt mã promo cho chương trình đã duyệt + tạm dừng / kích hoạt.'}
+                {callerRole === 'TP_KE' && 'Cài đặt mã promo (toàn hệ thống) + tạm dừng / kích hoạt.'}
+                {isQLCS && 'Bạn tạo chương trình cho cơ sở mình → gửi duyệt GD_KD → GD_VP → kế toán cài đặt mã → Sale dùng ở /nhap.'}
+                {!isQLCS && callerRole !== 'GD_KD' && callerRole !== 'GD_VP' && callerRole !== 'NV_KE' && callerRole !== 'TP_KE' && 'Tổng quan chương trình khuyến mãi.'}
               </p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
@@ -681,6 +684,11 @@ function ProgramFormModal({ mode, program, callerBranch, month, onClose, onSaved
               <AlertCircle size={14} className="shrink-0 mt-0.5" /> <span>{error}</span>
             </div>
           )}
+          {/* V7 (2026-06-18): note workflow để QLCS biết ai sẽ duyệt */}
+          <div className="rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-700 ring-1 ring-sky-200">
+            ℹ️ Sau khi <strong>Lưu</strong>, bạn cần bấm <strong>Gửi duyệt</strong> trên card. Quy trình duyệt:
+            <strong> GD_KD</strong> → <strong>GD_VP</strong> → kế toán cấu hình mã → Sale dùng được ở /nhap.
+          </div>
         </div>
         <div className="px-5 py-3 border-t border-slate-200 flex items-center justify-end gap-2">
           <button onClick={onClose} disabled={saving}

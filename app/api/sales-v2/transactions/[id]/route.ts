@@ -13,6 +13,7 @@ import { canEditTransaction } from '@/lib/sales-v2/scope';
 import { serializeTransaction } from '@/lib/sales-v2/serialize';
 import { getPackageById } from '@/lib/sales-v2/packages';
 import { writeSalesAuditBatch } from '@/lib/sales-v2/audit';
+import { computeDiscount, isDiscountType, type PromoSnapshot } from '@/lib/types/sales-program';
 import type { SalesV2Source, TransactionType, PaymentMethod } from '@/lib/types/sales-v2';
 
 export const runtime = 'nodejs';
@@ -147,22 +148,49 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const isCustomQty = resolvedIsCustomQty ?? (tx.packageIsCustomQuantity === true);
     const finalQuantity = 'quantity' in updates ? updates.quantity : (tx.quantity ?? null);
     const finalUnitPrice = 'unitPrice' in updates ? updates.unitPrice : (tx.unitPrice ?? null);
+
+    // V7 Promo audit fix (2026-06-18): luôn compute base TRƯỚC, recompute discount từ
+    // snapshots, rồi final = base - discount. Đồng bộ 3 field: basePackageValue +
+    // discountAmount + packageValue. Tránh drift khi user đổi qty/up/packageValue.
+    const snapshots: PromoSnapshot[] = Array.isArray(tx.promoSnapshots) ? tx.promoSnapshots : [];
+    const oldDiscountAmount = Number(tx.discountAmount ?? 0);
+
+    let newBase: number;
+    let newDiscount = 0;
     let finalPackageValue: number;
+
     if (finalTxnType === 'thanh_toan_not') {
+      newBase = 0;
       finalPackageValue = 0;
+      updates.basePackageValue = 0;
       updates.packageValue = 0;
+      updates.discountAmount = 0;
       updates.debtAmount = 0;
-    } else if (isCustomQty) {
-      // V6 PT: ALWAYS auto-compute (kể cả khi chưa đủ qty/up → packageValue=0).
-      // KHÔNG bao giờ fallback về tx.packageValue stale (đề phòng đổi non-PT → PT
-      // mà chưa nhập đủ → stale data gây sai aggregation/debt).
-      const q = finalQuantity != null ? Number(finalQuantity) : 0;
-      const u = finalUnitPrice != null ? Number(finalUnitPrice) : 0;
-      finalPackageValue = (q > 0 && u >= 0) ? q * u : 0;
-      updates.packageValue = finalPackageValue;
-      updates.debtAmount = Math.max(0, finalPackageValue - finalCollected);
     } else {
-      finalPackageValue = 'packageValue' in updates ? updates.packageValue : Number(tx.packageValue ?? 0);
+      if (isCustomQty) {
+        // PT: base = qty × unitPrice. Nếu thiếu qty/up → base=0 (chờ user nhập đủ).
+        const q = finalQuantity != null ? Number(finalQuantity) : 0;
+        const u = finalUnitPrice != null ? Number(finalUnitPrice) : 0;
+        newBase = (q > 0 && u >= 0) ? q * u : 0;
+      } else {
+        // Non-PT: lấy từ updates.packageValue (kế toán nhập) hoặc tx.basePackageValue cũ
+        // (Sale chỉ readonly cell). Nếu doc cũ không có basePackageValue → fallback packageValue.
+        if ('packageValue' in updates) {
+          newBase = Number(updates.packageValue);
+        } else {
+          newBase = Number(tx.basePackageValue ?? tx.packageValue ?? 0);
+        }
+      }
+      // Recompute discount từ snapshots với newBase (percent% thay đổi theo base; fixed cap ở base)
+      for (const s of snapshots) {
+        if (isDiscountType(s.type)) newDiscount += computeDiscount(newBase, s.type, s.value);
+      }
+      newDiscount = Math.min(newDiscount, newBase);
+      finalPackageValue = Math.max(0, newBase - newDiscount);
+
+      updates.basePackageValue = newBase;
+      updates.discountAmount = newDiscount;
+      updates.packageValue = finalPackageValue;
       updates.debtAmount = Math.max(0, finalPackageValue - finalCollected);
     }
 
@@ -189,6 +217,24 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     updates.updatedAt = Timestamp.now();
     await txRef.update(updates);
+
+    // V7 Promo audit fix (2026-06-18): adjust promo stats delta nếu discount thay đổi.
+    // Decrement(old) + Increment(new) cho từng promo trong snapshots → totalDiscount
+    // không drift sau khi kế toán sửa qty/up/packageValue.
+    const discountDelta = newDiscount - oldDiscountAmount;
+    if (discountDelta !== 0 && snapshots.length > 0) {
+      const discountPromos = snapshots.filter((s) => isDiscountType(s.type));
+      void Promise.all(discountPromos.map(async (s) => {
+        try {
+          await db.collection(COLLECTIONS.SALES_PROGRAMS).doc(s.id).update({
+            totalDiscount: FieldValue.increment(discountDelta),
+            updatedAt: updates.updatedAt,
+          });
+        } catch (e) {
+          console.warn('[sales-v2/tx PATCH] promo discount stat adjust failed', s.id, e);
+        }
+      }));
+    }
 
     // Audit log: chỉ ghi khi kế toán/quản lý sửa (khác saleId owner). Sale tự sửa
     // batch draft của mình không cần log (đỡ noise).

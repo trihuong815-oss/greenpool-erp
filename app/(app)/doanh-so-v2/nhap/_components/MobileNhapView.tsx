@@ -501,6 +501,12 @@ function CardEditor({
           )}
         </div>
       )}
+      {/* V7 Mobile notice (2026-06-18) — LocalRow chưa apply promo, hướng dẫn Sale mở desktop */}
+      {!row.savedRow && (row.promoSnapshots?.length ?? 0) === 0 && (
+        <div className="rounded-lg bg-amber-50/40 ring-1 ring-amber-200 px-2.5 py-1.5 text-[11px] text-amber-700 italic">
+          💡 Áp mã khuyến mãi: vui lòng mở /nhap trên máy tính (mobile chưa hỗ trợ chọn mã)
+        </div>
+      )}
 
       {/* Chứng từ — V7 (2026-06-18): prefix cố định 'PT' / 'HĐ' */}
       {(row as any).transactionType === 'dat_coc' && (

@@ -444,6 +444,7 @@ function TransactionsTable({
             <th className="px-2 py-2 text-left">Số PT</th>
             <th className="px-2 py-2 text-left">Số HĐ</th>
             <th className="px-2 py-2 text-right">Giá trị</th>
+            <th className="px-2 py-2 text-left">Khuyến mãi</th>
             <th className="px-2 py-2 text-right">Thu</th>
             <th className="px-2 py-2 text-right">Công nợ</th>
             <th className="px-2 py-2 text-center">Link</th>
@@ -530,19 +531,77 @@ function TransactionsTable({
                 <EditableText value={r.contractNo ?? ''} disabled={!editMode} onCommit={(v) => onUpdate(r.id, { contractNo: v || null })} />
               </td>
               <td className="px-2 py-1.5 text-right tabular-nums">
-                {r.packageIsCustomQuantity ? (
-                  // PT: packageValue = qty × up (server enforce). Hiển thị readonly + breakdown nhỏ.
-                  // Kế toán muốn sửa qty/up → reject row, Sale tự sửa ở /nhap khi batch returned.
-                  <div title="Gói PT — Sale sửa số buổi / đơn giá ở /nhap (sau khi reject)">
-                    <div className="text-[10px] text-slate-400 leading-tight">
-                      {(r.quantity ?? 0).toLocaleString()} {r.packageUnitName || 'buổi'} × {(r.unitPrice ?? 0).toLocaleString()}
+                {(() => {
+                  // V7 Promo (2026-06-18): server lưu packageValue = FINAL (sau discount).
+                  // basePackageValue = TRƯỚC discount. Hiển thị cả 2 + dấu trừ rõ.
+                  const base = Number(r.basePackageValue ?? r.packageValue ?? 0);
+                  const discount = Number(r.discountAmount ?? 0);
+                  const hasDiscount = discount > 0;
+                  if (r.packageIsCustomQuantity) {
+                    // PT: readonly. Show qty × up = base, − discount = final.
+                    return (
+                      <div title="Gói PT — Sale sửa số buổi / đơn giá ở /nhap (sau khi reject)">
+                        <div className="text-[10px] text-slate-400 leading-tight">
+                          {(r.quantity ?? 0).toLocaleString()} {r.packageUnitName || 'buổi'} × {(r.unitPrice ?? 0).toLocaleString()}
+                        </div>
+                        {hasDiscount && (
+                          <div className="text-[10px] text-slate-500 leading-tight">
+                            = {base.toLocaleString()} − {discount.toLocaleString()}
+                          </div>
+                        )}
+                        <div className={`font-semibold leading-tight ${hasDiscount ? 'text-emerald-700' : 'text-slate-700'}`}>
+                          {r.packageValue.toLocaleString()}
+                        </div>
+                      </div>
+                    );
+                  }
+                  // Non-PT: EditableNumber nhập BASE (server tự recompute discount + final).
+                  // Khi có discount: hiển thị base lớn + sub-text "= final" để kế toán hiểu.
+                  return (
+                    <div>
+                      <EditableNumber value={base} disabled={!editMode}
+                        onCommit={(v) => onUpdate(r.id, { packageValue: v })} />
+                      {hasDiscount && (
+                        <div className="text-[10px] text-emerald-700 leading-tight mt-0.5 tabular-nums">
+                          − {discount.toLocaleString()} → <strong>{r.packageValue.toLocaleString()}</strong>
+                        </div>
+                      )}
                     </div>
-                    <div className="font-semibold text-slate-700 leading-tight">
-                      {r.packageValue.toLocaleString()}
-                    </div>
+                  );
+                })()}
+              </td>
+              {/* V7 Promo (2026-06-18): hiển thị mã KM cho kế toán đối chiếu — readonly */}
+              <td className="px-2 py-1.5">
+                {Array.isArray(r.promoSnapshots) && r.promoSnapshots.length > 0 ? (
+                  <div className="flex flex-col gap-0.5">
+                    {r.promoSnapshots.map((s) => {
+                      const isDis = s.type === 'percent' || s.type === 'fixed_amount';
+                      return (
+                        <span key={s.id}
+                          className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ring-1 max-w-fit ${
+                            isDis ? 'bg-violet-50 text-violet-700 ring-violet-200' : 'bg-rose-50 text-rose-700 ring-rose-200'
+                          }`}
+                          title={s.name}>
+                          <span className="font-mono font-bold">{s.code || '(no-code)'}</span>
+                          <span className="opacity-60">·</span>
+                          <span>
+                            {s.type === 'percent' && `-${s.value}%`}
+                            {s.type === 'fixed_amount' && `-${s.value.toLocaleString()}đ`}
+                            {s.type === 'bonus_sessions' && `+${s.value} buổi`}
+                            {s.type === 'bonus_days' && `+${s.value} ngày`}
+                          </span>
+                        </span>
+                      );
+                    })}
+                    {(r.bonusQuantity ?? 0) > 0 && (
+                      <span className="text-[10px] text-rose-700 tabular-nums">Tặng {r.bonusQuantity} {r.packageUnitName || 'buổi'}</span>
+                    )}
+                    {(r.bonusDays ?? 0) > 0 && (
+                      <span className="text-[10px] text-cyan-700 tabular-nums">Tặng {r.bonusDays} ngày</span>
+                    )}
                   </div>
                 ) : (
-                  <EditableNumber value={r.packageValue} disabled={!editMode} onCommit={(v) => onUpdate(r.id, { packageValue: v })} />
+                  <span className="text-slate-300 text-xs">—</span>
                 )}
               </td>
               <td className="px-2 py-1.5 text-right tabular-nums">

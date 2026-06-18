@@ -86,14 +86,22 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       source: 'api',
     });
 
-    // Lần đầu active → noti creator (info)
-    if (data.status === 'approved') {
+    // V7 (2026-06-18) noti creator:
+    //  - Lần đầu active: thông báo mã đã set, Sale dùng được.
+    //  - Đổi mã sau khi active: thông báo mã cũ → mới (kế toán có thể đổi).
+    const isFirstActivation = data.status === 'approved';
+    const isCodeChanged = !isFirstActivation && data.promoCode && data.promoCode !== rawCode;
+    if (isFirstActivation || isCodeChanged) {
       void sendNotificationEvent({
         type: 'sales_program_active',
         module: 'sales',
         entityId: id,
-        title: `Chương trình "${data.name}" đã active`,
-        message: `Mã: ${rawCode}. Sale có thể chọn ở /nhap.`,
+        title: isFirstActivation
+          ? `Chương trình "${data.name}" đã active`
+          : `Chương trình "${data.name}" đã đổi mã`,
+        message: isFirstActivation
+          ? `Mã: ${rawCode}. Sale có thể chọn ở /nhap.`
+          : `Mã cũ: ${data.promoCode} → Mã mới: ${rawCode}`,
         linkUrl: `/doanh-so-v2/chuong-trinh?programId=${id}`,
         recipients: [String(data.createdBy)],
         priority: 'low',
