@@ -27,6 +27,33 @@ interface Summary {
   // V7 Promo (2026-06-18)
   promoTotals?: { transactions: number; totalDiscount: number; totalBonusSessions: number; totalBonusDays: number };
   promoByCode?: Record<string, { code: string; name: string; type: string; count: number; discount: number; bonusSessions: number; bonusDays: number }>;
+  // V8.X (2026-06-18) — danh sách KH chi tiết theo Sale (replace PT card)
+  salesCustomers?: Record<string, SaleCustomers>;
+}
+
+interface SaleCustomerTx {
+  id: string;
+  date: string;
+  customerName: string;
+  phone: string;
+  packageName: string;
+  packageValue: number;
+  collectedToday: number;
+  debtAmount: number;
+  originalDebt: number;
+  transactionType: string;
+  paymentMethod: string;
+  matchedTransactionId: string | null;
+  matchStatus: string;
+  note: string | null;
+}
+interface SaleCustomers {
+  saleId: string;
+  saleName: string;
+  branchId: string;
+  branchName: string;
+  transactions: SaleCustomerTx[];
+  totals: { count: number; sales: number; collected: number; debtGenerated: number; debtRemaining: number };
 }
 
 interface Props {
@@ -108,19 +135,8 @@ export default function TongKetClient({ scope }: Props) {
     return Math.max(...Object.values(data.bySource).map((s) => s.sales), 1);
   }, [data]);
 
-  // V6 PT (2026-06-17): top gói PT theo doanh số (chỉ hiển thị card khi có data PT)
-  const ptTopPackages = useMemo(() => {
-    if (!data?.ptByPackage) return [];
-    return Object.entries(data.ptByPackage)
-      .map(([id, v]) => ({ id, ...v }))
-      .sort((a, b) => b.sales - a.sales)
-      .slice(0, 5);
-  }, [data]);
-  const ptAvgUnitPrice = useMemo(() => {
-    if (!data?.ptTotals || data.ptTotals.sessions <= 0) return 0;
-    return Math.round(data.ptTotals.sales / data.ptTotals.sessions);
-  }, [data]);
-  const hasPtData = (data?.ptTotals?.transactions ?? 0) > 0;
+  // V8.X (2026-06-18): bỏ PT card → thay bằng 'Khách hàng theo Sale'.
+  // PT data vẫn còn ở /nhap + /cong-no.
 
   // V7 Promo (2026-06-18)
   const promoTopByDiscount = useMemo(() => {
@@ -269,57 +285,10 @@ export default function TongKetClient({ scope }: Props) {
               </div>
             </div>
 
-            {/* V6 PT (2026-06-17): card riêng cho gói dịch vụ theo buổi */}
-            {hasPtData && data?.ptTotals && (
-              <div className="card">
-                <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
-                  <Dumbbell size={16} className="text-violet-600" />
-                  Doanh số gói PT (theo buổi)
-                </h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                  <KpiCard label="Số giao dịch PT" value={data.ptTotals.transactions.toString()} icon={<Users size={18} />} tone="violet" />
-                  <KpiCard label="Tổng số buổi bán" value={data.ptTotals.sessions.toLocaleString()} icon={<Dumbbell size={18} />} tone="violet" />
-                  <KpiCard label="Doanh số PT" value={fmtMoney(data.ptTotals.sales)} icon={<TrendingUp size={18} />} tone="violet" />
-                  <KpiCard label="Đơn giá / buổi TB" value={fmtMoney(ptAvgUnitPrice)} icon={<Wallet size={18} />} tone="violet" />
-                </div>
-                {ptTopPackages.length > 0 && (
-                  <div>
-                    <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-2">Top gói PT theo doanh số</div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
-                          <tr>
-                            <th className="px-2 py-2 text-left w-10">#</th>
-                            <th className="px-2 py-2 text-left">Tên gói</th>
-                            <th className="px-2 py-2 text-right">Số GD</th>
-                            <th className="px-2 py-2 text-right">Tổng số buổi</th>
-                            <th className="px-2 py-2 text-right">Doanh số</th>
-                            <th className="px-2 py-2 text-right">Đơn giá / buổi TB</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {ptTopPackages.map((p, i) => {
-                            const avg = p.sessions > 0 ? Math.round(p.sales / p.sessions) : 0;
-                            return (
-                              <tr key={p.id} className="hover:bg-slate-50/60">
-                                <td className="px-2 py-1.5 tabular-nums text-slate-400">{i + 1}</td>
-                                <td className="px-2 py-1.5 text-slate-700 font-medium">{p.name}</td>
-                                <td className="px-2 py-1.5 text-right tabular-nums">{p.count}</td>
-                                <td className="px-2 py-1.5 text-right tabular-nums text-violet-700">
-                                  {p.sessions.toLocaleString()}
-                                  <span className="text-[10px] text-slate-400 ml-0.5">{p.unitName}</span>
-                                </td>
-                                <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-emerald-700">{fmtMoney(p.sales)}</td>
-                                <td className="px-2 py-1.5 text-right tabular-nums text-slate-600">{fmtMoney(avg)}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-              </div>
+            {/* V8.X (2026-06-18): thay PT card bằng 'Khách hàng theo Sale'. PT data
+               vẫn còn ở /nhap + /cong-no, chỉ bỏ tổng kết PT ở /tong-ket. */}
+            {data?.salesCustomers && Object.keys(data.salesCustomers).length > 0 && (
+              <CustomersBySaleSection salesCustomers={data.salesCustomers} />
             )}
 
             {/* V7 Promo (2026-06-18): section khuyến mãi */}
@@ -471,6 +440,165 @@ function KpiCard({ label, value, icon, tone }: {
         <span className="opacity-50">{icon}</span>
       </div>
       <div className="text-lg font-bold tabular-nums mt-1">{value}</div>
+    </div>
+  );
+}
+
+// ─── V8.X (2026-06-18) — Section "Khách hàng theo Sale" với tabs ─────────────────
+
+const TXN_TYPE_LABEL: Record<string, string> = {
+  dat_coc: 'Đặt cọc', thanh_toan_full: 'Thanh toán full', thanh_toan_not: 'Trả nốt',
+};
+const PAY_LABEL: Record<string, string> = {
+  tien_mat: 'Tiền mặt', chuyen_khoan: 'CK', pos: 'Quẹt thẻ',
+};
+
+function fmtDateShort(iso: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+  const [, m, d] = iso.split('-');
+  return `${d}/${m}`;
+}
+
+function CustomersBySaleSection({ salesCustomers }: { salesCustomers: Record<string, SaleCustomers> }) {
+  const salesList = useMemo(() =>
+    Object.values(salesCustomers)
+      .sort((a, b) => b.totals.sales - a.totals.sales),
+    [salesCustomers],
+  );
+  const [activeSaleId, setActiveSaleId] = useState<string>(() => salesList[0]?.saleId ?? '');
+  const active = salesList.find((s) => s.saleId === activeSaleId) ?? salesList[0];
+  if (!active) return null;
+
+  return (
+    <div className="card">
+      <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
+        <Users size={16} className="text-emerald-600" />
+        Khách hàng theo Sale ({salesList.length} người · {salesList.reduce((s, x) => s + x.totals.count, 0)} giao dịch)
+      </h3>
+
+      {/* Tabs ngang */}
+      <div className="flex flex-wrap gap-1.5 mb-4 border-b border-slate-200 pb-3">
+        {salesList.map((s) => {
+          const isActive = s.saleId === activeSaleId;
+          return (
+            <button key={s.saleId} type="button" onClick={() => setActiveSaleId(s.saleId)}
+              className={`inline-flex flex-col items-start gap-0.5 px-3 py-2 rounded-lg text-left transition ring-1 ${
+                isActive
+                  ? 'bg-emerald-600 text-white ring-emerald-600'
+                  : 'bg-white text-slate-700 ring-slate-200 hover:bg-slate-50'
+              }`}>
+              <span className="text-xs font-semibold flex items-center gap-1.5">
+                {s.saleName || '(chưa rõ)'}
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-normal ${isActive ? 'bg-white/20' : 'bg-slate-100 text-slate-500'}`}>
+                  {s.branchId}
+                </span>
+              </span>
+              <span className={`text-[10px] tabular-nums ${isActive ? 'opacity-90' : 'text-slate-500'}`}>
+                {s.totals.count} GD · {fmtMoney(s.totals.sales)}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* KPI summary của Sale active */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-3">
+        <KpiMini label="Số GD" value={active.totals.count.toString()} tone="slate" />
+        <KpiMini label="Doanh số" value={fmtMoney(active.totals.sales)} tone="emerald" />
+        <KpiMini label="Thực thu" value={fmtMoney(active.totals.collected)} tone="sky" />
+        <KpiMini label="Nợ phát sinh" value={fmtMoney(active.totals.debtGenerated)} tone="amber" />
+        <KpiMini label="Nợ còn lại" value={fmtMoney(active.totals.debtRemaining)} tone="rose" />
+      </div>
+
+      {/* Bảng chi tiết tx */}
+      <div className="overflow-x-auto rounded-lg ring-1 ring-slate-200">
+        <table className="w-full text-sm min-w-[1000px]">
+          <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500 font-semibold">
+            <tr>
+              <th className="px-2 py-2 text-left w-16">Ngày</th>
+              <th className="px-2 py-2 text-left">Khách hàng</th>
+              <th className="px-2 py-2 text-left">SĐT</th>
+              <th className="px-2 py-2 text-left">Gói</th>
+              <th className="px-2 py-2 text-left w-28">Loại GD</th>
+              <th className="px-2 py-2 text-left w-20">HT thu</th>
+              <th className="px-2 py-2 text-right w-28">Giá trị</th>
+              <th className="px-2 py-2 text-right w-28">Thực thu</th>
+              <th className="px-2 py-2 text-right w-28">Công nợ</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {active.transactions.length === 0 ? (
+              <tr><td colSpan={9} className="px-3 py-8 text-center text-slate-400 text-sm italic">
+                Sale này chưa có giao dịch nào đã đối chiếu trong tháng
+              </td></tr>
+            ) : (
+              active.transactions.map((tx) => {
+                const isDatCoc = tx.transactionType === 'dat_coc';
+                const isTraNot = tx.transactionType === 'thanh_toan_not';
+                const isLinked = tx.matchedTransactionId != null;
+                return (
+                  <tr key={tx.id} className={`hover:bg-slate-50/60 ${isTraNot ? 'bg-violet-50/30' : ''}`}>
+                    <td className="px-2 py-1.5 text-slate-500 tabular-nums whitespace-nowrap">{fmtDateShort(tx.date)}</td>
+                    <td className="px-2 py-1.5 text-slate-800 font-medium">{tx.customerName || '—'}</td>
+                    <td className="px-2 py-1.5 text-slate-600 tabular-nums">{tx.phone || '—'}</td>
+                    <td className="px-2 py-1.5 text-slate-700 truncate max-w-[200px]">{tx.packageName}</td>
+                    <td className="px-2 py-1.5">
+                      <span className={`text-[10px] uppercase font-semibold px-1.5 py-0.5 rounded ring-1 ${
+                        isDatCoc ? 'bg-amber-50 text-amber-700 ring-amber-200'
+                        : isTraNot ? 'bg-violet-50 text-violet-700 ring-violet-200'
+                        : 'bg-emerald-50 text-emerald-700 ring-emerald-200'
+                      }`}>{TXN_TYPE_LABEL[tx.transactionType] ?? tx.transactionType}</span>
+                    </td>
+                    <td className="px-2 py-1.5 text-xs text-slate-600">{PAY_LABEL[tx.paymentMethod] ?? tx.paymentMethod}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">
+                      {isTraNot ? <span className="text-slate-300 text-xs" title="Trả nốt — không tạo doanh số mới">—</span> : tx.packageValue.toLocaleString()}
+                    </td>
+                    <td className="px-2 py-1.5 text-right tabular-nums text-sky-700 font-medium">{tx.collectedToday.toLocaleString()}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">
+                      {isDatCoc ? (
+                        tx.debtAmount > 0 ? (
+                          <span className="text-rose-700 font-semibold" title={`Đã trả nốt ${(tx.originalDebt - tx.debtAmount).toLocaleString()}đ / ${tx.originalDebt.toLocaleString()}đ`}>
+                            {tx.debtAmount.toLocaleString()}
+                            {tx.originalDebt > tx.debtAmount && (
+                              <span className="block text-[10px] text-slate-400 font-normal">/ {tx.originalDebt.toLocaleString()}</span>
+                            )}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-emerald-700 text-xs font-semibold" title="Đã trả đủ nốt">
+                            ✓ Đã trả đủ
+                          </span>
+                        )
+                      ) : isTraNot ? (
+                        <span className="text-[10px] text-violet-600 italic" title={isLinked ? `Link với tx ${tx.matchedTransactionId}` : 'Chưa link'}>
+                          {isLinked ? '→ link tx cũ' : tx.matchStatus === 'needs_review' ? 'Cần review' : 'Chưa link'}
+                        </span>
+                      ) : (
+                        <span className="text-slate-300 text-xs">—</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function KpiMini({ label, value, tone }: { label: string; value: string; tone: 'slate'|'emerald'|'sky'|'amber'|'rose' }) {
+  const cls = {
+    slate:   'bg-slate-50 text-slate-700 ring-slate-200',
+    emerald: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+    sky:     'bg-sky-50 text-sky-700 ring-sky-200',
+    amber:   'bg-amber-50 text-amber-700 ring-amber-200',
+    rose:    'bg-rose-50 text-rose-700 ring-rose-200',
+  }[tone];
+  return (
+    <div className={`rounded-lg px-3 py-2 ring-1 ${cls}`}>
+      <div className="text-[10px] font-semibold uppercase tracking-wider opacity-70">{label}</div>
+      <div className="text-sm font-bold tabular-nums mt-0.5">{value}</div>
     </div>
   );
 }

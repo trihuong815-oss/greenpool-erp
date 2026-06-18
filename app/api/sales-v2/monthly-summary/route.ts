@@ -112,6 +112,33 @@ export async function GET(req: NextRequest) {
       code: string; name: string; type: string;
       count: number; discount: number; bonusSessions: number; bonusDays: number;
     }> = {};
+    // V8.X (2026-06-18): danh sách khách hàng chi tiết theo Sale (cho tab /tong-ket).
+    // Mỗi Sale có list tx + totals. Scope đã apply ở filter trên (saleId/branchId).
+    interface SaleCustomerTx {
+      id: string;
+      date: string;
+      customerName: string;
+      phone: string;
+      packageName: string;
+      packageValue: number;       // server-stored FINAL (sau promo)
+      collectedToday: number;
+      debtAmount: number;         // hiện tại (sau auto-match)
+      originalDebt: number;       // snapshot lúc tạo (dat_coc)
+      transactionType: string;
+      paymentMethod: string;
+      matchedTransactionId: string | null;
+      matchStatus: string;
+      note: string | null;
+    }
+    interface SaleCustomers {
+      saleId: string;
+      saleName: string;
+      branchId: string;
+      branchName: string;
+      transactions: SaleCustomerTx[];
+      totals: { count: number; sales: number; collected: number; debtGenerated: number; debtRemaining: number };
+    }
+    const salesCustomers: Record<string, SaleCustomers> = {};
 
     for (const d of snap.docs) {
       const x = d.data() as Record<string, any>;
@@ -127,6 +154,45 @@ export async function GET(req: NextRequest) {
       const src = (x.source ?? 'ca_nhan') as SalesV2Source;
       const txType = String(x.transactionType ?? '');
       const isThanhToanNot = txType === 'thanh_toan_not';
+
+      // V8.X: populate salesCustomers — danh sách KH chi tiết theo Sale
+      const sid = String(x.saleId ?? '');
+      if (sid) {
+        if (!salesCustomers[sid]) {
+          salesCustomers[sid] = {
+            saleId: sid,
+            saleName: String(x.saleName ?? ''),
+            branchId: String(x.branchId ?? ''),
+            branchName: String(x.branchName ?? ''),
+            transactions: [],
+            totals: { count: 0, sales: 0, collected: 0, debtGenerated: 0, debtRemaining: 0 },
+          };
+        }
+        const s = salesCustomers[sid];
+        s.transactions.push({
+          id: d.id,
+          date: String(x.date ?? ''),
+          customerName: String(x.customerName ?? ''),
+          phone: String(x.phone ?? ''),
+          packageName: String(x.packageName ?? ''),
+          packageValue: pv,
+          collectedToday: ct,
+          debtAmount: debt,
+          originalDebt,
+          transactionType: txType,
+          paymentMethod: String(x.paymentMethod ?? ''),
+          matchedTransactionId: x.matchedTransactionId ?? null,
+          matchStatus: String(x.matchStatus ?? 'not_applicable'),
+          note: x.note ?? null,
+        });
+        s.totals.count += 1;
+        s.totals.sales += pv;
+        s.totals.collected += ct;
+        if (txType === 'dat_coc') {
+          s.totals.debtGenerated += originalDebt;
+          s.totals.debtRemaining += debt;
+        }
+      }
 
       totals.sales += pv; // pv = 0 cho thanh_toan_not (server enforce)
       totals.collected += ct;
@@ -225,6 +291,11 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // V8.X: sort tx mỗi Sale theo date DESC (mới nhất trước), tx cùng ngày giữ thứ tự
+    for (const s of Object.values(salesCustomers)) {
+      s.transactions.sort((a, b) => b.date.localeCompare(a.date));
+    }
+
     return NextResponse.json({
       ok: true,
       month,
@@ -240,6 +311,8 @@ export async function GET(req: NextRequest) {
       // V7 Promo (2026-06-18): block riêng cho chương trình khuyến mãi
       promoTotals,
       promoByCode,
+      // V8.X (2026-06-18): danh sách KH chi tiết theo Sale — replace PT card ở /tong-ket
+      salesCustomers,
     });
   } catch (err: any) {
     if (err instanceof UnauthorizedError) {
