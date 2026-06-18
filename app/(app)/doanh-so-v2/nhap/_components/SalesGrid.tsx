@@ -385,14 +385,14 @@ function SavedRow({ idx, row, packages, canEdit, batchStatus, branchId, onUpdate
         </div>
       </Td>
       <Td>
-        <TextCell value={row.customerName} disabled={!canEdit} onCommit={(v) => onUpdate({ customerName: v })} />
+        <TextCell value={row.customerName} disabled={!canEdit} required onCommit={(v) => onUpdate({ customerName: v })} />
       </Td>
       <Td>
-        <PhoneCell value={row.phone} disabled={!canEdit} onCommit={(v) => onUpdate({ phone: v })} placeholder="0901234567" />
+        <PhoneCell value={row.phone} disabled={!canEdit} required onCommit={(v) => onUpdate({ phone: v })} placeholder="0901234567" />
       </Td>
       <Td>
         {row.isChildPackage ? (
-          <TextCell value={row.guardianName ?? ''} disabled={!canEdit} onCommit={(v) => onUpdate({ guardianName: v || null })} />
+          <TextCell value={row.guardianName ?? ''} disabled={!canEdit} required onCommit={(v) => onUpdate({ guardianName: v || null })} />
         ) : (
           <span className="text-slate-300 text-xs">—</span>
         )}
@@ -524,7 +524,7 @@ function SavedRow({ idx, row, packages, canEdit, batchStatus, branchId, onUpdate
         )}
       </Td>
       <Td align="right">
-        <NumberCell value={row.collectedToday} disabled={!canEdit} onCommit={(v) => onUpdate({ collectedToday: v })} />
+        <NumberCell value={row.collectedToday} disabled={!canEdit} required onCommit={(v) => onUpdate({ collectedToday: v })} />
       </Td>
       <Td align="right" className="tabular-nums text-slate-600 font-medium">
         {debt > 0 ? <span className="text-rose-600">{debt.toLocaleString()}</span> : <span className="text-slate-300">0</span>}
@@ -589,14 +589,14 @@ function LocalRowItem({ idx, row, packages, canEdit, branchId, batchMonth, onUpd
         </div>
       </Td>
       <Td>
-        <TextCell value={row.customerName} disabled={!canEdit} onCommit={(v) => onUpdate({ customerName: v })} placeholder="Tên KH..." inputRef={firstCellRef} />
+        <TextCell value={row.customerName} disabled={!canEdit} required onCommit={(v) => onUpdate({ customerName: v })} placeholder="Tên KH..." inputRef={firstCellRef} />
       </Td>
       <Td>
-        <PhoneCell value={row.phone} disabled={!canEdit} onCommit={(v) => onUpdate({ phone: v })} placeholder="0901234567" />
+        <PhoneCell value={row.phone} disabled={!canEdit} required onCommit={(v) => onUpdate({ phone: v })} placeholder="0901234567" />
       </Td>
       <Td>
         {row.isChildPackage ? (
-          <TextCell value={row.guardianName} disabled={!canEdit} onCommit={(v) => onUpdate({ guardianName: v })} placeholder="Người giám hộ..." />
+          <TextCell value={row.guardianName} disabled={!canEdit} required onCommit={(v) => onUpdate({ guardianName: v })} placeholder="Người giám hộ..." />
         ) : (
           <span className="text-slate-300 text-xs">—</span>
         )}
@@ -764,7 +764,7 @@ function LocalRowItem({ idx, row, packages, canEdit, branchId, batchMonth, onUpd
         )}
       </Td>
       <Td align="right">
-        <NumberCell value={ct} disabled={!canEdit} onCommit={(v) => onUpdate({ collectedToday: String(v) })} />
+        <NumberCell value={ct} disabled={!canEdit} required onCommit={(v) => onUpdate({ collectedToday: String(v) })} />
       </Td>
       <Td align="right" className="tabular-nums text-slate-600 font-medium">
         {debt > 0 ? <span className="text-rose-600">{debt.toLocaleString()}</span> : <span className="text-slate-300">0</span>}
@@ -790,15 +790,26 @@ function LocalRowItem({ idx, row, packages, canEdit, branchId, batchMonth, onUpd
 
 // ─── Atomic cell components ────────────────────────────────────────
 
+/** V8.X (2026-06-18) — Visual hint cho ô required: viền ĐỎ khi rỗng, viền XANH khi đã nhập.
+ *  Optional fields (note, người giám hộ khi non-child) → return '' (no extra style). */
+function requiredStateClass(required: boolean, hasValue: boolean): string {
+  if (!required) return '';
+  return hasValue
+    ? 'ring-1 ring-emerald-200 bg-emerald-50/30'
+    : 'ring-1 ring-rose-300 bg-rose-50/30';
+}
+
 function TextCell({
-  value, disabled, onCommit, placeholder, inputRef,
+  value, disabled, onCommit, placeholder, inputRef, required,
 }: {
   value: string;
   disabled: boolean;
   onCommit: (v: string) => void;
   placeholder?: string;
   inputRef?: React.MutableRefObject<HTMLInputElement | null>;
+  required?: boolean;
 }) {
+  const hint = requiredStateClass(!!required, value.trim().length > 0);
   return (
     <input
       ref={(el) => { if (inputRef) inputRef.current = el; }}
@@ -810,25 +821,34 @@ function TextCell({
         const v = e.target.value;
         if (v !== value) onCommit(v);
       }}
-      className="w-full px-2 py-1 rounded border border-transparent bg-transparent text-sm focus:bg-white focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100 focus:outline-none disabled:cursor-not-allowed"
+      title={required && !value.trim() ? 'Bắt buộc nhập' : undefined}
+      className={`w-full px-2 py-1 rounded border border-transparent text-sm focus:bg-white focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100 focus:outline-none disabled:cursor-not-allowed ${hint || 'bg-transparent'}`}
     />
   );
 }
 
-/** Phone cell: text input + đỏ ring nếu không hợp lệ (10 số bắt đầu 0). Empty không đỏ. */
+/** Phone cell. V8.X: red required-empty, green filled, đỏ đậm invalid. */
 function PhoneCell({
-  value, disabled, onCommit, placeholder,
+  value, disabled, onCommit, placeholder, required,
 }: {
   value: string;
   disabled: boolean;
   onCommit: (v: string) => void;
   placeholder?: string;
+  required?: boolean;
 }) {
   const [local, setLocal] = useState(value);
   useEffect(() => { setLocal(value); }, [value]);
   const trimmed = local.trim();
   const isEmpty = trimmed.length === 0;
   const invalid = !isEmpty && !isValidPhone(trimmed);
+  const valid = !isEmpty && !invalid;
+  // Priority: invalid > required+empty > required+filled
+  let extraCls = '';
+  if (invalid) extraCls = 'border-rose-400 bg-rose-50 text-rose-700 focus:border-rose-500 focus:ring-rose-100';
+  else if (required && isEmpty) extraCls = 'border-transparent ring-1 ring-rose-300 bg-rose-50/30 focus:border-rose-400 focus:ring-rose-100';
+  else if (required && valid) extraCls = 'border-transparent ring-1 ring-emerald-200 bg-emerald-50/30 focus:border-emerald-400 focus:ring-emerald-100';
+  else extraCls = 'border-transparent bg-transparent focus:border-emerald-300 focus:ring-emerald-100';
   return (
     <input
       type="tel"
@@ -839,12 +859,8 @@ function PhoneCell({
       placeholder={placeholder}
       onChange={(e) => setLocal(e.target.value.replace(/[^\d]/g, ''))}
       onBlur={() => { if (local !== value) onCommit(local); }}
-      title={invalid ? 'SĐT phải 10 số bắt đầu bằng 0 (vd: 0901234567)' : ''}
-      className={`w-full px-2 py-1 rounded border text-sm focus:bg-white focus:ring-2 focus:outline-none disabled:cursor-not-allowed ${
-        invalid
-          ? 'border-rose-400 bg-rose-50 text-rose-700 focus:border-rose-500 focus:ring-rose-100'
-          : 'border-transparent bg-transparent focus:border-emerald-300 focus:ring-emerald-100'
-      }`}
+      title={invalid ? 'SĐT phải 10 số bắt đầu bằng 0 (vd: 0901234567)' : (required && isEmpty ? 'Bắt buộc nhập' : '')}
+      className={`w-full px-2 py-1 rounded border text-sm focus:bg-white focus:ring-2 focus:outline-none disabled:cursor-not-allowed ${extraCls}`}
     />
   );
 }
@@ -883,12 +899,14 @@ function DocCell({
     if (t.toUpperCase().startsWith(prefix.toUpperCase())) return t;
     return `${prefix}${t}`;
   };
+  // V8.X: red khi required-empty, green subtle khi required-filled.
+  const stateCls = required && isEmpty
+    ? 'border-transparent ring-1 ring-rose-300 bg-rose-50/30 focus-within:border-rose-400 focus-within:ring-rose-100'
+    : required && !isEmpty
+      ? 'border-transparent ring-1 ring-emerald-200 bg-emerald-50/30 focus-within:border-emerald-400 focus-within:ring-emerald-100'
+      : 'border-transparent bg-transparent focus-within:bg-white focus-within:border-emerald-300 focus-within:ring-2 focus-within:ring-emerald-100';
   return (
-    <div className={`w-full flex items-center rounded border text-xs disabled:cursor-not-allowed ${
-      required && isEmpty
-        ? 'border-amber-300 bg-amber-50/40 focus-within:border-amber-400 focus-within:ring-2 focus-within:ring-amber-100'
-        : 'border-transparent bg-transparent focus-within:bg-white focus-within:border-emerald-300 focus-within:ring-2 focus-within:ring-emerald-100'
-    }`}
+    <div className={`w-full flex items-center rounded border text-xs disabled:cursor-not-allowed ${stateCls}`}
       title={required && isEmpty ? 'Bắt buộc nhập' : ''}>
       {prefix && (
         <span className="px-1.5 py-1 text-slate-500 font-mono font-semibold bg-slate-100/70 rounded-l border-r border-slate-200 select-none text-[11px]">
@@ -914,7 +932,7 @@ function DocCell({
 }
 
 function NumberCell({
-  value, disabled, onCommit, placeholder, emphasis,
+  value, disabled, onCommit, placeholder, emphasis, required,
 }: {
   value: number;
   disabled: boolean;
@@ -922,6 +940,8 @@ function NumberCell({
   placeholder?: string;
   // emphasis=true → border + bg visible để Sale dễ thấy đây là ô cần nhập (vd: PT số buổi)
   emphasis?: boolean;
+  // V8.X: required → red ring khi empty, green ring khi filled
+  required?: boolean;
 }) {
   // Format thousand separator khi blur; khi focus hiển thị raw số để dễ edit.
   const [editing, setEditing] = useState(false);
@@ -930,10 +950,18 @@ function NumberCell({
     if (!editing) setRaw(value > 0 ? String(value) : '');
   }, [value, editing]);
   const display = editing ? raw : (value > 0 ? value.toLocaleString() : '');
-  const baseCls = emphasis
-    // PT cell: viền tím rõ + bg trắng — Sale nhận ra ngay ô cần nhập
-    ? 'w-full px-2 py-1 rounded border border-violet-300 bg-white text-sm text-right tabular-nums text-violet-900 placeholder-violet-300 font-medium focus:border-violet-500 focus:ring-2 focus:ring-violet-100 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-50'
-    : 'w-full px-2 py-1 rounded border border-transparent bg-transparent text-sm text-right tabular-nums focus:bg-white focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100 focus:outline-none disabled:cursor-not-allowed';
+  // Priority: emphasis (PT) > required validation > default
+  let baseCls: string;
+  if (emphasis) {
+    // PT cell — viền tím luôn rõ
+    baseCls = 'w-full px-2 py-1 rounded border border-violet-300 bg-white text-sm text-right tabular-nums text-violet-900 placeholder-violet-300 font-medium focus:border-violet-500 focus:ring-2 focus:ring-violet-100 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-50';
+  } else if (required && value <= 0) {
+    baseCls = 'w-full px-2 py-1 rounded border border-transparent ring-1 ring-rose-300 bg-rose-50/30 text-sm text-right tabular-nums focus:bg-white focus:border-rose-400 focus:ring-2 focus:ring-rose-100 focus:outline-none disabled:cursor-not-allowed';
+  } else if (required && value > 0) {
+    baseCls = 'w-full px-2 py-1 rounded border border-transparent ring-1 ring-emerald-200 bg-emerald-50/30 text-sm text-right tabular-nums focus:bg-white focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none disabled:cursor-not-allowed';
+  } else {
+    baseCls = 'w-full px-2 py-1 rounded border border-transparent bg-transparent text-sm text-right tabular-nums focus:bg-white focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100 focus:outline-none disabled:cursor-not-allowed';
+  }
   return (
     <input
       type="text"
@@ -958,14 +986,17 @@ function SourceSelect({ value, disabled, onChange }: {
   disabled: boolean;
   onChange: (v: SalesV2Source) => void;
 }) {
+  // V8.X: required — red ring khi value=null
+  const cls = value
+    ? `${SOURCE_TONE[value]} ring-1 border-transparent`
+    : 'bg-rose-50/30 text-slate-500 border-transparent ring-1 ring-rose-300';
   return (
     <select
       value={value ?? ''}
       disabled={disabled}
       onChange={(e) => onChange(e.target.value as SalesV2Source)}
-      className={`w-full px-2 py-1 rounded border text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed ${
-        value ? `${SOURCE_TONE[value]} ring-1 border-transparent` : 'bg-white text-slate-400 border-slate-200'
-      }`}
+      title={value ? '' : 'Bắt buộc chọn nguồn'}
+      className={`w-full px-2 py-1 rounded border text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed ${cls}`}
     >
       <option value="">— Chọn —</option>
       {(Object.keys(SOURCE_LABEL) as SalesV2Source[]).map((k) => (
@@ -980,12 +1011,17 @@ function TxnTypeSelect({ value, disabled, onChange }: {
   disabled: boolean;
   onChange: (v: TransactionType) => void;
 }) {
+  // V8.X: required — red ring khi rỗng, green ring khi chọn
+  const cls = value
+    ? 'border-transparent ring-1 ring-emerald-200 bg-emerald-50/30 text-slate-700'
+    : 'border-transparent ring-1 ring-rose-300 bg-rose-50/30 text-slate-500';
   return (
     <select
       value={value ?? ''}
       disabled={disabled}
       onChange={(e) => onChange(e.target.value as TransactionType)}
-      className="w-full px-2 py-1 rounded border border-slate-200 bg-white text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed"
+      title={value ? '' : 'Bắt buộc chọn loại giao dịch'}
+      className={`w-full px-2 py-1 rounded border text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed ${cls}`}
     >
       <option value="">— Chọn —</option>
       {(Object.keys(TRANSACTION_TYPE_LABEL) as TransactionType[]).map((k) => (
@@ -1000,14 +1036,17 @@ function PayMethodSelect({ value, disabled, onChange }: {
   disabled: boolean;
   onChange: (v: PaymentMethod) => void;
 }) {
+  // V8.X: required — red ring khi value=null
+  const cls = value
+    ? `${PAY_TONE[value]} ring-1 border-transparent`
+    : 'bg-rose-50/30 text-slate-500 border-transparent ring-1 ring-rose-300';
   return (
     <select
       value={value ?? ''}
       disabled={disabled}
       onChange={(e) => onChange(e.target.value as PaymentMethod)}
-      className={`w-full px-2 py-1 rounded border text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed ${
-        value ? `${PAY_TONE[value]} ring-1 border-transparent` : 'bg-white text-slate-400 border-slate-200'
-      }`}
+      title={value ? '' : 'Bắt buộc chọn hình thức thu'}
+      className={`w-full px-2 py-1 rounded border text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed ${cls}`}
     >
       <option value="">— Chọn —</option>
       {(Object.keys(PAYMENT_METHOD_LABEL) as PaymentMethod[]).map((k) => (
