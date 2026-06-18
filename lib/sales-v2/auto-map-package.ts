@@ -80,22 +80,29 @@ function parseLuotLabel(packageName: string): string {
   return `${count} lượt`;
 }
 
-/** Phân loại học bơi: Trẻ em / Người lớn / Lặn / PT / CLC / Cơ bản / Khác. */
+/** Phân loại học bơi: Trẻ em / Người lớn / Lặn / PT / CLC / Cơ bản / Khác.
+ *  Audit fix 2026-06-18: relax regex để match tên gói viết dính (HBTE/HBNL/HBCB)
+ *  thay vì chỉ `\bte\b` (chỉ match khi 'te' đứng riêng). Convention Green Pool:
+ *  - HBTE = Học Bơi Trẻ Em
+ *  - HBNL = Học Bơi Người Lớn
+ *  - HBCB = Học Bơi Cơ Bản
+ *  - HB CLC = Học Bơi Chất Lượng Cao */
 function classifyHocBoi(packageName: string, packageGroupName: string): string {
   const n = norm(packageName);
   const g = norm(packageGroupName);
-  // PT (HB PT, PT Gym)
-  if (n.includes(' pt') || n.startsWith('pt ') || n === 'pt' || g.includes('pt gym')) return 'PT';
-  // Lặn (Thẻ lặn group hoặc tên chứa 'lan')
-  if (g.includes('lan') || n.includes(' lan') || n.includes('diving') || n.includes('mermaid')) return 'Lặn';
-  // Trẻ em (TE / kid / Thăng Long Kid)
-  if (/\bte\b/.test(n) || n.includes('kid') || n.includes('tre em')) return 'Trẻ em';
-  // Người lớn (NL / Aqua)
-  if (/\bnl\b/.test(n) || n.includes('aqua') || n.includes('nguoi lon')) return 'Người lớn';
-  // Chất lượng cao
-  if (n.includes('chat luong cao') || /\bclc\b/.test(n)) return 'CLC';
-  // Cơ bản
-  if (/\bcb\b/.test(n) || n.includes('co ban')) return 'Cơ bản';
+  // PT (HB PT, PT Gym, HBPT)
+  if (n.includes('pt gym') || g.includes('pt gym') || /(^|\W|hb)pt(\W|$)/.test(n)) return 'PT';
+  // Lặn — group 'Thẻ lặn' hoặc tên có 'lặn' standalone (tránh match 'plan'/'land')
+  if (g.includes(' lan') || g === 'the lan' || /(\W|^)lan(\W|$)/.test(n)
+      || n.includes('diving') || n.includes('mermaid')) return 'Lặn';
+  // Trẻ em (HBTE / TE / kid / 'trẻ em')
+  if (/(^|\W|hb)te(\W|$)/.test(n) || n.includes('kid') || n.includes('tre em')) return 'Trẻ em';
+  // Người lớn (HBNL / NL / Aqua / 'người lớn')
+  if (/(^|\W|hb)nl(\W|$)/.test(n) || n.includes('aqua') || n.includes('nguoi lon')) return 'Người lớn';
+  // Chất lượng cao (HB CLC / 'chất lượng cao')
+  if (n.includes('chat luong cao') || /(^|\W|hb)clc(\W|$)/.test(n)) return 'CLC';
+  // Cơ bản (HBCB / 'cơ bản')
+  if (/(^|\W|hb)cb(\W|$)/.test(n) || n.includes('co ban')) return 'Cơ bản';
   // Nâng cao
   if (n.includes('nang cao')) return 'Nâng cao';
   return 'Khác';

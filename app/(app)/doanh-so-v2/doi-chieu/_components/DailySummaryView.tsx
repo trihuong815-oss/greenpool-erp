@@ -45,9 +45,13 @@ interface DailySummary {
 }
 
 interface Props {
-  defaultBranch: BranchId | 'all';
+  // U1+U10 audit fix: date + branchId controlled từ parent (DoiChieuClient) để giữ context
+  // khi user switch qua lại 2 tab "Đối chiếu batch" ↔ "Tổng hợp doanh thu ngày".
+  date: string;
+  branchId: BranchId;
   allowSwitchBranch: boolean;   // top role được switch all branches; QLCS/NV_KE force branch
-  callerBranch: BranchId | null;
+  onChangeDate: (date: string) => void;
+  onChangeBranch: (branchId: BranchId) => void;
 }
 
 function todayInVN(): string {
@@ -65,33 +69,34 @@ function fmtDate(d: string): string {
   return `${dd}/${m}/${y}`;
 }
 
-export default function DailySummaryView({ defaultBranch, allowSwitchBranch, callerBranch }: Props) {
-  // Force branch cho non-top role: dùng callerBranch
-  const initialBranch: BranchId = allowSwitchBranch
-    ? (defaultBranch === 'all' ? (BRANCHES[0].id as BranchId) : defaultBranch as BranchId)
-    : ((callerBranch ?? BRANCHES[0].id) as BranchId);
-  const [branchId, setBranchId] = useState<BranchId>(initialBranch);
-  const [date, setDate] = useState<string>(todayInVN());
+export default function DailySummaryView({ date, branchId, allowSwitchBranch, onChangeDate, onChangeBranch }: Props) {
   const [data, setData] = useState<DailySummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
 
-  const fetchSummary = useCallback(async () => {
+  // U9 audit fix: AbortController cancel fetch cũ khi user đổi date/branch nhanh
+  // → tránh race condition response cũ ghi đè response mới.
+  useEffect(() => {
+    const ctrl = new AbortController();
+    let cancelled = false;
     setLoading(true); setError(null);
-    try {
-      const qs = new URLSearchParams({ branchId, date });
-      const r = await fetch(`/api/sales-v2/daily-summary?${qs.toString()}`);
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
-      const j = await r.json();
-      setData(j as DailySummary);
-    } catch (e: any) {
-      setError(e?.message ?? 'Lỗi tải');
-      setData(null);
-    } finally { setLoading(false); }
-  }, [branchId, date]);
-
-  useEffect(() => { void fetchSummary(); }, [fetchSummary, tick]);
+    (async () => {
+      try {
+        const qs = new URLSearchParams({ branchId, date });
+        const r = await fetch(`/api/sales-v2/daily-summary?${qs.toString()}`, { signal: ctrl.signal });
+        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
+        const j = await r.json();
+        if (!cancelled) setData(j as DailySummary);
+      } catch (e: any) {
+        if (e?.name === 'AbortError') return; // chuyển date/branch — bỏ qua silent
+        if (!cancelled) { setError(e?.message ?? 'Lỗi tải'); setData(null); }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; ctrl.abort(); };
+  }, [branchId, date, tick]);
 
   return (
     <div className="space-y-4">
@@ -107,18 +112,20 @@ export default function DailySummaryView({ defaultBranch, allowSwitchBranch, cal
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <button type="button" onClick={() => setDate(shiftDate(date, -1))}
+            <button type="button" onClick={() => onChangeDate(shiftDate(date, -1))}
               className="p-2 rounded-lg ring-1 ring-slate-200 hover:bg-slate-50" title="Ngày trước">
               <ChevronLeft size={16} />
             </button>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} max={todayInVN()}
+            <input type="date" value={date} onChange={(e) => onChangeDate(e.target.value)} max={todayInVN()}
+              aria-label="Chọn ngày tổng hợp"
               className="px-3 py-2 rounded-lg bg-white text-sm ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-            <button type="button" onClick={() => setDate(shiftDate(date, 1))} disabled={date >= todayInVN()}
+            <button type="button" onClick={() => onChangeDate(shiftDate(date, 1))} disabled={date >= todayInVN()}
               className="p-2 rounded-lg ring-1 ring-slate-200 hover:bg-slate-50 disabled:opacity-30" title="Ngày sau">
               <ChevronRight size={16} />
             </button>
             {allowSwitchBranch && (
-              <select value={branchId} onChange={(e) => setBranchId(e.target.value as BranchId)}
+              <select value={branchId} onChange={(e) => onChangeBranch(e.target.value as BranchId)}
+                aria-label="Chọn cơ sở"
                 className="px-3 py-2 rounded-lg bg-white text-sm ring-1 ring-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500">
                 {BRANCHES.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
               </select>
@@ -175,7 +182,7 @@ export default function DailySummaryView({ defaultBranch, allowSwitchBranch, cal
         <div className="card overflow-hidden p-0">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[900px] text-sm">
-              <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500 font-semibold">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500 font-semibold sticky top-0 z-10">
                 <tr>
                   <th className="px-3 py-2.5 text-left">Nội dung</th>
                   <th className="px-3 py-2.5 text-right w-20">SL</th>
@@ -189,21 +196,36 @@ export default function DailySummaryView({ defaultBranch, allowSwitchBranch, cal
               <tbody className="divide-y divide-slate-100">
                 {/* RECEPTION SECTION */}
                 <SectionHeader label={`Quầy lễ tân ${data.reception.exists ? '(' + (data.reception.status === 'approved' ? 'đã chốt' : 'nháp') + ')' : '(chưa nhập)'}`} tone="sky" />
-                {data.reception.entries.length === 0 ? (
+                {/* U3 audit fix: reception chưa nhập → hint rõ thay vì hiển thị skeleton rows
+                   (gây hiểu lầm "đã có data 0đ"). */}
+                {!data.reception.exists ? (
+                  <tr><td colSpan={7} className="px-3 py-4 text-center text-slate-500 text-xs italic">
+                    💡 Kế toán cơ sở chưa nhập báo cáo quầy lễ tân cho ngày này.
+                    Vào <strong>Doanh số V2 → Nhập DT quầy lễ tân</strong> để nhập.
+                  </td></tr>
+                ) : data.reception.entries.length === 0 ? (
                   <tr><td colSpan={7} className="px-3 py-3 text-center text-slate-400 text-xs italic">Không có category</td></tr>
-                ) : data.reception.entries.map((e) => (
-                  <ReceptionRow key={e.category} entry={e} />
-                ))}
-                <SubtotalRow label="Tổng quầy lễ tân" totals={data.reception.totals} tone="sky" />
+                ) : (
+                  data.reception.entries.map((e) => <ReceptionRow key={e.category} entry={e} />)
+                )}
+                {data.reception.exists && <SubtotalRow label="Tổng quầy lễ tân" totals={data.reception.totals} tone="sky" />}
 
-                {/* SALE GROUPS */}
-                {data.sales.groups.map((g) => {
-                  if (g.count === 0 && g.id === 'other') return null; // ẩn 'Khác' nếu rỗng
-                  return (
+                {/* SALE GROUPS — U4 audit fix: ẩn group count=0 toàn bộ */}
+                {data.sales.exists ? (
+                  data.sales.groups.filter((g) => g.count > 0).map((g) => (
                     <SaleGroupBlock key={g.id} group={g} />
-                  );
-                })}
-                <SubtotalRow label="Tổng Sale (gói dịch vụ)" totals={data.sales.totals} tone="emerald" />
+                  ))
+                ) : (
+                  <>
+                    <SectionHeader label="Sale (gói dịch vụ)" tone="emerald" />
+                    <tr><td colSpan={7} className="px-3 py-4 text-center text-slate-500 text-xs italic">
+                      💡 Chưa có batch Sale nào đã đối chiếu trong ngày. Sang tab <strong>Đối chiếu batch</strong> để duyệt.
+                    </td></tr>
+                  </>
+                )}
+                {data.sales.exists && data.sales.groups.some((g) => g.count > 0) && (
+                  <SubtotalRow label="Tổng Sale (gói dịch vụ)" totals={data.sales.totals} tone="emerald" />
+                )}
               </tbody>
               <tfoot className="bg-slate-100 text-sm font-bold">
                 <tr>

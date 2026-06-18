@@ -31,9 +31,21 @@ const TABS: Array<{ value: BatchStatus | 'all'; label: string; cls: string }> = 
 // V8 Phase 2 (2026-06-18): main tab switcher — 'doi-chieu' (batch review) vs 'tong-hop' (daily summary).
 type MainView = 'doi-chieu' | 'tong-hop';
 
+function todayInVN(): string {
+  const ms = Date.now() + 7 * 3600 * 1000;
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
 export default function DoiChieuClient({ scope, canReview, myBranchId }: Props) {
   const [view, setView] = useState<MainView>('doi-chieu');
   const [tab, setTab] = useState<BatchStatus | 'all'>('pending_review');
+  // U1+U10 audit fix: lift date + branch state cho tab tong-hop lên đây
+  // → giữ context khi user switch qua lại 2 tab.
+  const initialBranch: BranchId = scope === 'top'
+    ? (BRANCHES[0].id as BranchId)
+    : (myBranchId ?? BRANCHES[0].id) as BranchId;
+  const [summaryDate, setSummaryDate] = useState<string>(todayInVN());
+  const [summaryBranch, setSummaryBranch] = useState<BranchId>(initialBranch);
   const [branchId, setBranchId] = useState<BranchId | 'all'>(
     scope === 'top' ? 'all' : ((myBranchId as BranchId) ?? 'all'),
   );
@@ -125,11 +137,20 @@ export default function DoiChieuClient({ scope, canReview, myBranchId }: Props) 
         </div>
 
         {view === 'tong-hop' ? (
-          <DailySummaryView
-            defaultBranch={(scope === 'top' ? 'all' : (myBranchId ?? 'all')) as BranchId | 'all'}
-            allowSwitchBranch={scope === 'top'}
-            callerBranch={myBranchId}
-          />
+          // U2 audit fix: nếu non-top role không có branch (lỗi setup user) → block view
+          !scope || (scope !== 'top' && !myBranchId) ? (
+            <div className="card text-center py-12 text-amber-700 text-sm">
+              ⚠️ Tài khoản chưa được gán cơ sở. Báo Admin cập nhật.
+            </div>
+          ) : (
+            <DailySummaryView
+              date={summaryDate}
+              branchId={summaryBranch}
+              allowSwitchBranch={scope === 'top'}
+              onChangeDate={setSummaryDate}
+              onChangeBranch={setSummaryBranch}
+            />
+          )
         ) : (<>
         {/* Header */}
         <div className="card">

@@ -67,6 +67,11 @@ export async function GET(req: NextRequest) {
     if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return NextResponse.json({ error: 'date sai format (YYYY-MM-DD)' }, { status: 400 });
     }
+    // S5 audit fix: strict date validation (block 2026-13-45)
+    const parsedDate = new Date(date + 'T12:00:00Z');
+    if (isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== date) {
+      return NextResponse.json({ error: 'date không hợp lệ (vd 2026-13-45 sai tháng)' }, { status: 400 });
+    }
     if (!canRead(String(caller.profile.role_code), caller.profile.facility_id, branchId)) {
       return NextResponse.json({ error: 'Không có quyền xem tổng hợp doanh thu cơ sở này' }, { status: 403 });
     }
@@ -145,27 +150,41 @@ export async function GET(req: NextRequest) {
 
     for (const x of allTxs) {
       if (x.reviewStatus !== 'approved') continue;
-      if (x.transactionType === 'thanh_toan_not') continue; // không tạo doanh số mới
       const packageName = String(x.packageName ?? '');
       const serviceGroup = String(x.serviceGroup ?? x.packageCode ?? '');
       const mapping = mapPackageToReport(packageName, serviceGroup);
       const collected = Number(x.collectedToday ?? 0);
-      if (collected <= 0) continue; // không có tiền vào ngày này
+      // S2+S3 audit fix: KHÔNG skip tx khi collected<=0 hoặc thanh_toan_not.
+      // Báo cáo "Tổng hợp doanh thu ngày" theo intent user = CASH FLOW (tiền vào quỹ).
+      // - thanh_toan_not (trả nốt nợ cũ) vẫn là tiền thực thu chảy vào quỹ → PHẢI tính.
+      // - tx đặt cọc collected=0 (khách nợ 100%) → counted nhưng cash/transfer/card = 0.
+      if (collected <= 0) continue; // skip vì không có tiền vào ngày này (vẫn count vào batch khác)
+      // S4 audit fix: đảm bảo invariant total = cash + transfer + card.
+      // Nếu paymentMethod không thuộc 3 enum → gộp vào 'cash' default + log warn.
       const method = String(x.paymentMethod ?? '');
-      const cash = method === 'tien_mat' ? collected : 0;
-      const transfer = method === 'chuyen_khoan' ? collected : 0;
-      const card = method === 'pos' ? collected : 0;
+      let cash = 0, transfer = 0, card = 0;
+      if (method === 'tien_mat') cash = collected;
+      else if (method === 'chuyen_khoan') transfer = collected;
+      else if (method === 'pos') card = collected;
+      else {
+        // Defensive: gộp vào cash để không mất tiền + log để admin biết data dirty
+        console.warn('[daily-summary] tx có paymentMethod không xác định:', x.id ?? '(no-id)', method);
+        cash = collected;
+      }
+      const totalAttribution = cash + transfer + card; // === collected do logic trên
       // Group bucket
       const grp = groupTotals[mapping.group];
-      grp.cash += cash; grp.transfer += transfer; grp.card += card; grp.total += collected; grp.count += 1;
+      grp.cash += cash; grp.transfer += transfer; grp.card += card;
+      grp.total += totalAttribution;
+      grp.count += 1;
       // Item bucket
       const items = groupsMap[mapping.group];
       const existing = items.get(mapping.subLabel);
       if (existing) {
         existing.cash += cash; existing.transfer += transfer; existing.card += card;
-        existing.total += collected; existing.count += 1;
+        existing.total += totalAttribution; existing.count += 1;
       } else {
-        items.set(mapping.subLabel, { label: mapping.subLabel, count: 1, cash, transfer, card, total: collected });
+        items.set(mapping.subLabel, { label: mapping.subLabel, count: 1, cash, transfer, card, total: totalAttribution });
       }
     }
 
