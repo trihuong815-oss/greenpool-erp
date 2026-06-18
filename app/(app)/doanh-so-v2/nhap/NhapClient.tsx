@@ -272,16 +272,26 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
 
   /** Lưu tạm: POST các localRows hợp lệ → thành rows. Báo lỗi rows không hợp lệ.
    *  Row hoàn toàn rỗng (do auto-add trailing) → giữ lại làm placeholder, KHÔNG count. */
-  const handleSaveDraft = useCallback(async (): Promise<{ savedCount: number; invalidCount: number; failedCount: number }> => {
-    if (!batch) return { savedCount: 0, invalidCount: 0, failedCount: 0 };
+  const handleSaveDraft = useCallback(async (): Promise<{ savedCount: number; invalidCount: number; failedCount: number; skippedTrailing: number }> => {
+    if (!batch) return { savedCount: 0, invalidCount: 0, failedCount: 0, skippedTrailing: 0 };
     setSaving(true);
     const stillLocal: LocalRow[] = [];
-    let savedCount = 0, invalidCount = 0, failedCount = 0;
+    let savedCount = 0, invalidCount = 0, failedCount = 0, skippedTrailing = 0;
     const newSavedRows: SalesTransaction[] = [];
-    for (const lr of localRows) {
+    for (let i = 0; i < localRows.length; i++) {
+      const lr = localRows[i];
+      const isLast = i === localRows.length - 1;
       // Skip row trống — auto-add trailing chưa nhập gì, không phải lỗi
       if (isRowEmpty(lr)) {
         stillLocal.push(lr);
+        continue;
+      }
+      // V7 (2026-06-18): row CUỐI thiếu gói (auto-add user lỡ gõ vài ký tự rồi thôi)
+      // → giữ trong draft, KHÔNG count invalid, không block submit. Middle rows
+      // luôn validate strict (user chủ ý nhập từng dòng giữa).
+      if (isLast && !lr.packageId) {
+        stillLocal.push(lr);
+        skippedTrailing++;
         continue;
       }
       const v = validateRow(lr);
@@ -337,7 +347,7 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
     }
     setLocalRows(stillLocal);
     setSaving(false);
-    return { savedCount, invalidCount, failedCount };
+    return { savedCount, invalidCount, failedCount, skippedTrailing };
   }, [batch, localRows]);
 
   const handleSaveDraftClick = useCallback(async () => {
@@ -353,9 +363,22 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
     }
   }, [handleSaveDraft, showToast]);
 
+  // V7 (2026-06-18): coi row "submittable" nếu có gói. Row cuối thiếu gói = trailing auto-add.
+  const submittableCount = useMemo(() => {
+    let n = rows.length;
+    for (let i = 0; i < localRows.length; i++) {
+      const lr = localRows[i];
+      if (isRowEmpty(lr)) continue;
+      const isLast = i === localRows.length - 1;
+      if (isLast && !lr.packageId) continue; // trailing
+      if (validateRow(lr).ok) n++;
+    }
+    return n;
+  }, [rows.length, localRows]);
+
   const handleSubmit = useCallback(async () => {
     if (!batch) return;
-    if (rows.length === 0 && localRows.every((r) => !validateRow(r).ok)) {
+    if (submittableCount === 0) {
       showToast('err', 'Chưa có giao dịch nào để gửi');
       return;
     }
@@ -382,6 +405,10 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
         setSubmitting(false);
         return;
       }
+      // Info: nếu có trailing row chưa hoàn thiện → báo nhẹ, không block
+      if (draftRes.skippedTrailing > 0) {
+        showToast('ok', `Đã bỏ qua ${draftRes.skippedTrailing} dòng cuối chưa chọn gói (vẫn còn trong nháp)`);
+      }
       // 2. Submit batch
       const r = await fetch(`/api/sales-v2/batches/${encodeURIComponent(batch.id)}/submit`, { method: 'POST' });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
@@ -397,7 +424,7 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
     } finally {
       setSubmitting(false);
     }
-  }, [batch, rows.length, localRows, totals, handleSaveDraft, showToast]);
+  }, [batch, submittableCount, totals, handleSaveDraft, showToast]);
 
   // === Render ===
   if (loading) {
