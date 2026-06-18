@@ -252,9 +252,12 @@ export default function SalesGrid({
               <Th width={40}>#</Th>
               <Th width={230}>Tên khách hàng *</Th>
               <Th width={140}>SĐT *</Th>
+              {/* User chốt 2026-06-18: Gói lên trước vì quyết định các field conditional
+                  (isChildPackage → Người giám hộ; isCustomQuantity → Số buổi+Đơn giá).
+                  Người giám hộ đặt ngay sau Gói (depend on Gói), Nguồn lùi sau. */}
+              <Th width={180}>Gói *</Th>
               <Th width={150}>Người giám hộ</Th>
               <Th width={120}>Nguồn *</Th>
-              <Th width={180}>Gói *</Th>
               {/* V6 PT (2026-06-18): 2 ô PT đặt NGAY CẠNH Gói để Sale thao tác liền mạch */}
               <Th width={90} align="right">Số buổi</Th>
               <Th width={130} align="right">Đơn giá / buổi</Th>
@@ -390,16 +393,7 @@ function SavedRow({ idx, row, packages, canEdit, batchStatus, branchId, onUpdate
       <Td>
         <PhoneCell value={row.phone} disabled={!canEdit} required onCommit={(v) => onUpdate({ phone: v })} placeholder="0901234567" />
       </Td>
-      <Td>
-        {row.isChildPackage ? (
-          <TextCell value={row.guardianName ?? ''} disabled={!canEdit} required onCommit={(v) => onUpdate({ guardianName: v || null })} />
-        ) : (
-          <span className="text-slate-300 text-xs">—</span>
-        )}
-      </Td>
-      <Td>
-        <SourceSelect value={row.source} disabled={!canEdit} onChange={(v) => onUpdate({ source: v })} />
-      </Td>
+      {/* V8.X swap (2026-06-18): Gói lên trước (quyết định Người giám hộ + Số buổi) */}
       <Td>
         <PackagePicker
           packages={packages}
@@ -428,6 +422,17 @@ function SavedRow({ idx, row, packages, canEdit, batchStatus, branchId, onUpdate
             }
           }}
         />
+      </Td>
+      {/* V8.X swap (2026-06-18): Người giám hộ + Nguồn ngay sau Gói */}
+      <Td>
+        {row.isChildPackage ? (
+          <TextCell value={row.guardianName ?? ''} disabled={!canEdit} required onCommit={(v) => onUpdate({ guardianName: v || null })} />
+        ) : (
+          <span className="text-slate-300 text-xs">—</span>
+        )}
+      </Td>
+      <Td>
+        <SourceSelect value={row.source} disabled={!canEdit} onChange={(v) => onUpdate({ source: v })} />
       </Td>
       {/* V6 PT (2026-06-18): 2 ô NGAY CẠNH Gói — emphasis style khi PT để Sale nhận ra ô cần nhập */}
       <Td align="right">
@@ -594,16 +599,7 @@ function LocalRowItem({ idx, row, packages, canEdit, branchId, batchMonth, onUpd
       <Td>
         <PhoneCell value={row.phone} disabled={!canEdit} required onCommit={(v) => onUpdate({ phone: v })} placeholder="0901234567" />
       </Td>
-      <Td>
-        {row.isChildPackage ? (
-          <TextCell value={row.guardianName} disabled={!canEdit} required onCommit={(v) => onUpdate({ guardianName: v })} placeholder="Người giám hộ..." />
-        ) : (
-          <span className="text-slate-300 text-xs">—</span>
-        )}
-      </Td>
-      <Td>
-        <SourceSelect value={row.source} disabled={!canEdit} onChange={(v) => onUpdate({ source: v })} />
-      </Td>
+      {/* V8.X swap (2026-06-18): Gói lên trước (quyết định Người giám hộ + Số buổi) */}
       <Td>
         <PackagePicker
           packages={packages}
@@ -653,6 +649,17 @@ function LocalRowItem({ idx, row, packages, canEdit, branchId, batchMonth, onUpd
             });
           }}
         />
+      </Td>
+      {/* V8.X swap (2026-06-18): Người giám hộ + Nguồn ngay sau Gói */}
+      <Td>
+        {row.isChildPackage ? (
+          <TextCell value={row.guardianName} disabled={!canEdit} required onCommit={(v) => onUpdate({ guardianName: v })} placeholder="Người giám hộ..." />
+        ) : (
+          <span className="text-slate-300 text-xs">—</span>
+        )}
+      </Td>
+      <Td>
+        <SourceSelect value={row.source} disabled={!canEdit} onChange={(v) => onUpdate({ source: v })} />
       </Td>
       {/* V6 PT (2026-06-18): 2 ô PT NGAY CẠNH Gói — emphasis style khi PT để Sale nhận ra ô cần nhập */}
       <Td align="right">
@@ -790,14 +797,11 @@ function LocalRowItem({ idx, row, packages, canEdit, branchId, batchMonth, onUpd
 
 // ─── Atomic cell components ────────────────────────────────────────
 
-/** V8.X (2026-06-18) — Visual hint cho ô required: viền ĐỎ khi rỗng, viền XANH khi đã nhập.
- *  Optional fields (note, người giám hộ khi non-child) → return '' (no extra style). */
-function requiredStateClass(required: boolean, hasValue: boolean): string {
-  if (!required) return '';
-  return hasValue
-    ? 'ring-1 ring-emerald-200 bg-emerald-50/30'
-    : 'ring-1 ring-rose-300 bg-rose-50/30';
-}
+/** V8.X (2026-06-18) refactor — User chốt: TẤT CẢ ô input dùng viền TÍM thống nhất
+ *  (signal "đây là ô để nhập"); viền ĐỎ chỉ xuất hiện khi có LỖI (sai format).
+ *  Optional fields không có error → vẫn viền tím để rõ ràng là ô nhập. */
+const INPUT_BASE = 'border border-violet-200 bg-white focus:bg-white focus:border-violet-500 focus:ring-2 focus:ring-violet-100 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-50';
+const INPUT_ERROR = 'border border-rose-400 ring-1 ring-rose-300 bg-rose-50/40 focus:border-rose-500 focus:ring-2 focus:ring-rose-100 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-50';
 
 function TextCell({
   value, disabled, onCommit, placeholder, inputRef, required,
@@ -809,7 +813,6 @@ function TextCell({
   inputRef?: React.MutableRefObject<HTMLInputElement | null>;
   required?: boolean;
 }) {
-  const hint = requiredStateClass(!!required, value.trim().length > 0);
   return (
     <input
       ref={(el) => { if (inputRef) inputRef.current = el; }}
@@ -822,12 +825,12 @@ function TextCell({
         if (v !== value) onCommit(v);
       }}
       title={required && !value.trim() ? 'Bắt buộc nhập' : undefined}
-      className={`w-full px-2 py-1 rounded border border-transparent text-sm focus:bg-white focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100 focus:outline-none disabled:cursor-not-allowed ${hint || 'bg-transparent'}`}
+      className={`w-full px-2 py-1 rounded text-sm ${INPUT_BASE}`}
     />
   );
 }
 
-/** Phone cell. V8.X: red required-empty, green filled, đỏ đậm invalid. */
+/** Phone cell. V8.X: viền tím chung, đỏ CHỈ KHI sai format (>0 ký tự nhưng không match). */
 function PhoneCell({
   value, disabled, onCommit, placeholder, required,
 }: {
@@ -842,13 +845,6 @@ function PhoneCell({
   const trimmed = local.trim();
   const isEmpty = trimmed.length === 0;
   const invalid = !isEmpty && !isValidPhone(trimmed);
-  const valid = !isEmpty && !invalid;
-  // Priority: invalid > required+empty > required+filled
-  let extraCls = '';
-  if (invalid) extraCls = 'border-rose-400 bg-rose-50 text-rose-700 focus:border-rose-500 focus:ring-rose-100';
-  else if (required && isEmpty) extraCls = 'border-transparent ring-1 ring-rose-300 bg-rose-50/30 focus:border-rose-400 focus:ring-rose-100';
-  else if (required && valid) extraCls = 'border-transparent ring-1 ring-emerald-200 bg-emerald-50/30 focus:border-emerald-400 focus:ring-emerald-100';
-  else extraCls = 'border-transparent bg-transparent focus:border-emerald-300 focus:ring-emerald-100';
   return (
     <input
       type="tel"
@@ -860,7 +856,7 @@ function PhoneCell({
       onChange={(e) => setLocal(e.target.value.replace(/[^\d]/g, ''))}
       onBlur={() => { if (local !== value) onCommit(local); }}
       title={invalid ? 'SĐT phải 10 số bắt đầu bằng 0 (vd: 0901234567)' : (required && isEmpty ? 'Bắt buộc nhập' : '')}
-      className={`w-full px-2 py-1 rounded border text-sm focus:bg-white focus:ring-2 focus:outline-none disabled:cursor-not-allowed ${extraCls}`}
+      className={`w-full px-2 py-1 rounded text-sm ${invalid ? INPUT_ERROR : INPUT_BASE}`}
     />
   );
 }
@@ -899,14 +895,11 @@ function DocCell({
     if (t.toUpperCase().startsWith(prefix.toUpperCase())) return t;
     return `${prefix}${t}`;
   };
-  // V8.X: red khi required-empty, green subtle khi required-filled.
-  const stateCls = required && isEmpty
-    ? 'border-transparent ring-1 ring-rose-300 bg-rose-50/30 focus-within:border-rose-400 focus-within:ring-rose-100'
-    : required && !isEmpty
-      ? 'border-transparent ring-1 ring-emerald-200 bg-emerald-50/30 focus-within:border-emerald-400 focus-within:ring-emerald-100'
-      : 'border-transparent bg-transparent focus-within:bg-white focus-within:border-emerald-300 focus-within:ring-2 focus-within:ring-emerald-100';
+  // V8.X refactor: viền tím chung cho mọi ô input. Đỏ CHỈ khi có lỗi (DocCell
+  // hiện chưa có format validation rõ — required-empty không phải lỗi, để Sale
+  // thấy "cần nhập" qua header * + tooltip).
   return (
-    <div className={`w-full flex items-center rounded border text-xs disabled:cursor-not-allowed ${stateCls}`}
+    <div className="w-full flex items-center rounded border border-violet-200 bg-white text-xs focus-within:border-violet-500 focus-within:ring-2 focus-within:ring-violet-100 disabled:cursor-not-allowed"
       title={required && isEmpty ? 'Bắt buộc nhập' : ''}>
       {prefix && (
         <span className="px-1.5 py-1 text-slate-500 font-mono font-semibold bg-slate-100/70 rounded-l border-r border-slate-200 select-none text-[11px]">
@@ -950,18 +943,12 @@ function NumberCell({
     if (!editing) setRaw(value > 0 ? String(value) : '');
   }, [value, editing]);
   const display = editing ? raw : (value > 0 ? value.toLocaleString() : '');
-  // Priority: emphasis (PT) > required validation > default
-  let baseCls: string;
-  if (emphasis) {
-    // PT cell — viền tím luôn rõ
-    baseCls = 'w-full px-2 py-1 rounded border border-violet-300 bg-white text-sm text-right tabular-nums text-violet-900 placeholder-violet-300 font-medium focus:border-violet-500 focus:ring-2 focus:ring-violet-100 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-50';
-  } else if (required && value <= 0) {
-    baseCls = 'w-full px-2 py-1 rounded border border-transparent ring-1 ring-rose-300 bg-rose-50/30 text-sm text-right tabular-nums focus:bg-white focus:border-rose-400 focus:ring-2 focus:ring-rose-100 focus:outline-none disabled:cursor-not-allowed';
-  } else if (required && value > 0) {
-    baseCls = 'w-full px-2 py-1 rounded border border-transparent ring-1 ring-emerald-200 bg-emerald-50/30 text-sm text-right tabular-nums focus:bg-white focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 focus:outline-none disabled:cursor-not-allowed';
-  } else {
-    baseCls = 'w-full px-2 py-1 rounded border border-transparent bg-transparent text-sm text-right tabular-nums focus:bg-white focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100 focus:outline-none disabled:cursor-not-allowed';
-  }
+  // V8.X refactor: TẤT CẢ ô input dùng viền tím chung. emphasis (PT) đậm hơn nhẹ.
+  // Đỏ chỉ khi explicit lỗi (NumberCell hiện chưa có rule lỗi runtime — required check
+  // do validateRow handle ở row-level, hiển thị AlertCircle ở cuối row).
+  const baseCls = emphasis
+    ? `w-full px-2 py-1 rounded text-sm text-right tabular-nums text-violet-900 placeholder-violet-300 font-medium ${INPUT_BASE}`
+    : `w-full px-2 py-1 rounded text-sm text-right tabular-nums ${INPUT_BASE}`;
   return (
     <input
       type="text"
@@ -986,17 +973,17 @@ function SourceSelect({ value, disabled, onChange }: {
   disabled: boolean;
   onChange: (v: SalesV2Source) => void;
 }) {
-  // V8.X: required — red ring khi value=null
+  // V8.X refactor: viền tím chung. Khi đã chọn → tone đặc trưng theo SOURCE_TONE để Sale dễ scan.
   const cls = value
-    ? `${SOURCE_TONE[value]} ring-1 border-transparent`
-    : 'bg-rose-50/30 text-slate-500 border-transparent ring-1 ring-rose-300';
+    ? `${SOURCE_TONE[value]} border border-transparent ring-1`
+    : 'bg-white text-slate-600 border border-violet-200';
   return (
     <select
       value={value ?? ''}
       disabled={disabled}
       onChange={(e) => onChange(e.target.value as SalesV2Source)}
-      title={value ? '' : 'Bắt buộc chọn nguồn'}
-      className={`w-full px-2 py-1 rounded border text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed ${cls}`}
+      title={value ? '' : 'Chọn nguồn khách'}
+      className={`w-full px-2 py-1 rounded text-xs font-medium focus:outline-none focus:ring-2 focus:ring-violet-100 focus:border-violet-500 disabled:cursor-not-allowed ${cls}`}
     >
       <option value="">— Chọn —</option>
       {(Object.keys(SOURCE_LABEL) as SalesV2Source[]).map((k) => (
@@ -1011,17 +998,14 @@ function TxnTypeSelect({ value, disabled, onChange }: {
   disabled: boolean;
   onChange: (v: TransactionType) => void;
 }) {
-  // V8.X: required — red ring khi rỗng, green ring khi chọn
-  const cls = value
-    ? 'border-transparent ring-1 ring-emerald-200 bg-emerald-50/30 text-slate-700'
-    : 'border-transparent ring-1 ring-rose-300 bg-rose-50/30 text-slate-500';
+  // V8.X refactor: viền tím chung cho mọi select input
   return (
     <select
       value={value ?? ''}
       disabled={disabled}
       onChange={(e) => onChange(e.target.value as TransactionType)}
-      title={value ? '' : 'Bắt buộc chọn loại giao dịch'}
-      className={`w-full px-2 py-1 rounded border text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed ${cls}`}
+      title={value ? '' : 'Chọn loại giao dịch'}
+      className="w-full px-2 py-1 rounded text-xs font-medium text-slate-700 border border-violet-200 bg-white focus:outline-none focus:ring-2 focus:ring-violet-100 focus:border-violet-500 disabled:cursor-not-allowed"
     >
       <option value="">— Chọn —</option>
       {(Object.keys(TRANSACTION_TYPE_LABEL) as TransactionType[]).map((k) => (
@@ -1036,17 +1020,17 @@ function PayMethodSelect({ value, disabled, onChange }: {
   disabled: boolean;
   onChange: (v: PaymentMethod) => void;
 }) {
-  // V8.X: required — red ring khi value=null
+  // V8.X refactor: viền tím chung; khi đã chọn → tone đặc trưng theo PAY_TONE để dễ scan
   const cls = value
-    ? `${PAY_TONE[value]} ring-1 border-transparent`
-    : 'bg-rose-50/30 text-slate-500 border-transparent ring-1 ring-rose-300';
+    ? `${PAY_TONE[value]} border border-transparent ring-1`
+    : 'bg-white text-slate-600 border border-violet-200';
   return (
     <select
       value={value ?? ''}
       disabled={disabled}
       onChange={(e) => onChange(e.target.value as PaymentMethod)}
-      title={value ? '' : 'Bắt buộc chọn hình thức thu'}
-      className={`w-full px-2 py-1 rounded border text-xs font-medium focus:outline-none focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed ${cls}`}
+      title={value ? '' : 'Chọn hình thức thu'}
+      className={`w-full px-2 py-1 rounded text-xs font-medium focus:outline-none focus:ring-2 focus:ring-violet-100 focus:border-violet-500 disabled:cursor-not-allowed ${cls}`}
     >
       <option value="">— Chọn —</option>
       {(Object.keys(PAYMENT_METHOD_LABEL) as PaymentMethod[]).map((k) => (

@@ -97,12 +97,8 @@ export default function PackagePicker({ packages, value, disabled, onChange }: P
           onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
           onKeyDown={handleKeyDown}
           placeholder={selected ? '' : 'Tên thẻ / gói...'}
-          title={!selected ? 'Bắt buộc chọn gói' : ''}
-          className={`w-full pl-6 pr-2 py-1 rounded border bg-white text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:border-emerald-300 focus:ring-2 focus:ring-emerald-100 disabled:cursor-not-allowed disabled:bg-slate-50 ${
-            selected
-              ? 'border-transparent ring-1 ring-emerald-200 bg-emerald-50/30'
-              : 'border-transparent ring-1 ring-rose-300 bg-rose-50/30'
-          }`}
+          title={!selected ? 'Chọn gói (quyết định các field còn lại)' : ''}
+          className="w-full pl-6 pr-2 py-1 rounded border border-violet-200 bg-white text-xs text-slate-700 placeholder-slate-400 focus:outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 disabled:cursor-not-allowed disabled:bg-slate-50"
         />
       </div>
 
