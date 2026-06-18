@@ -24,6 +24,9 @@ interface Props {
   localRows: LocalRow[];
   canEdit: boolean;
   batchStatus: string;
+  // V7 Promo (2026-06-18): branchId để fetch /available — Mobile chưa hỗ trợ chọn promo
+  // (không gian màn hình hạn chế). Sale dùng desktop để áp KM, mobile vẫn nhập tx như cũ.
+  branchId: string;
   onUpdateLocal: (tempId: string, patch: Partial<LocalRow>) => void;
   onRemoveLocal: (tempId: string) => void;
   onUpdateSaved: (id: string, patch: Partial<SalesTransaction>) => void;
@@ -38,6 +41,7 @@ function canSaleEditSavedRow(batchStatus: string, reviewStatus?: string): boolea
 
 export default function MobileNhapView({
   packages, rows, localRows, canEdit, batchStatus,
+  branchId: _branchId,  // reserved cho future mobile promo picker
   onUpdateLocal, onRemoveLocal, onUpdateSaved, onRemoveSaved,
 }: Props) {
   const totalRows = rows.length + localRows.length;
@@ -479,6 +483,22 @@ function CardEditor({
         <span>Công nợ phát sinh:</span>
         <span className={`font-bold tabular-nums ${debt > 0 ? 'text-rose-600' : 'text-slate-400'}`}>{debt.toLocaleString()}đ</span>
       </div>
+      {/* V7 Promo (2026-06-18) — info promo nếu SavedRow có snapshot */}
+      {row.savedRow && (row.promoSnapshots?.length ?? 0) > 0 && (
+        <div className="rounded-lg bg-violet-50 ring-1 ring-violet-200 px-2.5 py-2 text-xs">
+          <div className="font-semibold text-violet-700 mb-1">Khuyến mãi đã áp:</div>
+          {row.promoSnapshots!.map((s) => (
+            <div key={s.id} className="flex items-center gap-2 text-violet-700">
+              <span className="font-mono font-bold">{s.code}</span>
+              <span>·</span>
+              <span>{s.name}</span>
+            </div>
+          ))}
+          {(row.discountAmount ?? 0) > 0 && (
+            <div className="mt-1 text-emerald-700">Đã giảm: <strong className="tabular-nums">{row.discountAmount!.toLocaleString()}đ</strong></div>
+          )}
+        </div>
+      )}
 
       {/* Chứng từ */}
       {(row as any).transactionType === 'dat_coc' && (

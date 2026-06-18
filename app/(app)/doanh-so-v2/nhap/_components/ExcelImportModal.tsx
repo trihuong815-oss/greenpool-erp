@@ -194,6 +194,8 @@ export default function ExcelImportModal({ packages, onClose, onImport }: Props)
       lr.receiptNo = r.receiptNo;
       lr.contractNo = r.contractNo;
       lr.note = r.note;
+      // V7 Promo: Excel import không hỗ trợ chọn KM — Sale tự thêm sau ở grid.
+      lr.promoSnapshots = [];
       validRows.push(lr);
     }
     onImport(validRows);

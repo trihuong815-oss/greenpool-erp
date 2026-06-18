@@ -45,6 +45,9 @@ export const ACTION_REQUIRED_TYPES = new Set<NotiType>([
   // Sales v2 (2026-06-17): kế toán cần duyệt + Sale cần sửa
   'sales_batch_submitted',     // kế toán nhận → cần đối chiếu
   'sales_batch_returned',      // Sale nhận → cần sửa các dòng lỗi
+  // V7 Promo (2026-06-18): chương trình khuyến mãi
+  'sales_program_pending_approval',  // → GD_KD/GD_VP cần duyệt
+  'sales_program_pending_configure', // → NV_KE cần set promoCode
 ]);
 
 export type NotiType =
@@ -78,7 +81,13 @@ export type NotiType =
   // Sales v2 (2026-06-17): daily batch workflow
   | 'sales_batch_submitted'    // → kế toán cơ sở (action_required)
   | 'sales_batch_approved'     // → Sale (informational)
-  | 'sales_batch_returned';    // → Sale (action_required)
+  | 'sales_batch_returned'     // → Sale (action_required)
+  // V7 Promo (2026-06-18): chương trình khuyến mãi
+  | 'sales_program_pending_approval'   // → GD_KD/GD_VP cần duyệt
+  | 'sales_program_approved_step'      // → người tạo + cấp duyệt tiếp theo (informational)
+  | 'sales_program_pending_configure'  // → NV_KE cần set promoCode
+  | 'sales_program_rejected'           // → người tạo (informational)
+  | 'sales_program_active';            // → người tạo (informational)
 
 export type NotiModule = 'proposal' | 'dispatch' | 'chat' | 'kt' | 'sales';
 export type NotiPriority = 'low' | 'normal' | 'high' | 'urgent';

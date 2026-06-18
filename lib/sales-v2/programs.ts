@@ -1,0 +1,150 @@
+// V7 Promo (2026-06-18) — Service helpers cho chương trình khuyến mãi.
+
+import 'server-only';
+import { Timestamp } from 'firebase-admin/firestore';
+import { getFirebaseAdminDb } from '@/lib/firebase/admin';
+import { COLLECTIONS } from '@/lib/firebase/collections';
+import type { BranchId } from '@/lib/types/branches';
+import type {
+  SalesProgram, ApprovalStep, ProgramStatus, PromoType, PromoSnapshot,
+} from '@/lib/types/sales-program';
+
+function tsToIso(v: unknown): string {
+  if (v instanceof Timestamp) return v.toDate().toISOString();
+  if (v instanceof Date) return v.toISOString();
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number') return new Date(v).toISOString();
+  return new Date().toISOString();
+}
+function tsToIsoOrNull(v: unknown): string | null {
+  if (v == null) return null;
+  return tsToIso(v);
+}
+
+export function serializeProgram(id: string, raw: Record<string, any>): SalesProgram {
+  const steps: ApprovalStep[] = Array.isArray(raw.approvalSteps)
+    ? raw.approvalSteps.map((s: any) => ({
+        approverId: String(s?.approverId ?? ''),
+        approverName: String(s?.approverName ?? ''),
+        action: s?.action === 'rejected' ? 'rejected' : 'approved',
+        timestamp: tsToIso(s?.timestamp),
+        reason: s?.reason ?? null,
+      }))
+    : [];
+  return {
+    id,
+    name: String(raw.name ?? ''),
+    description: String(raw.description ?? ''),
+    month: String(raw.month ?? ''),
+    branchId: raw.branchId as BranchId,
+    branchName: String(raw.branchName ?? ''),
+    packageIds: Array.isArray(raw.packageIds) ? raw.packageIds.map(String) : [],
+    packageNames: Array.isArray(raw.packageNames) ? raw.packageNames.map(String) : [],
+    promoType: raw.promoType as PromoType,
+    promoValue: Number(raw.promoValue ?? 0),
+    promoCode: raw.promoCode ?? null,
+    status: (raw.status as ProgramStatus) ?? 'draft',
+    createdBy: String(raw.createdBy ?? ''),
+    createdByName: String(raw.createdByName ?? ''),
+    createdByRole: String(raw.createdByRole ?? ''),
+    createdAt: tsToIso(raw.createdAt),
+    submittedAt: tsToIsoOrNull(raw.submittedAt),
+    approverChain: Array.isArray(raw.approverChain) ? raw.approverChain.map(String) : [],
+    approverChainNames: Array.isArray(raw.approverChainNames) ? raw.approverChainNames.map(String) : [],
+    currentApprover: raw.currentApprover ?? null,
+    approvalSteps: steps,
+    rejectedReason: raw.rejectedReason ?? null,
+    configuredBy: raw.configuredBy ?? null,
+    configuredByName: raw.configuredByName ?? null,
+    configuredAt: tsToIsoOrNull(raw.configuredAt),
+    pausedBy: raw.pausedBy ?? null,
+    pausedAt: tsToIsoOrNull(raw.pausedAt),
+    pauseReason: raw.pauseReason ?? null,
+    usageCount: Number(raw.usageCount ?? 0),
+    totalDiscount: Number(raw.totalDiscount ?? 0),
+    totalBonusSessions: Number(raw.totalBonusSessions ?? 0),
+    totalBonusDays: Number(raw.totalBonusDays ?? 0),
+    updatedAt: tsToIso(raw.updatedAt),
+  };
+}
+
+/** Build approver chain [GD_KD_uid, GD_VP_uid] — query users active của 2 role chính.
+ *  Nếu thiếu role (vd chưa có GD_VP) → chain rút ngắn còn 1 (system auto-approve khi đến end).
+ *  Nếu không có ai cả → throw. */
+export async function buildApproverChain(): Promise<{ uids: string[]; names: string[] }> {
+  const db = getFirebaseAdminDb();
+  const snap = await db.collection(COLLECTIONS.USERS)
+    .where('role_code', 'in', ['GD_KD', 'GD_VP'])
+    .get();
+  const byRole: Record<string, Array<{ uid: string; name: string }>> = { GD_KD: [], GD_VP: [] };
+  snap.forEach((d) => {
+    const data = d.data();
+    if (data.is_active === false) return;
+    // V6.4 audit fix: exclude IT/ADMIN có flag excludeFromBusinessNoti
+    if (data.excludeFromBusinessNoti === true) return;
+    const role = String(data.role_code);
+    if (role !== 'GD_KD' && role !== 'GD_VP') return;
+    byRole[role].push({
+      uid: String(data.uid ?? d.id),
+      name: String(data.display_name ?? data.full_name ?? data.email ?? ''),
+    });
+  });
+  const chain: Array<{ uid: string; name: string }> = [];
+  if (byRole.GD_KD[0]) chain.push(byRole.GD_KD[0]);
+  if (byRole.GD_VP[0]) chain.push(byRole.GD_VP[0]);
+  if (chain.length === 0) {
+    throw new Error('Hệ thống chưa có ai đảm nhiệm role GD_KD hoặc GD_VP để duyệt chương trình');
+  }
+  return { uids: chain.map((c) => c.uid), names: chain.map((c) => c.name) };
+}
+
+/** Resolve danh sách package thật cho program — fallback rỗng nếu không tồn tại. */
+export async function resolvePackageNames(packageIds: string[]): Promise<Map<string, string>> {
+  const result = new Map<string, string>();
+  if (packageIds.length === 0) return result;
+  const db = getFirebaseAdminDb();
+  // Firestore IN max 10 → chunk
+  for (let i = 0; i < packageIds.length; i += 10) {
+    const chunk = packageIds.slice(i, i + 10);
+    const refs = chunk.map((id) => db.collection(COLLECTIONS.PACKAGES).doc(id));
+    const docs = await db.getAll(...refs);
+    docs.forEach((d, idx) => {
+      if (d.exists) {
+        const name = String(d.data()?.name ?? '');
+        result.set(chunk[idx], name);
+      }
+    });
+  }
+  return result;
+}
+
+/** Resolve nhiều program theo id list — dùng khi POST tx có promoIds. */
+export async function getProgramsByIds(programIds: string[]): Promise<SalesProgram[]> {
+  if (programIds.length === 0) return [];
+  const db = getFirebaseAdminDb();
+  const refs = programIds.map((id) => db.collection(COLLECTIONS.SALES_PROGRAMS).doc(id));
+  const docs = await db.getAll(...refs);
+  const out: SalesProgram[] = [];
+  docs.forEach((d) => {
+    if (d.exists) out.push(serializeProgram(d.id, d.data() ?? {}));
+  });
+  return out;
+}
+
+/** Snapshot 1 program thành PromoSnapshot ghi vào tx doc (immutable). */
+export function toSnapshot(p: SalesProgram): PromoSnapshot {
+  return {
+    id: p.id,
+    code: p.promoCode ?? '',
+    name: p.name,
+    type: p.promoType,
+    value: p.promoValue,
+  };
+}
+
+/** Hiện tại theo VN timezone YYYY-MM */
+export function currentMonthVN(): string {
+  const ms = Date.now() + 7 * 3600 * 1000;
+  const d = new Date(ms);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+}

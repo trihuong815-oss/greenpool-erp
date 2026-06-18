@@ -127,6 +127,21 @@ export interface SalesTransaction {
   packageIsCustomQuantity?: boolean;
   // Snapshot unitName ('buổi'/'lượt'/...) — UI/báo cáo dùng để hiển thị "10 buổi" / "30 lượt".
   packageUnitName?: string;
+  // V7 Promo (2026-06-18): chương trình khuyến mãi áp dụng (tối đa 2: 1 giảm + 1 tặng)
+  // Tx doc lưu snapshot full vào promoSnapshots → admin sửa promo sau không phá tx cũ.
+  // packageValue (final billed) = basePackageValue - discountAmount (server enforce)
+  promoIds?: string[];                 // [] hoặc null khi không có promo
+  promoSnapshots?: Array<{
+    id: string;
+    code: string;
+    name: string;
+    type: 'percent' | 'fixed_amount' | 'bonus_sessions' | 'bonus_days';
+    value: number;
+  }>;
+  basePackageValue?: number;           // packageValue TRƯỚC promo (= qty×up nếu PT hoặc input gốc)
+  discountAmount?: number;             // tiền giảm
+  bonusQuantity?: number;              // buổi tặng (cho bonus_sessions)
+  bonusDays?: number;                  // ngày tặng (cho bonus_days)
   // V6 (2026-06-17): chứng từ tracking
   // - receiptNo: số phiếu thu — required cho 'dat_coc' (mới), optional+link key cho 'thanh_toan_not'
   // - contractNo: số hợp đồng — required cho 'thanh_toan_full' và 'thanh_toan_not'
@@ -196,6 +211,8 @@ export interface SalesTransactionInput {
   // PT/Bơi PT — số buổi + đơn giá / buổi
   quantity?: number | null;
   unitPrice?: number | null;
+  // V7 Promo — Sale gửi list promoIds. Server resolve + validate combo + apply.
+  promoIds?: string[];
 }
 
 export interface SalesBatchSubmitInput {

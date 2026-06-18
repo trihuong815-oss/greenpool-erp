@@ -3,8 +3,8 @@
 // Sales grid — 11 cột Excel-like cho Sale nhập daily transactions.
 // Phase 1 (2026-06-17).
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Trash2, AlertCircle } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Trash2, AlertCircle, Tag, X, Search } from 'lucide-react';
 import type {
   SalesTransaction,
   SalesV2Source,
@@ -13,8 +13,20 @@ import type {
 } from '@/lib/types/sales-v2';
 import { SOURCE_LABEL, TRANSACTION_TYPE_LABEL, PAYMENT_METHOD_LABEL } from '@/lib/types/sales-v2';
 import type { SalesV2Package } from '@/lib/sales-v2/packages';
+import {
+  computeDiscount, isDiscountType, isBonusType,
+  type PromoSnapshot, type PromoType,
+} from '@/lib/types/sales-program';
 import PackagePicker from './PackagePicker';
 import { showConfirm } from '@/components/ui/imperative-modal';
+
+interface AvailablePromo {
+  id: string;
+  promoCode: string;
+  name: string;
+  promoType: PromoType;
+  promoValue: number;
+}
 
 export interface LocalRow {
   tempId: string;
@@ -36,6 +48,9 @@ export interface LocalRow {
   // V6 PT: số buổi + đơn giá / buổi. Chỉ dùng khi packageIsCustomQuantity=true.
   quantity: string;
   unitPrice: string;
+  // V7 Promo (2026-06-18): tối đa 2 promo (1 giảm + 1 tặng) per row.
+  // Snapshot lưu inline trong row → preview discount client-side, gửi promoIds lên server lúc POST.
+  promoSnapshots: PromoSnapshot[];
   receiptNo: string;
   contractNo: string;
   note: string;
@@ -63,6 +78,7 @@ export function makeEmptyRow(): LocalRow {
     collectedToday: '',
     quantity: '',
     unitPrice: '',
+    promoSnapshots: [],
     receiptNo: '',
     contractNo: '',
     note: '',
@@ -88,13 +104,17 @@ export function isRowEmpty(r: LocalRow): boolean {
     && !r.collectedToday.trim()
     && !r.quantity.trim()
     && !r.unitPrice.trim()
+    && (r.promoSnapshots?.length ?? 0) === 0
     && !r.receiptNo.trim()
     && !r.contractNo.trim()
     && !r.note.trim();
 }
 
-/** Tính packageValue effective cho 1 row — auto-compute nếu PT, ngược lại lấy field. */
-export function effectivePackageValue(r: LocalRow): number {
+/** BASE packageValue cho 1 row (TRƯỚC khi áp discount).
+ *  - thanh_toan_not → 0
+ *  - PT → qty × unitPrice
+ *  - Non-PT → field packageValue */
+export function basePackageValueOf(r: LocalRow): number {
   if (r.transactionType === 'thanh_toan_not') return 0;
   if (r.packageIsCustomQuantity) {
     const q = Number(r.quantity);
@@ -103,6 +123,22 @@ export function effectivePackageValue(r: LocalRow): number {
     return q * u;
   }
   return Number(r.packageValue) || 0;
+}
+
+/** Tổng discount áp lên 1 row từ promoSnapshots (chỉ percent + fixed_amount). */
+export function discountSumOf(r: LocalRow): number {
+  const base = basePackageValueOf(r);
+  if (base <= 0) return 0;
+  let total = 0;
+  for (const s of r.promoSnapshots ?? []) {
+    if (isDiscountType(s.type)) total += computeDiscount(base, s.type, s.value);
+  }
+  return Math.min(total, base);
+}
+
+/** FINAL packageValue (SAU discount) — khớp với server-stored packageValue. */
+export function effectivePackageValue(r: LocalRow): number {
+  return Math.max(0, basePackageValueOf(r) - discountSumOf(r));
 }
 
 /** Validate 1 local row đủ điều kiện POST chưa. */
@@ -135,17 +171,24 @@ export function validateRow(r: LocalRow): { ok: true } | { ok: false; error: str
     if (!Number.isFinite(q) || q <= 0) return { ok: false, error: 'Gói PT — phải nhập số buổi (> 0)' };
     const u = Number(r.unitPrice);
     if (!Number.isFinite(u) || u < 0) return { ok: false, error: 'Gói PT — đơn giá / buổi không hợp lệ' };
-    const pv = q * u;
-    if (pv <= 0) return { ok: false, error: 'Giá trị gói (số buổi × đơn giá) phải > 0' };
-    if (r.transactionType === 'thanh_toan_full' && ct < pv) {
-      return { ok: false, error: 'Thanh toán full phải thu đủ giá trị gói' };
-    }
-    return { ok: true };
+    if (q * u <= 0) return { ok: false, error: 'Giá trị gói (số buổi × đơn giá) phải > 0' };
+  } else {
+    const pv = Number(r.packageValue);
+    if (!Number.isFinite(pv) || pv <= 0) return { ok: false, error: 'Giá trị gói phải > 0' };
   }
-  const pv = Number(r.packageValue);
-  if (!Number.isFinite(pv) || pv <= 0) return { ok: false, error: 'Giá trị gói phải > 0' };
-  if (r.transactionType === 'thanh_toan_full' && ct < pv) {
-    return { ok: false, error: 'Thanh toán full phải thu đủ giá trị gói' };
+  // V7 Promo: validate combo max 1 discount + 1 bonus
+  if ((r.promoSnapshots?.length ?? 0) > 2) return { ok: false, error: 'Tối đa 2 chương trình mỗi giao dịch' };
+  const discountCount = (r.promoSnapshots ?? []).filter((s) => isDiscountType(s.type)).length;
+  const bonusCount = (r.promoSnapshots ?? []).filter((s) => isBonusType(s.type)).length;
+  if (discountCount > 1) return { ok: false, error: 'Chỉ áp được 1 mã giảm giá' };
+  if (bonusCount > 1) return { ok: false, error: 'Chỉ áp được 1 mã tặng' };
+  // Thu hôm nay không > pv (sau discount)
+  const finalPv = effectivePackageValue(r);
+  if (r.transactionType === 'thanh_toan_full' && ct < finalPv) {
+    return { ok: false, error: 'Thanh toán full phải thu đủ giá trị gói (sau khuyến mãi)' };
+  }
+  if (ct > finalPv) {
+    return { ok: false, error: 'Thu hôm nay không thể lớn hơn giá trị gói' };
   }
   return { ok: true };
 }
@@ -156,6 +199,7 @@ interface Props {
   localRows: LocalRow[];
   canEdit: boolean;                  // Sale có thể edit row mới (add/lock-free)
   batchStatus: string;               // V6: dùng để quyết định row nào lock khi returned
+  branchId: string;                  // V7 Promo — dùng để fetch /available
   onUpdateLocal: (tempId: string, patch: Partial<LocalRow>) => void;
   onRemoveLocal: (tempId: string) => void;
   onUpdateSaved: (id: string, patch: Partial<SalesTransaction>) => void;
@@ -184,7 +228,7 @@ function canSaleEditRow(batchStatus: string, reviewStatus?: string): boolean {
 }
 
 export default function SalesGrid({
-  packages, rows, localRows, canEdit, batchStatus,
+  packages, rows, localRows, canEdit, batchStatus, branchId,
   onUpdateLocal, onRemoveLocal, onUpdateSaved, onRemoveSaved,
 }: Props) {
   const totalRows = rows.length + localRows.length;
@@ -201,7 +245,7 @@ export default function SalesGrid({
   return (
     <div className="card overflow-hidden p-0">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[2400px] text-sm">
+        <table className="w-full min-w-[2730px] text-sm">
           <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
             <tr>
               <Th width={40}>#</Th>
@@ -218,6 +262,9 @@ export default function SalesGrid({
               <Th width={120}>Số phiếu thu</Th>
               <Th width={120}>Số HĐ</Th>
               <Th width={120} align="right">Giá trị gói *</Th>
+              {/* V7 Promo (2026-06-18): KM chips + Giá trị sau KM (= base − discount) */}
+              <Th width={200}>Khuyến mãi</Th>
+              <Th width={130} align="right">Giá trị sau KM</Th>
               <Th width={120} align="right">Thu hôm nay *</Th>
               <Th width={120} align="right">Công nợ</Th>
               <Th width={140}>Ghi chú</Th>
@@ -236,6 +283,7 @@ export default function SalesGrid({
                   packages={packages}
                   canEdit={rowEditable}
                   batchStatus={batchStatus}
+                  branchId={branchId}
                   onUpdate={(patch) => onUpdateSaved(r.id, patch)}
                   onRemove={() => onRemoveSaved(r.id)}
                 />
@@ -253,6 +301,7 @@ export default function SalesGrid({
                   row={r}
                   packages={packages}
                   canEdit={canEdit}
+                  branchId={branchId}
                   onUpdate={(patch) => onUpdateLocal(r.tempId, patch)}
                   onRemove={() => onRemoveLocal(r.tempId)}
                   autoFocusFirstCell={shouldFocus}
@@ -286,12 +335,13 @@ function Td({ children, align = 'left', className = '' }: { children?: React.Rea
 }
 
 /** Row đã save (có id Firestore). Edit gửi PATCH ngay. */
-function SavedRow({ idx, row, packages, canEdit, batchStatus, onUpdate, onRemove }: {
+function SavedRow({ idx, row, packages, canEdit, batchStatus, branchId, onUpdate, onRemove }: {
   idx: number;
   row: SalesTransaction;
   packages: SalesV2Package[];
   canEdit: boolean;
   batchStatus: string;
+  branchId: string;
   onUpdate: (patch: Partial<SalesTransaction>) => void;
   onRemove: () => void;
 }) {
@@ -453,6 +503,22 @@ function SavedRow({ idx, row, packages, canEdit, batchStatus, onUpdate, onRemove
           <NumberCell value={row.packageValue} disabled={!canEdit} onCommit={(v) => onUpdate({ packageValue: v })} />
         )}
       </Td>
+      {/* V7 Promo (2026-06-18) — readonly cho SavedRow (xoá+tạo lại nếu muốn đổi promo) */}
+      <Td>
+        <PromoChipsReadonly snapshots={row.promoSnapshots ?? []} discountAmount={row.discountAmount ?? 0}
+          bonusQuantity={row.bonusQuantity ?? 0} bonusDays={row.bonusDays ?? 0}
+          unitName={row.packageUnitName || 'buổi'} />
+      </Td>
+      {/* Giá trị sau KM = server-stored packageValue (đã trừ discount) */}
+      <Td align="right" className="tabular-nums">
+        {row.transactionType === 'thanh_toan_not' ? (
+          <span className="text-slate-300 text-xs">—</span>
+        ) : (row.discountAmount ?? 0) > 0 ? (
+          <span className="font-semibold text-emerald-700">{row.packageValue.toLocaleString()}</span>
+        ) : (
+          <span className="text-slate-600">{row.packageValue.toLocaleString()}</span>
+        )}
+      </Td>
       <Td align="right">
         <NumberCell value={row.collectedToday} disabled={!canEdit} onCommit={(v) => onUpdate({ collectedToday: v })} />
       </Td>
@@ -474,11 +540,12 @@ function SavedRow({ idx, row, packages, canEdit, batchStatus, onUpdate, onRemove
 }
 
 /** Row local (chưa save). Edit cập nhật state cha. */
-function LocalRowItem({ idx, row, packages, canEdit, onUpdate, onRemove, autoFocusFirstCell }: {
+function LocalRowItem({ idx, row, packages, canEdit, branchId, onUpdate, onRemove, autoFocusFirstCell }: {
   idx: number;
   row: LocalRow;
   packages: SalesV2Package[];
   canEdit: boolean;
+  branchId: string;
   onUpdate: (patch: Partial<LocalRow>) => void;
   onRemove: () => void;
   autoFocusFirstCell?: boolean;
@@ -488,8 +555,10 @@ function LocalRowItem({ idx, row, packages, canEdit, onUpdate, onRemove, autoFoc
   const isPT = row.packageIsCustomQuantity;
   const qty = Number(row.quantity) || 0;
   const up = Number(row.unitPrice) || 0;
-  // PT: pv = qty × up (computed). Non-PT: lấy từ field.
-  const pv = isThanhToanNot ? 0 : (isPT ? qty * up : (Number(row.packageValue) || 0));
+  // V7 Promo: base = qty*up (PT) hoặc packageValue field (non-PT). Final = base - discount.
+  const base = isThanhToanNot ? 0 : (isPT ? qty * up : (Number(row.packageValue) || 0));
+  const discount = isThanhToanNot ? 0 : discountSumOf(row);
+  const pv = Math.max(0, base - discount);
   const ct = Number(row.collectedToday) || 0;
   const debt = isThanhToanNot ? 0 : Math.max(0, pv - ct);
   const rowEmpty = useMemo(() => isRowEmpty(row), [row]);
@@ -658,14 +727,34 @@ function LocalRowItem({ idx, row, packages, canEdit, onUpdate, onRemove, autoFoc
         {isThanhToanNot ? (
           <span className="text-slate-300 text-xs" title="Thanh toán nốt — không tính doanh số mới (sẽ link với GD cũ)">—</span>
         ) : isPT ? (
-          <span
-            className="block text-right tabular-nums text-slate-700 font-medium px-2 py-1 bg-slate-50 rounded"
-            title="Auto = Số buổi × Đơn giá / buổi"
-          >
-            {pv.toLocaleString()}
+          <span className="block text-right tabular-nums text-slate-700 font-medium px-2 py-1 bg-slate-50 rounded"
+            title="Auto = Số buổi × Đơn giá / buổi (TRƯỚC khuyến mãi)">
+            {base.toLocaleString()}
           </span>
         ) : (
-          <NumberCell value={pv} disabled={!canEdit} onCommit={(v) => onUpdate({ packageValue: String(v) })} />
+          <NumberCell value={base} disabled={!canEdit} onCommit={(v) => onUpdate({ packageValue: String(v) })} />
+        )}
+      </Td>
+      {/* V7 Promo (2026-06-18) — editable cho LocalRow */}
+      <Td>
+        <PromoCell
+          row={row}
+          branchId={branchId}
+          canEdit={canEdit && !isThanhToanNot}
+          onUpdate={(snapshots) => onUpdate({ promoSnapshots: snapshots })}
+        />
+      </Td>
+      {/* Giá trị sau KM = base − discount (auto, readonly) */}
+      <Td align="right" className="tabular-nums">
+        {isThanhToanNot ? (
+          <span className="text-slate-300 text-xs">—</span>
+        ) : discount > 0 ? (
+          <div>
+            <span className="block text-[10px] text-slate-400 leading-tight">−{discount.toLocaleString()}</span>
+            <span className="font-semibold text-emerald-700">{pv.toLocaleString()}</span>
+          </div>
+        ) : (
+          <span className="text-slate-600">{pv.toLocaleString()}</span>
         )}
       </Td>
       <Td align="right">
@@ -892,5 +981,189 @@ function PayMethodSelect({ value, disabled, onChange }: {
         <option key={k} value={k}>{PAYMENT_METHOD_LABEL[k]}</option>
       ))}
     </select>
+  );
+}
+
+// ─── V7 Promo cells ──────────────────────────────────────────
+
+const PROMO_TYPE_SHORT: Record<PromoType, string> = {
+  percent: '%', fixed_amount: 'VND', bonus_sessions: 'Buổi', bonus_days: 'Ngày',
+};
+function fmtPromoChip(s: PromoSnapshot, unitName: string = 'buổi'): string {
+  if (s.type === 'percent') return `-${s.value}%`;
+  if (s.type === 'fixed_amount') return `-${s.value.toLocaleString()}đ`;
+  if (s.type === 'bonus_sessions') return `+${s.value} ${unitName}`;
+  if (s.type === 'bonus_days') return `+${s.value} ngày`;
+  return String(s.value);
+}
+
+/** Readonly chips display cho SavedRow — không cho edit (xoá+tạo lại nếu muốn đổi). */
+function PromoChipsReadonly({ snapshots, discountAmount, bonusQuantity, bonusDays, unitName }: {
+  snapshots: PromoSnapshot[];
+  discountAmount: number;
+  bonusQuantity: number;
+  bonusDays: number;
+  unitName: string;
+}) {
+  if (snapshots.length === 0) return <span className="text-slate-300 text-xs">—</span>;
+  return (
+    <div className="flex flex-col gap-0.5">
+      {snapshots.map((s) => (
+        <div key={s.id} className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ring-1 max-w-fit ${
+          isDiscountType(s.type) ? 'bg-violet-50 text-violet-700 ring-violet-200' : 'bg-rose-50 text-rose-700 ring-rose-200'
+        }`}>
+          <span className="font-mono font-bold">{s.code}</span>
+          <span className="opacity-60">·</span>
+          <span>{fmtPromoChip(s, unitName)}</span>
+        </div>
+      ))}
+      {discountAmount > 0 && (
+        <span className="text-[10px] text-emerald-700 tabular-nums">Giảm {discountAmount.toLocaleString()}đ</span>
+      )}
+      {bonusQuantity > 0 && (
+        <span className="text-[10px] text-rose-700 tabular-nums">Tặng {bonusQuantity} {unitName}</span>
+      )}
+      {bonusDays > 0 && (
+        <span className="text-[10px] text-cyan-700 tabular-nums">Tặng {bonusDays} ngày</span>
+      )}
+    </div>
+  );
+}
+
+/** Editable cell cho LocalRow — popover picker + chips. */
+function PromoCell({ row, branchId, canEdit, onUpdate }: {
+  row: LocalRow;
+  branchId: string;
+  canEdit: boolean;
+  onUpdate: (snapshots: PromoSnapshot[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [available, setAvailable] = useState<AvailablePromo[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  const snapshots = row.promoSnapshots ?? [];
+  const unitName = row.packageId ? (row.packageIsCustomQuantity ? 'buổi' : '') : '';
+
+  const fetchAvailable = useCallback(async () => {
+    if (!row.packageId) return;
+    setLoading(true); setError(null);
+    try {
+      const qs = new URLSearchParams({ branchId, packageId: row.packageId });
+      const r = await fetch(`/api/sales-v2/programs/available?${qs.toString()}`);
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
+      const j = await r.json();
+      setAvailable(j.programs as AvailablePromo[]);
+    } catch (e: any) { setError(e?.message ?? 'Lỗi tải'); }
+    finally { setLoading(false); }
+  }, [branchId, row.packageId]);
+
+  function openPicker() {
+    if (!canEdit) return;
+    if (!row.packageId) { setError('Chọn gói trước khi thêm khuyến mãi'); return; }
+    setOpen(true);
+    void fetchAvailable();
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  function addPromo(p: AvailablePromo) {
+    // Check combo: max 1 discount + 1 bonus
+    const newType = p.promoType;
+    const sameGroup = snapshots.filter((s) =>
+      (isDiscountType(s.type) && isDiscountType(newType)) ||
+      (isBonusType(s.type) && isBonusType(newType))
+    );
+    let nextSnaps = snapshots;
+    if (sameGroup.length > 0) {
+      // Replace cùng nhóm (vd đã có 1 discount, chọn discount khác → thay)
+      nextSnaps = snapshots.filter((s) => s.id !== sameGroup[0].id);
+    }
+    // Tránh add trùng
+    if (nextSnaps.some((s) => s.id === p.id)) return;
+    nextSnaps = [...nextSnaps, {
+      id: p.id, code: p.promoCode, name: p.name, type: p.promoType, value: p.promoValue,
+    }];
+    onUpdate(nextSnaps);
+    setOpen(false);
+  }
+
+  function removePromo(id: string) {
+    onUpdate(snapshots.filter((s) => s.id !== id));
+  }
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <div className="flex flex-wrap items-center gap-1">
+        {snapshots.map((s) => (
+          <span key={s.id} className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ring-1 ${
+            isDiscountType(s.type) ? 'bg-violet-50 text-violet-700 ring-violet-200' : 'bg-rose-50 text-rose-700 ring-rose-200'
+          }`}>
+            <span className="font-mono font-bold">{s.code}</span>
+            <span className="opacity-60">·</span>
+            <span>{fmtPromoChip(s, unitName)}</span>
+            {canEdit && (
+              <button type="button" onClick={() => removePromo(s.id)} className="opacity-60 hover:opacity-100">
+                <X size={10} />
+              </button>
+            )}
+          </span>
+        ))}
+        {canEdit && snapshots.length < 2 && (
+          <button type="button" onClick={openPicker}
+            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-white ring-1 ring-dashed ring-slate-300 text-slate-500 hover:bg-slate-50 hover:ring-emerald-300">
+            <Tag size={10} /> + Mã KM
+          </button>
+        )}
+      </div>
+
+      {open && (
+        <div className="absolute z-30 mt-1 left-0 w-72 max-h-72 overflow-y-auto rounded-lg bg-white shadow-xl ring-1 ring-slate-200">
+          <div className="sticky top-0 px-3 py-2 bg-slate-50 border-b border-slate-200 text-[11px] font-semibold uppercase tracking-wider text-slate-600 flex items-center gap-1.5">
+            <Search size={11} /> Chương trình áp dụng cho gói
+          </div>
+          {loading ? (
+            <div className="p-3 text-center text-xs text-slate-400">Đang tải...</div>
+          ) : error ? (
+            <div className="p-3 text-center text-xs text-rose-600">⚠️ {error}</div>
+          ) : !available || available.length === 0 ? (
+            <div className="p-3 text-center text-xs text-slate-400">
+              Không có chương trình nào active cho gói này tháng này
+            </div>
+          ) : (
+            <div className="py-1">
+              {available.map((p) => {
+                const already = snapshots.some((s) => s.id === p.id);
+                return (
+                  <button key={p.id} type="button" disabled={already} onClick={() => addPromo(p)}
+                    className={`w-full px-3 py-2 text-left text-xs flex items-center gap-2 ${
+                      already ? 'opacity-40 cursor-not-allowed' : 'hover:bg-emerald-50'
+                    }`}>
+                    <span className={`shrink-0 inline-block px-1.5 py-0.5 rounded text-[10px] font-mono font-bold ring-1 ${
+                      isDiscountType(p.promoType) ? 'bg-violet-100 text-violet-700 ring-violet-200' : 'bg-rose-100 text-rose-700 ring-rose-200'
+                    }`}>{p.promoCode}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-slate-700 truncate">{p.name}</div>
+                      <div className="text-[10px] text-slate-500">
+                        {PROMO_TYPE_SHORT[p.promoType]} · {fmtPromoChip({id:'',code:'',name:'',type:p.promoType,value:p.promoValue}, unitName)}
+                      </div>
+                    </div>
+                    {already && <span className="text-[10px] text-slate-400">đã chọn</span>}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

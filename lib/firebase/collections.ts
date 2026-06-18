@@ -46,6 +46,9 @@ export const COLLECTIONS = {
   SALES_TRANSACTIONS: 'salesTransactions',    // Mỗi dòng grid là 1 doc
   SALES_AUDIT_LOGS: 'salesAuditLogs',          // Log mọi chỉnh sửa của kế toán
   SALES_MONTHLY_SUMMARY: 'salesMonthlySummary', // Rebuild via cron daily 23:00
+  // ─── V7 Promo (2026-06-18) — Chương trình khuyến mãi theo tháng × cơ sở × gói ───
+  // Workflow: QLCS tạo → GD_KD duyệt → GD_VP duyệt → Kế toán cấu hình mã → Sale dùng.
+  SALES_PROGRAMS: 'salesPrograms',
 } as const;
 
 // Subcollection names — đứng trong context của doc cha.

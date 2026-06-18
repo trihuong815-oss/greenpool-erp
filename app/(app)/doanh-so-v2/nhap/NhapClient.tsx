@@ -306,6 +306,8 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
           collectedToday: Number(lr.collectedToday) || 0,
           quantity: lr.packageIsCustomQuantity ? (Number(lr.quantity) || null) : null,
           unitPrice: lr.packageIsCustomQuantity ? (Number(lr.unitPrice) || null) : null,
+          // V7 Promo: gửi promoIds (server resolve + validate combo + apply discount/bonus)
+          promoIds: (lr.promoSnapshots ?? []).map((s) => s.id),
           // Chứng từ — server V6 yêu cầu theo transactionType
           receiptNo: lr.receiptNo.trim() || null,
           contractNo: lr.contractNo.trim() || null,
@@ -552,6 +554,7 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
             localRows={localRows}
             canEdit={canEdit}
             batchStatus={batch.status}
+            branchId={branchId}
             onUpdateLocal={handleUpdateLocal}
             onRemoveLocal={handleRemoveLocal}
             onUpdateSaved={handleUpdateSaved}
@@ -567,6 +570,7 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
             localRows={localRows}
             canEdit={canEdit}
             batchStatus={batch.status}
+            branchId={branchId}
             onUpdateLocal={handleUpdateLocal}
             onRemoveLocal={handleRemoveLocal}
             onUpdateSaved={handleUpdateSaved}

@@ -101,6 +101,17 @@ export async function GET(req: NextRequest) {
     // Chỉ tính tx có packageIsCustomQuantity=true, KHÔNG bao gồm thanh_toan_not.
     const ptTotals = { transactions: 0, sessions: 0, sales: 0 };
     const ptByPackage: Record<string, NamedBucket & { sessions: number; unitName: string }> = {};
+    // V7 Promo (2026-06-18): aggregate riêng theo promo. Snapshot ở tx → lịch sử bất biến.
+    const promoTotals = {
+      transactions: 0,           // tx có ÍT NHẤT 1 promo
+      totalDiscount: 0,
+      totalBonusSessions: 0,
+      totalBonusDays: 0,
+    };
+    const promoByCode: Record<string, {
+      code: string; name: string; type: string;
+      count: number; discount: number; bonusSessions: number; bonusDays: number;
+    }> = {};
 
     for (const d of snap.docs) {
       const x = d.data() as Record<string, any>;
@@ -168,6 +179,33 @@ export async function GET(req: NextRequest) {
         }
       }
 
+      // V7 Promo aggregate — chỉ tính tx KHÔNG phải thanh_toan_not (không tạo doanh số mới)
+      if (!isThanhToanNot) {
+        const snaps: Array<{ id: string; code: string; name: string; type: string }> = Array.isArray(x.promoSnapshots) ? x.promoSnapshots : [];
+        const txDiscount = Number(x.discountAmount ?? 0);
+        const txBonusSessions = Number(x.bonusQuantity ?? 0);
+        const txBonusDays = Number(x.bonusDays ?? 0);
+        if (snaps.length > 0) {
+          promoTotals.transactions += 1;
+          promoTotals.totalDiscount += txDiscount;
+          promoTotals.totalBonusSessions += txBonusSessions;
+          promoTotals.totalBonusDays += txBonusDays;
+          for (const s of snaps) {
+            const code = String(s?.code ?? '').trim() || '(no-code)';
+            if (!promoByCode[code]) promoByCode[code] = {
+              code, name: String(s?.name ?? ''), type: String(s?.type ?? ''),
+              count: 0, discount: 0, bonusSessions: 0, bonusDays: 0,
+            };
+            promoByCode[code].count += 1;
+            // Attribute toàn bộ discount/bonus của tx cho TỪNG promo trong snapshots — vì
+            // tx max 1 discount + 1 bonus, mỗi promo chỉ thuộc 1 group → attribute đúng group.
+            if (s?.type === 'percent' || s?.type === 'fixed_amount') promoByCode[code].discount += txDiscount;
+            else if (s?.type === 'bonus_sessions') promoByCode[code].bonusSessions += txBonusSessions;
+            else if (s?.type === 'bonus_days') promoByCode[code].bonusDays += txBonusDays;
+          }
+        }
+      }
+
       // By sale + branch: count tất cả tx (kể cả nốt — vì nốt cũng là thực thu)
       if (role === 'top' || role === 'accountant' || role === 'qlcs') {
         const sid = String(x.saleId ?? '');
@@ -199,6 +237,9 @@ export async function GET(req: NextRequest) {
       // V6 PT (2026-06-17): block riêng cho gói dịch vụ buổi
       ptTotals,
       ptByPackage,
+      // V7 Promo (2026-06-18): block riêng cho chương trình khuyến mãi
+      promoTotals,
+      promoByCode,
     });
   } catch (err: any) {
     if (err instanceof UnauthorizedError) {

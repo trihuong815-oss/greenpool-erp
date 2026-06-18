@@ -7,13 +7,18 @@
 // Phase 1 (2026-06-17).
 
 import { NextRequest, NextResponse } from 'next/server';
-import { Timestamp } from 'firebase-admin/firestore';
+import { Timestamp, FieldValue } from 'firebase-admin/firestore';
 import { getFirebaseAdminDb } from '@/lib/firebase/admin';
 import { COLLECTIONS } from '@/lib/firebase/collections';
 import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-auth';
 import { canReadBatch, canEditTransaction } from '@/lib/sales-v2/scope';
 import { serializeTransaction } from '@/lib/sales-v2/serialize';
 import { getPackageById } from '@/lib/sales-v2/packages';
+import { getProgramsByIds, toSnapshot } from '@/lib/sales-v2/programs';
+import {
+  computeDiscount, isDiscountType, isBonusType, validatePromoCombo,
+  type PromoSnapshot,
+} from '@/lib/types/sales-program';
 import type { SalesV2Source, TransactionType, PaymentMethod, MatchStatus } from '@/lib/types/sales-v2';
 
 export const runtime = 'nodejs';
@@ -81,6 +86,10 @@ export async function POST(req: NextRequest) {
     // V6 (PT): nếu gói tính theo buổi → Sale gửi quantity + unitPrice, server auto packageValue
     const inputQuantity = body.quantity != null ? Number(body.quantity) : null;
     const inputUnitPrice = body.unitPrice != null ? Number(body.unitPrice) : null;
+    // V7 Promo (2026-06-18): Sale gửi promoIds[] tối đa 2 (1 giảm + 1 tặng).
+    const inputPromoIds: string[] = Array.isArray(body.promoIds)
+      ? body.promoIds.map(String).filter((s: string) => s.length > 0).slice(0, 2)
+      : [];
 
     if (!customerName) return NextResponse.json({ error: 'Thiếu tên khách hàng' }, { status: 400 });
     if (!phone) return NextResponse.json({ error: 'Thiếu SĐT' }, { status: 400 });
@@ -131,15 +140,65 @@ export async function POST(req: NextRequest) {
       finalUnitPrice = inputUnitPrice;
       finalPackageValue = inputQuantity * inputUnitPrice;
     }
-    if (collectedToday > finalPackageValue && transactionType !== 'thanh_toan_not') {
-      return NextResponse.json({ error: 'Thu hôm nay không thể lớn hơn giá trị gói' }, { status: 400 });
+    // ─── V7 Promo apply ───
+    // finalPackageValue (lúc này) = basePackageValue TRƯỚC promo.
+    // Resolve programs → validate active + scope (branch/month/package) → compute.
+    const isThanhToanNot = transactionType === 'thanh_toan_not';
+    let promoSnapshots: PromoSnapshot[] = [];
+    let discountAmount = 0;
+    let bonusQuantity = 0;
+    let bonusDays = 0;
+    const basePackageValue = isThanhToanNot ? 0 : finalPackageValue;
+
+    if (inputPromoIds.length > 0 && !isThanhToanNot) {
+      const programs = await getProgramsByIds(inputPromoIds);
+      if (programs.length !== inputPromoIds.length) {
+        return NextResponse.json({ error: 'Một số chương trình không tồn tại' }, { status: 400 });
+      }
+      // Validate combo (max 1 discount + 1 bonus)
+      const comboCheck = validatePromoCombo(programs.map((p) => ({ promoType: p.promoType })));
+      if (!comboCheck.ok) {
+        return NextResponse.json({ error: comboCheck.error }, { status: 400 });
+      }
+      // Validate scope mỗi promo: status='active', branch khớp, month khớp, package trong scope
+      for (const p of programs) {
+        if (p.status !== 'active') {
+          return NextResponse.json({ error: `Chương trình "${p.name}" không còn active (${p.status})` }, { status: 400 });
+        }
+        if (p.branchId !== batch.branchId) {
+          return NextResponse.json({ error: `Chương trình "${p.name}" thuộc cơ sở khác` }, { status: 400 });
+        }
+        if (p.month !== batch.month) {
+          return NextResponse.json({ error: `Chương trình "${p.name}" thuộc tháng ${p.month}, không phải tháng ${batch.month}` }, { status: 400 });
+        }
+        if (p.packageIds.length > 0 && !p.packageIds.includes(pkg.id)) {
+          return NextResponse.json({ error: `Chương trình "${p.name}" không áp dụng cho gói "${pkg.name}"` }, { status: 400 });
+        }
+        if (p.promoType === 'bonus_sessions' && pkg.isCustomQuantity !== true) {
+          return NextResponse.json({ error: `"Tặng buổi" chỉ áp gói PT` }, { status: 400 });
+        }
+      }
+      // Compute (1 discount + 1 bonus tối đa)
+      for (const p of programs) {
+        if (isDiscountType(p.promoType)) {
+          discountAmount += computeDiscount(basePackageValue, p.promoType, p.promoValue);
+        } else if (isBonusType(p.promoType)) {
+          if (p.promoType === 'bonus_sessions') bonusQuantity += Math.max(0, Math.floor(p.promoValue));
+          else if (p.promoType === 'bonus_days') bonusDays += Math.max(0, Math.floor(p.promoValue));
+        }
+        promoSnapshots.push(toSnapshot(p));
+      }
+      // Discount không thể > base
+      discountAmount = Math.min(discountAmount, basePackageValue);
     }
 
-    // 2026-06-17: tx 'thanh_toan_not' = trả nốt công nợ cũ → KHÔNG tạo doanh số mới
-    // → packageValue effective = 0 (không cộng vào doanh số batch), debt = 0.
-    // Số tiền nốt chỉ ghi nhận ở collectedToday + sẽ link với tx cũ qua auto-match.
-    const isThanhToanNot = transactionType === 'thanh_toan_not';
-    const effectivePackageValue = isThanhToanNot ? 0 : finalPackageValue;
+    // packageValue CUỐI = base - discount (sau promo). Cho thanh_toan_not = 0.
+    const effectivePackageValue = isThanhToanNot ? 0 : basePackageValue - discountAmount;
+
+    if (collectedToday > effectivePackageValue && !isThanhToanNot) {
+      return NextResponse.json({ error: 'Thu hôm nay không thể lớn hơn giá trị gói (sau khuyến mãi)' }, { status: 400 });
+    }
+
     const debtAmount = isThanhToanNot ? 0 : Math.max(0, effectivePackageValue - collectedToday);
     const now = Timestamp.now();
     const matchStatus: MatchStatus = isThanhToanNot ? 'pending' : 'not_applicable';
@@ -173,6 +232,13 @@ export async function POST(req: NextRequest) {
       unitPrice: finalUnitPrice,
       packageIsCustomQuantity: pkg.isCustomQuantity === true,
       packageUnitName: pkg.unitName ?? '',
+      // V7 Promo snapshots (immutable per tx — admin sửa promo sau không ảnh hưởng tx này)
+      promoIds: promoSnapshots.map((s) => s.id),
+      promoSnapshots,
+      basePackageValue,
+      discountAmount,
+      bonusQuantity,
+      bonusDays,
       receiptNo,
       contractNo,
       note,
@@ -186,6 +252,31 @@ export async function POST(req: NextRequest) {
       updatedAt: now,
     };
     await ref.set(data);
+
+    // V7 Promo stats: increment usage/discount/bonus cho từng program.
+    // Fire-and-forget — không block response. Nếu fail, không phá tx.
+    if (promoSnapshots.length > 0) {
+      void Promise.all(promoSnapshots.map(async (s) => {
+        try {
+          const pRef = db.collection(COLLECTIONS.SALES_PROGRAMS).doc(s.id);
+          const inc: Record<string, any> = {
+            usageCount: FieldValue.increment(1),
+            updatedAt: now,
+          };
+          if (s.type === 'percent' || s.type === 'fixed_amount') {
+            // Mỗi tx có thể chứa 1 discount → discountAmount toàn tx được attribute hoàn toàn cho discount promo này.
+            inc.totalDiscount = FieldValue.increment(discountAmount);
+          } else if (s.type === 'bonus_sessions') {
+            inc.totalBonusSessions = FieldValue.increment(bonusQuantity);
+          } else if (s.type === 'bonus_days') {
+            inc.totalBonusDays = FieldValue.increment(bonusDays);
+          }
+          await pRef.update(inc);
+        } catch (e) {
+          console.warn('[sales-v2/tx POST] promo stat increment failed', s.id, e);
+        }
+      }));
+    }
 
     return NextResponse.json({ ok: true, transaction: serializeTransaction(ref.id, data) });
   } catch (err: any) {

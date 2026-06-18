@@ -450,6 +450,27 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // ---- V7 Promo (2026-06-18) — Chương trình khuyến mãi ----
+    // WRITE: 100% server-side qua /api/sales-v2/programs/* (Admin SDK) — client write deny.
+    // READ scope:
+    //   - Admin (CEO/ADMIN/CHU_TICH/GD_KD/GD_VP): all
+    //   - TP_KE: all (tổng kế toán xem hết)
+    //   - QLCS, NV_KE: programs của branch mình
+    //   - Sale (NV_SALE, NV_SALE_PT): programs branch mình + status='active' (qua API /available)
+    match /salesPrograms/{programId} {
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        userRole() == 'TP_KE' ||
+        (resource.data.branchId == userFacility() && (
+          isQLCS() ||
+          userRole() == 'NV_KE' ||
+          userRole() == 'NV_SALE' ||
+          userRole() == 'NV_SALE_PT'
+        ))
+      );
+      allow write: if false; // Admin SDK only
+    }
+
     // ---- Catch-all deny ----
     match /{document=**} {
       allow read, write: if false;
