@@ -69,24 +69,30 @@ export function serializeProgram(id: string, raw: Record<string, any>): SalesPro
 }
 
 /** Build approver chain [GD_KD_uid, GD_VP_uid] — query users active của 2 role chính.
- *  Nếu thiếu role (vd chưa có GD_VP) → chain rút ngắn còn 1 (system auto-approve khi đến end).
- *  Nếu không có ai cả → throw. */
+ *  Nếu thiếu role (vd chưa có GD_VP) → chain rút ngắn còn 1.
+ *  Nếu không có ai cả → throw.
+ *
+ *  Field names trong users collection (verified 2026-06-18 qua inspect-users-schema):
+ *    - `roleId` (camelCase, KHÔNG phải role_code snake_case)
+ *    - `status` ('active' / 'inactive', KHÔNG phải is_active boolean)
+ *    - `displayName` (camelCase)
+ *    - doc.id = uid (không lưu field uid riêng) */
 export async function buildApproverChain(): Promise<{ uids: string[]; names: string[] }> {
   const db = getFirebaseAdminDb();
   const snap = await db.collection(COLLECTIONS.USERS)
-    .where('role_code', 'in', ['GD_KD', 'GD_VP'])
+    .where('roleId', 'in', ['GD_KD', 'GD_VP'])
     .get();
   const byRole: Record<string, Array<{ uid: string; name: string }>> = { GD_KD: [], GD_VP: [] };
   snap.forEach((d) => {
     const data = d.data();
-    if (data.is_active === false) return;
+    if (data.status && data.status !== 'active') return;
     // V6.4 audit fix: exclude IT/ADMIN có flag excludeFromBusinessNoti
     if (data.excludeFromBusinessNoti === true) return;
-    const role = String(data.role_code);
+    const role = String(data.roleId);
     if (role !== 'GD_KD' && role !== 'GD_VP') return;
     byRole[role].push({
-      uid: String(data.uid ?? d.id),
-      name: String(data.display_name ?? data.full_name ?? data.email ?? ''),
+      uid: d.id, // doc.id chính là uid
+      name: String(data.displayName ?? data.email ?? ''),
     });
   });
   const chain: Array<{ uid: string; name: string }> = [];

@@ -92,19 +92,21 @@ export async function POST(_req: NextRequest, ctx: { params: Promise<{ id: strin
       };
       await ref.update(updates);
 
-      // Tìm tất cả NV_KE của branch để noti cấu hình mã
+      // Tìm tất cả NV_KE của branch + TP_KE (HQ) để noti cấu hình mã.
+      // Field names: roleId (camelCase), status, branchId, displayName — verified
+      // 2026-06-18 qua inspect-users-schema.ts.
       const keSnap = await db.collection(COLLECTIONS.USERS)
-        .where('role_code', 'in', ['NV_KE', 'TP_KE'])
+        .where('roleId', 'in', ['NV_KE', 'TP_KE'])
         .get();
       const keRecipients: string[] = [];
       keSnap.forEach((d) => {
         const u = d.data();
-        if (u.is_active === false) return;
+        if (u.status && u.status !== 'active') return;
         if (u.excludeFromBusinessNoti === true) return;
-        const roleU = String(u.role_code);
+        const roleU = String(u.roleId);
         // TP_KE thấy hết; NV_KE chỉ thấy của branch mình
-        if (roleU === 'TP_KE') keRecipients.push(String(u.uid ?? d.id));
-        else if (u.facility_id === data.branchId) keRecipients.push(String(u.uid ?? d.id));
+        if (roleU === 'TP_KE') keRecipients.push(d.id);
+        else if (u.branchId === data.branchId) keRecipients.push(d.id);
       });
       if (keRecipients.length > 0) {
         void sendNotificationEvent({
