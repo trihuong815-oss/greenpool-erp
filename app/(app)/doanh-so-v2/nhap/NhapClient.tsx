@@ -555,6 +555,7 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
             canEdit={canEdit}
             batchStatus={batch.status}
             branchId={branchId}
+            batchMonth={batch.month}
             onUpdateLocal={handleUpdateLocal}
             onRemoveLocal={handleRemoveLocal}
             onUpdateSaved={handleUpdateSaved}
@@ -571,6 +572,7 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
             canEdit={canEdit}
             batchStatus={batch.status}
             branchId={branchId}
+            batchMonth={batch.month}
             onUpdateLocal={handleUpdateLocal}
             onRemoveLocal={handleRemoveLocal}
             onUpdateSaved={handleUpdateSaved}

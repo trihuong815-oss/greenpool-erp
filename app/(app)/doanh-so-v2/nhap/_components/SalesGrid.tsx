@@ -200,6 +200,7 @@ interface Props {
   canEdit: boolean;                  // Sale có thể edit row mới (add/lock-free)
   batchStatus: string;               // V6: dùng để quyết định row nào lock khi returned
   branchId: string;                  // V7 Promo — dùng để fetch /available
+  batchMonth: string;                // V7 Promo — promo phải match batch.month, không phải currentMonth
   onUpdateLocal: (tempId: string, patch: Partial<LocalRow>) => void;
   onRemoveLocal: (tempId: string) => void;
   onUpdateSaved: (id: string, patch: Partial<SalesTransaction>) => void;
@@ -228,7 +229,7 @@ function canSaleEditRow(batchStatus: string, reviewStatus?: string): boolean {
 }
 
 export default function SalesGrid({
-  packages, rows, localRows, canEdit, batchStatus, branchId,
+  packages, rows, localRows, canEdit, batchStatus, branchId, batchMonth,
   onUpdateLocal, onRemoveLocal, onUpdateSaved, onRemoveSaved,
 }: Props) {
   const totalRows = rows.length + localRows.length;
@@ -302,6 +303,7 @@ export default function SalesGrid({
                   packages={packages}
                   canEdit={canEdit}
                   branchId={branchId}
+                  batchMonth={batchMonth}
                   onUpdate={(patch) => onUpdateLocal(r.tempId, patch)}
                   onRemove={() => onRemoveLocal(r.tempId)}
                   autoFocusFirstCell={shouldFocus}
@@ -542,12 +544,13 @@ function SavedRow({ idx, row, packages, canEdit, batchStatus, branchId, onUpdate
 }
 
 /** Row local (chưa save). Edit cập nhật state cha. */
-function LocalRowItem({ idx, row, packages, canEdit, branchId, onUpdate, onRemove, autoFocusFirstCell }: {
+function LocalRowItem({ idx, row, packages, canEdit, branchId, batchMonth, onUpdate, onRemove, autoFocusFirstCell }: {
   idx: number;
   row: LocalRow;
   packages: SalesV2Package[];
   canEdit: boolean;
   branchId: string;
+  batchMonth: string;
   onUpdate: (patch: Partial<LocalRow>) => void;
   onRemove: () => void;
   autoFocusFirstCell?: boolean;
@@ -742,6 +745,7 @@ function LocalRowItem({ idx, row, packages, canEdit, branchId, onUpdate, onRemov
         <PromoCell
           row={row}
           branchId={branchId}
+          batchMonth={batchMonth}
           canEdit={canEdit && !isThanhToanNot}
           onUpdate={(snapshots) => onUpdate({ promoSnapshots: snapshots })}
         />
@@ -1060,9 +1064,10 @@ function PromoChipsReadonly({ snapshots, discountAmount, bonusQuantity, bonusDay
 }
 
 /** Editable cell cho LocalRow — popover picker + chips. */
-function PromoCell({ row, branchId, canEdit, onUpdate }: {
+function PromoCell({ row, branchId, batchMonth, canEdit, onUpdate }: {
   row: LocalRow;
   branchId: string;
+  batchMonth: string;
   canEdit: boolean;
   onUpdate: (snapshots: PromoSnapshot[]) => void;
 }) {
@@ -1079,7 +1084,10 @@ function PromoCell({ row, branchId, canEdit, onUpdate }: {
     if (!row.packageId) return;
     setLoading(true); setError(null);
     try {
-      const qs = new URLSearchParams({ branchId, packageId: row.packageId });
+      // V7 audit fix: dùng batchMonth (tháng của tx) thay vì current month — đảm bảo
+      // promo list khớp với scope server validate (tránh hiện promo tháng này khi tx
+      // thuộc tháng trước).
+      const qs = new URLSearchParams({ branchId, packageId: row.packageId, month: batchMonth });
       const r = await fetch(`/api/sales-v2/programs/available?${qs.toString()}`);
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
       const j = await r.json();

@@ -5,7 +5,7 @@
 // Phase 1 (2026-06-17).
 
 import { NextRequest, NextResponse } from 'next/server';
-import { Timestamp } from 'firebase-admin/firestore';
+import { Timestamp, FieldValue } from 'firebase-admin/firestore';
 import { getFirebaseAdminDb } from '@/lib/firebase/admin';
 import { COLLECTIONS } from '@/lib/firebase/collections';
 import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-auth';
@@ -237,6 +237,34 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
       { reviewStatus: tx.reviewStatus },
     )) {
       return NextResponse.json({ error: 'Không có quyền xoá (giao dịch đã được kế toán duyệt)' }, { status: 403 });
+    }
+
+    // V7 Promo (2026-06-18): decrement promo stats trước khi xoá tx → tránh stats drift.
+    // Snapshot ở tx ghi rõ promoIds + discountAmount/bonusQuantity/bonusDays — đảo dấu để trừ.
+    const promoSnapshots: Array<{ id: string; type: string }> = Array.isArray(tx.promoSnapshots) ? tx.promoSnapshots : [];
+    const txDiscount = Number(tx.discountAmount ?? 0);
+    const txBonusSessions = Number(tx.bonusQuantity ?? 0);
+    const txBonusDays = Number(tx.bonusDays ?? 0);
+    if (promoSnapshots.length > 0) {
+      await Promise.all(promoSnapshots.map(async (s) => {
+        try {
+          const pRef = db.collection(COLLECTIONS.SALES_PROGRAMS).doc(s.id);
+          const dec: Record<string, any> = {
+            usageCount: FieldValue.increment(-1),
+            updatedAt: Timestamp.now(),
+          };
+          if (s.type === 'percent' || s.type === 'fixed_amount') {
+            dec.totalDiscount = FieldValue.increment(-txDiscount);
+          } else if (s.type === 'bonus_sessions') {
+            dec.totalBonusSessions = FieldValue.increment(-txBonusSessions);
+          } else if (s.type === 'bonus_days') {
+            dec.totalBonusDays = FieldValue.increment(-txBonusDays);
+          }
+          await pRef.update(dec);
+        } catch (e) {
+          console.warn('[sales-v2/tx DELETE] promo stat decrement failed', s.id, e);
+        }
+      }));
     }
 
     await txRef.delete();

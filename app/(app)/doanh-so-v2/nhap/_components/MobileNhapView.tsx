@@ -24,9 +24,11 @@ interface Props {
   localRows: LocalRow[];
   canEdit: boolean;
   batchStatus: string;
-  // V7 Promo (2026-06-18): branchId để fetch /available — Mobile chưa hỗ trợ chọn promo
-  // (không gian màn hình hạn chế). Sale dùng desktop để áp KM, mobile vẫn nhập tx như cũ.
+  // V7 Promo (2026-06-18): branchId + batchMonth để fetch /available — Mobile hiện chỉ
+  // hiển thị info promo (read-only) cho SavedRow, không cho Sale add từ mobile (popover
+  // chật trên màn hình nhỏ). Sale dùng desktop để áp KM mới.
   branchId: string;
+  batchMonth: string;
   onUpdateLocal: (tempId: string, patch: Partial<LocalRow>) => void;
   onRemoveLocal: (tempId: string) => void;
   onUpdateSaved: (id: string, patch: Partial<SalesTransaction>) => void;
@@ -41,7 +43,7 @@ function canSaleEditSavedRow(batchStatus: string, reviewStatus?: string): boolea
 
 export default function MobileNhapView({
   packages, rows, localRows, canEdit, batchStatus,
-  branchId: _branchId,  // reserved cho future mobile promo picker
+  branchId: _branchId, batchMonth: _batchMonth,  // reserved cho future mobile promo picker
   onUpdateLocal, onRemoveLocal, onUpdateSaved, onRemoveSaved,
 }: Props) {
   const totalRows = rows.length + localRows.length;
