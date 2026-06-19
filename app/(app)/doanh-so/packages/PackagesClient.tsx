@@ -107,27 +107,25 @@ export function PackagesClient({ allowedBranches }: Props) {
       } catch (e: any) { showToast('error', e.message); }
       return;
     }
-    // EDIT: optimistic rename
+    // EDIT: optimistic rename — retry once nếu fail
     const original = groupModal.group;
     setGroups((prev) => prev.map((g) => (g.id === original.id ? { ...g, name } : g)));
     setGroupModal(null);
-    packageGroupsApi.update(original.id, { name })
-      .then(() => showToast('success', 'Đã đổi tên nhóm'))
-      .catch((e: any) => {
-        setGroups((prev) => prev.map((g) => (g.id === original.id ? original : g)));
-        showToast('error', `Đổi tên thất bại: ${e?.message ?? 'lỗi'} (đã hoàn tác)`);
-      });
+    patchGroupWithRetry(original.id, { name }).then((err) => {
+      if (!err) { showToast('success', 'Đã đổi tên nhóm'); return; }
+      setGroups((prev) => prev.map((g) => (g.id === original.id ? original : g)));
+      showToast('error', `Đổi tên thất bại: ${err.message} (đã hoàn tác)`);
+    });
   }
 
   async function toggleGroup(g: PackageGroup) {
     const newActive = !g.active;
     setGroups((prev) => prev.map((x) => (x.id === g.id ? { ...x, active: newActive } : x)));
-    packageGroupsApi.update(g.id, { active: newActive })
-      .then(() => showToast('success', newActive ? 'Đã bật nhóm' : 'Đã tắt nhóm'))
-      .catch((e: any) => {
-        setGroups((prev) => prev.map((x) => (x.id === g.id ? { ...x, active: g.active } : x)));
-        showToast('error', `Thao tác thất bại: ${e?.message ?? 'lỗi'} (đã hoàn tác)`);
-      });
+    patchGroupWithRetry(g.id, { active: newActive }).then((err) => {
+      if (!err) { showToast('success', newActive ? 'Đã bật nhóm' : 'Đã tắt nhóm'); return; }
+      setGroups((prev) => prev.map((x) => (x.id === g.id ? { ...x, active: g.active } : x)));
+      showToast('error', `Thao tác thất bại: ${err.message} (đã hoàn tác)`);
+    });
   }
 
   function askDeleteGroup(g: PackageGroup) {
@@ -147,6 +145,42 @@ export function PackagesClient({ allowedBranches }: Props) {
   // V8.Y bug fix 2026-06-19: EDIT/toggle dùng OPTIMISTIC UPDATE — apply patch
   // vào local state ngay + đóng modal ngay, gọi PATCH ngầm. Nếu fail thì rollback
   // + toast error. Tránh modal stuck khi cold start App Hosting (~2-5s).
+  //
+  // V8.Y bug fix 2026-06-19 (round 2): bg PATCH có thể fail transient (cold start,
+  // network blip) → user thấy badge nhấp nháy rồi biến mất. Fix: RETRY ONCE silent
+  // sau 300ms; chỉ rollback nếu cả 2 lần fail. Surface lỗi qua console.error để debug.
+  async function patchPackageWithRetry(id: string, patch: Partial<PackageItem>): Promise<Error | null> {
+    try {
+      await packagesApi.update(id, patch);
+      return null;
+    } catch (e1) {
+      console.warn('[packages] PATCH attempt 1 failed, retrying...', e1);
+      await new Promise((r) => setTimeout(r, 300));
+      try {
+        await packagesApi.update(id, patch);
+        return null;
+      } catch (e2) {
+        console.error('[packages] PATCH attempt 2 failed:', e2);
+        return e2 instanceof Error ? e2 : new Error(String(e2));
+      }
+    }
+  }
+  async function patchGroupWithRetry(id: string, patch: Partial<PackageGroup>): Promise<Error | null> {
+    try {
+      await packageGroupsApi.update(id, patch);
+      return null;
+    } catch (e1) {
+      console.warn('[packageGroups] PATCH attempt 1 failed, retrying...', e1);
+      await new Promise((r) => setTimeout(r, 300));
+      try {
+        await packageGroupsApi.update(id, patch);
+        return null;
+      } catch (e2) {
+        console.error('[packageGroups] PATCH attempt 2 failed:', e2);
+        return e2 instanceof Error ? e2 : new Error(String(e2));
+      }
+    }
+  }
   async function savePackage(payload: {
     name: string;
     defaultPrice: number;
@@ -190,21 +224,23 @@ export function PackagesClient({ allowedBranches }: Props) {
       return updated;
     });
     setPackageModal(null);
-    // Background PATCH — rollback nếu fail
-    packagesApi.update(original.id, patch)
-      .then(() => showToast('success', 'Đã cập nhật gói'))
-      .catch((e: any) => {
-        // Rollback to original (re-fetch để chắc chắn không drift)
-        setPackages((prev) => {
-          const updated: typeof prev = {};
-          for (const gid of Object.keys(prev)) {
-            const arr = prev[gid].map((p) => (p.id === original.id ? original : p));
-            updated[gid] = [...arr].sort(comparePackagesSmart);
-          }
-          return updated;
-        });
-        showToast('error', `Lưu thất bại: ${e?.message ?? 'lỗi không xác định'} (đã hoàn tác)`);
+    // Background PATCH (retry once) — rollback chỉ khi cả 2 lần fail
+    patchPackageWithRetry(original.id, patch).then((err) => {
+      if (!err) {
+        showToast('success', 'Đã cập nhật gói');
+        return;
+      }
+      // Rollback to original
+      setPackages((prev) => {
+        const updated: typeof prev = {};
+        for (const gid of Object.keys(prev)) {
+          const arr = prev[gid].map((p) => (p.id === original.id ? original : p));
+          updated[gid] = [...arr].sort(comparePackagesSmart);
+        }
+        return updated;
       });
+      showToast('error', `Lưu thất bại: ${err.message} (đã hoàn tác)`);
+    });
   }
 
   async function togglePackage(p: PackageItem) {
@@ -217,19 +253,21 @@ export function PackagesClient({ allowedBranches }: Props) {
       }
       return updated;
     });
-    packagesApi.update(p.id, { active: newActive })
-      .then(() => showToast('success', newActive ? 'Đã bật gói' : 'Đã tắt gói'))
-      .catch((e: any) => {
-        // Rollback
-        setPackages((prev) => {
-          const updated: typeof prev = {};
-          for (const gid of Object.keys(prev)) {
-            updated[gid] = prev[gid].map((x) => (x.id === p.id ? { ...x, active: p.active } : x));
-          }
-          return updated;
-        });
-        showToast('error', `Thao tác thất bại: ${e?.message ?? 'lỗi'} (đã hoàn tác)`);
+    patchPackageWithRetry(p.id, { active: newActive }).then((err) => {
+      if (!err) {
+        showToast('success', newActive ? 'Đã bật gói' : 'Đã tắt gói');
+        return;
+      }
+      // Rollback
+      setPackages((prev) => {
+        const updated: typeof prev = {};
+        for (const gid of Object.keys(prev)) {
+          updated[gid] = prev[gid].map((x) => (x.id === p.id ? { ...x, active: p.active } : x));
+        }
+        return updated;
       });
+      showToast('error', `Thao tác thất bại: ${err.message} (đã hoàn tác)`);
+    });
   }
 
   function askDeletePackage(p: PackageItem) {
