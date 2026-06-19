@@ -8,6 +8,7 @@ import {
   Home, CheckSquare, ListTodo, Inbox,
   Users, FileBarChart, GraduationCap, Megaphone, Settings, LogOut, UserCog, Wrench, KeyRound, X, Briefcase, ShieldCheck, Search,
   Sliders, Bell, Building2, Factory, Briefcase as BriefcaseBusiness, Rocket, ChevronDown,
+  PencilLine, ClipboardCheck, CreditCard, TrendingUp, Tag, Calculator, BarChart3,
   type LucideIcon,
 } from 'lucide-react';
 import { DispatchBadge } from './DispatchBadge';
@@ -58,22 +59,43 @@ const MENU_SECTIONS: MenuSection[] = [
     ],
   },
   // 3. KHỐI KINH DOANH (V9.1: Cơ sở = single link → /co-so list page;
-  //    branch access kiểm tra ở page level từ profile.branchId)
+  //    V9.2: + "Doanh số" nested expandable cho Sale workflow)
   {
     title: 'Khối kinh doanh',
     items: [
       { route: 'co-so',    label: 'Cơ sở',               icon: Building2 },
+      // V9.2: Doanh số = nested expandable. Sub-items chỉ show nếu có permission.
+      // Parent route 'doanh-so-v2-kkd' chỉ là key cho React, không phải URL thực.
+      {
+        route: 'doanh-so-v2-kkd', label: 'Doanh số', icon: BarChart3,
+        children: [
+          { route: 'doanh-so-v2/nhap',     label: 'Nhập doanh số',  icon: PencilLine },
+          { route: 'doanh-so-v2/cong-no',  label: 'Công nợ',        icon: CreditCard },
+          { route: 'doanh-so-v2/tong-ket', label: 'Tổng kết tháng', icon: TrendingUp },
+        ],
+      },
       { route: 'mkt',      label: 'Marketing',           icon: Megaphone },
       { route: 'daotao',   label: 'Đào tạo',             icon: GraduationCap },
       { route: 'ky-thuat', label: 'Kỹ thuật vận hành',   icon: Wrench },
     ],
   },
-  // 4. KHỐI VĂN PHÒNG
+  // 4. KHỐI VĂN PHÒNG (V9.2: Tài chính kế toán = nested expandable cho Kế toán workflow)
   {
     title: 'Khối văn phòng',
     items: [
-      // Tài chính kế toán → main page là /doi-chieu (kế toán review)
-      { route: 'doanh-so-v2/doi-chieu', label: 'Tài chính kế toán', icon: BriefcaseBusiness },
+      // Tài chính kế toán nested — 6 sub-tool, hiển thị theo permission.
+      // Parent route 'tai-chinh-ke-toan' là key cho React, không phải URL thực.
+      {
+        route: 'tai-chinh-ke-toan', label: 'Tài chính kế toán', icon: BriefcaseBusiness,
+        children: [
+          { route: 'doanh-so-v2/doi-chieu',             label: 'Đối chiếu doanh số',   icon: ClipboardCheck },
+          { route: 'doanh-so-v2/cong-no',               label: 'Công nợ',              icon: CreditCard },
+          { route: 'doanh-so-v2/tong-ket',              label: 'Tổng kết',             icon: TrendingUp },
+          { route: 'doanh-so-v2/chuong-trinh',          label: 'Chương trình KM',      icon: Tag },
+          { route: 'doanh-so-v2/quay-le-tan/nhap',      label: 'Quầy lễ tân — Nhập',   icon: Calculator },
+          { route: 'doanh-so-v2/quay-le-tan/cau-hinh',  label: 'Quầy lễ tân — Cấu hình', icon: Sliders },
+        ],
+      },
       // Nhân sự → /sodo (sơ đồ tổ chức)
       { route: 'sodo',                  label: 'Nhân sự',           icon: Users },
       // Giám sát → /checklist-v2 (checklist là tool giám sát chính)
@@ -97,14 +119,13 @@ const MENU_SECTIONS: MenuSection[] = [
       { route: 'bao-cao', label: 'Báo cáo tự động', icon: FileBarChart },
     ],
   },
-  // 7. CÀI ĐẶT
+  // 7. CÀI ĐẶT (V9.2: bỏ "Đơn giá lễ tân" — đã chuyển về TCKT nested)
   {
     title: 'Cài đặt',
     items: [
-      { route: 'bao-mat',                          label: 'Bảo mật & Thông báo',  icon: ShieldCheck },
-      { route: 'doanh-so/packages',                label: 'Gói dịch vụ',          icon: Settings },
-      { route: 'doanh-so-v2/quay-le-tan/cau-hinh', label: 'Đơn giá lễ tân',       icon: Sliders },
-      { route: 'users',                            label: 'Tài khoản user',       icon: UserCog },
+      { route: 'bao-mat',           label: 'Bảo mật & Thông báo',  icon: ShieldCheck },
+      { route: 'doanh-so/packages', label: 'Gói dịch vụ',          icon: Settings },
+      { route: 'users',             label: 'Tài khoản user',       icon: UserCog },
     ],
   },
 ];

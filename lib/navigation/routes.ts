@@ -104,6 +104,23 @@ export const NAV_ROUTES: NavRoute[] = [
     keywords: ['du an', 'dac biet', 'special', 'rnd', 'r&d'] },
   { route: 'du-an/ai',           section: 'Khối dự án', label: 'AI & Chuyển đổi số',       icon: 'settings',
     keywords: ['du an', 'ai', 'chuyen doi so', 'digital transformation', 'cds'] },
+
+  // V9.2 (2026-06-19): doanh-so-v2 sub-tools cho Cmd+K (sidebar đã có entry nested,
+  // bổ sung registry để user search nhanh).
+  { route: 'doanh-so-v2/nhap',                   section: 'Doanh số', label: 'Nhập doanh số (V2)',     icon: 'chart',
+    keywords: ['nhap doanh so', 'sale v2', 'daily batch', 'nv sale', 'sale entry'] },
+  { route: 'doanh-so-v2/doi-chieu',              section: 'Tài chính kế toán', label: 'Đối chiếu doanh số', icon: 'check-square',
+    keywords: ['doi chieu', 'reconcile', 'ke toan duyet', 'review batch'] },
+  { route: 'doanh-so-v2/cong-no',                section: 'Tài chính kế toán', label: 'Công nợ',           icon: 'dollar',
+    keywords: ['cong no', 'debt', 'khach no', 'receivable', 'no con lai'] },
+  { route: 'doanh-so-v2/tong-ket',               section: 'Tài chính kế toán', label: 'Tổng kết tháng',    icon: 'chart',
+    keywords: ['tong ket', 'monthly summary', 'kpi thang', 'thong ke', 'report'] },
+  { route: 'doanh-so-v2/chuong-trinh',           section: 'Tài chính kế toán', label: 'Chương trình KM',   icon: 'megaphone',
+    keywords: ['chuong trinh', 'promo', 'km', 'khuyen mai', 'giam gia'] },
+  { route: 'doanh-so-v2/quay-le-tan/nhap',       section: 'Tài chính kế toán', label: 'Quầy lễ tân — Nhập', icon: 'chart',
+    keywords: ['quay le tan', 'le tan', 'reception', 'cashier', 'walk-in', 'walkin'] },
+  { route: 'doanh-so-v2/quay-le-tan/cau-hinh',   section: 'Tài chính kế toán', label: 'Quầy lễ tân — Cấu hình', icon: 'settings',
+    keywords: ['quay le tan cau hinh', 'le tan price', 'reception config', 'don gia le tan'] },
 ];
 
 /** Chuẩn hoá string để fuzzy search: lowercase + bỏ dấu tiếng Việt. */
