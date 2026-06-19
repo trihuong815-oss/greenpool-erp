@@ -13,6 +13,7 @@ import { useRouter } from 'next/navigation';
 import {
   Home, MessageCircle, Briefcase, BarChart3, Wrench, CheckSquare, FileText, ListTodo,
   Users, DollarSign, FileBarChart, GraduationCap, Megaphone, ShieldCheck, Settings, UserCog, Lock,
+  Bell, Building2, Factory, Rocket, Inbox,
   Search, CornerDownLeft, ArrowUp, ArrowDown,
 } from 'lucide-react';
 import { searchRoutes, type IconId, type NavRoute } from '@/lib/navigation/routes';
@@ -25,6 +26,8 @@ const ICON_MAP: Record<IconId, typeof Home> = {
   'file-bar': FileBarChart, 'grad-cap': GraduationCap, 'megaphone': Megaphone,
   'shield': ShieldCheck, 'settings': Settings, 'user-cog': UserCog,
   'lock': Lock,
+  // V9.0
+  'bell': Bell, 'building': Building2, 'factory': Factory, 'rocket': Rocket, 'inbox': Inbox,
 };
 
 const RECENT_KEY = 'gp_cmdk_recent';

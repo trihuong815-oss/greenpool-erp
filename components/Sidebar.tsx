@@ -5,14 +5,13 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { effectiveMenu } from '@/lib/permissions';
 import {
-  Home, BarChart3, CheckSquare, FileText, ListTodo, MessageCircle, Inbox,
-  Users, DollarSign, FileBarChart, GraduationCap, Megaphone, Settings, LogOut, UserCog, Wrench, KeyRound, X, Briefcase, ShieldCheck, Search,
-  PencilLine, ClipboardCheck, CreditCard, TrendingUp, Tag, Calculator, Sliders,
+  Home, CheckSquare, ListTodo, Inbox,
+  Users, FileBarChart, GraduationCap, Megaphone, Settings, LogOut, UserCog, Wrench, KeyRound, X, Briefcase, ShieldCheck, Search,
+  Sliders, Bell, Building2, Factory, Briefcase as BriefcaseBusiness, Rocket, ChevronDown,
   type LucideIcon,
 } from 'lucide-react';
 import { DispatchBadge } from './DispatchBadge';
 import { ProposalsBadge } from './ProposalsBadge';
-import { ChatUnreadBadge } from './ChatUnreadBadge';
 import { ChecklistBadge } from './ChecklistBadge';
 import { TechWorkBadge } from './TechWorkBadge';
 import { SalesV2Badge } from './SalesV2Badge';
@@ -23,74 +22,96 @@ interface MenuItem {
   route: string;
   label: string;
   icon: LucideIcon;
+  /** V9.0: badge nhỏ bên cạnh label. 'soon' = sắp ra mắt, 'wip' = đang phát triển. */
+  badge?: 'soon' | 'wip';
+  /** V9.0: sub-items cho menu nested (vd. Cơ sở > 5 chi nhánh). */
+  children?: MenuItem[];
 }
 
 interface MenuSection {
+  /** title rỗng = top-level item, không group. */
   title: string;
   items: MenuItem[];
 }
 
-/** Menu chia section theo nghiệp vụ — giúp scan nhanh hơn flat list */
+// V9.0 Sidebar restructure (2026-06-19) — quy hoạch theo cấu trúc vận hành mới.
+// Module hiện có map về vị trí mới. Module thừa (tin-nhan, giao-viec, quan-ly-cong-viec,
+// quan-ly-sale, doanh-so V1, doanh-so/nhap V1) ẨN khỏi sidebar nhưng GIỮ route
+// (truy cập qua URL trực tiếp + Cmd+K palette).
 const MENU_SECTIONS: MenuSection[] = [
+  // 1. DASHBOARD CEO — top-level single link
   {
-    title: 'Tổng quan',
+    title: '',
     items: [
-      { route: 'dashboard',         label: 'Dashboard',          icon: Home },
+      { route: 'dashboard', label: 'Dashboard CEO', icon: Home },
+    ],
+  },
+  // 2. TRUNG TÂM ĐIỀU HÀNH
+  {
+    title: 'Trung tâm điều hành',
+    items: [
       { route: 'cong-viec-ca-nhan', label: 'Công việc cá nhân',  icon: Briefcase },
+      { route: 'dieu-phoi',         label: 'Điều phối công việc', icon: ListTodo },
+      { route: 'de-xuat',           label: 'Đề xuất',             icon: Inbox },
+      { route: 'phe-duyet',         label: 'Phê duyệt',           icon: CheckSquare, badge: 'wip' },
+      { route: 'thong-bao',         label: 'Thông báo',           icon: Bell,        badge: 'wip' },
     ],
   },
+  // 3. KHỐI KINH DOANH
   {
-    title: 'Điều hành',
+    title: 'Khối kinh doanh',
     items: [
-      { route: 'dieu-phoi', label: 'Điều phối công việc', icon: ListTodo },
-      { route: 'de-xuat',   label: 'Đề xuất',              icon: Inbox },
+      {
+        route: 'co-so', label: 'Cơ sở', icon: Building2,
+        children: [
+          { route: 'co-so/TK',    label: 'Thuỵ Khuê',         icon: Home, badge: 'wip' },
+          { route: 'co-so/HM',    label: 'Hoàng Mai',          icon: Home, badge: 'wip' },
+          { route: 'co-so/24NCT', label: 'Nguyễn Cơ Thạch',    icon: Home, badge: 'wip' },
+          { route: 'co-so/CTT',   label: 'Cung Thể Thao',      icon: Home, badge: 'wip' },
+          { route: 'co-so/TT',    label: 'Thanh Trì',          icon: Home, badge: 'wip' },
+        ],
+      },
+      { route: 'mkt',      label: 'Marketing',           icon: Megaphone },
+      { route: 'daotao',   label: 'Đào tạo',             icon: GraduationCap },
+      { route: 'ky-thuat', label: 'Kỹ thuật vận hành',   icon: Wrench },
     ],
   },
+  // 4. KHỐI VĂN PHÒNG
   {
-    title: 'Vận hành',
+    title: 'Khối văn phòng',
     items: [
-      { route: 'doanh-so',      label: 'Doanh số',               icon: BarChart3 },
-      { route: 'doanh-so/nhap', label: 'Nhập doanh số',          icon: BarChart3 },
-      { route: 'ky-thuat',      label: 'Kỹ thuật vận hành',      icon: Wrench },
-      { route: 'checklist-v2',  label: 'Checklist vận hành',     icon: CheckSquare },
-      { route: 'quy-trinh',     label: 'Quy trình vận hành',     icon: FileText },
+      // Tài chính kế toán → main page là /doi-chieu (kế toán review)
+      { route: 'doanh-so-v2/doi-chieu', label: 'Tài chính kế toán', icon: BriefcaseBusiness },
+      // Nhân sự → /sodo (sơ đồ tổ chức)
+      { route: 'sodo',                  label: 'Nhân sự',           icon: Users },
+      // Giám sát → /checklist-v2 (checklist là tool giám sát chính)
+      { route: 'checklist-v2',          label: 'Giám sát',          icon: CheckSquare },
     ],
   },
+  // 5. KHỐI DỰ ÁN
   {
-    // Phase 0 (2026-06-16): Module mới Doanh số v2 — song song module sales cũ FROZEN.
-    // Sau khi user xác nhận ổn → migrate hoàn toàn + ẩn section "Vận hành > Doanh số" cũ.
-    title: 'Doanh số v2',
+    title: 'Khối dự án',
     items: [
-      { route: 'doanh-so-v2/nhap',                  label: 'Nhập doanh số ngày',     icon: PencilLine },
-      { route: 'doanh-so-v2/quay-le-tan/nhap',      label: 'Nhập DT quầy lễ tân',    icon: Calculator },
-      { route: 'doanh-so-v2/doi-chieu',             label: 'Đối chiếu doanh số',     icon: ClipboardCheck },
-      { route: 'doanh-so-v2/chuong-trinh',          label: 'Chương trình KM',        icon: Tag },
-      { route: 'doanh-so-v2/cong-no',               label: 'Công nợ',                icon: CreditCard },
-      { route: 'doanh-so-v2/tong-ket',              label: 'Tổng kết tháng',         icon: TrendingUp },
+      { route: 'du-an/erp',       label: 'ERP',              icon: Rocket, badge: 'soon' },
+      { route: 'du-an/mo-co-so',  label: 'Mở cơ sở mới',     icon: Factory, badge: 'soon' },
+      { route: 'du-an/dac-biet',  label: 'Dự án đặc biệt',   icon: Rocket, badge: 'soon' },
     ],
   },
+  // 6. BÁO CÁO & AI
   {
-    title: 'Nhân sự & Lương',
-    items: [
-      { route: 'sodo',  label: 'Sơ đồ tổ chức', icon: Users },
-      { route: 'luong', label: 'Lương 3P & KPI', icon: DollarSign },
-    ],
-  },
-  {
-    title: 'Báo cáo & Tích hợp',
+    title: 'Báo cáo & AI',
     items: [
       { route: 'bao-cao', label: 'Báo cáo tự động', icon: FileBarChart },
-      { route: 'daotao',  label: 'Đào tạo (API)',    icon: GraduationCap },
-      { route: 'mkt',     label: 'Marketing (API)',  icon: Megaphone },
     ],
   },
+  // 7. CÀI ĐẶT
   {
     title: 'Cài đặt',
     items: [
-      { route: 'bao-mat',                          label: 'Bảo mật & Thông báo',     icon: ShieldCheck },
-      { route: 'doanh-so/packages',                label: 'Cài đặt gói dịch vụ',     icon: Settings },
-      { route: 'doanh-so-v2/quay-le-tan/cau-hinh', label: 'Đơn giá quầy lễ tân',     icon: Sliders },
-      { route: 'users',                            label: 'Cài đặt user',            icon: UserCog },
+      { route: 'bao-mat',                          label: 'Bảo mật & Thông báo',  icon: ShieldCheck },
+      { route: 'doanh-so/packages',                label: 'Gói dịch vụ',          icon: Settings },
+      { route: 'doanh-so-v2/quay-le-tan/cau-hinh', label: 'Đơn giá lễ tân',       icon: Sliders },
+      { route: 'users',                            label: 'Tài khoản user',       icon: UserCog },
     ],
   },
 ];
@@ -109,10 +130,23 @@ export function Sidebar({ userName, userRole, roleCode, avatarUrl, menuOverrides
   const { setOpen } = useMobileNav();
   const allowed = effectiveMenu(roleCode, menuOverrides);
 
-  // Filter mỗi section theo quyền, bỏ section rỗng
+  // V9.0: filter recursive (items + nested children) theo quyền, bỏ section/parent rỗng.
+  // Parent item có children: hiển thị nếu CÓ ÍT NHẤT 1 child được phép, không cần parent route.
+  function filterItems(items: MenuItem[]): MenuItem[] {
+    return items
+      .map((it) => {
+        if (it.children && it.children.length > 0) {
+          const visibleChildren = it.children.filter((c) => allowed.has(c.route));
+          if (visibleChildren.length === 0) return null;
+          return { ...it, children: visibleChildren };
+        }
+        return allowed.has(it.route) ? it : null;
+      })
+      .filter((it): it is MenuItem => it !== null);
+  }
   const visibleSections: MenuSection[] = MENU_SECTIONS
-    .map(s => ({ ...s, items: s.items.filter(it => allowed.has(it.route)) }))
-    .filter(s => s.items.length > 0);
+    .map((s) => ({ ...s, items: filterItems(s.items) }))
+    .filter((s) => s.items.length > 0);
 
   async function handleLogout() {
     // Phase 13.9.3 (2026-06-05): KHÔNG xoá FCM token khi logout — anh chốt rule
@@ -162,66 +196,33 @@ export function Sidebar({ userName, userRole, roleCode, avatarUrl, menuOverrides
       {/* Phase UI-3.1 (2026-06-07): Cmd+K Spotlight trigger — desktop hiển thị shortcut hint, mobile vẫn click được */}
       <SidebarCommandTrigger />
 
-      {/* Menu sections */}
+      {/* Menu sections — V9.0: support nested children + Soon badge + title rỗng (top-level) */}
       <nav className="flex-1 overflow-y-auto px-3 py-4">
-        {visibleSections.map((section) => (
-          <div key={section.title} className="mb-5 last:mb-0">
-            <div className="mb-1.5 px-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
-              {section.title}
-            </div>
+        {visibleSections.map((section, sIdx) => (
+          <div key={section.title || `_top_${sIdx}`} className="mb-5 last:mb-0">
+            {section.title && (
+              <div className="mb-1.5 px-3 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                {section.title}
+              </div>
+            )}
             <ul className="space-y-0.5">
-              {section.items.map((item) => {
-                const Icon = item.icon;
-                const isActive =
-                  pathname === `/${item.route}` ||
-                  pathname.startsWith(`/${item.route}/`);
-                return (
-                  <li key={item.route}>
-                    <Link
-                      href={`/${item.route}`}
-                      aria-current={isActive ? 'page' : undefined}
-                      className={`group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${
-                        isActive
-                          ? 'bg-emerald-50 font-semibold text-emerald-800'
-                          : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                      }`}
-                    >
-                      {/* Active indicator stripe trái */}
-                      {isActive && (
-                        <span
-                          aria-hidden
-                          className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r bg-gradient-to-b from-emerald-500 to-cyan-500"
-                        />
-                      )}
-                      <Icon
-                        className={`h-4 w-4 flex-shrink-0 ${
-                          isActive ? 'text-emerald-700' : 'text-slate-400 group-hover:text-slate-600'
-                        }`}
-                      />
-                      <span
-                        className="truncate"
-                        title={
-                          // V6.5 Audit fix Phase D.3 (2026-06-15) — Issue 7.3:
-                          // Tooltip cho TP/QLCS biết scope khi vào /de-xuat (xem đề xuất tham gia,
-                          // không phải toàn hệ thống). Roles cao hơn không cần tooltip.
-                          item.route === 'de-xuat' && (roleCode.startsWith('TP_') || roleCode.startsWith('QLCS_'))
-                            ? 'Xem đề xuất bạn tạo + đề xuất bạn được phê duyệt (theo khối của bạn)'
-                            : undefined
-                        }
-                      >
-                        {item.label}
-                      </span>
-                      {item.route === 'dieu-phoi' && <DispatchBadge />}
-                      {item.route === 'de-xuat' && <ProposalsBadge />}
-                      {item.route === 'tin-nhan' && <ChatUnreadBadge />}
-                      {item.route === 'checklist-v2' && <ChecklistBadge />}
-                      {item.route === 'ky-thuat' && <TechWorkBadge />}
-                      {item.route === 'doanh-so-v2/nhap' && <SalesV2Badge kind="submit" />}
-                      {item.route === 'doanh-so-v2/doi-chieu' && <SalesV2Badge kind="review" />}
-                    </Link>
-                  </li>
-                );
-              })}
+              {section.items.map((item) =>
+                item.children && item.children.length > 0 ? (
+                  <NestedMenuItem
+                    key={item.route}
+                    item={item}
+                    pathname={pathname}
+                    roleCode={roleCode}
+                  />
+                ) : (
+                  <FlatMenuItem
+                    key={item.route}
+                    item={item}
+                    pathname={pathname}
+                    roleCode={roleCode}
+                  />
+                )
+              )}
             </ul>
           </div>
         ))}
@@ -262,6 +263,141 @@ export function Sidebar({ userName, userRole, roleCode, avatarUrl, menuOverrides
         </div>
       </div>
     </aside>
+  );
+}
+
+// V9.0 (2026-06-19): Badge "Soon"/"WIP" cho item placeholder/đang phát triển.
+function ItemBadge({ kind }: { kind: 'soon' | 'wip' }) {
+  const label = kind === 'soon' ? 'Soon' : 'WIP';
+  const tone = kind === 'soon'
+    ? 'bg-sky-50 text-sky-700 ring-sky-200'
+    : 'bg-amber-50 text-amber-700 ring-amber-200';
+  return (
+    <span className={`ml-auto text-xs uppercase font-semibold px-1.5 py-0.5 rounded ring-1 ${tone}`}>
+      {label}
+    </span>
+  );
+}
+
+// V9.0: Slot badge dynamic theo route (DispatchBadge, ProposalsBadge, ...).
+// Tách helper để cả FlatMenuItem + NestedMenuItem dùng chung.
+function RouteBadgeSlot({ route }: { route: string }) {
+  if (route === 'dieu-phoi')           return <DispatchBadge />;
+  if (route === 'de-xuat')             return <ProposalsBadge />;
+  if (route === 'checklist-v2')        return <ChecklistBadge />;
+  if (route === 'ky-thuat')            return <TechWorkBadge />;
+  if (route === 'doanh-so-v2/nhap')    return <SalesV2Badge kind="submit" />;
+  if (route === 'doanh-so-v2/doi-chieu') return <SalesV2Badge kind="review" />;
+  return null;
+}
+
+// V9.0: Render 1 item link phẳng (không có children).
+function FlatMenuItem({
+  item,
+  pathname,
+  roleCode,
+  indent = false,
+}: {
+  item: MenuItem;
+  pathname: string;
+  roleCode: string;
+  indent?: boolean;
+}) {
+  const Icon = item.icon;
+  const isActive =
+    pathname === `/${item.route}` || pathname.startsWith(`/${item.route}/`);
+  const tooltip =
+    item.route === 'de-xuat' && (roleCode.startsWith('TP_') || roleCode.startsWith('QLCS_'))
+      ? 'Xem đề xuất bạn tạo + đề xuất bạn được phê duyệt (theo khối của bạn)'
+      : undefined;
+  return (
+    <li>
+      <Link
+        href={`/${item.route}`}
+        aria-current={isActive ? 'page' : undefined}
+        className={`group relative flex items-center gap-3 rounded-lg ${indent ? 'pl-9 pr-3' : 'px-3'} py-2 text-sm transition ${
+          isActive
+            ? 'bg-emerald-50 font-semibold text-emerald-800'
+            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+        }`}
+      >
+        {isActive && (
+          <span
+            aria-hidden
+            className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r bg-gradient-to-b from-emerald-500 to-cyan-500"
+          />
+        )}
+        <Icon
+          className={`h-4 w-4 flex-shrink-0 ${
+            isActive ? 'text-emerald-700' : 'text-slate-400 group-hover:text-slate-600'
+          }`}
+        />
+        <span className="truncate" title={tooltip}>{item.label}</span>
+        <RouteBadgeSlot route={item.route} />
+        {item.badge && <ItemBadge kind={item.badge} />}
+      </Link>
+    </li>
+  );
+}
+
+// V9.0: Render 1 item có children (nested expandable). Vd "Cơ sở > 5 chi nhánh".
+// Auto-expanded nếu pathname trong children, else collapsed default. User toggle bằng chevron.
+function NestedMenuItem({
+  item,
+  pathname,
+  roleCode,
+}: {
+  item: MenuItem;
+  pathname: string;
+  roleCode: string;
+}) {
+  const Icon = item.icon;
+  const childActive = (item.children ?? []).some(
+    (c) => pathname === `/${c.route}` || pathname.startsWith(`/${c.route}/`),
+  );
+  const [open, setOpen] = useState<boolean>(childActive);
+  // Sync open state khi pathname change (vd direct deeplink mở subroute → auto expand)
+  useEffect(() => {
+    if (childActive) setOpen(true);
+  }, [childActive]);
+
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className={`group relative w-full flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition ${
+          childActive
+            ? 'text-emerald-800 font-semibold'
+            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+        }`}
+      >
+        <Icon
+          className={`h-4 w-4 flex-shrink-0 ${
+            childActive ? 'text-emerald-700' : 'text-slate-400 group-hover:text-slate-600'
+          }`}
+        />
+        <span className="truncate text-left flex-1">{item.label}</span>
+        <ChevronDown
+          size={14}
+          className={`text-slate-400 transition-transform ${open ? 'rotate-0' : '-rotate-90'}`}
+        />
+      </button>
+      {open && (
+        <ul className="mt-0.5 space-y-0.5">
+          {item.children?.map((c) => (
+            <FlatMenuItem
+              key={c.route}
+              item={c}
+              pathname={pathname}
+              roleCode={roleCode}
+              indent
+            />
+          ))}
+        </ul>
+      )}
+    </li>
   );
 }
 

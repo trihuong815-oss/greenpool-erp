@@ -11,7 +11,9 @@ export type IconId =
   | 'users' | 'dollar'
   | 'file-bar' | 'grad-cap' | 'megaphone'
   | 'shield' | 'settings' | 'user-cog'
-  | 'lock';
+  | 'lock'
+  // V9.0 sidebar restructure (2026-06-19)
+  | 'bell' | 'building' | 'factory' | 'rocket' | 'inbox';
 
 export interface NavRoute {
   /** Route slug — KHỚP với lib/permissions MENU_PERMISSIONS key. */
@@ -73,6 +75,31 @@ export const NAV_ROUTES: NavRoute[] = [
   // Always-accessible
   { route: 'doi-mat-khau',       section: 'Cài đặt', label: 'Đổi mật khẩu',         icon: 'lock',
     keywords: ['password', 'mat khau', 'reset'] },
+
+  // V9.0 sidebar restructure (2026-06-19) — routes mới
+  // Trung tâm điều hành
+  { route: 'phe-duyet',          section: 'Trung tâm điều hành', label: 'Phê duyệt',     icon: 'check-square',
+    keywords: ['phe duyet', 'approval', 'approve', 'duyet', 'review'] },
+  { route: 'thong-bao',          section: 'Trung tâm điều hành', label: 'Thông báo',     icon: 'bell',
+    keywords: ['thong bao', 'notification', 'noti', 'bell', 'alert'] },
+  // Khối kinh doanh > Cơ sở (5 chi nhánh)
+  { route: 'co-so/TK',           section: 'Cơ sở', label: 'Cơ sở Thuỵ Khuê',       icon: 'building',
+    keywords: ['co so', 'branch', 'thuy khue', 'tk', '20 thuy khue'] },
+  { route: 'co-so/HM',           section: 'Cơ sở', label: 'Cơ sở Hoàng Mai',       icon: 'building',
+    keywords: ['co so', 'branch', 'hoang mai', 'hm'] },
+  { route: 'co-so/24NCT',        section: 'Cơ sở', label: 'Cơ sở Nguyễn Cơ Thạch', icon: 'building',
+    keywords: ['co so', 'branch', 'nguyen co thach', 'nct', '24', '24 nct'] },
+  { route: 'co-so/CTT',          section: 'Cơ sở', label: 'Cơ sở Cung Thể Thao',   icon: 'building',
+    keywords: ['co so', 'branch', 'cung the thao', 'ctt', 'mai dong', 'ma dong'] },
+  { route: 'co-so/TT',           section: 'Cơ sở', label: 'Cơ sở Thanh Trì',       icon: 'building',
+    keywords: ['co so', 'branch', 'thanh tri', 'tt'] },
+  // Khối dự án
+  { route: 'du-an/erp',          section: 'Khối dự án', label: 'Dự án ERP',         icon: 'rocket',
+    keywords: ['du an', 'erp', 'project', 'system'] },
+  { route: 'du-an/mo-co-so',     section: 'Khối dự án', label: 'Mở cơ sở mới',      icon: 'factory',
+    keywords: ['du an', 'mo co so', 'new branch', 'expand'] },
+  { route: 'du-an/dac-biet',     section: 'Khối dự án', label: 'Dự án đặc biệt',    icon: 'rocket',
+    keywords: ['du an', 'dac biet', 'special', 'rnd', 'r&d'] },
 ];
 
 /** Chuẩn hoá string để fuzzy search: lowercase + bỏ dấu tiếng Việt. */
