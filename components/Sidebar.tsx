@@ -39,11 +39,11 @@ interface MenuSection {
 // quan-ly-sale, doanh-so V1, doanh-so/nhap V1) ẨN khỏi sidebar nhưng GIỮ route
 // (truy cập qua URL trực tiếp + Cmd+K palette).
 const MENU_SECTIONS: MenuSection[] = [
-  // 1. DASHBOARD CEO — top-level single link
+  // 1. DASHBOARD CEO — top-level single link (V9.1: route riêng /dashboard-ceo)
   {
     title: '',
     items: [
-      { route: 'dashboard', label: 'Dashboard CEO', icon: Home },
+      { route: 'dashboard-ceo', label: 'Dashboard CEO', icon: Home, badge: 'wip' },
     ],
   },
   // 2. TRUNG TÂM ĐIỀU HÀNH
@@ -57,20 +57,12 @@ const MENU_SECTIONS: MenuSection[] = [
       { route: 'thong-bao',         label: 'Thông báo',           icon: Bell,        badge: 'wip' },
     ],
   },
-  // 3. KHỐI KINH DOANH
+  // 3. KHỐI KINH DOANH (V9.1: Cơ sở = single link → /co-so list page;
+  //    branch access kiểm tra ở page level từ profile.branchId)
   {
     title: 'Khối kinh doanh',
     items: [
-      {
-        route: 'co-so', label: 'Cơ sở', icon: Building2,
-        children: [
-          { route: 'co-so/TK',    label: 'Thuỵ Khuê',         icon: Home, badge: 'wip' },
-          { route: 'co-so/HM',    label: 'Hoàng Mai',          icon: Home, badge: 'wip' },
-          { route: 'co-so/24NCT', label: 'Nguyễn Cơ Thạch',    icon: Home, badge: 'wip' },
-          { route: 'co-so/CTT',   label: 'Cung Thể Thao',      icon: Home, badge: 'wip' },
-          { route: 'co-so/TT',    label: 'Thanh Trì',          icon: Home, badge: 'wip' },
-        ],
-      },
+      { route: 'co-so',    label: 'Cơ sở',               icon: Building2 },
       { route: 'mkt',      label: 'Marketing',           icon: Megaphone },
       { route: 'daotao',   label: 'Đào tạo',             icon: GraduationCap },
       { route: 'ky-thuat', label: 'Kỹ thuật vận hành',   icon: Wrench },
@@ -88,13 +80,14 @@ const MENU_SECTIONS: MenuSection[] = [
       { route: 'checklist-v2',          label: 'Giám sát',          icon: CheckSquare },
     ],
   },
-  // 5. KHỐI DỰ ÁN
+  // 5. KHỐI DỰ ÁN (V9.1: + AI & Chuyển đổi số)
   {
     title: 'Khối dự án',
     items: [
-      { route: 'du-an/erp',       label: 'ERP',              icon: Rocket, badge: 'soon' },
-      { route: 'du-an/mo-co-so',  label: 'Mở cơ sở mới',     icon: Factory, badge: 'soon' },
-      { route: 'du-an/dac-biet',  label: 'Dự án đặc biệt',   icon: Rocket, badge: 'soon' },
+      { route: 'du-an/erp',       label: 'ERP',                 icon: Rocket,  badge: 'soon' },
+      { route: 'du-an/mo-co-so',  label: 'Mở cơ sở mới',        icon: Factory, badge: 'soon' },
+      { route: 'du-an/dac-biet',  label: 'Dự án đặc biệt',      icon: Rocket,  badge: 'soon' },
+      { route: 'du-an/ai',        label: 'AI & Chuyển đổi số',  icon: Sliders, badge: 'soon' },
     ],
   },
   // 6. BÁO CÁO & AI

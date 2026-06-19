@@ -77,29 +77,33 @@ export const NAV_ROUTES: NavRoute[] = [
     keywords: ['password', 'mat khau', 'reset'] },
 
   // V9.0 sidebar restructure (2026-06-19) — routes mới
+  // V9.1 (2026-06-19): bỏ 5 per-branch routes (co-so/HM, co-so/TK,...) — dùng single 'co-so'.
+  //                    + dashboard-ceo (route riêng, không dùng chung /dashboard).
+  //                    + du-an/ai (AI & Chuyển đổi số).
+
+  // Dashboard CEO — route riêng, anchor kiến trúc ERP tương lai
+  { route: 'dashboard-ceo',      section: 'Dashboard CEO', label: 'Dashboard CEO', icon: 'home',
+    keywords: ['dashboard ceo', 'ceo', 'tong quan ceo', 'kpi ceo', 'overview'] },
+
   // Trung tâm điều hành
   { route: 'phe-duyet',          section: 'Trung tâm điều hành', label: 'Phê duyệt',     icon: 'check-square',
     keywords: ['phe duyet', 'approval', 'approve', 'duyet', 'review'] },
   { route: 'thong-bao',          section: 'Trung tâm điều hành', label: 'Thông báo',     icon: 'bell',
-    keywords: ['thong bao', 'notification', 'noti', 'bell', 'alert'] },
-  // Khối kinh doanh > Cơ sở (5 chi nhánh)
-  { route: 'co-so/TK',           section: 'Cơ sở', label: 'Cơ sở Thuỵ Khuê',       icon: 'building',
-    keywords: ['co so', 'branch', 'thuy khue', 'tk', '20 thuy khue'] },
-  { route: 'co-so/HM',           section: 'Cơ sở', label: 'Cơ sở Hoàng Mai',       icon: 'building',
-    keywords: ['co so', 'branch', 'hoang mai', 'hm'] },
-  { route: 'co-so/24NCT',        section: 'Cơ sở', label: 'Cơ sở Nguyễn Cơ Thạch', icon: 'building',
-    keywords: ['co so', 'branch', 'nguyen co thach', 'nct', '24', '24 nct'] },
-  { route: 'co-so/CTT',          section: 'Cơ sở', label: 'Cơ sở Cung Thể Thao',   icon: 'building',
-    keywords: ['co so', 'branch', 'cung the thao', 'ctt', 'mai dong', 'ma dong'] },
-  { route: 'co-so/TT',           section: 'Cơ sở', label: 'Cơ sở Thanh Trì',       icon: 'building',
-    keywords: ['co so', 'branch', 'thanh tri', 'tt'] },
+    keywords: ['thong bao', 'notification', 'noti', 'bell', 'alert', 'notification center'] },
+
+  // Khối kinh doanh > Cơ sở (single route, list page + dynamic dashboard per branch)
+  { route: 'co-so',              section: 'Cơ sở', label: 'Danh sách cơ sở',       icon: 'building',
+    keywords: ['co so', 'branch', 'facility', 'chi nhanh', 'tk', 'hm', 'ctt', '24', 'tt', 'thuy khue', 'hoang mai', 'cung the thao', 'nguyen co thach', 'thanh tri'] },
+
   // Khối dự án
-  { route: 'du-an/erp',          section: 'Khối dự án', label: 'Dự án ERP',         icon: 'rocket',
+  { route: 'du-an/erp',          section: 'Khối dự án', label: 'Dự án ERP',                icon: 'rocket',
     keywords: ['du an', 'erp', 'project', 'system'] },
-  { route: 'du-an/mo-co-so',     section: 'Khối dự án', label: 'Mở cơ sở mới',      icon: 'factory',
+  { route: 'du-an/mo-co-so',     section: 'Khối dự án', label: 'Mở cơ sở mới',             icon: 'factory',
     keywords: ['du an', 'mo co so', 'new branch', 'expand'] },
-  { route: 'du-an/dac-biet',     section: 'Khối dự án', label: 'Dự án đặc biệt',    icon: 'rocket',
+  { route: 'du-an/dac-biet',     section: 'Khối dự án', label: 'Dự án đặc biệt',           icon: 'rocket',
     keywords: ['du an', 'dac biet', 'special', 'rnd', 'r&d'] },
+  { route: 'du-an/ai',           section: 'Khối dự án', label: 'AI & Chuyển đổi số',       icon: 'settings',
+    keywords: ['du an', 'ai', 'chuyen doi so', 'digital transformation', 'cds'] },
 ];
 
 /** Chuẩn hoá string để fuzzy search: lowercase + bỏ dấu tiếng Việt. */
