@@ -72,6 +72,8 @@ export async function GET(req: NextRequest) {
           packageUnitName: String(x.packageUnitName ?? ''),
           quantity: x.quantity != null ? Number(x.quantity) : null,
           unitPrice: x.unitPrice != null ? Number(x.unitPrice) : null,
+          // V8.Y (2026-06-19): manual mode (HB CLB Kid/Aqua) — qty là note
+          packageManualPriceWithQty: x.packageManualPriceWithQty === true,
           receiptNo: x.receiptNo ?? null,
           contractNo: x.contractNo ?? null,
           saleId: String(x.saleId ?? ''),

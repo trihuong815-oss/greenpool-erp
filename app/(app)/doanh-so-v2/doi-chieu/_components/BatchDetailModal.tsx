@@ -494,14 +494,28 @@ function TransactionsTable({
                     <span>{r.packageName}</span>
                     {r.packageIsCustomQuantity && (
                       <span
-                        className="text-[9px] uppercase font-bold text-violet-700 bg-violet-100 px-1 py-0.5 rounded ring-1 ring-violet-200"
+                        className="text-xs uppercase font-bold text-violet-700 bg-violet-100 px-1 py-0.5 rounded ring-1 ring-violet-200"
                         title={`Gói tính theo ${r.packageUnitName || 'buổi'} (PT) — packageValue = số ${r.packageUnitName || 'buổi'} × đơn giá. Sale sửa qua /nhap khi batch returned.`}
                       >
                         PT
                       </span>
                     )}
+                    {r.packageManualPriceWithQty && (
+                      <span
+                        className="text-xs uppercase font-bold text-amber-700 bg-amber-100 px-1 py-0.5 rounded ring-1 ring-amber-200"
+                        title="Sale tự nhập giá trị gói + ghi số buổi (note). Giá trị không có công thức tự động."
+                      >
+                        Tự nhập
+                      </span>
+                    )}
                   </div>
-                  <div className="text-slate-400 text-[10px]">{r.serviceGroup}</div>
+                  <div className="text-slate-400 text-xs">{r.serviceGroup}</div>
+                  {/* V8.Y manual mode: số buổi (note) */}
+                  {r.packageManualPriceWithQty && r.quantity != null && r.quantity > 0 && (
+                    <div className="text-amber-700 text-xs mt-0.5">
+                      Số buổi: <span className="font-semibold">{r.quantity.toLocaleString()}</span>
+                    </div>
+                  )}
                 </div>
               </td>
               <td className="px-2 py-1.5">

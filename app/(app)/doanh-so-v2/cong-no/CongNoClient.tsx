@@ -28,6 +28,8 @@ interface DebtRow {
   packageUnitName?: string;
   quantity?: number | null;
   unitPrice?: number | null;
+  // V8.Y (2026-06-19): manual mode (HB CLB Kid/Aqua) — qty là note
+  packageManualPriceWithQty?: boolean;
 }
 
 interface Props {
@@ -199,6 +201,7 @@ export default function CongNoClient({ scope }: Props) {
                 <tbody className="divide-y divide-slate-100">
                   {filtered.map((r) => {
                     const isPT = r.packageIsCustomQuantity === true;
+                    const isManual = r.packageManualPriceWithQty === true;
                     const unit = r.packageUnitName || 'buổi';
                     return (
                       <tr key={r.id} className="hover:bg-slate-50/60">
@@ -209,8 +212,16 @@ export default function CongNoClient({ scope }: Props) {
                           <div className="flex items-center gap-1.5">
                             <span className="truncate">{r.packageName}</span>
                             {isPT && (
-                              <span className="shrink-0 text-[9px] uppercase font-bold text-violet-700 bg-violet-100 px-1 py-0.5 rounded ring-1 ring-violet-200">
+                              <span className="shrink-0 text-xs uppercase font-bold text-violet-700 bg-violet-100 px-1 py-0.5 rounded ring-1 ring-violet-200">
                                 PT
+                              </span>
+                            )}
+                            {isManual && (
+                              <span
+                                className="shrink-0 text-xs uppercase font-bold text-amber-700 bg-amber-100 px-1 py-0.5 rounded ring-1 ring-amber-200"
+                                title="Sale tự nhập giá + ghi số buổi"
+                              >
+                                Tự nhập
                               </span>
                             )}
                           </div>
@@ -219,8 +230,11 @@ export default function CongNoClient({ scope }: Props) {
                         {scope !== 'sale' && <td className="px-3 py-2 text-slate-600">{r.saleName}</td>}
                         {scope === 'top' && <td className="px-3 py-2 text-slate-600">{r.branchName}</td>}
                         <td className="px-3 py-2 text-right tabular-nums">
-                          {isPT && r.quantity != null
-                            ? <span className="text-violet-700 font-semibold">{r.quantity.toLocaleString()}<span className="text-[10px] text-slate-400 ml-0.5">{unit}</span></span>
+                          {(isPT || isManual) && r.quantity != null
+                            ? <span className={`font-semibold ${isPT ? 'text-violet-700' : 'text-amber-700'}`}>
+                                {r.quantity.toLocaleString()}
+                                <span className="text-xs text-slate-400 ml-0.5">{isPT ? unit : 'buổi'}</span>
+                              </span>
                             : <span className="text-slate-300">—</span>
                           }
                         </td>

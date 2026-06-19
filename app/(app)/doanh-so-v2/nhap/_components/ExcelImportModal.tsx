@@ -185,8 +185,12 @@ export default function ExcelImportModal({ packages, onClose, onImport }: Props)
       // không có trong file Excel cũ → giữ rỗng để validateRow chặn POST (Sale phải
       // mở row sửa, nhập số buổi). Tránh import nhầm = mất doanh số.
       lr.packageIsCustomQuantity = r.resolvedPackage!.isCustomQuantity === true;
+      // V8.Y (2026-06-19): manual mode flag (HB CLB Kid/Aqua) — qty từ Excel cần Sale review
+      lr.packageManualPriceWithQty = r.resolvedPackage!.manualPriceWithQuantity === true;
       lr.transactionType = r.resolvedTxnType!;
       lr.paymentMethod = r.resolvedPayMethod!;
+      // V6 PT giữ rỗng packageValue (auto). V8.Y manual KHÔNG giữ rỗng — Sale tự nhập:
+      // dùng giá Excel (nếu có >0) làm seed, else rỗng để chặn POST + Sale nhập tay.
       lr.packageValue = r.resolvedTxnType === 'thanh_toan_not' || r.resolvedPackage!.isCustomQuantity
         ? ''
         : String(r.packageValue);

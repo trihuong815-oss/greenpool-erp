@@ -123,8 +123,26 @@ export default function PackagePicker({ packages, value, disabled, onChange }: P
                   {p.name}
                 </span>
                 {p.isChildPackage && (
-                  <span className="shrink-0 text-[9px] uppercase font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
+                  <span className="shrink-0 text-xs uppercase font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
                     Trẻ em
+                  </span>
+                )}
+                {/* V6 PT (existing): badge nhận diện gói tính theo buổi × đơn giá */}
+                {p.isCustomQuantity && (
+                  <span
+                    className="shrink-0 text-xs uppercase font-bold text-violet-700 bg-violet-50 px-1.5 py-0.5 rounded"
+                    title={`Gói PT — nhập số ${p.unitName || 'buổi'} × đơn giá`}
+                  >
+                    PT
+                  </span>
+                )}
+                {/* V8.Y (2026-06-19): manual mode — Sale tự nhập giá + ghi số buổi */}
+                {p.manualPriceWithQuantity && (
+                  <span
+                    className="shrink-0 text-xs uppercase font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded"
+                    title="Sale tự nhập Giá trị gói + ghi số buổi (note)"
+                  >
+                    Tự nhập
                   </span>
                 )}
                 {isSelected && <Check size={12} className="text-emerald-600 shrink-0" />}
