@@ -91,30 +91,43 @@ export function PackagesClient({ allowedBranches }: Props) {
   useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [branchId]);
 
   // ===== Group CRUD =====
+  // V8.Y bug fix 2026-06-19: EDIT/toggle optimistic — đóng modal ngay, PATCH ngầm.
   async function saveGroup(name: string) {
     if (!groupModal) return;
-    try {
-      if (groupModal.mode === 'add') {
+    // ADD: cần server tạo ID
+    if (groupModal.mode === 'add') {
+      try {
         await packageGroupsApi.create({
           name, branchId,
           sortOrder: (groups.at(-1)?.sortOrder ?? 0) + 10,
         });
         showToast('success', 'Đã thêm nhóm');
-      } else {
-        await packageGroupsApi.update(groupModal.group.id, { name });
-        showToast('success', 'Đã đổi tên nhóm');
-      }
-      setGroupModal(null);
-      await load();
-    } catch (e: any) { showToast('error', e.message); }
+        setGroupModal(null);
+        await load();
+      } catch (e: any) { showToast('error', e.message); }
+      return;
+    }
+    // EDIT: optimistic rename
+    const original = groupModal.group;
+    setGroups((prev) => prev.map((g) => (g.id === original.id ? { ...g, name } : g)));
+    setGroupModal(null);
+    packageGroupsApi.update(original.id, { name })
+      .then(() => showToast('success', 'Đã đổi tên nhóm'))
+      .catch((e: any) => {
+        setGroups((prev) => prev.map((g) => (g.id === original.id ? original : g)));
+        showToast('error', `Đổi tên thất bại: ${e?.message ?? 'lỗi'} (đã hoàn tác)`);
+      });
   }
 
   async function toggleGroup(g: PackageGroup) {
-    try {
-      await packageGroupsApi.update(g.id, { active: !g.active });
-      showToast('success', g.active ? 'Đã tắt nhóm' : 'Đã bật nhóm');
-      await load();
-    } catch (e: any) { showToast('error', e.message); }
+    const newActive = !g.active;
+    setGroups((prev) => prev.map((x) => (x.id === g.id ? { ...x, active: newActive } : x)));
+    packageGroupsApi.update(g.id, { active: newActive })
+      .then(() => showToast('success', newActive ? 'Đã bật nhóm' : 'Đã tắt nhóm'))
+      .catch((e: any) => {
+        setGroups((prev) => prev.map((x) => (x.id === g.id ? { ...x, active: g.active } : x)));
+        showToast('error', `Thao tác thất bại: ${e?.message ?? 'lỗi'} (đã hoàn tác)`);
+      });
   }
 
   function askDeleteGroup(g: PackageGroup) {
@@ -131,6 +144,9 @@ export function PackagesClient({ allowedBranches }: Props) {
   }
 
   // ===== Package CRUD =====
+  // V8.Y bug fix 2026-06-19: EDIT/toggle dùng OPTIMISTIC UPDATE — apply patch
+  // vào local state ngay + đóng modal ngay, gọi PATCH ngầm. Nếu fail thì rollback
+  // + toast error. Tránh modal stuck khi cold start App Hosting (~2-5s).
   async function savePackage(payload: {
     name: string;
     defaultPrice: number;
@@ -141,8 +157,10 @@ export function PackagesClient({ allowedBranches }: Props) {
   }) {
     if (!packageModal) return;
     const { name, defaultPrice, isCustomQuantity, unitName, defaultUnitPrice, manualPriceWithQuantity } = payload;
-    try {
-      if (packageModal.mode === 'add') {
+
+    // ADD: cần server tạo ID → vẫn await (không optimistic được)
+    if (packageModal.mode === 'add') {
+      try {
         const next = (packages[packageModal.groupId] ?? []).at(-1)?.sortOrder ?? 0;
         await packagesApi.create({
           name, branchId, groupId: packageModal.groupId, defaultPrice,
@@ -151,24 +169,67 @@ export function PackagesClient({ allowedBranches }: Props) {
           manualPriceWithQuantity,
         });
         showToast('success', 'Đã thêm gói');
-      } else {
-        await packagesApi.update(packageModal.pkg.id, {
-          name, defaultPrice, isCustomQuantity, unitName, defaultUnitPrice,
-          manualPriceWithQuantity,
-        });
-        showToast('success', 'Đã cập nhật gói');
+        setPackageModal(null);
+        await load();
+      } catch (e: any) { showToast('error', e.message); }
+      return;
+    }
+
+    // EDIT: optimistic
+    const original = packageModal.pkg;
+    const patch: Partial<PackageItem> = {
+      name, defaultPrice, isCustomQuantity, unitName, defaultUnitPrice, manualPriceWithQuantity,
+    };
+    // Apply optimistic patch + re-sort theo helper smart
+    setPackages((prev) => {
+      const updated: typeof prev = {};
+      for (const gid of Object.keys(prev)) {
+        const arr = prev[gid].map((p) => (p.id === original.id ? { ...p, ...patch } : p));
+        updated[gid] = [...arr].sort(comparePackagesSmart);
       }
-      setPackageModal(null);
-      await load();
-    } catch (e: any) { showToast('error', e.message); }
+      return updated;
+    });
+    setPackageModal(null);
+    // Background PATCH — rollback nếu fail
+    packagesApi.update(original.id, patch)
+      .then(() => showToast('success', 'Đã cập nhật gói'))
+      .catch((e: any) => {
+        // Rollback to original (re-fetch để chắc chắn không drift)
+        setPackages((prev) => {
+          const updated: typeof prev = {};
+          for (const gid of Object.keys(prev)) {
+            const arr = prev[gid].map((p) => (p.id === original.id ? original : p));
+            updated[gid] = [...arr].sort(comparePackagesSmart);
+          }
+          return updated;
+        });
+        showToast('error', `Lưu thất bại: ${e?.message ?? 'lỗi không xác định'} (đã hoàn tác)`);
+      });
   }
 
   async function togglePackage(p: PackageItem) {
-    try {
-      await packagesApi.update(p.id, { active: !p.active });
-      showToast('success', p.active ? 'Đã tắt gói' : 'Đã bật gói');
-      await load();
-    } catch (e: any) { showToast('error', e.message); }
+    // Optimistic toggle
+    const newActive = !p.active;
+    setPackages((prev) => {
+      const updated: typeof prev = {};
+      for (const gid of Object.keys(prev)) {
+        updated[gid] = prev[gid].map((x) => (x.id === p.id ? { ...x, active: newActive } : x));
+      }
+      return updated;
+    });
+    packagesApi.update(p.id, { active: newActive })
+      .then(() => showToast('success', newActive ? 'Đã bật gói' : 'Đã tắt gói'))
+      .catch((e: any) => {
+        // Rollback
+        setPackages((prev) => {
+          const updated: typeof prev = {};
+          for (const gid of Object.keys(prev)) {
+            updated[gid] = prev[gid].map((x) => (x.id === p.id ? { ...x, active: p.active } : x));
+          }
+          return updated;
+        });
+        showToast('error', `Thao tác thất bại: ${e?.message ?? 'lỗi'} (đã hoàn tác)`);
+      });
   }
 
   function askDeletePackage(p: PackageItem) {
