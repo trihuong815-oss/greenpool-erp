@@ -27,6 +27,10 @@ interface MenuItem {
   badge?: 'soon' | 'wip';
   /** V9.0: sub-items cho menu nested (vd. Cơ sở > 5 chi nhánh). */
   children?: MenuItem[];
+  /** V9.3 (2026-06-20): role explicit exclude — ẨN item BẤT KỂ children có visible
+   *  (vd: KVP > Tài chính kế toán KHÔNG hiển thị cho Sale dù họ có share permission
+   *  cong-no/tong-ket — đây là workflow-based separation). */
+  hideForRoles?: string[];
 }
 
 interface MenuSection {
@@ -85,8 +89,12 @@ const MENU_SECTIONS: MenuSection[] = [
     items: [
       // Tài chính kế toán nested — 6 sub-tool, hiển thị theo permission.
       // Parent route 'tai-chinh-ke-toan' là key cho React, không phải URL thực.
+      // V9.3: hideForRoles — Sale (NV_SALE/NV_SALE_PT) tuy có chia sẻ permission
+      // cong-no + tong-ket nhưng KHÔNG thuộc workflow Kế toán → ẩn nhánh này.
+      // Sale dùng KKD>Doanh số (3 sub) cho công việc daily.
       {
         route: 'tai-chinh-ke-toan', label: 'Tài chính kế toán', icon: BriefcaseBusiness,
+        hideForRoles: ['NV_SALE', 'NV_SALE_PT'],
         children: [
           { route: 'doanh-so-v2/doi-chieu',             label: 'Đối chiếu doanh số',   icon: ClipboardCheck },
           { route: 'doanh-so-v2/cong-no',               label: 'Công nợ',              icon: CreditCard },
@@ -146,11 +154,16 @@ export function Sidebar({ userName, userRole, roleCode, avatarUrl, menuOverrides
 
   // V9.0: filter recursive (items + nested children) theo quyền, bỏ section/parent rỗng.
   // Parent item có children: hiển thị nếu CÓ ÍT NHẤT 1 child được phép, không cần parent route.
+  // V9.3: + hideForRoles check (parent + child) — explicit ẨN cho role cụ thể bất kể permission.
   function filterItems(items: MenuItem[]): MenuItem[] {
     return items
       .map((it) => {
+        // V9.3: explicit hide cho role (ưu tiên cao nhất)
+        if (it.hideForRoles?.includes(roleCode)) return null;
         if (it.children && it.children.length > 0) {
-          const visibleChildren = it.children.filter((c) => allowed.has(c.route));
+          const visibleChildren = it.children.filter((c) =>
+            !c.hideForRoles?.includes(roleCode) && allowed.has(c.route),
+          );
           if (visibleChildren.length === 0) return null;
           return { ...it, children: visibleChildren };
         }

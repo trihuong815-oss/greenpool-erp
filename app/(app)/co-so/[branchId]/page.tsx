@@ -5,7 +5,7 @@
 //      profile.branchId === [branchId].
 
 import { notFound } from 'next/navigation';
-import { canAccessRoute, canSeeAllFacilities, isTopAdmin } from '@/lib/permissions';
+import { canAccessRoute, canSeeAllFacilities, isTopAdmin, getVisibleFacilities } from '@/lib/permissions';
 import { requireAuthedProfile } from '@/lib/firebase/current-profile';
 import { AppTopBar } from '@/components/AppTopBar';
 import { PlaceholderPage } from '@/components/PlaceholderPage';
@@ -35,12 +35,16 @@ export default async function CoSoBranchPage({ params }: { params: Promise<{ bra
     );
   }
 
-  // 2. Branch-level access từ profile.branchId hoặc top scope.
-  const canSeeAnyBranch = canSeeAllFacilities(profile.roleCode)
+  // 2. Branch-level access — V9.3: fallback qua getVisibleFacilities (bao gồm
+  // QLCS_FACILITY mapping nếu profile.branchId thiếu trong DB).
+  const seeAll = canSeeAllFacilities(profile.roleCode)
     || isTopAdmin(profile.roleCode)
     || profile.roleCode === 'CHU_TICH'
     || profile.roleCode === 'TP_GS';
-  const canAccessThisBranch = canSeeAnyBranch || profile.branchId === branchId;
+  const allowedBranchIds = seeAll
+    ? null  // unrestricted
+    : getVisibleFacilities(profile.roleCode, profile.branchId);
+  const canAccessThisBranch = allowedBranchIds === null || allowedBranchIds.includes(branchId);
 
   if (!canAccessThisBranch) {
     return (

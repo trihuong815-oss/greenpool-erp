@@ -86,6 +86,12 @@ export const NAV_ROUTES: NavRoute[] = [
     keywords: ['dashboard ceo', 'ceo', 'tong quan ceo', 'kpi ceo', 'overview'] },
 
   // Trung tâm điều hành
+  // V9.3 (2026-06-20): + dieu-phoi + de-xuat (Sidebar có entry nhưng NAV_ROUTES
+  // thiếu — user không tìm được qua Cmd+K. Route legacy giao-viec sai navigate).
+  { route: 'dieu-phoi',          section: 'Trung tâm điều hành', label: 'Điều phối công việc', icon: 'list-todo',
+    keywords: ['dieu phoi', 'dispatch', 'cong viec', 'giao viec', 'task assignment', 'phan cong'] },
+  { route: 'de-xuat',            section: 'Trung tâm điều hành', label: 'Đề xuất',             icon: 'inbox',
+    keywords: ['de xuat', 'proposal', 'request', 'xin duyet', 'kien nghi', 'approval request'] },
   { route: 'phe-duyet',          section: 'Trung tâm điều hành', label: 'Phê duyệt',     icon: 'check-square',
     keywords: ['phe duyet', 'approval', 'approve', 'duyet', 'review'] },
   { route: 'thong-bao',          section: 'Trung tâm điều hành', label: 'Thông báo',     icon: 'bell',

@@ -4,7 +4,7 @@
 // chỉ thấy branch của mình.
 
 import Link from 'next/link';
-import { canAccessRoute, canSeeAllFacilities, isTopAdmin } from '@/lib/permissions';
+import { canAccessRoute, canSeeAllFacilities, isTopAdmin, getVisibleFacilities } from '@/lib/permissions';
 import { requireAuthedProfile } from '@/lib/firebase/current-profile';
 import { AppTopBar } from '@/components/AppTopBar';
 import { BRANCHES } from '@/lib/branches';
@@ -28,15 +28,19 @@ export default async function CoSoListPage() {
     );
   }
 
-  // Lọc cơ sở theo quyền — top mgmt thấy 5; CHU_TICH thấy 5; else chỉ branch của mình.
+  // V9.3 (2026-06-20): lọc cơ sở qua getVisibleFacilities helper — bao gồm fallback
+  // QLCS_FACILITY map nếu user thiếu profile.branchId trong DB (vd QLCS_HM rỗng
+  // branchId vẫn thấy Hoàng Mai qua role-code mapping).
+  // Top mgmt explicit (CHU_TICH + TP_GS chưa nằm trong canSeeAllFacilities helper).
   const seeAll = canSeeAllFacilities(profile.roleCode)
     || isTopAdmin(profile.roleCode)
     || profile.roleCode === 'CHU_TICH'
-    || profile.roleCode === 'TP_GS'; // Trưởng phòng Giám sát — giám sát toàn hệ thống
+    || profile.roleCode === 'TP_GS';
 
-  const visibleBranches = seeAll
-    ? BRANCHES
-    : BRANCHES.filter((b) => b.id === profile.branchId);
+  const visibleIds = seeAll
+    ? BRANCHES.map((b) => b.id)
+    : getVisibleFacilities(profile.roleCode, profile.branchId);
+  const visibleBranches = BRANCHES.filter((b) => visibleIds.includes(b.id));
 
   return (
     <>
