@@ -353,7 +353,16 @@ export async function GET(req: NextRequest) {
     if (err instanceof UnauthorizedError) {
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
-    console.error('[sales-v2/monthly-summary] GET error:', err);
-    return NextResponse.json({ error: err?.message ?? 'Lỗi server' }, { status: 500 });
+    // Defensive 2026-06-19: log đầy đủ context để diagnose bug Sale role bị 'out khỏi app'
+    console.error('[sales-v2/monthly-summary] GET error:', {
+      message: err?.message,
+      stack: err?.stack?.split('\n').slice(0, 5).join('\n'),
+      url: req.nextUrl?.toString(),
+    });
+    return NextResponse.json({
+      error: err?.message ?? 'Lỗi server',
+      // Trả thêm chi tiết để frontend hiển thị + admin debug
+      hint: 'Liên hệ admin nếu lỗi tiếp diễn',
+    }, { status: 500 });
   }
 }
