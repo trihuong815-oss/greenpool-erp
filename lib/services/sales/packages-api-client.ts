@@ -203,25 +203,30 @@ function packageClusterStem(name: string): string {
 }
 
 /** Comparator để sort packages.
- *  1. Cluster theo stem chung (variant gần nhau, vd "HB CLB ..." luôn cạnh nhau)
- *  2. Trong cluster: numeric (extracted) ascending
- *  3. Fallback sortOrder rồi tên alphabetical (vi). */
+ *  1. Cả 2 có numeric key (tháng/năm/lượt) → numeric ascending — luôn ưu tiên
+ *     bất kể prefix tên. Vd "Thẻ 1 tháng" / "Member 6 tháng" / "VIP 1 năm" → 1<6<12.
+ *  2. Một có numeric → numeric đứng trước (gói có "X tháng" lên trên gói tên đặc biệt).
+ *  3. Cả 2 không có numeric → cluster theo stem chung (variant gần nhau,
+ *     vd "HB CLB cấp 1" / "HBCLB người lớn" → cùng cluster).
+ *  4. Same cluster, no numeric → sortOrder rồi tên alphabetical (vi). */
 export function comparePackagesSmart(a: PackageItem, b: PackageItem): number {
+  const ka = extractPackageSortKey(a.name);
+  const kb = extractPackageSortKey(b.name);
+  // 1. Cả 2 numeric → ascending CROSS-CLUSTER. Đảm bảo Thẻ member fitness
+  //    1 tháng → 3 tháng → 6 tháng → 1 năm (=12) → 2 năm (=24) đúng thứ tự.
+  if (ka !== null && kb !== null) return ka - kb;
+  // 2. Một có numeric → đứng trước (gói có đơn vị thời gian/lượt rõ ràng lên đầu)
+  if (ka !== null) return -1;
+  if (kb !== null) return 1;
+  // 3. Cả 2 không numeric → cluster theo stem (HB CLB grouping case)
   const stemA = packageClusterStem(a.name);
   const stemB = packageClusterStem(b.name);
-  // Cluster khác nhau → sort theo stem alphabetical. Stem rỗng (thuần variant như
-  // "1 tháng" / "10 lượt") xếp về cuối nhóm — tránh chen vào giữa các cluster có tên.
   if (stemA !== stemB) {
     if (!stemA) return 1;
     if (!stemB) return -1;
     return stemA.localeCompare(stemB, 'vi');
   }
-  // Same cluster: numeric ascending
-  const ka = extractPackageSortKey(a.name);
-  const kb = extractPackageSortKey(b.name);
-  if (ka !== null && kb !== null) return ka - kb;
-  if (ka !== null) return -1;
-  if (kb !== null) return 1;
+  // 4. Same cluster: sortOrder rồi alphabetical
   const so = (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
   if (so !== 0) return so;
   return a.name.localeCompare(b.name, 'vi');
