@@ -172,12 +172,51 @@ export function extractPackageSortKey(name: string): number | null {
   return null;
 }
 
-/** Comparator để sort packages: numeric (extracted) trước, fallback theo sortOrder rồi tên. */
+/** Extract "cluster stem" từ tên gói: phần ổn định sau khi bỏ variant suffix.
+ *  Mục đích: gom variant cùng prefix lại gần nhau, bất kể khoảng trắng/dấu/viết tắt nhỏ.
+ *  Vd cùng stem "hbclb":
+ *    "HB CLB cấp 1" / "HBCLB cấp 2" / "HB CLB người lớn" / "HBCLB 8 buổi"
+ *  Variant suffix strip: trailing "cấp N" / "level N" / số + đơn vị (buổi/tháng/năm/lượt/tuần/ngày)
+ *  / "trẻ em" / "người lớn" / "kid" / "adult" / "nữ" / "nam". */
+function packageClusterStem(name: string): string {
+  if (!name) return '';
+  let s = name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '') // bỏ dấu tiếng Việt
+    .replace(/đ/g, 'd')
+    .replace(/[^a-z0-9]+/g, ' ')      // unify separator
+    .trim();
+  // Loop strip vì có thể nhiều suffix chồng nhau ("HB CLB người lớn cấp 1")
+  const TRAILING_RE = /\s*(?:cap\s*\d+|level\s*\d+|\d+\s*(?:buoi|thang|nam|luot|tuan|ngay)?|tre\s*em|nguoi\s*lon|kid|adult|nu|nam)\s*$/;
+  let prev = '';
+  while (s !== prev) {
+    prev = s;
+    s = s.replace(TRAILING_RE, '').trim();
+  }
+  // Flatten: bỏ luôn whitespace để "HB CLB" ≡ "HBCLB" ≡ "hb  clb"
+  return s.replace(/\s+/g, '');
+}
+
+/** Comparator để sort packages.
+ *  1. Cluster theo stem chung (variant gần nhau, vd "HB CLB ..." luôn cạnh nhau)
+ *  2. Trong cluster: numeric (extracted) ascending
+ *  3. Fallback sortOrder rồi tên alphabetical (vi). */
 export function comparePackagesSmart(a: PackageItem, b: PackageItem): number {
+  const stemA = packageClusterStem(a.name);
+  const stemB = packageClusterStem(b.name);
+  // Cluster khác nhau → sort theo stem alphabetical. Stem rỗng (thuần variant như
+  // "1 tháng" / "10 lượt") xếp về cuối nhóm — tránh chen vào giữa các cluster có tên.
+  if (stemA !== stemB) {
+    if (!stemA) return 1;
+    if (!stemB) return -1;
+    return stemA.localeCompare(stemB, 'vi');
+  }
+  // Same cluster: numeric ascending
   const ka = extractPackageSortKey(a.name);
   const kb = extractPackageSortKey(b.name);
   if (ka !== null && kb !== null) return ka - kb;
-  if (ka !== null) return -1; // có numeric → lên trước
+  if (ka !== null) return -1;
   if (kb !== null) return 1;
   const so = (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
   if (so !== 0) return so;
