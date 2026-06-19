@@ -14,6 +14,7 @@ import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-aut
 import { canReadBatch, canEditTransaction } from '@/lib/sales-v2/scope';
 import { serializeTransaction } from '@/lib/sales-v2/serialize';
 import { getPackageById } from '@/lib/sales-v2/packages';
+import { refreshPackageNames } from '@/lib/sales-v2/resolve-package-names';
 import { getProgramsByIds, toSnapshot } from '@/lib/sales-v2/programs';
 import {
   computeDiscount, isDiscountType, isBonusType, validatePromoCombo,
@@ -50,6 +51,8 @@ export async function GET(req: NextRequest) {
     const transactions = txSnap.docs
       .map((d) => serializeTransaction(d.id, d.data()))
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    // V8.X (2026-06-19): admin sửa tên gói → fresh resolve, snapshot làm fallback.
+    await refreshPackageNames(transactions);
     return NextResponse.json({ ok: true, transactions });
   } catch (err: any) {
     if (err instanceof UnauthorizedError) {

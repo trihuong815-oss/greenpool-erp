@@ -23,6 +23,7 @@ import { COLLECTIONS } from '@/lib/firebase/collections';
 import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-auth';
 import { getScopeRole } from '@/lib/sales-v2/scope';
 import { isBranchId } from '@/lib/branches';
+import { fetchFreshPackageMap, applyFreshPackageName, collectPackageIds } from '@/lib/sales-v2/resolve-package-names';
 import type { SalesV2Source } from '@/lib/types/sales-v2';
 
 export const runtime = 'nodejs';
@@ -122,6 +123,8 @@ export async function GET(req: NextRequest) {
       date: string;
       customerName: string;
       phone: string;
+      // V8.X (2026-06-19): thêm packageId để fresh-resolve được packageName theo /packages.
+      packageId: string;
       packageName: string;
       packageValue: number;       // server-stored FINAL (sau promo)
       collectedToday: number;
@@ -177,6 +180,7 @@ export async function GET(req: NextRequest) {
           date: String(x.date ?? ''),
           customerName: String(x.customerName ?? ''),
           phone: String(x.phone ?? ''),
+          packageId: String(x.packageId ?? ''),
           packageName: String(x.packageName ?? ''),
           packageValue: pv,
           collectedToday: ct,
@@ -297,6 +301,31 @@ export async function GET(req: NextRequest) {
     // V8.X: sort tx mỗi Sale theo date DESC (mới nhất trước), tx cùng ngày giữ thứ tự
     for (const s of Object.values(salesCustomers)) {
       s.transactions.sort((a, b) => b.date.localeCompare(a.date));
+    }
+
+    // V8.X (2026-06-19): fresh-resolve tên gói cho mọi field hiển thị.
+    // Gom packageId từ byPackage keys + ptByPackage keys + salesCustomers tx → 1 batch read.
+    const allPkgIds = new Set<string>();
+    Object.keys(byPackage).forEach((k) => k && allPkgIds.add(k));
+    Object.keys(ptByPackage).forEach((k) => k && allPkgIds.add(k));
+    for (const s of Object.values(salesCustomers)) {
+      collectPackageIds(s.transactions).forEach((id) => allPkgIds.add(id));
+    }
+    if (allPkgIds.size > 0) {
+      const pkgMap = await fetchFreshPackageMap(Array.from(allPkgIds));
+      // byPackage: replace .name khi tìm thấy fresh
+      for (const [pid, bucket] of Object.entries(byPackage)) {
+        const fresh = pkgMap.get(pid);
+        if (fresh?.name) bucket.name = fresh.name;
+      }
+      for (const [pid, bucket] of Object.entries(ptByPackage)) {
+        const fresh = pkgMap.get(pid);
+        if (fresh?.name) bucket.name = fresh.name;
+      }
+      // salesCustomers tx: replace packageName per tx
+      for (const s of Object.values(salesCustomers)) {
+        for (const tx of s.transactions) applyFreshPackageName(tx, pkgMap);
+      }
     }
 
     return NextResponse.json({

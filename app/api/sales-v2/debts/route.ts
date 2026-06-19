@@ -14,6 +14,7 @@ import { COLLECTIONS } from '@/lib/firebase/collections';
 import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-auth';
 import { getScopeRole } from '@/lib/sales-v2/scope';
 import { isBranchId } from '@/lib/branches';
+import { refreshPackageNames } from '@/lib/sales-v2/resolve-package-names';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -86,6 +87,9 @@ export async function GET(req: NextRequest) {
       .filter((r) => !monthFilter || r.month === monthFilter)
       .sort((a, b) => b.debtAmount - a.debtAmount)
       .slice(0, MAX);
+
+    // V8.X (2026-06-19): fresh resolve tên gói theo /packages settings.
+    await refreshPackageNames(rows);
 
     return NextResponse.json({ ok: true, rows });
   } catch (err: any) {
