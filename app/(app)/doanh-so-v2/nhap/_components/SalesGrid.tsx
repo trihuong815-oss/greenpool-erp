@@ -256,7 +256,7 @@ export default function SalesGrid({
   return (
     <div className="card overflow-hidden p-0">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[2730px] text-sm">
+        <table className="w-full min-w-[2810px] text-sm">
           <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
             <tr>
               <Th width={40}>#</Th>
@@ -264,8 +264,10 @@ export default function SalesGrid({
               <Th width={140}>SĐT *</Th>
               {/* User chốt 2026-06-18: Gói lên trước vì quyết định các field conditional
                   (isChildPackage → Người giám hộ; isCustomQuantity → Số buổi+Đơn giá).
-                  Người giám hộ đặt ngay sau Gói (depend on Gói), Nguồn lùi sau. */}
-              <Th width={180}>Gói *</Th>
+                  Người giám hộ đặt ngay sau Gói (depend on Gói), Nguồn lùi sau.
+                  User 2026-06-19: nới rộng từ 180 → 260 để vừa tên dài như
+                  "HB chất lượng cao Ếch TE". */}
+              <Th width={260}>Gói *</Th>
               <Th width={150}>Người giám hộ</Th>
               <Th width={120}>Nguồn *</Th>
               {/* V6 PT (2026-06-18): 2 ô PT đặt NGAY CẠNH Gói để Sale thao tác liền mạch */}
