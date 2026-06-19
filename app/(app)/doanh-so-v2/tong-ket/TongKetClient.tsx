@@ -465,35 +465,108 @@ function CustomersBySaleSection({ salesCustomers }: { salesCustomers: Record<str
       .sort((a, b) => b.totals.sales - a.totals.sales),
     [salesCustomers],
   );
+
+  // V8.X (2026-06-19): filter cơ sở multi-select cho top role.
+  // Branch options: derive từ salesList (chỉ hiện cơ sở thực sự có Sale trong tháng).
+  const branchOptions = useMemo(() => {
+    const map = new Map<string, { branchId: string; branchName: string; saleCount: number }>();
+    for (const s of salesList) {
+      const bid = s.branchId;
+      if (!bid) continue;
+      const existing = map.get(bid);
+      if (existing) existing.saleCount += 1;
+      else map.set(bid, { branchId: bid, branchName: s.branchName || bid, saleCount: 1 });
+    }
+    return Array.from(map.values()).sort((a, b) => a.branchName.localeCompare(b.branchName, 'vi'));
+  }, [salesList]);
+
+  // selectedBranches rỗng = "Tất cả" (default). Chỉ render filter khi >1 cơ sở
+  // (Sale tự xem / QLCS 1 cơ sở → ẩn filter cho gọn).
+  const [selectedBranches, setSelectedBranches] = useState<Set<string>>(new Set());
+  const toggleBranch = useCallback((bid: string) => {
+    setSelectedBranches((prev) => {
+      const next = new Set(prev);
+      if (next.has(bid)) next.delete(bid);
+      else next.add(bid);
+      return next;
+    });
+  }, []);
+  const clearBranches = useCallback(() => setSelectedBranches(new Set()), []);
+
+  // Filtered list theo selectedBranches (rỗng = không filter)
+  const filteredSalesList = useMemo(() => {
+    if (selectedBranches.size === 0) return salesList;
+    return salesList.filter((s) => selectedBranches.has(s.branchId));
+  }, [salesList, selectedBranches]);
+
   const [activeSaleId, setActiveSaleId] = useState<string>(() => salesList[0]?.saleId ?? '');
-  // U1 audit fix: reset activeSaleId khi salesList đổi (vd user đổi tháng) → tránh tab
-  // không highlight do active.saleId không còn tồn tại trong tháng mới.
+  // Reset activeSaleId khi danh sách filter đổi → tránh tab không highlight.
   useEffect(() => {
-    if (salesList.length === 0) return;
-    const stillExists = salesList.some((s) => s.saleId === activeSaleId);
-    if (!stillExists) setActiveSaleId(salesList[0].saleId);
-  }, [salesList, activeSaleId]);
+    if (filteredSalesList.length === 0) return;
+    const stillExists = filteredSalesList.some((s) => s.saleId === activeSaleId);
+    if (!stillExists) setActiveSaleId(filteredSalesList[0].saleId);
+  }, [filteredSalesList, activeSaleId]);
 
-  const active = salesList.find((s) => s.saleId === activeSaleId) ?? salesList[0];
-  if (!active) return null;
+  const active = filteredSalesList.find((s) => s.saleId === activeSaleId) ?? filteredSalesList[0];
 
-  // U3 audit fix: chỉ 1 Sale (vd Sale tự xem) → ẩn tabs row (vô nghĩa với 1 tab).
-  const showTabs = salesList.length > 1;
+  // Filter bar chỉ render khi >1 cơ sở trong scope hiện tại (top role).
+  const showBranchFilter = branchOptions.length > 1;
+  // Tabs Sale ẩn khi chỉ còn 1 Sale (sau filter HOẶC Sale tự xem).
+  const showTabs = filteredSalesList.length > 1;
+  // Chip cơ sở trong nút Sale: ẨN khi đang focus 1 cơ sở (selectedBranches.size===1
+  // hoặc branchOptions.length===1 — chỉ 1 cơ sở trong scope).
+  const hideSaleBranchChip =
+    branchOptions.length === 1 || selectedBranches.size === 1;
+
+  // Empty state: filter ra 0 Sale (user uncheck hết)
+  if (!active) {
+    return (
+      <div className="card">
+        <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
+          <Users size={16} className="text-emerald-600" />
+          Khách hàng theo Sale
+        </h3>
+        {showBranchFilter && (
+          <BranchChipFilter
+            options={branchOptions}
+            selected={selectedBranches}
+            onToggle={toggleBranch}
+            onClear={clearBranches}
+            totalSaleCount={salesList.length}
+          />
+        )}
+        <div className="text-center text-slate-400 text-sm italic py-8">
+          Không có Sale nào trong cơ sở đã chọn. Bỏ filter hoặc chọn cơ sở khác.
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="card">
       <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
         <Users size={16} className="text-emerald-600" />
         {showTabs
-          ? `Khách hàng theo Sale (${salesList.length} người · ${salesList.reduce((s, x) => s + x.totals.count, 0)} giao dịch)`
+          ? `Khách hàng theo Sale (${filteredSalesList.length} người · ${filteredSalesList.reduce((s, x) => s + x.totals.count, 0)} giao dịch)`
           : `Khách hàng của ${active.saleName || 'tôi'} (${active.totals.count} giao dịch)`
         }
       </h3>
 
-      {/* Tabs ngang — U3: ẩn khi chỉ 1 Sale; U5: overflow-x-auto cho CEO nhiều Sale */}
+      {/* V8.X: filter chip cơ sở cho top role */}
+      {showBranchFilter && (
+        <BranchChipFilter
+          options={branchOptions}
+          selected={selectedBranches}
+          onToggle={toggleBranch}
+          onClear={clearBranches}
+          totalSaleCount={salesList.length}
+        />
+      )}
+
+      {/* Tabs ngang — ẩn khi chỉ 1 Sale; overflow-x-auto cho top role nhiều Sale */}
       {showTabs && (
         <div className="flex gap-1.5 mb-4 border-b border-slate-200 pb-3 overflow-x-auto" role="tablist">
-          {salesList.map((s) => {
+          {filteredSalesList.map((s) => {
             const isActive = s.saleId === activeSaleId;
             return (
               <button key={s.saleId} type="button" onClick={() => setActiveSaleId(s.saleId)}
@@ -505,10 +578,12 @@ function CustomersBySaleSection({ salesCustomers }: { salesCustomers: Record<str
                 }`}>
                 <span className="text-xs font-semibold flex items-center gap-1.5">
                   {s.saleName || '(chưa rõ)'}
-                  {/* U4 audit fix: hiển thị branchName thay vì branchId code */}
-                  <span className={`text-xs px-1.5 py-0.5 rounded font-normal ${isActive ? 'bg-white/20' : 'bg-slate-100 text-slate-500'}`}>
-                    {s.branchName || s.branchId}
-                  </span>
+                  {/* V8.X: chip cơ sở ẨN khi đang focus 1 cơ sở (gọn hơn theo yêu cầu user) */}
+                  {!hideSaleBranchChip && (
+                    <span className={`text-xs px-1.5 py-0.5 rounded font-normal ${isActive ? 'bg-white/20' : 'bg-slate-100 text-slate-500'}`}>
+                      {s.branchName || s.branchId}
+                    </span>
+                  )}
                 </span>
                 <span className={`text-xs tabular-nums ${isActive ? 'opacity-90' : 'text-slate-500'}`}>
                   {s.totals.count} GD · {fmtMoney(s.totals.sales)}
@@ -602,6 +677,60 @@ function CustomersBySaleSection({ salesCustomers }: { salesCustomers: Record<str
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+/** V8.X (2026-06-19): chip filter cơ sở multi-select cho top role.
+ *  Chip "Tất cả" reset filter. Multi-select để xem 2-3 cơ sở cùng lúc.
+ *  Mỗi chip cơ sở hiển thị (count) = số Sale active trong tháng. */
+function BranchChipFilter({ options, selected, onToggle, onClear, totalSaleCount }: {
+  options: Array<{ branchId: string; branchName: string; saleCount: number }>;
+  selected: Set<string>;
+  onToggle: (bid: string) => void;
+  onClear: () => void;
+  totalSaleCount: number;
+}) {
+  const isAll = selected.size === 0;
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 mb-3">
+      <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 mr-1">Cơ sở:</span>
+      <button
+        type="button"
+        onClick={onClear}
+        aria-pressed={isAll}
+        className={`shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition ring-1 ${
+          isAll
+            ? 'bg-emerald-600 text-white ring-emerald-600'
+            : 'bg-white text-slate-600 ring-slate-200 hover:bg-slate-50'
+        }`}
+      >
+        Tất cả
+        <span className={`text-xs tabular-nums ${isAll ? 'opacity-90' : 'text-slate-400'}`}>
+          ({totalSaleCount})
+        </span>
+      </button>
+      {options.map((opt) => {
+        const active = selected.has(opt.branchId);
+        return (
+          <button
+            key={opt.branchId}
+            type="button"
+            onClick={() => onToggle(opt.branchId)}
+            aria-pressed={active}
+            className={`shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition ring-1 ${
+              active
+                ? 'bg-emerald-600 text-white ring-emerald-600'
+                : 'bg-white text-slate-600 ring-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            {opt.branchName}
+            <span className={`text-xs tabular-nums ${active ? 'opacity-90' : 'text-slate-400'}`}>
+              ({opt.saleCount})
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }
