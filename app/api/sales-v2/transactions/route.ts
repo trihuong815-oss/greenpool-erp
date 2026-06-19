@@ -130,6 +130,8 @@ export async function POST(req: NextRequest) {
     }
 
     // V6 PT: nếu gói isCustomQuantity → server enforce packageValue = quantity × unitPrice
+    // V8.Y manual: nếu gói manualPriceWithQuantity → Sale tự nhập packageValue + qty (note),
+    //              KHÔNG enforce qty×unitPrice, unitPrice = null.
     let finalPackageValue = inputPackageValue;
     let finalQuantity: number | null = null;
     let finalUnitPrice: number | null = null;
@@ -143,6 +145,17 @@ export async function POST(req: NextRequest) {
       finalQuantity = inputQuantity;
       finalUnitPrice = inputUnitPrice;
       finalPackageValue = inputQuantity * inputUnitPrice;
+    } else if (pkg.manualPriceWithQuantity && transactionType !== 'thanh_toan_not') {
+      // Manual mode: bắt buộc nhập số buổi (>0) + packageValue (>0). KHÔNG enforce qty×unitPrice.
+      if (inputQuantity == null || !Number.isFinite(inputQuantity) || inputQuantity <= 0) {
+        return NextResponse.json({ error: 'Gói này phải nhập Số buổi học (>0) để note thông tin' }, { status: 400 });
+      }
+      if (!Number.isFinite(inputPackageValue) || inputPackageValue <= 0) {
+        return NextResponse.json({ error: 'Gói này phải tự nhập Giá trị gói (>0)' }, { status: 400 });
+      }
+      finalQuantity = inputQuantity;
+      finalUnitPrice = null; // mode này KHÔNG có đơn giá
+      finalPackageValue = inputPackageValue;
     }
     // ─── V7 Promo apply ───
     // finalPackageValue (lúc này) = basePackageValue TRƯỚC promo.
@@ -179,6 +192,7 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: `Chương trình "${p.name}" không áp dụng cho gói "${pkg.name}"` }, { status: 400 });
         }
         if (p.promoType === 'bonus_sessions' && pkg.isCustomQuantity !== true) {
+          // Manual mode (HB CLB Kid/Aqua) cũng KHÔNG nhận "tặng buổi" vì qty là note, không phải đơn vị bán.
           return NextResponse.json({ error: `"Tặng buổi" chỉ áp gói PT` }, { status: 400 });
         }
       }
@@ -241,6 +255,8 @@ export async function POST(req: NextRequest) {
       unitPrice: finalUnitPrice,
       packageIsCustomQuantity: pkg.isCustomQuantity === true,
       packageUnitName: pkg.unitName ?? '',
+      // V8.Y (2026-06-19): snapshot mode "Sale tự nhập giá + ghi số buổi"
+      packageManualPriceWithQty: pkg.manualPriceWithQuantity === true,
       // V7 Promo snapshots (immutable per tx — admin sửa promo sau không ảnh hưởng tx này)
       promoIds: promoSnapshots.map((s) => s.id),
       promoSnapshots,

@@ -137,9 +137,10 @@ export function PackagesClient({ allowedBranches }: Props) {
     isCustomQuantity: boolean;
     unitName: string;
     defaultUnitPrice: number;
+    manualPriceWithQuantity: boolean;
   }) {
     if (!packageModal) return;
-    const { name, defaultPrice, isCustomQuantity, unitName, defaultUnitPrice } = payload;
+    const { name, defaultPrice, isCustomQuantity, unitName, defaultUnitPrice, manualPriceWithQuantity } = payload;
     try {
       if (packageModal.mode === 'add') {
         const next = (packages[packageModal.groupId] ?? []).at(-1)?.sortOrder ?? 0;
@@ -147,11 +148,13 @@ export function PackagesClient({ allowedBranches }: Props) {
           name, branchId, groupId: packageModal.groupId, defaultPrice,
           sortOrder: next + 1,
           isCustomQuantity, unitName, defaultUnitPrice,
+          manualPriceWithQuantity,
         });
         showToast('success', 'Đã thêm gói');
       } else {
         await packagesApi.update(packageModal.pkg.id, {
           name, defaultPrice, isCustomQuantity, unitName, defaultUnitPrice,
+          manualPriceWithQuantity,
         });
         showToast('success', 'Đã cập nhật gói');
       }
@@ -277,10 +280,18 @@ export function PackagesClient({ allowedBranches }: Props) {
                             <span>{p.name}</span>
                             {p.isCustomQuantity && (
                               <span
-                                className="text-[10px] uppercase font-bold text-violet-700 bg-violet-100 px-1.5 py-0.5 rounded ring-1 ring-violet-200"
+                                className="text-xs uppercase font-bold text-violet-700 bg-violet-100 px-1.5 py-0.5 rounded ring-1 ring-violet-200"
                                 title={`Tính theo ${p.unitName || 'buổi'} (PT) — Sale nhập số ${p.unitName || 'buổi'} × đơn giá`}
                               >
                                 PT · {p.unitName || 'buổi'}
+                              </span>
+                            )}
+                            {p.manualPriceWithQuantity && (
+                              <span
+                                className="text-xs uppercase font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded ring-1 ring-amber-200"
+                                title="Sale tự nhập giá trị gói + ghi số buổi (vd HB CLB Kid/Aqua)"
+                              >
+                                Tự nhập · ghi buổi
                               </span>
                             )}
                           </div>
@@ -399,6 +410,7 @@ function PackageModal({ state, onClose, onSave }: {
     isCustomQuantity: boolean;
     unitName: string;
     defaultUnitPrice: number;
+    manualPriceWithQuantity: boolean;
   }) => Promise<void>;
 }) {
   const isEdit = state.mode === 'edit';
@@ -409,6 +421,10 @@ function PackageModal({ state, onClose, onSave }: {
   const [unitName, setUnitName] = useState(isEdit ? (state.pkg.unitName ?? 'buổi') : 'buổi');
   const [unitPriceStr, setUnitPriceStr] = useState(
     isEdit && state.pkg.defaultUnitPrice ? formatVND(state.pkg.defaultUnitPrice) : ''
+  );
+  // V8.Y (2026-06-19): Manual price + ghi số buổi (HB CLB Kid/Aqua)
+  const [manualPriceWithQuantity, setManualPriceWithQuantity] = useState(
+    isEdit ? (state.pkg.manualPriceWithQuantity === true) : false
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -426,6 +442,10 @@ function PackageModal({ state, onClose, onSave }: {
     const trimmed = name.trim();
     if (trimmed.length < 1) { setError('Tên gói không được rỗng'); return; }
     if (trimmed.length > 100) { setError('Tên gói tối đa 100 ký tự'); return; }
+    if (isCustomQuantity && manualPriceWithQuantity) {
+      setError('Không thể bật cùng lúc "PT theo buổi × đơn giá" và "Tự nhập giá + ghi số buổi"');
+      return;
+    }
     const price = parseVNDInput(priceStr);
     if (price < 0) { setError('Đơn giá phải ≥ 0'); return; }
     const unitPrice = parseVNDInput(unitPriceStr);
@@ -440,6 +460,7 @@ function PackageModal({ state, onClose, onSave }: {
         isCustomQuantity,
         unitName: isCustomQuantity ? cleanUnitName : '',
         defaultUnitPrice: isCustomQuantity ? unitPrice : 0,
+        manualPriceWithQuantity,
       });
     } catch (e: any) { setError(e.message); setSaving(false); }
   }
@@ -469,9 +490,12 @@ function PackageModal({ state, onClose, onSave }: {
             <input
               type="checkbox"
               checked={isCustomQuantity}
-              onChange={(e) => setIsCustomQuantity(e.target.checked)}
-              disabled={saving}
-              className="mt-0.5 w-4 h-4 accent-emerald-600"
+              onChange={(e) => {
+                setIsCustomQuantity(e.target.checked);
+                if (e.target.checked) setManualPriceWithQuantity(false);
+              }}
+              disabled={saving || manualPriceWithQuantity}
+              className="mt-0.5 w-4 h-4 accent-emerald-600 disabled:opacity-50"
             />
             <div className="flex-1">
               <div className="text-sm font-semibold text-slate-800">Gói tính theo buổi / lượt (PT, học PT)</div>
@@ -483,8 +507,36 @@ function PackageModal({ state, onClose, onSave }: {
           </label>
         </div>
 
+        {/* V8.Y Manual price + ghi số buổi toggle (HB CLB Kid/Aqua) */}
+        <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3 space-y-2">
+          <label className="flex items-start gap-2.5 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={manualPriceWithQuantity}
+              onChange={(e) => {
+                setManualPriceWithQuantity(e.target.checked);
+                if (e.target.checked) setIsCustomQuantity(false);
+              }}
+              disabled={saving || isCustomQuantity}
+              className="mt-0.5 w-4 h-4 accent-amber-600 disabled:opacity-50"
+            />
+            <div className="flex-1">
+              <div className="text-sm font-semibold text-slate-800">Sale tự nhập giá + ghi số buổi (HB CLB Kid/Aqua)</div>
+              <div className="text-xs text-slate-500 mt-0.5">
+                Sale tự nhập <strong>giá trị gói</strong> + <strong>số buổi học</strong> (chỉ để note thông tin).
+                KHÔNG có ô đơn giá, KHÔNG có công thức × tự động. Dùng cho gói linh hoạt giá theo từng khách.
+              </div>
+            </div>
+          </label>
+        </div>
+
         {!isCustomQuantity && (
-          <FieldLabel label="Đơn giá mặc định (VND)" hint="Có thể chỉnh khi nhập doanh số. Format tự động theo VND.">
+          <FieldLabel
+            label="Đơn giá mặc định (VND)"
+            hint={manualPriceWithQuantity
+              ? 'Mode "Sale tự nhập": đây là giá GỢI Ý mặc định. Sale có thể đè khi nhập tx.'
+              : 'Có thể chỉnh khi nhập doanh số. Format tự động theo VND.'}
+          >
             <div className="relative">
               <input
                 value={priceStr}

@@ -25,6 +25,9 @@ export interface PackageItem {
   isCustomQuantity?: boolean;
   unitName?: string;           // 'buổi' / 'lượt' / ...
   defaultUnitPrice?: number;   // đơn giá / buổi gợi ý
+  // V8.Y (2026-06-19): Manual mode — Sale tự nhập packageValue + ghi số buổi (note).
+  // Mutually exclusive với isCustomQuantity. Dùng cho HB CLB Kid/Aqua.
+  manualPriceWithQuantity?: boolean;
 }
 
 async function jsonOrThrow<T>(res: Response): Promise<T> {
@@ -135,6 +138,7 @@ export const packagesApi = {
   async create(payload: {
     name: string; branchId: string; groupId: string; defaultPrice: number; sortOrder?: number;
     isCustomQuantity?: boolean; unitName?: string; defaultUnitPrice?: number;
+    manualPriceWithQuantity?: boolean;
   }): Promise<PackageItem> {
     const res = await fetch('/api/packages', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },

@@ -41,6 +41,9 @@ export interface LocalRow {
   isChildPackage: boolean;
   // V6 2026-06-17 PT: snapshot từ pkg.isCustomQuantity khi chọn gói (resolve client-side)
   packageIsCustomQuantity: boolean;
+  // V8.Y 2026-06-19: Manual mode (HB CLB Kid/Aqua) — Sale tự nhập packageValue + ghi số buổi (note).
+  // Mutually exclusive với packageIsCustomQuantity. Không có ô đơn giá.
+  packageManualPriceWithQty: boolean;
   transactionType: TransactionType | null;
   paymentMethod: PaymentMethod | null;
   packageValue: string;     // dạng string để input hiển thị OK
@@ -72,6 +75,7 @@ export function makeEmptyRow(): LocalRow {
     serviceGroup: '',
     isChildPackage: false,
     packageIsCustomQuantity: false,
+    packageManualPriceWithQty: false,
     transactionType: null,
     paymentMethod: null,
     packageValue: '',
@@ -172,6 +176,12 @@ export function validateRow(r: LocalRow): { ok: true } | { ok: false; error: str
     const u = Number(r.unitPrice);
     if (!Number.isFinite(u) || u < 0) return { ok: false, error: 'Gói PT — đơn giá / buổi không hợp lệ' };
     if (q * u <= 0) return { ok: false, error: 'Giá trị gói (số buổi × đơn giá) phải > 0' };
+  } else if (r.packageManualPriceWithQty) {
+    // V8.Y manual mode: Sale tự nhập packageValue + ghi số buổi (note bắt buộc >0)
+    const q = Number(r.quantity);
+    if (!Number.isFinite(q) || q <= 0) return { ok: false, error: 'Gói này phải nhập Số buổi (>0)' };
+    const pv = Number(r.packageValue);
+    if (!Number.isFinite(pv) || pv <= 0) return { ok: false, error: 'Gói này Sale tự nhập Giá trị gói (>0)' };
   } else {
     const pv = Number(r.packageValue);
     if (!Number.isFinite(pv) || pv <= 0) return { ok: false, error: 'Gói chưa có giá — báo admin cập nhật ở /doanh-so/packages' };
@@ -352,9 +362,11 @@ function SavedRow({ idx, row, packages, canEdit, batchStatus, branchId, onUpdate
 }) {
   // PT mode: snapshot từ doc (packageIsCustomQuantity). Doc cũ chưa có field → false.
   const isPT = row.packageIsCustomQuantity === true;
+  // V8.Y manual mode: snapshot từ doc (packageManualPriceWithQty). Doc cũ → false.
+  const isManual = row.packageManualPriceWithQty === true;
   const qty = row.quantity ?? 0;
   const up = row.unitPrice ?? 0;
-  // PT: pv tính lại từ qty/up (tránh stale khi user vừa edit qty, server PATCH chưa response)
+  // PT: pv tính lại từ qty/up; manual + non-PT: pv = field packageValue (Sale tự nhập/auto-fill)
   const effectivePv = row.transactionType === 'thanh_toan_not' ? 0 : (isPT ? qty * up : row.packageValue);
   const debt = Math.max(0, effectivePv - row.collectedToday);
   // V6 review status visual indicator: chỉ hiển thị badge khi batch returned
@@ -408,11 +420,16 @@ function SavedRow({ idx, row, packages, canEdit, batchStatus, branchId, onUpdate
                 serviceGroup: pkg.serviceGroup,
                 isChildPackage: pkg.isChildPackage,
                 packageIsCustomQuantity: pkg.isCustomQuantity === true,
+                packageManualPriceWithQty: pkg.manualPriceWithQuantity === true,
               };
               // PT → seed unitPrice from default nếu doc chưa có; clear quantity
               if (pkg.isCustomQuantity) {
                 patch.unitPrice = up > 0 ? up : (pkg.defaultUnitPrice ?? null);
                 patch.quantity = null;
+              } else if (pkg.manualPriceWithQuantity) {
+                // V8.Y manual mode → Sale tự nhập packageValue + qty (note). Clear unitPrice.
+                patch.quantity = null;
+                patch.unitPrice = null;
               } else {
                 // Không phải PT → clear PT fields để server không auto-compute
                 patch.quantity = null;
@@ -434,9 +451,9 @@ function SavedRow({ idx, row, packages, canEdit, batchStatus, branchId, onUpdate
       <Td>
         <SourceSelect value={row.source} disabled={!canEdit} onChange={(v) => onUpdate({ source: v })} />
       </Td>
-      {/* V6 PT (2026-06-18): 2 ô NGAY CẠNH Gói — emphasis style khi PT để Sale nhận ra ô cần nhập */}
+      {/* V6 PT + V8.Y Manual (2026-06-19): Số buổi cho cả PT và Manual; Đơn giá CHỈ PT */}
       <Td align="right">
-        {isPT && row.transactionType !== 'thanh_toan_not'
+        {(isPT || isManual) && row.transactionType !== 'thanh_toan_not'
           ? <NumberCell
               value={qty}
               disabled={!canEdit}
@@ -563,9 +580,11 @@ function LocalRowItem({ idx, row, packages, canEdit, branchId, batchMonth, onUpd
   // 'thanh_toan_not' = trả nốt → KHÔNG tính doanh số mới + debt = 0 (sẽ link gd cũ)
   const isThanhToanNot = row.transactionType === 'thanh_toan_not';
   const isPT = row.packageIsCustomQuantity;
+  // V8.Y manual mode (HB CLB Kid/Aqua) — Sale tự nhập packageValue + ghi số buổi (note)
+  const isManual = row.packageManualPriceWithQty;
   const qty = Number(row.quantity) || 0;
   const up = Number(row.unitPrice) || 0;
-  // V7 Promo: base = qty*up (PT) hoặc packageValue field (non-PT). Final = base - discount.
+  // base: PT = qty×up; Manual & Non-PT = packageValue field. Final = base - discount.
   const base = isThanhToanNot ? 0 : (isPT ? qty * up : (Number(row.packageValue) || 0));
   const discount = isThanhToanNot ? 0 : discountSumOf(row);
   const pv = Math.max(0, base - discount);
@@ -609,7 +628,7 @@ function LocalRowItem({ idx, row, packages, canEdit, branchId, batchMonth, onUpd
             if (!pkg) {
               onUpdate({
                 packageId: null, packageCode: '', packageName: '', serviceGroup: '',
-                isChildPackage: false, packageIsCustomQuantity: false,
+                isChildPackage: false, packageIsCustomQuantity: false, packageManualPriceWithQty: false,
                 quantity: '', unitPrice: '',
               });
               return;
@@ -627,9 +646,29 @@ function LocalRowItem({ idx, row, packages, canEdit, branchId, batchMonth, onUpd
                 serviceGroup: pkg.serviceGroup,
                 isChildPackage: pkg.isChildPackage,
                 packageIsCustomQuantity: true,
+                packageManualPriceWithQty: false,
                 packageValue: '', // auto-compute, không dùng
                 unitPrice: seededUnitPrice,
                 // Giữ nguyên row.quantity nếu user đã nhập (vd đổi gói PT khác)
+              });
+              return;
+            }
+            // V8.Y (2026-06-19) Manual mode (HB CLB Kid/Aqua):
+            // Sale TỰ NHẬP packageValue (suggest từ defaultPrice nếu admin có set) + ghi số buổi.
+            // KHÔNG có unitPrice.
+            if (pkg.manualPriceWithQuantity) {
+              onUpdate({
+                packageId: pkg.id,
+                packageCode: pkg.code,
+                packageName: pkg.name,
+                serviceGroup: pkg.serviceGroup,
+                isChildPackage: pkg.isChildPackage,
+                packageIsCustomQuantity: false,
+                packageManualPriceWithQty: true,
+                // Suggest from defaultPrice nếu admin có; nếu không → trống cho Sale nhập.
+                packageValue: pkg.defaultPrice > 0 ? String(pkg.defaultPrice) : '',
+                quantity: '', // bắt buộc Sale nhập
+                unitPrice: '',
               });
               return;
             }
@@ -643,6 +682,7 @@ function LocalRowItem({ idx, row, packages, canEdit, branchId, batchMonth, onUpd
               serviceGroup: pkg.serviceGroup,
               isChildPackage: pkg.isChildPackage,
               packageIsCustomQuantity: false,
+              packageManualPriceWithQty: false,
               packageValue: pkg.defaultPrice > 0 ? String(pkg.defaultPrice) : '',
               quantity: '',
               unitPrice: '',
@@ -661,9 +701,9 @@ function LocalRowItem({ idx, row, packages, canEdit, branchId, batchMonth, onUpd
       <Td>
         <SourceSelect value={row.source} disabled={!canEdit} onChange={(v) => onUpdate({ source: v })} />
       </Td>
-      {/* V6 PT (2026-06-18): 2 ô PT NGAY CẠNH Gói — emphasis style khi PT để Sale nhận ra ô cần nhập */}
+      {/* V6 PT + V8.Y Manual (2026-06-19): Số buổi cho cả PT và Manual; Đơn giá CHỈ PT */}
       <Td align="right">
-        {isPT && !isThanhToanNot
+        {(isPT || isManual) && !isThanhToanNot
           ? <NumberCell
               value={qty}
               disabled={!canEdit}
@@ -733,6 +773,15 @@ function LocalRowItem({ idx, row, packages, canEdit, branchId, batchMonth, onUpd
             title="Auto = Số buổi × Đơn giá / buổi (TRƯỚC khuyến mãi)">
             {base.toLocaleString()}
           </span>
+        ) : isManual ? (
+          // V8.Y manual mode: Sale TỰ NHẬP giá trị gói (suggest từ defaultPrice nếu admin có)
+          <NumberCell
+            value={Number(row.packageValue) || 0}
+            disabled={!canEdit}
+            emphasis
+            placeholder="Sale tự nhập"
+            onCommit={(v) => onUpdate({ packageValue: v > 0 ? String(v) : '' })}
+          />
         ) : base > 0 ? (
           // V7 (2026-06-18): Auto-fill từ pkg.defaultPrice — Sale KHÔNG sửa.
           <span className="block text-right tabular-nums text-slate-700 font-medium px-2 py-1 bg-slate-50 rounded"
@@ -741,7 +790,7 @@ function LocalRowItem({ idx, row, packages, canEdit, branchId, batchMonth, onUpd
           </span>
         ) : (
           // pkg chưa có defaultPrice hoặc chưa chọn gói
-          <span className="block text-right text-[11px] text-amber-600 italic px-2"
+          <span className="block text-right text-xs text-amber-600 italic px-2"
             title="Gói chưa có giá — báo admin cập nhật giá ở /doanh-so/packages">
             {row.packageId ? 'Gói chưa có giá' : '—'}
           </span>

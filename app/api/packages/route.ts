@@ -24,6 +24,8 @@ function serialize(id: string, data: Record<string, any>): Record<string, any> {
   out.isCustomQuantity = data.isCustomQuantity === true;
   out.unitName = data.unitName ? String(data.unitName) : '';
   out.defaultUnitPrice = data.defaultUnitPrice != null ? Number(data.defaultUnitPrice) : 0;
+  // V8.Y (2026-06-19): manual price + ghi số buổi (vd HB CLB Kid/Aqua)
+  out.manualPriceWithQuantity = data.manualPriceWithQuantity === true;
   return out;
 }
 
@@ -75,6 +77,8 @@ export async function POST(req: NextRequest) {
       ? (String(body?.unitName ?? '').trim() || 'buổi').slice(0, 20)
       : '';
     const defaultUnitPrice: number = isCustomQuantity ? Number(body?.defaultUnitPrice ?? 0) : 0;
+    // V8.Y (2026-06-19) Manual mode: Sale tự nhập packageValue + ghi số buổi
+    const manualPriceWithQuantity: boolean = body?.manualPriceWithQuantity === true;
 
     if (!name || !branchId || !groupId) {
       return NextResponse.json({ error: 'Thiếu name/branchId/groupId' }, { status: 400 });
@@ -84,6 +88,10 @@ export async function POST(req: NextRequest) {
     }
     if (isCustomQuantity && (defaultUnitPrice < 0 || !Number.isFinite(defaultUnitPrice))) {
       return NextResponse.json({ error: 'defaultUnitPrice không hợp lệ' }, { status: 400 });
+    }
+    // V8.Y mutex: 2 mode loại trừ nhau
+    if (isCustomQuantity && manualPriceWithQuantity) {
+      return NextResponse.json({ error: 'Không thể bật cùng lúc "PT theo buổi × đơn giá" và "Sale tự nhập giá + ghi số buổi"' }, { status: 400 });
     }
 
     if (!canCreatePackage(caller.profile, { branchId })) {
@@ -102,6 +110,7 @@ export async function POST(req: NextRequest) {
     const ref = await db.collection(COL).add({
       name, groupId, branchId, defaultPrice, sortOrder, active: true,
       isCustomQuantity, unitName, defaultUnitPrice,
+      manualPriceWithQuantity,
       createdAt: now, createdBy: caller.profile.uid,
       updatedAt: now, updatedBy: caller.profile.uid,
     });
@@ -113,7 +122,7 @@ export async function POST(req: NextRequest) {
       userId: caller.profile.uid,
       branchId,
       before: null,
-      after: { id: ref.id, name, groupId, defaultPrice, sortOrder, isCustomQuantity, unitName, defaultUnitPrice },
+      after: { id: ref.id, name, groupId, defaultPrice, sortOrder, isCustomQuantity, unitName, defaultUnitPrice, manualPriceWithQuantity },
       actorName: caller.actorName,
       actorRole: caller.actorRole,
       source: 'api',

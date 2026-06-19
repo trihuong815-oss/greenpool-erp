@@ -75,6 +75,8 @@ export function serializeTransaction(id: string, raw: Record<string, any>): Sale
     unitPrice: raw.unitPrice != null ? Number(raw.unitPrice) : null,
     packageIsCustomQuantity: raw.packageIsCustomQuantity === true,
     packageUnitName: raw.packageUnitName ? String(raw.packageUnitName) : '',
+    // V8.Y (2026-06-19) — manual price + ghi số buổi mode (HB CLB Kid/Aqua)
+    packageManualPriceWithQty: raw.packageManualPriceWithQty === true,
     // V7 Promo (2026-06-18) — snapshot fields, doc cũ chưa có → fallback rỗng/0
     promoIds: Array.isArray(raw.promoIds) ? raw.promoIds.map(String) : [],
     promoSnapshots: Array.isArray(raw.promoSnapshots) ? raw.promoSnapshots.map((s: any) => ({

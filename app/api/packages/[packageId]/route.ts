@@ -13,6 +13,8 @@ const PATCH_FIELDS = new Set([
   'name', 'defaultPrice', 'sortOrder', 'active',
   // V6 PT (2026-06-17): gói tính theo buổi
   'isCustomQuantity', 'unitName', 'defaultUnitPrice',
+  // V8.Y (2026-06-19): manual price + ghi số buổi
+  'manualPriceWithQuantity',
 ]);
 
 function sanitize(patch: Record<string, unknown>): Record<string, unknown> {
@@ -23,7 +25,7 @@ function sanitize(patch: Record<string, unknown>): Record<string, unknown> {
       const n = Number(v);
       if (n < 0 || !Number.isFinite(n)) continue;
       out[k] = n;
-    } else if (k === 'isCustomQuantity') {
+    } else if (k === 'isCustomQuantity' || k === 'manualPriceWithQuantity') {
       out[k] = v === true;
     } else if (k === 'unitName') {
       out[k] = String(v ?? '').trim().slice(0, 20);
@@ -48,6 +50,17 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ packageId
 
     if (!canUpdatePackage(caller.profile, { branchId: current.branchId }, { branchId: current.branchId })) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // V8.Y mutex: kết hợp current + patch, kiểm tra không bật cả 2 mode
+    const finalIsCustomQty = patch.isCustomQuantity !== undefined
+      ? patch.isCustomQuantity === true
+      : current.isCustomQuantity === true;
+    const finalManualPwq = patch.manualPriceWithQuantity !== undefined
+      ? patch.manualPriceWithQuantity === true
+      : current.manualPriceWithQuantity === true;
+    if (finalIsCustomQty && finalManualPwq) {
+      return NextResponse.json({ error: 'Không thể bật cùng lúc "PT theo buổi × đơn giá" và "Sale tự nhập giá + ghi số buổi"' }, { status: 400 });
     }
 
     const now = new Date();

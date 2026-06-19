@@ -127,6 +127,10 @@ export interface SalesTransaction {
   packageIsCustomQuantity?: boolean;
   // Snapshot unitName ('buổi'/'lượt'/...) — UI/báo cáo dùng để hiển thị "10 buổi" / "30 lượt".
   packageUnitName?: string;
+  // V8.Y (2026-06-19) — gói "tự nhập giá + ghi số buổi" (vd HB CLB Kid/Aqua).
+  // Khác PT (isCustomQuantity): qty CHỈ là note, packageValue Sale tự nhập (KHÔNG enforce
+  // qty×unitPrice). 2 mode mutually exclusive. Snapshot vào tx để lock hành vi sau khi admin đổi.
+  packageManualPriceWithQty?: boolean;
   // V7 Promo (2026-06-18): chương trình khuyến mãi áp dụng (tối đa 2: 1 giảm + 1 tặng)
   // Tx doc lưu snapshot full vào promoSnapshots → admin sửa promo sau không phá tx cũ.
   // packageValue (final billed) = basePackageValue - discountAmount (server enforce)

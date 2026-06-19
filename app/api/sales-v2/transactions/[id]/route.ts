@@ -119,6 +119,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     // Nếu đổi packageId → re-resolve package info
     let resolvedIsCustomQty: boolean | undefined;
+    let resolvedManualPwq: boolean | undefined;
     if ('packageId' in updates) {
       const pkg = await getPackageById(String(updates.packageId));
       if (!pkg) return NextResponse.json({ error: 'Gói không tồn tại' }, { status: 400 });
@@ -129,7 +130,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       updates.isChildPackage = pkg.isChildPackage;
       updates.packageIsCustomQuantity = pkg.isCustomQuantity === true;
       updates.packageUnitName = pkg.unitName ?? '';
+      // V8.Y (2026-06-19): snapshot manual mode
+      updates.packageManualPriceWithQty = pkg.manualPriceWithQuantity === true;
       resolvedIsCustomQty = pkg.isCustomQuantity;
+      resolvedManualPwq = pkg.manualPriceWithQuantity;
     }
     // Validate + sanitize quantity/unitPrice
     if ('quantity' in updates) {
@@ -146,8 +150,23 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const finalCollected = 'collectedToday' in updates ? updates.collectedToday : Number(tx.collectedToday ?? 0);
     // PT: auto-compute packageValue khi gói tính theo buổi (resolvedIsCustomQty hoặc đã lưu)
     const isCustomQty = resolvedIsCustomQty ?? (tx.packageIsCustomQuantity === true);
+    // V8.Y: manual mode — Sale tự nhập packageValue + qty là note (required >0). Không enforce formula.
+    const isManualMode = resolvedManualPwq ?? (tx.packageManualPriceWithQty === true);
     const finalQuantity = 'quantity' in updates ? updates.quantity : (tx.quantity ?? null);
     const finalUnitPrice = 'unitPrice' in updates ? updates.unitPrice : (tx.unitPrice ?? null);
+
+    // Manual mode: validate quantity required + clear unitPrice (mode này không có đơn giá)
+    if (isManualMode && finalTxnType !== 'thanh_toan_not') {
+      if (finalQuantity == null || Number(finalQuantity) <= 0) {
+        return NextResponse.json({ error: 'Gói này phải có Số buổi (>0)' }, { status: 400 });
+      }
+      // Force unitPrice = null (gói manual không dùng đơn giá)
+      updates.unitPrice = null;
+      // packageValue phải > 0. Nếu user PATCH packageValue=0 → reject (block zero-value tx)
+      if ('packageValue' in updates && Number(updates.packageValue ?? 0) <= 0) {
+        return NextResponse.json({ error: 'Gói này phải có Giá trị gói (>0) — Sale tự nhập' }, { status: 400 });
+      }
+    }
 
     // V7 Promo audit fix (2026-06-18): luôn compute base TRƯỚC, recompute discount từ
     // snapshots, rồi final = base - discount. Đồng bộ 3 field: basePackageValue +

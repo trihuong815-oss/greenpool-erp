@@ -26,6 +26,9 @@ export interface SalesV2Package {
   isCustomQuantity?: boolean;
   unitName?: string;        // 'buổi' / 'lượt' (default 'buổi' nếu isCustomQuantity)
   defaultUnitPrice?: number; // đơn giá/buổi mặc định, Sale có thể sửa
+  // V8.Y (2026-06-19) — Manual mode: Sale tự nhập packageValue + ghi số buổi (note).
+  // Mutually exclusive với isCustomQuantity. Dùng cho HB CLB Kid/Aqua.
+  manualPriceWithQuantity?: boolean;
 }
 
 function detectChildPackage(packageName: string, groupName: string): boolean {
@@ -87,6 +90,7 @@ export async function listPackagesForBranch(branchId: BranchId): Promise<SalesV2
       isCustomQuantity: data.isCustomQuantity === true,
       unitName: data.unitName ? String(data.unitName) : undefined,
       defaultUnitPrice: data.defaultUnitPrice != null ? Number(data.defaultUnitPrice) : undefined,
+      manualPriceWithQuantity: data.manualPriceWithQuantity === true,
     });
   });
 
@@ -123,5 +127,6 @@ export async function getPackageById(packageId: string): Promise<SalesV2Package 
     isCustomQuantity: data.isCustomQuantity === true,
     unitName: data.unitName ? String(data.unitName) : undefined,
     defaultUnitPrice: data.defaultUnitPrice != null ? Number(data.defaultUnitPrice) : undefined,
+    manualPriceWithQuantity: data.manualPriceWithQuantity === true,
   };
 }

@@ -271,6 +271,10 @@ function CardEditor({
   const isPT = row.savedRow
     ? (row.packageIsCustomQuantity === true)
     : (row.packageIsCustomQuantity);
+  // V8.Y manual mode (HB CLB Kid/Aqua) — Sale tự nhập packageValue + ghi số buổi (note)
+  const isManual = row.savedRow
+    ? (row.packageManualPriceWithQty === true)
+    : (row.packageManualPriceWithQty);
   const qtyNum = row.savedRow ? (row.quantity ?? 0) : (Number(row.quantity) || 0);
   const upNum = row.savedRow ? (row.unitPrice ?? 0) : (Number(row.unitPrice) || 0);
   // PT: pv = qty × up (auto). Không PT: pv lấy từ field.
@@ -348,7 +352,7 @@ function CardEditor({
             if (!pkg) {
               onUpdate({
                 packageId: null, packageCode: '', packageName: '', serviceGroup: '',
-                isChildPackage: false, packageIsCustomQuantity: false,
+                isChildPackage: false, packageIsCustomQuantity: false, packageManualPriceWithQty: false,
                 quantity: row.savedRow ? null : '', unitPrice: row.savedRow ? null : '',
               } as any);
               return;
@@ -365,8 +369,30 @@ function CardEditor({
                 serviceGroup: pkg.serviceGroup,
                 isChildPackage: pkg.isChildPackage,
                 packageIsCustomQuantity: true,
+                packageManualPriceWithQty: false,
                 packageValue: row.savedRow ? 0 : '',
                 unitPrice: seededUnitPrice,
+              } as any);
+              return;
+            }
+            // V8.Y Manual mode (HB CLB Kid/Aqua): Sale TỰ NHẬP packageValue (suggest từ
+            // defaultPrice) + ghi số buổi (note). KHÔNG có unitPrice.
+            if (pkg.manualPriceWithQuantity) {
+              const newPv = pkg.defaultPrice;
+              const packageValueToSet = newPv > 0
+                ? (row.savedRow ? newPv : String(newPv))
+                : (row.savedRow ? 0 : '');
+              onUpdate({
+                packageId: pkg.id,
+                packageCode: pkg.code,
+                packageName: pkg.name,
+                serviceGroup: pkg.serviceGroup,
+                isChildPackage: pkg.isChildPackage,
+                packageIsCustomQuantity: false,
+                packageManualPriceWithQty: true,
+                packageValue: packageValueToSet,
+                quantity: row.savedRow ? null : '', // bắt buộc Sale nhập
+                unitPrice: row.savedRow ? null : '',
               } as any);
               return;
             }
@@ -382,6 +408,7 @@ function CardEditor({
               serviceGroup: pkg.serviceGroup,
               isChildPackage: pkg.isChildPackage,
               packageIsCustomQuantity: false,
+              packageManualPriceWithQty: false,
               packageValue: packageValueToSet,
               quantity: row.savedRow ? null : '',
               unitPrice: row.savedRow ? null : '',
@@ -437,15 +464,17 @@ function CardEditor({
         </FieldLabel>
       </div>
 
-      {/* V6 PT (2026-06-17): gói tính theo buổi → 2 ô riêng, packageValue auto-readonly */}
-      {isPT && !isThanhToanNot && (
-        <div className="grid grid-cols-2 gap-2">
+      {/* V6 PT (2026-06-17) + V8.Y Manual (2026-06-19): Số buổi cho cả PT và Manual; Đơn giá CHỈ PT */}
+      {(isPT || isManual) && !isThanhToanNot && (
+        <div className={`grid ${isPT ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
           <FieldLabel label="Số buổi *">
             <MoneyInput value={qtyNum} disabled={!canEdit} onCommit={(n) => setNum('quantity', n)} />
           </FieldLabel>
-          <FieldLabel label="Đơn giá / buổi *">
-            <MoneyInput value={upNum} disabled={!canEdit} onCommit={(n) => setNum('unitPrice', n)} />
-          </FieldLabel>
+          {isPT && (
+            <FieldLabel label="Đơn giá / buổi *">
+              <MoneyInput value={upNum} disabled={!canEdit} onCommit={(n) => setNum('unitPrice', n)} />
+            </FieldLabel>
+          )}
         </div>
       )}
 
@@ -462,6 +491,9 @@ function CardEditor({
             >
               {pvNum.toLocaleString()}đ
             </div>
+          ) : isManual ? (
+            // V8.Y manual mode: Sale TỰ NHẬP (suggest từ defaultPrice)
+            <MoneyInput value={pvNum} disabled={!canEdit} onCommit={(n) => setNum('packageValue', n)} />
           ) : pvNum > 0 ? (
             // V7 (2026-06-18): Auto-fill từ pkg.defaultPrice — Sale KHÔNG sửa.
             <div

@@ -303,10 +303,13 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
           transactionType: lr.transactionType!,
           paymentMethod: lr.paymentMethod!,
           // V6 PT: gói tính theo buổi → server auto packageValue = qty × up.
-          //  Client gửi 0 cho packageValue (server sẽ override). Non-PT: gửi field.
+          //  Client gửi 0 cho packageValue (server sẽ override). Non-PT/Manual: gửi field.
+          // V8.Y Manual: Sale TỰ NHẬP packageValue + quantity (note >0); KHÔNG có unitPrice.
           packageValue: lr.packageIsCustomQuantity ? 0 : (Number(lr.packageValue) || 0),
           collectedToday: Number(lr.collectedToday) || 0,
-          quantity: lr.packageIsCustomQuantity ? (Number(lr.quantity) || null) : null,
+          quantity: (lr.packageIsCustomQuantity || lr.packageManualPriceWithQty)
+            ? (Number(lr.quantity) || null)
+            : null,
           unitPrice: lr.packageIsCustomQuantity ? (Number(lr.unitPrice) || null) : null,
           // V7 Promo: gửi promoIds (server resolve + validate combo + apply discount/bonus)
           promoIds: (lr.promoSnapshots ?? []).map((s) => s.id),
