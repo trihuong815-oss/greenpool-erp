@@ -163,11 +163,61 @@ function buildSummarySheet(wb: ExcelJS.Workbook, data: ExportData): void {
   ws.views = [{ state: 'frozen', xSplit: 0, ySplit: 1 }];
 }
 
+/** PR-6.2 (2026-06-20): Build map txId → "GD-YYYYMMDD-NNNN" và batchId → "LO-BRANCH-YYYYMMDD-NN".
+ *  Deterministic: caller phải pass transactions đã sort theo (date ASC, id ASC) để STT ổn định
+ *  giữa các lần export cùng input. Batch sort theo batchId alphabetical.
+ *  Mã ngắn CHỈ phục vụ hiển thị Excel — KHÔNG lưu Firestore, KHÔNG ảnh hưởng nghiệp vụ.
+ */
+function buildShortCodeMaps(
+  transactions: ExportTxRow[],
+  branchId: string,
+): { shortTxById: Map<string, string>; shortBatchById: Map<string, string> } {
+  // 1. Mã GD per date
+  const txIdsByDate = new Map<string, string[]>();
+  for (const tx of transactions) {
+    if (!txIdsByDate.has(tx.date)) txIdsByDate.set(tx.date, []);
+    txIdsByDate.get(tx.date)!.push(tx.id);
+  }
+  const shortTxById = new Map<string, string>();
+  for (const [date, ids] of txIdsByDate) {
+    const yyyymmdd = date.replace(/-/g, '');
+    ids.forEach((id, i) => {
+      shortTxById.set(id, `GD-${yyyymmdd}-${String(i + 1).padStart(4, '0')}`);
+    });
+  }
+
+  // 2. Mã lô per (branch, date) — branch fixed = ExportData.branchId
+  const batchDateById = new Map<string, string>();
+  for (const tx of transactions) {
+    if (tx.batchId && !batchDateById.has(tx.batchId)) batchDateById.set(tx.batchId, tx.date);
+  }
+  const batchesByDate = new Map<string, string[]>();
+  for (const [bid, date] of batchDateById) {
+    if (!batchesByDate.has(date)) batchesByDate.set(date, []);
+    batchesByDate.get(date)!.push(bid);
+  }
+  const shortBatchById = new Map<string, string>();
+  for (const [date, bids] of batchesByDate) {
+    bids.sort();  // deterministic STT
+    const yyyymmdd = date.replace(/-/g, '');
+    bids.forEach((bid, i) => {
+      shortBatchById.set(bid, `LO-${branchId}-${yyyymmdd}-${String(i + 1).padStart(2, '0')}`);
+    });
+  }
+
+  return { shortTxById, shortBatchById };
+}
+
 function buildTransactionsSheet(wb: ExcelJS.Workbook, data: ExportData): void {
   const ws = wb.addWorksheet('Chi tiết giao dịch');
+
+  // PR-6.2: tạo mã ngắn dễ đọc + giữ mã hệ thống ở cuối (hidden) cho truy vết
+  const { shortTxById, shortBatchById } = buildShortCodeMaps(data.transactions, data.branchId);
+
   ws.columns = [
     { header: 'Ngày', key: 'date', width: 12 },
-    { header: 'Mã giao dịch', key: 'id', width: 22 },
+    { header: 'Mã GD', key: 'shortTxCode', width: 22 },
+    { header: 'Mã lô', key: 'shortBatchCode', width: 22 },
     { header: 'Khách hàng', key: 'customerName', width: 24 },
     { header: 'SĐT', key: 'phone', width: 14 },
     { header: 'Gói', key: 'packageName', width: 30 },
@@ -178,8 +228,11 @@ function buildTransactionsSheet(wb: ExcelJS.Workbook, data: ExportData): void {
     { header: 'Công nợ', key: 'debtAmount', width: 16 },
     { header: 'Sale phụ trách', key: 'saleName', width: 22 },
     { header: 'Người nhập', key: 'submitterDisplay', width: 24 },
-    { header: 'Batch ID', key: 'batchId', width: 22 },
     { header: 'Trạng thái', key: 'reviewStatus', width: 14 },
+    // Mã hệ thống đặt CUỐI sheet — hidden=true. Dùng cho truy vết/audit/support khi cần
+    // (vd: support unhide qua Excel → copy ID gốc paste vào Firestore Console).
+    { header: 'Mã giao dịch hệ thống', key: 'id', width: 30, hidden: true },
+    { header: 'Mã lô hệ thống', key: 'batchId', width: 30, hidden: true },
   ];
   ws.getRow(1).font = { bold: true };
   ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0F2FE' } };
@@ -187,7 +240,8 @@ function buildTransactionsSheet(wb: ExcelJS.Workbook, data: ExportData): void {
   for (const tx of data.transactions) {
     ws.addRow({
       date: formatVnDate(tx.date),
-      id: tx.id,
+      shortTxCode: shortTxById.get(tx.id) ?? tx.id,
+      shortBatchCode: tx.batchId ? (shortBatchById.get(tx.batchId) ?? tx.batchId) : '',
       customerName: tx.customerName,
       phone: tx.phone,
       packageName: tx.packageName,
@@ -198,8 +252,9 @@ function buildTransactionsSheet(wb: ExcelJS.Workbook, data: ExportData): void {
       debtAmount: tx.debtAmount,
       saleName: tx.saleName,
       submitterDisplay: tx.submitterDisplay,
-      batchId: tx.batchId,
       reviewStatus: REVIEW_STATUS_LABEL[tx.reviewStatus] ?? tx.reviewStatus,
+      id: tx.id,
+      batchId: tx.batchId,
     });
   }
 
