@@ -5,9 +5,22 @@ import 'server-only';
 import type { AuthedCaller } from '@/lib/firebase/checklist-auth';
 import type { BranchId } from '@/lib/types';
 import { BRANCH_BY_ID, isBranchId } from '@/lib/branches';
-import { isTopAdmin } from '@/lib/permissions';
+import { isTopAdmin, QLCS_FACILITY } from '@/lib/permissions';
 import { getFirebaseAdminDb } from '@/lib/firebase/admin';
 import { COLLECTIONS } from '@/lib/firebase/collections';
+
+/** V9.4 (2026-06-20): callerBranch — facility_id từ profile, fallback QLCS_FACILITY[role_code]
+ *  cho user QLCS thiếu profile.facility_id trong DB. Trả BranchId hoặc null. */
+function callerBranchId(caller: AuthedCaller): BranchId | null {
+  const raw = caller.profile.facility_id;
+  if (raw && isBranchId(raw)) return raw;
+  const role = caller.profile.role_code ?? '';
+  if (role.startsWith('QLCS_')) {
+    const fromMap = QLCS_FACILITY[role];
+    if (fromMap && isBranchId(fromMap)) return fromMap;
+  }
+  return null;
+}
 
 export type ScopeRole =
   | 'sale'            // NV_SALE, NV_SALE_PT — chỉ batch của mình
@@ -29,9 +42,12 @@ export function getScopeRole(roleCode: string): ScopeRole | null {
   return null;
 }
 
-/** Sale có quyền tạo/sửa batch của chính mình không. */
+/** Sale (hoặc QLCS hỗ trợ) có quyền tạo/sửa batch của chính mình không.
+ *  V9.4 (2026-06-20): QLCS được nhập doanh số khi cần (anh chốt nghiệp vụ).
+ *  Vẫn dùng tên 'canSaleEnter' giữ API compat — sau này có thể rename. */
 export function canSaleEnter(roleCode: string): boolean {
-  return getScopeRole(roleCode) === 'sale';
+  const role = getScopeRole(roleCode);
+  return role === 'sale' || role === 'qlcs';
 }
 
 /** Kế toán có quyền duyệt/sửa batch không. */
@@ -64,9 +80,16 @@ export function canEditTransaction(
   tx?: { reviewStatus?: string },
 ): boolean {
   const role = getScopeRole(caller.profile.role_code);
-  if (role === 'sale') {
+  // V9.4 (2026-06-20): Sale + QLCS đều edit batch của mình (QLCS tự tạo batch riêng
+  // với saleId=uid khi hỗ trợ nhập). QLCS thêm sanity check branchId === facility (fallback
+  // qua QLCS_FACILITY map nếu profile.facility_id thiếu).
+  if (role === 'sale' || role === 'qlcs') {
     if (batch.saleId !== caller.profile.uid) return false;
-    if (batch.status === 'draft') return true; // draft = Sale đang nhập, edit tất cả
+    if (role === 'qlcs') {
+      const branch = callerBranchId(caller);
+      if (!branch || batch.branchId !== branch) return false;
+    }
+    if (batch.status === 'draft') return true; // draft = đang nhập, edit tất cả
     if (batch.status === 'returned') {
       // Chỉ sửa tx bị reject. Tx approved/pending lock.
       // Nếu không truyền tx (vd add new row trong returned mode) → cho phép (tạo mới = pending).
@@ -86,7 +109,9 @@ export function canEditTransaction(
 }
 
 /** Resolve branch + sale info từ caller. branchName fetch từ Firestore `branches` (source
- *  of truth — admin tự sửa được, không cần deploy). BRANCH_BY_ID chỉ làm fallback. */
+ *  of truth — admin tự sửa được, không cần deploy). BRANCH_BY_ID chỉ làm fallback.
+ *  V9.4 (2026-06-20): cho phép cả 'sale' và 'qlcs' role nhập. QLCS thiếu profile.facility_id
+ *  thì fallback qua QLCS_FACILITY map (vd QLCS_HM → HM). */
 export async function resolveSaleContext(caller: AuthedCaller): Promise<{
   saleId: string;
   saleName: string;
@@ -94,10 +119,11 @@ export async function resolveSaleContext(caller: AuthedCaller): Promise<{
   branchName: string;
 } | { error: string }> {
   const role = getScopeRole(caller.profile.role_code);
-  if (role !== 'sale') return { error: 'Chỉ tài khoản Sale mới được nhập' };
-  const raw = caller.profile.facility_id;
-  if (!raw || !isBranchId(raw)) return { error: 'Tài khoản Sale chưa được gán cơ sở' };
-  const branchId: BranchId = raw;
+  if (role !== 'sale' && role !== 'qlcs') {
+    return { error: 'Chỉ tài khoản Sale hoặc QLCS được nhập doanh số' };
+  }
+  const branchId = callerBranchId(caller);
+  if (!branchId) return { error: 'Tài khoản chưa được gán cơ sở' };
 
   // Fetch branchName từ Firestore — admin edit qua /users hoặc trực tiếp DB sẽ có hiệu lực ngay.
   let branchName = BRANCH_BY_ID[branchId]?.name ?? branchId;
