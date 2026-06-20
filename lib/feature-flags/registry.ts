@@ -21,6 +21,11 @@
 //
 // Server: load qua getFeatureFlag(key) (cached 60s).
 // Client: pass từ server qua props (RSC pattern).
+//
+// M2.2 PR-6.1 (2026-06-20): SỬA THỨ TỰ EVAL — allowList/allowRoles ưu tiên HƠN
+// kill switch `enabled=false`. Lý do: pattern canary chuẩn = {enabled:false,
+// allowList:[uid]} → uid trong list thấy tính năng, mọi user khác bị kill switch.
+// Trước đây kill switch đè allowList → KHÔNG canary được. Fix: allowList trước.
 
 export interface FeatureFlagDef {
   /** Slug key — KHÔNG đổi sau khi đã ghi vào Firestore. */
@@ -123,14 +128,15 @@ export function evalFlag(
   // Doc chưa tồn tại → dùng default safe.
   if (!value) return def.defaultEnabled;
 
-  // Kill switch ưu tiên cao nhất.
-  if (value.enabled === false) return false;
-
+  // Allow overrides ƯU TIÊN cao nhất — cho phép canary pattern
+  //   {enabled: false, allowList: [uid]} → uid được, others bị kill switch.
   // Canary uid.
   if (value.allowList?.includes(uid)) return true;
-
   // Canary role.
   if (value.allowRoles?.includes(roleCode)) return true;
+
+  // Kill switch — chặn full nếu không match canary ở trên.
+  if (value.enabled === false) return false;
 
   // Percentage rollout — deterministic hash uid để user lặp lại nhận cùng quyết định.
   if (typeof value.rolloutPercent === 'number' && value.rolloutPercent > 0 && value.rolloutPercent < 100) {
