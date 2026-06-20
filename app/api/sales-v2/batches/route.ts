@@ -12,7 +12,8 @@ import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-aut
 import { getScopeRole } from '@/lib/sales-v2/scope';
 import { serializeBatch } from '@/lib/sales-v2/serialize';
 import { isBranchId } from '@/lib/branches';
-import type { BatchStatus } from '@/lib/types/sales-v2';
+import type { BatchStatus, SalesDailyBatch } from '@/lib/types/sales-v2';
+import { isFlagEnabled } from '@/lib/feature-flags/server';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -66,6 +67,15 @@ export async function GET(req: NextRequest) {
     // get-or-create riêng, không qua endpoint này).
     batches = batches.filter((b) => !(b.status === 'draft' && b.totalTransactions === 0));
 
+    // M2.1 PR-4 (2026-06-20): enrich submitterRoleType — flag-gated.
+    // Flag OFF → KHÔNG fetch users → 0 extra read → response y PR-3B.
+    // Flag ON → batch fetch users.roleId qua chunk 30, derive 'sale'|'qlcs'|'other'.
+    const role_code = String(caller.profile.role_code ?? '');
+    const flagOn = await isFlagEnabled('SALES_V2_QLCS_BADGE', caller.profile.uid, role_code);
+    if (flagOn && batches.length > 0) {
+      batches = await enrichSubmitterRoleType(db, batches);
+    }
+
     return NextResponse.json({ ok: true, batches });
   } catch (err: any) {
     if (err instanceof UnauthorizedError) {
@@ -74,4 +84,43 @@ export async function GET(req: NextRequest) {
     console.error('[sales-v2/batches] GET error:', err);
     return NextResponse.json({ error: err?.message ?? 'Lỗi server' }, { status: 500 });
   }
+}
+
+/** M2.1 PR-4 (2026-06-20) — Derive submitterRoleType từ users.roleId của saleId.
+ *  Batch fetch users qua chunk 30 (Firestore 'in' limit) + cache trong Map.
+ *  Fail-safe: user delete / lookup lỗi → 'other'. KHÔNG throw. */
+async function enrichSubmitterRoleType(
+  db: FirebaseFirestore.Firestore,
+  batches: SalesDailyBatch[],
+): Promise<SalesDailyBatch[]> {
+  // Gom unique saleIds
+  const uids = Array.from(new Set(batches.map((b) => b.saleId).filter(Boolean)));
+  if (uids.length === 0) return batches;
+
+  const roleByUid = new Map<string, string>();
+  try {
+    // Chunk 30 (Firestore 'in' limit). Worst case 7 chunks cho 200 unique uids.
+    for (let i = 0; i < uids.length; i += 30) {
+      const chunk = uids.slice(i, i + 30);
+      const refs = chunk.map((u) => db.collection(COLLECTIONS.USERS).doc(u));
+      const snaps = await db.getAll(...refs);
+      snaps.forEach((s) => {
+        if (!s.exists) return;
+        const u = s.data() ?? {};
+        roleByUid.set(s.id, String(u.roleId ?? ''));
+      });
+    }
+  } catch (e: any) {
+    console.warn('[sales-v2/batches] enrich users fail (silent fallback):', e?.message);
+    // Trả về batches nguyên — undefined submitterRoleType. UI tự ẩn badge.
+    return batches;
+  }
+
+  return batches.map((b) => {
+    const role = roleByUid.get(b.saleId) ?? '';
+    let kind: 'sale' | 'qlcs' | 'other' = 'other';
+    if (role === 'NV_SALE' || role === 'NV_SALE_PT') kind = 'sale';
+    else if (role.startsWith('QLCS_')) kind = 'qlcs';
+    return { ...b, submitterRoleType: kind };
+  });
 }

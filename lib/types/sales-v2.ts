@@ -83,6 +83,11 @@ export interface SalesDailyBatch {
   returnReason?: string | null;
   createdAt: string;
   updatedAt: string;
+  /** M2.1 PR-4 (2026-06-20): derive runtime từ users.roleId của saleId.
+   *  CHỈ enrich khi feature flag SALES_V2_QLCS_BADGE ON. Undefined nếu flag OFF
+   *  hoặc user bị delete → UI fallback ẩn badge.
+   *  KHÔNG lưu vào Firestore — derive mỗi lần GET. */
+  submitterRoleType?: 'sale' | 'qlcs' | 'other';
 }
 
 /** salesTransactions/{id} — mỗi dòng trong data grid. */

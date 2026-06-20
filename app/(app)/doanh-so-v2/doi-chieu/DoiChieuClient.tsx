@@ -13,6 +13,7 @@ import BatchList from './_components/BatchList';
 import BatchDetailModal from './_components/BatchDetailModal';
 import DailySummaryView from './_components/DailySummaryView';
 import MonthLockBar from './_components/MonthLockBar';
+import { useFeatureFlag } from '@/lib/feature-flags/client';
 
 interface Props {
   myRoleCode: string;
@@ -56,6 +57,11 @@ export default function DoiChieuClient({ scope, canReview, myBranchId, myRoleCod
   const [error, setError] = useState<string | null>(null);
   const [selectedBatch, setSelectedBatch] = useState<SalesDailyBatch | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
+
+  // M2.1 PR-4 (2026-06-20): filter theo người nhập (Sale/QLCS hỗ trợ). Flag-gated.
+  // Default 'all'. Flag OFF → filter chip ẨN + giá trị bị bỏ qua khi compute batches.
+  const showSubmitterFilter = useFeatureFlag('SALES_V2_QLCS_BADGE');
+  const [submitterFilter, setSubmitterFilter] = useState<'all' | 'sale' | 'qlcs'>('all');
 
   const showBranchFilter = scope === 'top';
 
@@ -101,9 +107,14 @@ export default function DoiChieuClient({ scope, canReview, myBranchId, myRoleCod
   }, [allBatches]);
 
   const batches = useMemo(() => {
-    if (tab === 'all') return allBatches;
-    return allBatches.filter((b) => b.status === tab);
-  }, [allBatches, tab]);
+    let list = tab === 'all' ? allBatches : allBatches.filter((b) => b.status === tab);
+    // M2.1 PR-4: filter theo người nhập — chỉ áp dụng khi flag ON + filter != 'all'.
+    // Flag OFF → submitterFilter giữ 'all' (chip ẩn) → skip filter này.
+    if (showSubmitterFilter && submitterFilter !== 'all') {
+      list = list.filter((b) => b.submitterRoleType === submitterFilter);
+    }
+    return list;
+  }, [allBatches, tab, showSubmitterFilter, submitterFilter]);
 
   const summary = useMemo(() => {
     let sales = 0, collected = 0;
@@ -229,6 +240,34 @@ export default function DoiChieuClient({ scope, canReview, myBranchId, myRoleCod
               roleCode={myRoleCode}
             />
           </div>
+
+          {/* M2.1 PR-4 (2026-06-20): filter chip Người nhập — flag-gated.
+              Flag OFF → ẩn hoàn toàn. Default 'all'. */}
+          {showSubmitterFilter && (
+            <div className="mt-3 flex flex-wrap items-center gap-1.5">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 mr-1">Người nhập:</span>
+              {([
+                { v: 'all',  label: 'Tất cả',       cls: 'bg-slate-100 text-slate-700 ring-slate-300' },
+                { v: 'sale', label: 'Sale',         cls: 'bg-emerald-50 text-emerald-700 ring-emerald-300' },
+                { v: 'qlcs', label: 'QLCS hỗ trợ', cls: 'bg-violet-50 text-violet-700 ring-violet-300' },
+              ] as const).map((opt) => {
+                const active = submitterFilter === opt.v;
+                return (
+                  <button
+                    key={opt.v}
+                    type="button"
+                    onClick={() => setSubmitterFilter(opt.v)}
+                    aria-pressed={active}
+                    className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ring-1 transition ${
+                      active ? opt.cls : 'bg-white text-slate-500 ring-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {/* Tabs theo status với count badge */}
           <div className="mt-4 flex flex-wrap gap-1.5">

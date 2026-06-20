@@ -61,7 +61,7 @@ export default function BatchList({ batches, loading, onSelect }: Props) {
             <tr>
               <th className="px-3 py-2.5 text-left">Ngày</th>
               <th className="px-3 py-2.5 text-left">Cơ sở</th>
-              <th className="px-3 py-2.5 text-left">Sale</th>
+              <th className="px-3 py-2.5 text-left">Người nhập</th>
               <th className="px-3 py-2.5 text-right">Số GD</th>
               <th className="px-3 py-2.5 text-right">DS phát sinh</th>
               <th className="px-3 py-2.5 text-right">Thực thu</th>
@@ -82,7 +82,24 @@ export default function BatchList({ batches, loading, onSelect }: Props) {
                 >
                   <td className="px-3 py-2.5 font-medium text-slate-800 tabular-nums">{fmtDate(b.date)}</td>
                   <td className="px-3 py-2.5 text-slate-600">{branchName(b.branchId)}</td>
-                  <td className="px-3 py-2.5 text-slate-700 font-medium">{b.saleName}</td>
+                  <td className="px-3 py-2.5">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-slate-700 font-medium truncate max-w-[160px]">{b.saleName}</span>
+                      {/* M2.1 PR-4 (2026-06-20): submitterRoleType chỉ có giá trị khi
+                          server enrich (flag SALES_V2_QLCS_BADGE ON). Undefined → không hiện badge. */}
+                      {b.submitterRoleType === 'sale' && (
+                        <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold ring-1 bg-emerald-50 text-emerald-700 ring-emerald-200">
+                          Sale
+                        </span>
+                      )}
+                      {b.submitterRoleType === 'qlcs' && (
+                        <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold ring-1 bg-violet-50 text-violet-700 ring-violet-200"
+                          title="Quản lý cơ sở nhập hỗ trợ Sale">
+                          QLCS hỗ trợ
+                        </span>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-slate-700">{b.totalTransactions}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums font-semibold text-emerald-700">
                     {b.totalSalesAmount.toLocaleString()}
