@@ -12,6 +12,7 @@ import type { ScopeRole } from '@/lib/sales-v2/scope';
 import BatchList from './_components/BatchList';
 import BatchDetailModal from './_components/BatchDetailModal';
 import DailySummaryView from './_components/DailySummaryView';
+import MonthLockBar from './_components/MonthLockBar';
 
 interface Props {
   myRoleCode: string;
@@ -36,7 +37,7 @@ function todayInVN(): string {
   return new Date(ms).toISOString().slice(0, 10);
 }
 
-export default function DoiChieuClient({ scope, canReview, myBranchId }: Props) {
+export default function DoiChieuClient({ scope, canReview, myBranchId, myRoleCode }: Props) {
   const [view, setView] = useState<MainView>('doi-chieu');
   const [tab, setTab] = useState<BatchStatus | 'all'>('pending_review');
   // U1+U10 audit fix: lift date + branch state cho tab tong-hop lên đây
@@ -216,6 +217,18 @@ export default function DoiChieuClient({ scope, canReview, myBranchId }: Props) 
               )}
             </div>
           )}
+
+          {/* M2.1 PR-3A (2026-06-20): Month lock bar — FLAG-GATED.
+              Default OFF → component tự return null. Bật flag SALES_V2_MONTH_LOCK
+              ở Firestore featureFlags → render bar.
+              KHÔNG enforce tx mutation ở PR-3A — PR-3B sẽ wire middleware. */}
+          <div className="mt-3">
+            <MonthLockBar
+              branchId={branchId}
+              month={(date ? date.substring(0, 7) : todayInVN().substring(0, 7))}
+              roleCode={myRoleCode}
+            />
+          </div>
 
           {/* Tabs theo status với count badge */}
           <div className="mt-4 flex flex-wrap gap-1.5">
