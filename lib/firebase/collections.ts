@@ -45,6 +45,9 @@ export const COLLECTIONS = {
   SALES_DAILY_BATCHES: 'salesDailyBatches',   // 1 doc / sale / ngày — bảng nhập theo ngày
   SALES_TRANSACTIONS: 'salesTransactions',    // Mỗi dòng grid là 1 doc
   SALES_AUDIT_LOGS: 'salesAuditLogs',          // Log mọi chỉnh sửa của kế toán
+  // M2.1 PR-1 (2026-06-20): khoá kỳ tháng × cơ sở. DocId = `${branchId}_${month}`
+  // (deterministic). Helper lib/sales-v2/month-lock.ts. PR-3 wire vào tx middleware.
+  SALES_MONTH_LOCKS: 'salesMonthLocks',
   SALES_MONTHLY_SUMMARY: 'salesMonthlySummary', // Rebuild via cron daily 23:00
   // ─── V7 Promo (2026-06-18) — Chương trình khuyến mãi theo tháng × cơ sở × gói ───
   // Workflow: QLCS tạo → GD_KD duyệt → GD_VP duyệt → Kế toán cấu hình mã → Sale dùng.

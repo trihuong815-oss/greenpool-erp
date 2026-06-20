@@ -322,6 +322,70 @@
         { "fieldPath": "actionStatus", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "ASCENDING" }
       ]
+    },
+    {
+      "_comment": "M2.1 PR-1 (2026-06-20): salesAuditLogs query theo batch — list audit của 1 batch sắp xếp mới nhất.",
+      "collectionGroup": "salesAuditLogs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "batchId", "order": "ASCENDING" },
+        { "fieldPath": "changedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "_comment": "M2.1 PR-1: salesAuditLogs query theo transaction — list audit của 1 tx.",
+      "collectionGroup": "salesAuditLogs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "transactionId", "order": "ASCENDING" },
+        { "fieldPath": "changedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "_comment": "M2.1 PR-1: salesAuditLogs query theo program — list audit lifecycle program.",
+      "collectionGroup": "salesAuditLogs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "programId", "order": "ASCENDING" },
+        { "fieldPath": "changedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "_comment": "M2.1 PR-1: salesAuditLogs query theo cơ sở × tháng — kế toán review audit tháng X cơ sở Y.",
+      "collectionGroup": "salesAuditLogs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "branchId", "order": "ASCENDING" },
+        { "fieldPath": "month", "order": "ASCENDING" },
+        { "fieldPath": "changedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "_comment": "M2.1 PR-1: salesMonthLocks list theo branch — UI badge khoá kỳ.",
+      "collectionGroup": "salesMonthLocks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "branchId", "order": "ASCENDING" },
+        { "fieldPath": "month", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "_comment": "M2.1 PR-1: salesPrograms cron auto-expire — where(status IN [...]) where(month < cur).",
+      "collectionGroup": "salesPrograms",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "month", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "_comment": "M2.1 PR-1: salesPrograms cron approval-overdue — where(status='pending_approval') orderBy(submittedAt).",
+      "collectionGroup": "salesPrograms",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "submittedAt", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

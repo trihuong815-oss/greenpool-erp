@@ -87,7 +87,17 @@ export type NotiType =
   | 'sales_program_approved_step'      // → người tạo + cấp duyệt tiếp theo (informational)
   | 'sales_program_pending_configure'  // → NV_KE cần set promoCode
   | 'sales_program_rejected'           // → người tạo (informational)
-  | 'sales_program_active';            // → người tạo (informational)
+  | 'sales_program_active'             // → người tạo (informational)
+  // M2.1 PR-1 (2026-06-20): deadline + reminder + escalate + auto-expire + lock.
+  // CHƯA wire vào noti caller nào ở PR-1 — chỉ extend enum để PR-2/3/5 dùng.
+  | 'sales_program_deadline_d2'        // D-2 (ngày 23) — nhắc QLCS chưa submit
+  | 'sales_program_deadline_d0'        // D  (ngày 25) — hạn cuối, nhắc khẩn
+  | 'sales_program_deadline_overdue'   // D+1 (ngày 26+) — escalate QLCS + GD_KD
+  | 'sales_program_submitted_late'     // QLCS submit sau deadline — noti GD prefix [NỘP TRỄ]
+  | 'sales_program_approval_overdue'   // pending_approval > 24h — escalate
+  | 'sales_program_auto_expired'       // cron set status='expired' — noti creator
+  | 'sales_month_locked'               // TP_KE khoá tháng → noti Sale + NV_KE branch
+  | 'sales_month_unlocked';            // unlock → noti CEO + CHU_TICH (audit transparency)
 
 export type NotiModule = 'proposal' | 'dispatch' | 'chat' | 'kt' | 'sales';
 export type NotiPriority = 'low' | 'normal' | 'high' | 'urgent';

@@ -102,6 +102,27 @@ export interface SalesProgram {
   totalBonusDays: number;      // Tổng ngày tặng (chỉ bonus_days)
 
   updatedAt: string;
+
+  // ─── M2.1 PR-1 (2026-06-20) — Deadline + reminder + auto-expire foundation ───
+  // CHƯA wire — PR-5 sẽ set/đọc các field này. Tất cả optional để backward compat
+  // với doc cũ (V7 Promo) trả về undefined → caller default xử lý.
+  /** Hạn nộp = ngày 25 của program.month, set khi tạo. ISO string. */
+  deadlineAt?: string | null;
+  /** True nếu QLCS submit SAU deadlineAt (chốt anh #1: soft warning, không hard block). */
+  lateSubmission?: boolean;
+  /** BẮT BUỘC nếu lateSubmission=true. QLCS nhập lý do nộp trễ. */
+  lateReason?: string | null;
+  /** Tracking đã gửi reminder cho QLCS chưa — tránh spam. ISO string per kênh. */
+  remindersSent?: {
+    d2?: string | null;       // D-2 (ngày 23)
+    d0?: string | null;       // D  (ngày 25)
+    overdue?: string | null;  // D+1 (ngày 26+)
+  };
+  /** Tracking đã gửi escalate noti khi pending_approval > 24h chưa. */
+  approvalOverdueNotifiedAt?: string | null;
+  /** Cron set khi auto-transition sang status='expired' (program tháng cũ). */
+  expiredAt?: string | null;
+  expiredByCron?: boolean;
 }
 
 /** Input cho POST /api/sales-v2/programs */
