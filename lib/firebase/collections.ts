@@ -48,6 +48,9 @@ export const COLLECTIONS = {
   // M2.1 PR-1 (2026-06-20): khoá kỳ tháng × cơ sở. DocId = `${branchId}_${month}`
   // (deterministic). Helper lib/sales-v2/month-lock.ts. PR-3 wire vào tx middleware.
   SALES_MONTH_LOCKS: 'salesMonthLocks',
+  // M2.1 PR-5 (2026-06-20): dedupe log cho deadline reminder cron.
+  // DocId = `${uid}_${month}_${tag}` (tag: d2/d0/overdue). Doc exists = đã gửi → cron skip.
+  SALES_PROGRAM_REMINDER_LOG: 'salesProgramReminderLog',
   SALES_MONTHLY_SUMMARY: 'salesMonthlySummary', // Rebuild via cron daily 23:00
   // ─── V7 Promo (2026-06-18) — Chương trình khuyến mãi theo tháng × cơ sở × gói ───
   // Workflow: QLCS tạo → GD_KD duyệt → GD_VP duyệt → Kế toán cấu hình mã → Sale dùng.

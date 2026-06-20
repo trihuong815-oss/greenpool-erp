@@ -19,6 +19,7 @@ import {
   type PromoType, type ProgramStatus, type SalesProgram,
 } from '@/lib/types/sales-program';
 import { showConfirm } from '@/components/ui/imperative-modal';
+import { useFeatureFlag } from '@/lib/feature-flags/client';
 
 interface Props {
   callerUid: string;
@@ -125,21 +126,50 @@ export default function ChuongTrinhClient({ callerUid, callerRole, callerBranch,
     return c;
   }, [programs]);
 
+  // M2.1 PR-5 (2026-06-20): late submit modal state
+  const [lateReasonModal, setLateReasonModal] = useState<{ id: string; programName: string; month: string } | null>(null);
+
   // Actions
-  const submitProgram = useCallback(async (id: string) => {
-    const ok = await showConfirm({
-      title: 'Gửi duyệt chương trình?',
-      description: 'GD_KD sẽ duyệt cấp 1, sau đó GD_VP duyệt cấp 2. Sau khi đủ duyệt, kế toán cài đặt mã promo.',
-      confirmText: 'Gửi duyệt', cancelText: 'Huỷ',
-    });
-    if (!ok) return;
+  const submitProgram = useCallback(async (id: string, lateReason?: string) => {
+    // PR-5: nếu chưa có lateReason → gọi API lần 1.
+    // Nếu API trả 400 requiresLateReason → mở modal yêu cầu nhập lý do.
+    // Khi user nhập + confirm → call lại với lateReason.
+    const body: Record<string, string> = {};
+    if (lateReason !== undefined) body.lateReason = lateReason;
+
+    if (lateReason === undefined) {
+      const ok = await showConfirm({
+        title: 'Gửi duyệt chương trình?',
+        description: 'GD_KD sẽ duyệt cấp 1, sau đó GD_VP duyệt cấp 2. Sau khi đủ duyệt, kế toán cài đặt mã promo.',
+        confirmText: 'Gửi duyệt', cancelText: 'Huỷ',
+      });
+      if (!ok) return;
+    }
     try {
-      const r = await fetch(`/api/sales-v2/programs/${id}/submit`, { method: 'POST' });
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`);
-      showToast('ok', 'Đã gửi duyệt');
+      const r = await fetch(`/api/sales-v2/programs/${id}/submit`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) {
+        const errBody = await r.json().catch(() => ({}));
+        // M2.1 PR-5: API trả requiresLateReason → mở modal
+        if (r.status === 400 && errBody?.requiresLateReason) {
+          const program = programs.find((p) => p.id === id);
+          setLateReasonModal({
+            id,
+            programName: program?.name ?? '(không rõ)',
+            month: program?.month ?? '',
+          });
+          return;
+        }
+        throw new Error(errBody?.error ?? `HTTP ${r.status}`);
+      }
+      showToast('ok', lateReason ? 'Đã gửi duyệt (nộp trễ — đã ghi lý do)' : 'Đã gửi duyệt');
+      setLateReasonModal(null);
       setRefreshTick((t) => t + 1);
     } catch (e: any) { showToast('err', e?.message ?? 'Lỗi gửi'); }
-  }, []);
+  }, [programs]);
 
   const approveProgram = useCallback(async (id: string) => {
     const ok = await showConfirm({
@@ -197,6 +227,9 @@ export default function ChuongTrinhClient({ callerUid, callerRole, callerBranch,
   return (
     <div className="flex-1 p-3 md:p-5 bg-slate-50 overflow-y-auto">
       <div className="mx-auto max-w-[1400px] space-y-4">
+        {/* M2.1 PR-5 (2026-06-20): Deadline banner — flag-gated */}
+        <DeadlineBanner month={month} />
+
         {/* Header */}
         <div className="card">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -339,6 +372,15 @@ export default function ChuongTrinhClient({ callerUid, callerRole, callerBranch,
           onRejected={() => { setRejectOpen(null); setRefreshTick((t) => t + 1); showToast('ok', 'Đã từ chối'); }}
         />
       )}
+      {/* M2.1 PR-5 (2026-06-20): Late submit reason modal — mở khi API trả requiresLateReason */}
+      {lateReasonModal && (
+        <LateReasonModal
+          programName={lateReasonModal.programName}
+          month={lateReasonModal.month}
+          onClose={() => setLateReasonModal(null)}
+          onConfirm={(reason) => submitProgram(lateReasonModal.id, reason)}
+        />
+      )}
     </div>
   );
 }
@@ -386,6 +428,31 @@ function ProgramCard({ program: p, callerUid, callerRole, callerBranch, onClick,
                   {p.promoCode}
                 </span>
               )}
+              {/* M2.1 PR-5 (2026-06-20): badge "Nộp trễ" — schema có lateSubmission từ PR-1 */}
+              {p.lateSubmission && (
+                <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded ring-1 bg-rose-50 text-rose-700 ring-rose-200"
+                  title={p.lateReason ?? 'Nộp sau hạn ngày 25'}>
+                  ⚠️ Nộp trễ
+                </span>
+              )}
+              {/* M2.1 PR-5: badge "Hết hiệu lực" — status=expired (cron auto-set) */}
+              {p.status === 'expired' && (
+                <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded ring-1 bg-slate-100 text-slate-500 ring-slate-300"
+                  title="Tự động hết hiệu lực khi sang tháng mới">
+                  Hết hiệu lực
+                </span>
+              )}
+              {/* M2.1 PR-5: badge "Chờ duyệt >24h" — compute từ submittedAt nếu pending */}
+              {p.status === 'pending_approval' && p.submittedAt && (() => {
+                const hoursPending = Math.floor((Date.now() - new Date(p.submittedAt).getTime()) / 3600_000);
+                if (hoursPending < 24) return null;
+                return (
+                  <span className="text-[10px] uppercase font-semibold px-2 py-0.5 rounded ring-1 bg-amber-50 text-amber-700 ring-amber-200"
+                    title={`Đã chờ duyệt ${hoursPending} giờ`}>
+                    Chờ duyệt {hoursPending}h
+                  </span>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -959,6 +1026,108 @@ function Stat({ label, value, tone }: { label: string; value: string; tone: 'sla
     <div className={`rounded-lg px-3 py-2 ring-1 ${cls}`}>
       <div className="text-[10px] uppercase tracking-wider font-semibold opacity-70">{label}</div>
       <div className="text-base font-bold tabular-nums mt-0.5">{value}</div>
+    </div>
+  );
+}
+
+// ─── M2.1 PR-5 (2026-06-20) — Deadline banner + Late reason modal ──────────
+
+/** Banner cảnh báo deadline ngày 25 cho tháng `month`. Flag-gated.
+ *  Compute today VN vs 25/MM/YYYY. Render khác nhau theo dayDelta. */
+function DeadlineBanner({ month }: { month: string }) {
+  const flagOn = useFeatureFlag('SALES_V2_PROGRAM_DEADLINE');
+  if (!flagOn) return null;
+  if (!/^\d{4}-\d{2}$/.test(month)) return null;
+
+  // Compute today VN day-of-month + diff với deadline 25
+  const nowMs = Date.now() + 7 * 3600 * 1000;
+  const today = new Date(nowMs);
+  const todayMonth = `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, '0')}`;
+  // Chỉ hiển thị banner cho currentMonth (xem tháng cũ/tháng mới thì không nhắc deadline)
+  if (todayMonth !== month) return null;
+
+  const day = today.getUTCDate();
+  const daysUntil = 25 - day; // <0 = past, 0 = today, >0 = future
+
+  let tone = 'bg-sky-50 text-sky-800 ring-sky-200';
+  let icon = '📅';
+  let text = '';
+  if (daysUntil >= 3) {
+    text = `Hạn nộp chương trình tháng ${month}: ngày 25 — còn ${daysUntil} ngày.`;
+  } else if (daysUntil === 2 || daysUntil === 1) {
+    tone = 'bg-amber-50 text-amber-800 ring-amber-300';
+    icon = '⚠️';
+    text = `Còn ${daysUntil} ngày tới hạn nộp ngày 25. Đừng quên gửi duyệt!`;
+  } else if (daysUntil === 0) {
+    tone = 'bg-orange-50 text-orange-800 ring-orange-300';
+    icon = '🔔';
+    text = `Hôm nay là hạn cuối nộp chương trình tháng ${month}.`;
+  } else {
+    // daysUntil < 0 → quá hạn
+    tone = 'bg-rose-50 text-rose-800 ring-rose-300';
+    icon = '❌';
+    text = `Đã quá hạn ${Math.abs(daysUntil)} ngày. Vẫn có thể gửi (cần nhập lý do nộp trễ).`;
+  }
+  return (
+    <div className={`rounded-lg ring-1 px-4 py-2.5 text-sm font-medium flex items-center gap-2 ${tone}`}>
+      <span aria-hidden>{icon}</span>
+      <span>{text}</span>
+    </div>
+  );
+}
+
+/** Modal nhập lý do nộp trễ — mở khi submit API trả requiresLateReason. */
+function LateReasonModal({
+  programName, month, onClose, onConfirm,
+}: {
+  programName: string;
+  month: string;
+  onClose: () => void;
+  onConfirm: (reason: string) => void;
+}) {
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  function handleConfirm() {
+    const r = reason.trim();
+    if (!r) return;
+    setBusy(true);
+    onConfirm(r);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-3"
+      onClick={() => !busy && onClose()}>
+      <div onClick={(e) => e.stopPropagation()}
+        className="bg-white rounded-xl shadow-xl w-full max-w-md p-4 ring-1 ring-slate-200">
+        <h3 className="text-sm font-bold text-slate-800 mb-2 flex items-center gap-2">
+          ⚠️ Nộp trễ — Lý do
+        </h3>
+        <p className="text-xs text-slate-600 mb-3">
+          Chương trình <strong>"{programName}"</strong> tháng <strong>{month}</strong> đã quá hạn ngày 25.
+          Bạn vẫn có thể gửi duyệt nhưng phải nhập lý do nộp trễ. GD_KD/GD_VP sẽ thấy cảnh báo "Nộp trễ" khi duyệt.
+        </p>
+        <textarea
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="Vd: Chờ thông tin giá khuyến mãi từ nhà cung cấp, chốt phương án trễ 3 ngày."
+          rows={3}
+          maxLength={500}
+          className="w-full text-sm rounded-lg ring-1 ring-slate-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400"
+          autoFocus
+        />
+        <div className="text-xs text-slate-400 text-right mt-1">{reason.length}/500</div>
+        <div className="flex justify-end gap-2 mt-3">
+          <button type="button" onClick={onClose} disabled={busy}
+            className="px-3 py-1.5 text-sm rounded-lg ring-1 ring-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50">
+            Huỷ
+          </button>
+          <button type="button" onClick={handleConfirm} disabled={busy || !reason.trim()}
+            className="px-3 py-1.5 text-sm rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50">
+            {busy ? 'Đang gửi...' : 'Gửi duyệt (nộp trễ)'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

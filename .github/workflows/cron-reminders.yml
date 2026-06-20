@@ -23,6 +23,11 @@ on:
     - cron: '45 * * * *'     # action-required-stuck mỗi giờ (offset 45p)
     # V6.5 Audit Phase D.1 (2026-06-15): proposal stale recipient cleanup — hourly
     - cron: '50 * * * *'     # proposal-stale-recipient mỗi giờ (offset 50p)
+    # M2.1 PR-5 (2026-06-20): Sales V2 program deadline/overdue/expire.
+    # Flag SALES_V2_PROGRAM_CRON default OFF → endpoints tự skip an toàn.
+    - cron: '0 2 * * *'      # program-deadline-reminder daily 09:00 VN
+    - cron: '40 * * * *'     # program-approval-overdue hourly (offset 40p)
+    - cron: '30 17 * * *'    # program-auto-expire daily 00:30 VN (= 17:30 UTC prev day)
   workflow_dispatch:          # manual trigger để test
 
 # Concurrency: cancel runs cũ nếu chậm — tránh chồng chéo
@@ -230,6 +235,52 @@ jobs:
         run: |
           response=$(curl -s -o /tmp/body -w "%{http_code}" \
             -X POST "${{ secrets.APP_HOSTING_URL }}/api/cron/proposal-stale-recipient" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "content-type: application/json")
+          echo "Status: $response"; cat /tmp/body
+          if [ "$response" -ne 200 ]; then exit 1; fi
+
+  # M2.1 PR-5 (2026-06-20): Sales V2 program deadline reminders (daily 09:00 VN).
+  # Flag SALES_V2_PROGRAM_CRON default OFF → endpoint trả 200 {skipped:true} ngay.
+  program-deadline-reminder:
+    if: github.event.schedule == '0 2 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Call program-deadline-reminder
+        run: |
+          response=$(curl -s -o /tmp/body -w "%{http_code}" \
+            -X POST "${{ secrets.APP_HOSTING_URL }}/api/cron/program-deadline-reminder" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "content-type: application/json")
+          echo "Status: $response"; cat /tmp/body
+          if [ "$response" -ne 200 ]; then exit 1; fi
+
+  # M2.1 PR-5: Sales V2 program approval SLA escalation — hourly.
+  program-approval-overdue:
+    if: github.event.schedule == '40 * * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Call program-approval-overdue
+        run: |
+          response=$(curl -s -o /tmp/body -w "%{http_code}" \
+            -X POST "${{ secrets.APP_HOSTING_URL }}/api/cron/program-approval-overdue" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "content-type: application/json")
+          echo "Status: $response"; cat /tmp/body
+          if [ "$response" -ne 200 ]; then exit 1; fi
+
+  # M2.1 PR-5: Sales V2 program auto-expire khi sang tháng mới — daily 00:30 VN.
+  program-auto-expire:
+    if: github.event.schedule == '30 17 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Call program-auto-expire
+        run: |
+          response=$(curl -s -o /tmp/body -w "%{http_code}" \
+            -X POST "${{ secrets.APP_HOSTING_URL }}/api/cron/program-auto-expire" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "content-type: application/json")
           echo "Status: $response"; cat /tmp/body

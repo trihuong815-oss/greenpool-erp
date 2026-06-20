@@ -159,3 +159,30 @@ export function currentMonthVN(): string {
   const d = new Date(ms);
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
 }
+
+// ─── M2.1 PR-5 (2026-06-20) — Deadline helpers ─────────────────────────────
+
+/** Compute deadline ISO cho program.month — ngày 25/MM 23:59:59 VN (UTC+7).
+ *  Convention: program tháng N có hạn nộp 25/N (cùng tháng).
+ *  Trả ISO UTC string để compare với Date.now() trực tiếp. */
+export function computeDeadlineIso(month: string): string {
+  if (!/^\d{4}-\d{2}$/.test(month)) return '';
+  const [yStr, mStr] = month.split('-');
+  // 25/MM/YYYY 23:59:59 VN = 16:59:59 UTC cùng ngày
+  // Dùng ISO format trực tiếp, +07:00 offset
+  return `${yStr}-${mStr}-25T23:59:59+07:00`;
+}
+
+/** Check program tháng X đã quá hạn nộp (25/X 23:59:59 VN) tính tới `now`.
+ *  Default now = Date.now(). */
+export function isPastDeadline(month: string, now: Date = new Date()): boolean {
+  const isoDeadline = computeDeadlineIso(month);
+  if (!isoDeadline) return false;
+  return now.getTime() > new Date(isoDeadline).getTime();
+}
+
+/** Ngày trong tháng VN (1-31) từ Date hiện tại — dùng cho cron switch D-2/D/D+1. */
+export function dayOfMonthVN(now: Date = new Date()): number {
+  const ms = now.getTime() + 7 * 3600 * 1000;
+  return new Date(ms).getUTCDate();
+}
