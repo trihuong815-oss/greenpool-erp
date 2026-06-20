@@ -124,7 +124,7 @@ export const NAV_ROUTES: NavRoute[] = [
   { route: 'doanh-so-v2/chuong-trinh',           section: 'Tài chính kế toán', label: 'Chương trình KM',   icon: 'megaphone',
     keywords: ['chuong trinh', 'promo', 'km', 'khuyen mai', 'giam gia'] },
   { route: 'doanh-so-v2/quay-le-tan/nhap',       section: 'Tài chính kế toán', label: 'Quầy lễ tân — Nhập', icon: 'chart',
-    keywords: ['quay le tan', 'le tan', 'reception', 'cashier', 'walk-in', 'walkin'] },
+    keywords: ['quay le tan', 'le tan', 'reception', 'cashier', 'walk-in', 'walkin', 'quay le tan nhap', 'quầy lễ tân nhập'] },
   { route: 'doanh-so-v2/quay-le-tan/cau-hinh',   section: 'Tài chính kế toán', label: 'Quầy lễ tân — Cấu hình', icon: 'settings',
     keywords: ['quay le tan cau hinh', 'le tan price', 'reception config', 'don gia le tan'] },
 ];
