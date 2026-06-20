@@ -13,6 +13,7 @@ import { canEditTransaction } from '@/lib/sales-v2/scope';
 import { serializeTransaction } from '@/lib/sales-v2/serialize';
 import { getPackageById } from '@/lib/sales-v2/packages';
 import { writeSalesAuditBatch } from '@/lib/sales-v2/audit';
+import { recordSalesAuditIfEnabled } from '@/lib/sales-v2/audit-log';
 import { computeDiscount, isDiscountType, type PromoSnapshot } from '@/lib/types/sales-program';
 import type { SalesV2Source, TransactionType, PaymentMethod } from '@/lib/types/sales-v2';
 
@@ -333,6 +334,33 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     }
 
     await txRef.delete();
+
+    // M2.1 PR-2 (2026-06-20): audit log delete tx — SAU khi delete thành công.
+    // Silent + fail-soft (helper nuốt lỗi). Snapshot fields nghiệp vụ vào oldValue.
+    void recordSalesAuditIfEnabled({
+      module: 'transaction',
+      action: 'delete_tx',
+      branchId: batch.branchId,
+      month: String(batch.month ?? tx.month ?? ''),
+      batchId: tx.batchId,
+      transactionId: id,
+      oldValue: {
+        customerName: tx.customerName,
+        phone: tx.phone,
+        packageId: tx.packageId,
+        transactionType: tx.transactionType,
+        paymentMethod: tx.paymentMethod,
+        packageValue: tx.packageValue,
+        collectedToday: tx.collectedToday,
+        debtAmount: tx.debtAmount,
+        receiptNo: tx.receiptNo,
+        contractNo: tx.contractNo,
+      },
+      actorUid: caller.profile.uid,
+      actorName: caller.actorName,
+      actorRole: String(caller.profile.role_code ?? ''),
+    }, caller.profile.uid, String(caller.profile.role_code ?? ''));
+
     return NextResponse.json({ ok: true });
   } catch (err: any) {
     if (err instanceof UnauthorizedError) {

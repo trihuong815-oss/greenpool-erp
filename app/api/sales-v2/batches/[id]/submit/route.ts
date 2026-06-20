@@ -15,6 +15,7 @@ import { sendNotificationEvent } from '@/lib/firebase/noti-engine';
 import { markActionDoneForEntity } from '@/lib/firebase/notifications-store';
 import { resolveAccountantsByBranch, fmtDateVi } from '@/lib/sales-v2/recipients';
 import { branchName } from '@/lib/branches';
+import { recordSalesAuditIfEnabled } from '@/lib/sales-v2/audit-log';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -116,11 +117,15 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
     // V6.5 Notification (Phase 3 wire 2026-06-17): gửi cho kế toán cơ sở
     void FieldValue; // silence import
+    let batchData: Record<string, any> = {};
+    let branchIdResolved = '';
     try {
       // Re-fetch batch để có thông tin sau update
       const batchSnap = await batchRef.get();
       const batch = batchSnap.data() ?? {};
+      batchData = batch;
       const branchId = String(batch.branchId ?? '');
+      branchIdResolved = branchId;
       const accountantUids = await resolveAccountantsByBranch(branchId);
       if (accountantUids.length > 0) {
         await sendNotificationEvent({
@@ -139,6 +144,27 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     } catch (e: any) {
       console.warn('[sales-v2/submit] noti send fail:', e?.message);
       // KHÔNG fail flow nếu noti lỗi — Sale vẫn submit thành công
+    }
+
+    // M2.1 PR-2 (2026-06-20): audit log submit batch — SAU mutation thành công.
+    // Silent + fail-soft. Snapshot total + status mới.
+    if (branchIdResolved) {
+      void recordSalesAuditIfEnabled({
+        module: 'batch',
+        action: 'submit_batch',
+        branchId: branchIdResolved as any,
+        month: String(batchData.month ?? ''),
+        batchId: id,
+        newValue: {
+          status: 'pending_review',
+          totalTransactions: batchData.totalTransactions ?? 0,
+          totalSalesAmount: batchData.totalSalesAmount ?? 0,
+          totalCollectedAmount: batchData.totalCollectedAmount ?? 0,
+        },
+        actorUid: caller.profile.uid,
+        actorName: caller.actorName,
+        actorRole: String(caller.profile.role_code ?? ''),
+      }, caller.profile.uid, String(caller.profile.role_code ?? ''));
     }
 
     return NextResponse.json({ ok: true });

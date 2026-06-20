@@ -116,3 +116,34 @@ export function diffFields<T extends Record<string, unknown>>(
 /** Re-export FieldValue cho convenience — caller có thể dùng FieldValue.serverTimestamp()
  *  nếu cần ghi audit với client time (rare). */
 export { FieldValue };
+
+// ─── M2.1 PR-2 (2026-06-20) — Feature-flag wrapper cho mutation API ────────
+
+/** Wrapper: chỉ ghi audit nếu feature flag `SALES_V2_AUDIT_LOG` enabled cho user.
+ *  Fail-safe: cả flag check + audit write đều nuốt lỗi → KHÔNG phá flow chính.
+ *
+ *  Usage trong mutation API:
+ *    await recordSalesAuditIfEnabled(input, caller.profile.uid, caller.profile.role_code);
+ *
+ *  Khi flag tắt (Firestore doc featureFlags/SALES_V2_AUDIT_LOG enabled=false):
+ *    → no-op, không ghi audit, không tốn Firestore write.
+ */
+export async function recordSalesAuditIfEnabled(
+  input: RecordSalesAuditInput,
+  uid: string,
+  roleCode: string,
+): Promise<string | null> {
+  try {
+    // Import lazy để tránh circular dep + tránh load feature-flag infra ở build time
+    const { isFlagEnabled } = await import('@/lib/feature-flags/server');
+    const enabled = await isFlagEnabled('SALES_V2_AUDIT_LOG', uid, roleCode);
+    if (!enabled) return null;
+    return await recordSalesAudit(input);
+  } catch (err) {
+    console.warn('[sales-audit] recordSalesAuditIfEnabled fail (swallowed):', {
+      action: input.action,
+      err: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}

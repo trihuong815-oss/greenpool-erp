@@ -15,6 +15,7 @@ import { canReadBatch, canEditTransaction } from '@/lib/sales-v2/scope';
 import { serializeTransaction } from '@/lib/sales-v2/serialize';
 import { getPackageById } from '@/lib/sales-v2/packages';
 import { refreshPackageNames } from '@/lib/sales-v2/resolve-package-names';
+import { recordSalesAuditIfEnabled } from '@/lib/sales-v2/audit-log';
 import { getProgramsByIds, toSnapshot } from '@/lib/sales-v2/programs';
 import {
   computeDiscount, isDiscountType, isBonusType, validatePromoCombo,
@@ -302,6 +303,28 @@ export async function POST(req: NextRequest) {
         }
       }));
     }
+
+    // M2.1 PR-2 (2026-06-20): audit log create tx — silent, không block response.
+    void recordSalesAuditIfEnabled({
+      module: 'transaction',
+      action: 'create_tx',
+      branchId: batch.branchId,
+      month: batch.month,
+      batchId,
+      transactionId: ref.id,
+      newValue: {
+        customerName, phone,
+        packageId: pkg.id, packageName: pkg.name,
+        transactionType, paymentMethod,
+        packageValue: effectivePackageValue,
+        collectedToday,
+        debtAmount,
+        receiptNo, contractNo,
+      },
+      actorUid: caller.profile.uid,
+      actorName: caller.actorName,
+      actorRole: String(caller.profile.role_code ?? ''),
+    }, caller.profile.uid, String(caller.profile.role_code ?? ''));
 
     return NextResponse.json({ ok: true, transaction: serializeTransaction(ref.id, data) });
   } catch (err: any) {
