@@ -14,6 +14,7 @@ import { serializeTransaction } from '@/lib/sales-v2/serialize';
 import { getPackageById } from '@/lib/sales-v2/packages';
 import { writeSalesAuditBatch } from '@/lib/sales-v2/audit';
 import { recordSalesAuditIfEnabled } from '@/lib/sales-v2/audit-log';
+import { assertMonthNotLockedIfEnabled, MonthLockedError } from '@/lib/sales-v2/month-lock';
 import { computeDiscount, isDiscountType, type PromoSnapshot } from '@/lib/types/sales-program';
 import type { SalesV2Source, TransactionType, PaymentMethod } from '@/lib/types/sales-v2';
 
@@ -56,6 +57,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       { reviewStatus: tx.reviewStatus },
     )) {
       return NextResponse.json({ error: 'Không có quyền sửa giao dịch này (có thể đã được kế toán duyệt)' }, { status: 403 });
+    }
+
+    // M2.1 PR-3B (2026-06-20): enforce month lock — flag-gated.
+    try {
+      await assertMonthNotLockedIfEnabled(
+        batch.branchId, String(batch.month ?? tx.month ?? ''),
+        caller.profile.uid, String(caller.profile.role_code ?? ''),
+      );
+    } catch (err) {
+      if (err instanceof MonthLockedError) {
+        return NextResponse.json({ error: err.message }, { status: 403 });
+      }
+      throw err;
     }
 
     const updates: Record<string, any> = {};
@@ -303,6 +317,19 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
       { reviewStatus: tx.reviewStatus },
     )) {
       return NextResponse.json({ error: 'Không có quyền xoá (giao dịch đã được kế toán duyệt)' }, { status: 403 });
+    }
+
+    // M2.1 PR-3B (2026-06-20): enforce month lock — flag-gated.
+    try {
+      await assertMonthNotLockedIfEnabled(
+        batch.branchId, String(batch.month ?? tx.month ?? ''),
+        caller.profile.uid, String(caller.profile.role_code ?? ''),
+      );
+    } catch (err) {
+      if (err instanceof MonthLockedError) {
+        return NextResponse.json({ error: err.message }, { status: 403 });
+      }
+      throw err;
     }
 
     // V7 Promo (2026-06-18): decrement promo stats trước khi xoá tx → tránh stats drift.

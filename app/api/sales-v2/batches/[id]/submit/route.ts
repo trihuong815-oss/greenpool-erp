@@ -16,6 +16,7 @@ import { markActionDoneForEntity } from '@/lib/firebase/notifications-store';
 import { resolveAccountantsByBranch, fmtDateVi } from '@/lib/sales-v2/recipients';
 import { branchName } from '@/lib/branches';
 import { recordSalesAuditIfEnabled } from '@/lib/sales-v2/audit-log';
+import { assertMonthNotLockedIfEnabled, MonthLockedError } from '@/lib/sales-v2/month-lock';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -30,6 +31,26 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
     const db = getFirebaseAdminDb();
     const batchRef = db.collection(COLLECTIONS.SALES_DAILY_BATCHES).doc(id);
+
+    // M2.1 PR-3B (2026-06-20): pre-flight read batch để lấy branchId+month,
+    // assert lock TRƯỚC khi vào runTransaction. Tránh đọc non-tx trong tx callback.
+    // Race window ms — chấp nhận (lock+submit đồng thời rất hiếm).
+    const preSnap = await batchRef.get();
+    if (!preSnap.exists) {
+      return NextResponse.json({ error: 'Không tìm thấy batch' }, { status: 404 });
+    }
+    const preBatch = preSnap.data() ?? {};
+    try {
+      await assertMonthNotLockedIfEnabled(
+        preBatch.branchId, String(preBatch.month ?? ''),
+        caller.profile.uid, String(caller.profile.role_code ?? ''),
+      );
+    } catch (err) {
+      if (err instanceof MonthLockedError) {
+        return NextResponse.json({ error: err.message }, { status: 403 });
+      }
+      throw err;
+    }
 
     const result = await db.runTransaction(async (tx) => {
       const batchSnap = await tx.get(batchRef);

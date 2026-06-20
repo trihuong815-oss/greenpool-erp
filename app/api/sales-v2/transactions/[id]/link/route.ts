@@ -10,6 +10,7 @@ import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-aut
 import { canAccountantReview, getScopeRole } from '@/lib/sales-v2/scope';
 import { linkTransaction } from '@/lib/sales-v2/auto-match';
 import { serializeTransaction } from '@/lib/sales-v2/serialize';
+import { assertMonthNotLockedIfEnabled, MonthLockedError } from '@/lib/sales-v2/month-lock';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -36,6 +37,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (!caller.profile.facility_id || tx.branchId !== caller.profile.facility_id) {
         return NextResponse.json({ error: 'Tx không thuộc cơ sở của bạn' }, { status: 403 });
       }
+    }
+
+    // M2.1 PR-3B (2026-06-20): enforce month lock — dùng tx.branchId + tx.month
+    // (tx schema có month denormalize từ batch).
+    try {
+      await assertMonthNotLockedIfEnabled(
+        tx.branchId, String(tx.month ?? ''),
+        caller.profile.uid, String(caller.profile.role_code ?? ''),
+      );
+    } catch (err) {
+      if (err instanceof MonthLockedError) {
+        return NextResponse.json({ error: err.message }, { status: 403 });
+      }
+      throw err;
     }
 
     const result = await linkTransaction(db, id, targetTxId, {

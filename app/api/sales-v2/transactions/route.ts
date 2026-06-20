@@ -16,6 +16,7 @@ import { serializeTransaction } from '@/lib/sales-v2/serialize';
 import { getPackageById } from '@/lib/sales-v2/packages';
 import { refreshPackageNames } from '@/lib/sales-v2/resolve-package-names';
 import { recordSalesAuditIfEnabled } from '@/lib/sales-v2/audit-log';
+import { assertMonthNotLockedIfEnabled, MonthLockedError } from '@/lib/sales-v2/month-lock';
 import { getProgramsByIds, toSnapshot } from '@/lib/sales-v2/programs';
 import {
   computeDiscount, isDiscountType, isBonusType, validatePromoCombo,
@@ -120,6 +121,19 @@ export async function POST(req: NextRequest) {
     const batch = batchDoc.data() ?? {};
     if (!canEditTransaction(caller, { saleId: batch.saleId, branchId: batch.branchId, status: batch.status })) {
       return NextResponse.json({ error: 'Không có quyền thêm giao dịch vào batch này' }, { status: 403 });
+    }
+
+    // M2.1 PR-3B (2026-06-20): enforce month lock — chỉ check khi flag SALES_V2_MONTH_LOCK ON.
+    try {
+      await assertMonthNotLockedIfEnabled(
+        batch.branchId, String(batch.month ?? ''),
+        caller.profile.uid, String(caller.profile.role_code ?? ''),
+      );
+    } catch (err) {
+      if (err instanceof MonthLockedError) {
+        return NextResponse.json({ error: err.message }, { status: 403 });
+      }
+      throw err;
     }
 
     // Resolve package info

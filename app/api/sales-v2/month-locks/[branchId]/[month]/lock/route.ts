@@ -7,9 +7,11 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-auth';
-import { isBranchId } from '@/lib/branches';
+import { isBranchId, BRANCH_BY_ID } from '@/lib/branches';
 import { lockMonth, isValidMonth } from '@/lib/sales-v2/month-lock';
 import { recordSalesAuditIfEnabled } from '@/lib/sales-v2/audit-log';
+import { sendNotificationEvent } from '@/lib/firebase/noti-engine';
+import { resolveBranchUsersAffectedByLock } from '@/lib/sales-v2/recipients';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -60,6 +62,29 @@ export async function POST(
       actorName: caller.actorName,
       actorRole: role,
     }, caller.profile.uid, role);
+
+    // M2.1 PR-3B (2026-06-20): noti 'sales_month_locked' cho Sale + QLCS + NV_KE
+    // branch + TP_KE HQ. Fail-soft — lỗi noti KHÔNG block response.
+    void (async () => {
+      try {
+        const recipients = await resolveBranchUsersAffectedByLock(branchId);
+        if (recipients.length === 0) return;
+        const branchName = BRANCH_BY_ID[branchId]?.name ?? branchId;
+        await sendNotificationEvent({
+          type: 'sales_month_locked',
+          module: 'sales',
+          entityId: `${branchId}_${month}`,
+          title: `🔒 Đã khoá kỳ ${month} cơ sở ${branchName}`,
+          message: `${caller.actorName} (${role}) đã khoá kỳ. Mọi chỉnh sửa dữ liệu tháng này sẽ bị chặn.`,
+          linkUrl: '/doanh-so-v2/doi-chieu',
+          recipients,
+          priority: 'normal',
+          pushTag: `month-lock-${branchId}-${month}`,
+        });
+      } catch (e: any) {
+        console.warn('[lock-month] noti send fail:', e?.message);
+      }
+    })();
 
     return NextResponse.json({
       ok: true,

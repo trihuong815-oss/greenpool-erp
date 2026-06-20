@@ -18,7 +18,7 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { getFirebaseAdminDb } from '@/lib/firebase/admin';
 import { COLLECTIONS } from '@/lib/firebase/collections';
 import type { BranchId } from '@/lib/types/branches';
-import { isBranchId } from '@/lib/branches';
+import { isBranchId, BRANCH_BY_ID } from '@/lib/branches';
 import type {
   MonthLockState,
   SalesMonthLockDoc,
@@ -189,27 +189,63 @@ export async function unlockMonth(input: UnlockMonthInput): Promise<SalesMonthLo
 
 // ─── Middleware helper — PR-3 sẽ wire vào tx mutation API ─────────────────
 
+/** M2.1 PR-3B (2026-06-20): message format theo spec user — dùng branchName từ
+ *  BRANCH_BY_ID, hướng dẫn user liên hệ TP_Kế toán hoặc Ban điều hành. */
 export class MonthLockedError extends Error {
   constructor(public branchId: BranchId, public month: string, public lockedByName: string | null) {
-    super(`Tháng ${month} cơ sở ${branchId} đã khoá${lockedByName ? ` bởi ${lockedByName}` : ''}. Liên hệ TP_KE/CEO để mở khoá.`);
+    const branchName = BRANCH_BY_ID[branchId]?.name ?? branchId;
+    const suffix = lockedByName ? ` (Khoá bởi ${lockedByName})` : '';
+    super(
+      `Kỳ doanh số tháng ${month} của cơ sở ${branchName} đã được khoá. ` +
+      `Bạn không thể chỉnh sửa dữ liệu tháng này. ` +
+      `Vui lòng liên hệ TP_Kế toán hoặc Ban điều hành nếu cần mở khoá.${suffix}`
+    );
     this.name = 'MonthLockedError';
   }
 }
 
 /** Throw MonthLockedError nếu (branchId, month) đang locked. Caller dùng try/catch
- *  trong API mutation → trả 403/409 response.
+ *  trong API mutation → trả 403 response.
  *
- *  PR-1 export helper, KHÔNG có caller nào dùng. PR-3 sẽ wire vào:
- *    POST /api/sales-v2/transactions
- *    PATCH /api/sales-v2/transactions/[id]
- *    DELETE /api/sales-v2/transactions/[id]
- *    POST /api/sales-v2/transactions/[id]/review
- *    POST /api/sales-v2/transactions/[id]/link
- *    POST /api/sales-v2/batches/[id]/submit|approve|return
+ *  PR-3B wired vào 8 mutation API. Pattern dùng (caller side):
+ *    try {
+ *      await assertMonthNotLockedIfEnabled(batch.branchId, batch.month, uid, role);
+ *    } catch (err) {
+ *      if (err instanceof MonthLockedError) {
+ *        return NextResponse.json({ error: err.message }, { status: 403 });
+ *      }
+ *      throw err;
+ *    }
  */
 export async function assertMonthNotLocked(branchId: BranchId, month: string): Promise<void> {
   const state = await getMonthLockState(branchId, month);
   if (state.locked) {
     throw new MonthLockedError(branchId, month, state.lockedByName);
   }
+}
+
+/** M2.1 PR-3B (2026-06-20) — Wrapper kiểm flag + assert. Caller-friendly.
+ *
+ *  Nếu feature flag `SALES_V2_MONTH_LOCK` OFF cho user → no-op (không check DB,
+ *  không tốn read). Nếu ON → check lock state + throw MonthLockedError nếu locked.
+ *
+ *  Fail-safe: flag check fail → coi như OFF (return không throw). Tránh false-positive
+ *  block mutation khi feature-flag service lỗi.
+ */
+export async function assertMonthNotLockedIfEnabled(
+  branchId: BranchId,
+  month: string,
+  uid: string,
+  roleCode: string,
+): Promise<void> {
+  let flagEnabled = false;
+  try {
+    const { isFlagEnabled } = await import('@/lib/feature-flags/server');
+    flagEnabled = await isFlagEnabled('SALES_V2_MONTH_LOCK', uid, roleCode);
+  } catch (err) {
+    console.warn('[month-lock] flag check fail (fallback OFF):', err);
+    return;
+  }
+  if (!flagEnabled) return;
+  await assertMonthNotLocked(branchId, month);
 }

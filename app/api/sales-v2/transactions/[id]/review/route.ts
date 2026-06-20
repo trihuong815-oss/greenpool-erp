@@ -13,6 +13,7 @@ import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-aut
 import { canEditTransaction } from '@/lib/sales-v2/scope';
 import { writeSalesAudit } from '@/lib/sales-v2/audit';
 import { serializeTransaction } from '@/lib/sales-v2/serialize';
+import { assertMonthNotLockedIfEnabled, MonthLockedError } from '@/lib/sales-v2/month-lock';
 import type { TxReviewStatus } from '@/lib/types/sales-v2';
 
 export const runtime = 'nodejs';
@@ -54,6 +55,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // Sale không được review tx của mình
     if (batch.saleId === caller.profile.uid) {
       return NextResponse.json({ error: 'Sale không thể tự review batch của mình' }, { status: 403 });
+    }
+
+    // M2.1 PR-3B (2026-06-20): enforce month lock — flag-gated.
+    try {
+      await assertMonthNotLockedIfEnabled(
+        batch.branchId, String(batch.month ?? tx.month ?? ''),
+        caller.profile.uid, String(caller.profile.role_code ?? ''),
+      );
+    } catch (err) {
+      if (err instanceof MonthLockedError) {
+        return NextResponse.json({ error: err.message }, { status: 403 });
+      }
+      throw err;
     }
 
     const now = Timestamp.now();
