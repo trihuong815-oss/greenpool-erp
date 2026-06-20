@@ -34,7 +34,10 @@ export type SalesAuditAction =
   // Month lock
   | 'lock_month' | 'unlock_month'
   // Override (top admin force edit sau khi đã approved/locked — Milestone 2.2)
-  | 'override_approved';
+  | 'override_approved'
+  // M2.2 PR-6 (2026-06-20): Export Excel báo cáo doanh số.
+  // module='batch' (vì query theo batchId list trong tháng + cơ sở). batchId/transactionId/programId=null.
+  | 'export_sales_excel';
 
 /** salesAuditLogs/{auto-id}.
  *  Append-only. Lưu vĩnh viễn ≥10 năm.

@@ -13,7 +13,17 @@ import BatchList from './_components/BatchList';
 import BatchDetailModal from './_components/BatchDetailModal';
 import DailySummaryView from './_components/DailySummaryView';
 import MonthLockBar from './_components/MonthLockBar';
+import ExportExcelButton from './_components/ExportExcelButton';
 import { useFeatureFlag } from '@/lib/feature-flags/client';
+
+function currentMonthVN(): string {
+  // YYYY-MM theo VN timezone — dùng cho ExportExcelButton default month
+  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit' });
+  const parts = fmt.formatToParts(new Date());
+  const y = parts.find((p) => p.type === 'year')?.value ?? '1970';
+  const m = parts.find((p) => p.type === 'month')?.value ?? '01';
+  return `${y}-${m}`;
+}
 
 interface Props {
   myRoleCode: string;
@@ -175,15 +185,23 @@ export default function DoiChieuClient({ scope, canReview, myBranchId, myRoleCod
                   : 'Xem danh sách batch của các Sale trong cơ sở.'}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setRefreshTick((t) => t + 1)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white text-sm font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50 disabled:opacity-50"
-              disabled={loading}
-            >
-              {loading ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />}
-              Tải lại
-            </button>
+            <div className="flex items-center gap-2">
+              <ExportExcelButton
+                roleCode={myRoleCode}
+                ownBranchId={myBranchId}
+                defaultMonth={currentMonthVN()}
+                defaultBranchId={branchId}
+              />
+              <button
+                type="button"
+                onClick={() => setRefreshTick((t) => t + 1)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white text-sm font-medium text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50 disabled:opacity-50"
+                disabled={loading}
+              >
+                {loading ? <Loader2 className="animate-spin" size={16} /> : <RefreshCw size={16} />}
+                Tải lại
+              </button>
+            </div>
           </div>
 
           {/* Filters: branch + date (status đã chuyển sang tab) */}

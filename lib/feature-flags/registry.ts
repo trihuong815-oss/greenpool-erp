@@ -87,6 +87,14 @@ export const FEATURE_FLAGS: Record<string, FeatureFlagDef> = {
     tag: 'sales-v2-m2.1',
   },
 
+  // ─── M2.2 PR-6 (2026-06-20) — Export Excel báo cáo doanh số ───
+  SALES_V2_EXPORT_EXCEL: {
+    key: 'SALES_V2_EXPORT_EXCEL',
+    description: 'Xuất Excel báo cáo doanh số 1 cơ sở × 1 tháng (PR-6). UI nút + endpoint flag-gated.',
+    defaultEnabled: false,  // OFF mặc định — bật canary TP_KE allowList trước khi mở rộng.
+    tag: 'sales-v2-m2.2',
+  },
+
   // Slot cho feature tương lai — thêm khi cần dark launch.
 };
 
