@@ -245,6 +245,41 @@ export async function GET(req: NextRequest) {
     const bySale = Array.from(bySaleMap.values()).sort((a, b) => b.sales - a.sales);
     const byPackage = Array.from(byPackageMap.values()).sort((a, b) => b.sales - a.sales);
 
+    // ─── PR-TK3C (2026-06-21) — Wire target vào Excel ──────────────────────────
+    // Đọc 1 doc salesTargets/{year}_{branchId} → trích monthTargets[monthIdx]
+    // và staffTargets[saleId][monthIdx]. Fail-soft: không có target → exportData
+    // KHÔNG có target fields → helper render Excel như cũ (KHÔNG dòng/cột target).
+    // KHÔNG đụng tổng doanh số/thực thu/công nợ.
+    let branchTarget: number | null = null;
+    try {
+      const [yearStr, monthStr] = month.split('-');
+      const yearNum = Number(yearStr);
+      const monthIdx = Number(monthStr) - 1;  // 0-11
+      const targetDocId = `${yearNum}_${branchId}`;
+      const targetSnap = await db.collection(COLLECTIONS.SALES_TARGETS).doc(targetDocId).get();
+      if (targetSnap.exists) {
+        const td = targetSnap.data() ?? {};
+        // Branch target
+        const mt = (td.monthTargets ?? null) as number[] | null;
+        if (Array.isArray(mt) && mt.length >= 12) {
+          const v = Number(mt[monthIdx] ?? 0);
+          if (v > 0) branchTarget = v;
+        }
+        // Per-Sale target: fill vào bySale[].target
+        const staff = (td.staffTargets ?? {}) as Record<string, number[]>;
+        for (const s of bySale) {
+          const arr = staff[s.saleId];
+          if (Array.isArray(arr) && arr.length >= 12) {
+            const v = Number(arr[monthIdx] ?? 0);
+            if (v > 0) s.target = v;
+          }
+        }
+      }
+    } catch (e) {
+      // Fail-soft: lỗi đọc target → không có target trong Excel (giữ behavior cũ)
+      console.warn('[sales-v2/export] target read fail (swallowed):', (e as Error)?.message);
+    }
+
     // 8. Build Excel
     const exportedAt = new Date();
     const exportData: ExportData = {
@@ -261,7 +296,9 @@ export async function GET(req: NextRequest) {
       transactions,
       bySale,
       byPackage,
-      // branchTarget: undefined — PR-6 chưa có module chỉ tiêu, để PR-7 fill
+      // PR-TK3C: fill branchTarget nếu cơ sở/tháng có target. null/undefined → Sheet 1
+      // không hiện 3 dòng chỉ tiêu (helper tự detect).
+      branchTarget,
     };
 
     const buffer = await buildSalesExportWorkbook(exportData);
