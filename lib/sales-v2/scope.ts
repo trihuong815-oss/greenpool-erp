@@ -50,6 +50,24 @@ export function canSaleEnter(roleCode: string): boolean {
   return role === 'sale' || role === 'qlcs';
 }
 
+/** M2.2 PR-6.3 (2026-06-21): quyền export Excel báo cáo doanh số (file tải về).
+ *  TÁCH BIỆT khỏi getScopeRole vì export = file ra ngoài, chính sách giới hạn hơn
+ *  quyền view màn hình /tong-ket.
+ *
+ *  Allow-list:
+ *    - top scope NHƯNG LOẠI TP_GS (TP_GS xem được /tong-ket nhưng KHÔNG tải file)
+ *    - qlcs scope (chỉ branch của mình — server-override branchId trong route)
+ *
+ *  KHÔNG đụng getScopeRole → /tong-ket, monthly-summary, các route khác KHÔNG bị ảnh hưởng.
+ */
+export function canExportSalesExcel(roleCode: string): boolean {
+  const role = getScopeRole(roleCode);
+  if (role !== 'top' && role !== 'qlcs') return false;
+  // Loại trừ TP_GS dù scope=top
+  if (roleCode === 'TP_GS') return false;
+  return true;
+}
+
 /** Kế toán có quyền duyệt/sửa batch không. */
 export function canAccountantReview(roleCode: string): boolean {
   const r = getScopeRole(roleCode);

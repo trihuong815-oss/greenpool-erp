@@ -29,7 +29,7 @@ import { getFirebaseAdminDb } from '@/lib/firebase/admin';
 import { COLLECTIONS } from '@/lib/firebase/collections';
 import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-auth';
 import { isFlagEnabled } from '@/lib/feature-flags/server';
-import { getScopeRole } from '@/lib/sales-v2/scope';
+import { getScopeRole, canExportSalesExcel } from '@/lib/sales-v2/scope';
 import { isBranchId, BRANCH_BY_ID, type BranchId } from '@/lib/branches';
 import { recordSalesAuditIfEnabled } from '@/lib/sales-v2/audit-log';
 import {
@@ -79,11 +79,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Không thể export tháng tương lai' }, { status: 400 });
     }
 
-    // 3. Permission + scope (top / qlcs only)
-    const scope = getScopeRole(roleCode);
-    if (scope !== 'top' && scope !== 'qlcs') {
+    // 3. Permission scope cho EXPORT (PR-6.3 2026-06-21: dùng canExportSalesExcel
+    //    để TÁCH RIÊNG quyền tải file Excel khỏi quyền view /tong-ket. TP_GS xem
+    //    được /tong-ket nhưng KHÔNG được tải file ra ngoài).
+    if (!canExportSalesExcel(roleCode)) {
       return NextResponse.json({ error: 'Không có quyền export báo cáo' }, { status: 403 });
     }
+    const scope = getScopeRole(roleCode);  // 'top' | 'qlcs' (đã guarantee bởi canExportSalesExcel)
 
     let branchId: BranchId;
     if (scope === 'qlcs') {

@@ -8,6 +8,7 @@ import {
   canAccountantReview,
   canReadBatch,
   canEditTransaction,
+  canExportSalesExcel,
 } from '@/lib/sales-v2/scope';
 
 // Helper: tạo AuthedCaller giả
@@ -61,14 +62,14 @@ describe('getScopeRole', () => {
 });
 
 describe('canSaleEnter', () => {
-  it('chỉ NV_SALE/NV_SALE_PT true', () => {
+  it('NV_SALE/NV_SALE_PT + QLCS_* true (V9.4: QLCS được nhập doanh số khi cần)', () => {
     expect(canSaleEnter('NV_SALE')).toBe(true);
     expect(canSaleEnter('NV_SALE_PT')).toBe(true);
+    expect(canSaleEnter('QLCS_HM')).toBe(true);  // V9.4 chốt — drive-by fix stale assertion
     expect(canSaleEnter('ADMIN')).toBe(false);
     expect(canSaleEnter('CEO')).toBe(false);
     expect(canSaleEnter('GD_KD')).toBe(false);
     expect(canSaleEnter('NV_KE')).toBe(false);
-    expect(canSaleEnter('QLCS_HM')).toBe(false);
   });
 });
 
@@ -186,5 +187,62 @@ describe('canEditTransaction', () => {
 
   it('Role lạ KHÔNG edit', () => {
     expect(canEditTransaction(caller('GV_CB'), pendingBatch)).toBe(false);
+  });
+});
+
+// PR-6.3 (2026-06-21): allow-list export Excel — TÁCH RIÊNG khỏi getScopeRole.
+// TP_GS xem được /tong-ket nhưng KHÔNG được tải file Excel ra ngoài.
+describe('canExportSalesExcel — PR-6.3 export Excel allow-list', () => {
+  it('Top role: ADMIN/CEO/CHU_TICH/GD_KD/GD_VP/TP_KE → TRUE', () => {
+    expect(canExportSalesExcel('ADMIN')).toBe(true);
+    expect(canExportSalesExcel('CEO')).toBe(true);
+    expect(canExportSalesExcel('CHU_TICH')).toBe(true);
+    expect(canExportSalesExcel('GD_KD')).toBe(true);
+    expect(canExportSalesExcel('GD_VP')).toBe(true);
+    expect(canExportSalesExcel('TP_KE')).toBe(true);
+  });
+
+  it('Tất cả 5 QLCS → TRUE (server sẽ override branch riêng)', () => {
+    expect(canExportSalesExcel('QLCS_HM')).toBe(true);
+    expect(canExportSalesExcel('QLCS_TK')).toBe(true);
+    expect(canExportSalesExcel('QLCS_CTT')).toBe(true);
+    expect(canExportSalesExcel('QLCS_24NCT')).toBe(true);
+    expect(canExportSalesExcel('QLCS_TT')).toBe(true);
+  });
+
+  it('TP_GS → FALSE (loại trừ riêng cho export, vẫn xem /tong-ket được)', () => {
+    expect(canExportSalesExcel('TP_GS')).toBe(false);
+    // Verify getScopeRole vẫn trả 'top' để /tong-ket không bị ảnh hưởng
+    expect(getScopeRole('TP_GS')).toBe('top');
+  });
+
+  it('Sale roles → FALSE', () => {
+    expect(canExportSalesExcel('NV_SALE')).toBe(false);
+    expect(canExportSalesExcel('NV_SALE_PT')).toBe(false);
+  });
+
+  it('Kế toán cơ sở (NV_KE) → FALSE', () => {
+    expect(canExportSalesExcel('NV_KE')).toBe(false);
+  });
+
+  it('Nhân viên khác (lễ tân/giáo viên/kỹ thuật/cứu hộ/tạp vụ) → FALSE', () => {
+    expect(canExportSalesExcel('LE_TAN')).toBe(false);
+    expect(canExportSalesExcel('GIAO_VIEN')).toBe(false);
+    expect(canExportSalesExcel('KY_THUAT')).toBe(false);
+    expect(canExportSalesExcel('CUU_HO')).toBe(false);
+    expect(canExportSalesExcel('TAP_VU')).toBe(false);
+    expect(canExportSalesExcel('KT_XLN_CTT')).toBe(false);
+    expect(canExportSalesExcel('GV_CB')).toBe(false);
+  });
+
+  it('Role rỗng/null/unknown → FALSE', () => {
+    expect(canExportSalesExcel('')).toBe(false);
+    expect(canExportSalesExcel('UNKNOWN_ROLE')).toBe(false);
+  });
+
+  it('Bonus QLCS_* role tương lai → TRUE (theo prefix match getScopeRole)', () => {
+    // Nếu admin thêm QLCS mới (vd QLCS_NEWBRANCH) → tự match scope='qlcs' → được export
+    // (branch sẽ bị server override). Đây là intent của design.
+    expect(canExportSalesExcel('QLCS_NEWBRANCH')).toBe(true);
   });
 });
