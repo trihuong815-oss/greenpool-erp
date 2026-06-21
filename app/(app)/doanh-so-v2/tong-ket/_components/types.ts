@@ -86,4 +86,51 @@ export interface Summary {
   }>;
   // V8.X (2026-06-18) — danh sách KH chi tiết theo Sale (replace PT card)
   salesCustomers?: Record<string, SaleCustomers>;
+  // V8.X audit fix — số tx vượt LIMIT (5000) → số liệu không đầy đủ
+  truncated?: boolean;
+  limit?: number;
+  // ─── PR-TK2 (2026-06-21) — Data completeness ───
+  /** Số khách distinct trong scope (phone chuẩn hóa, fallback name+saleId nếu thiếu phone). */
+  customerCount?: number;
+  /** Đếm tx theo reviewStatus — TRƯỚC khi filter approved. Phục vụ alert "còn N chờ duyệt". */
+  txStatusStats?: {
+    total: number;
+    approved: number;
+    pending: number;
+    rejected: number;
+  };
+  /** Đếm batch theo status trong scope. Sale → tất cả 0 (không trả null để tránh check khắp UI). */
+  batchStats?: {
+    total: number;
+    pendingReview: number;
+    approved: number;
+    returned: number;
+  };
+  /** Trạng thái khóa tháng.
+   *  - QLCS/Accountant + Top có filter 1 branch: single shape
+   *  - Top xem all branches: summary shape
+   *  - Sale: null
+   */
+  monthLock?: MonthLockSingle | MonthLockSummary | null;
+}
+
+export interface MonthLockSingle {
+  branchId: string;
+  locked: boolean;
+  lockedByName: string | null;
+  lockedAt: string | null;  // ISO timestamp
+}
+
+export interface MonthLockSummary {
+  totalBranches: number;
+  lockedCount: number;
+  lockedBranchIds: string[];
+}
+
+export function isMonthLockSummary(v: MonthLockSingle | MonthLockSummary | null | undefined): v is MonthLockSummary {
+  return v != null && 'totalBranches' in v;
+}
+
+export function isMonthLockSingle(v: MonthLockSingle | MonthLockSummary | null | undefined): v is MonthLockSingle {
+  return v != null && 'branchId' in v;
 }

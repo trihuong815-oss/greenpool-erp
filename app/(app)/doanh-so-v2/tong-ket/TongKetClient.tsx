@@ -11,6 +11,7 @@ import type { ScopeRole } from '@/lib/sales-v2/scope';
 import TongKetHeader from './_components/TongKetHeader';
 import { LoadingState, ErrorState, EmptyState } from './_components/TongKetStates';
 import MonthlyKpiCards from './_components/MonthlyKpiCards';
+import BusinessAlerts from './_components/BusinessAlerts';
 import SourceBreakdownCard from './_components/SourceBreakdownCard';
 import TopPackagesCard from './_components/TopPackagesCard';
 import PromoSummaryCard from './_components/PromoSummaryCard';
@@ -70,6 +71,8 @@ export default function TongKetClient({ scope }: Props) {
           showBranchFilter={showBranchFilter}
           onMonthChange={setMonth}
           onBranchChange={setBranchId}
+          monthLock={data?.monthLock}
+          showReconcileCta={scope !== 'sale'}
         />
 
         {loading ? (
@@ -77,10 +80,19 @@ export default function TongKetClient({ scope }: Props) {
         ) : error ? (
           <ErrorState message={error} />
         ) : !data ? null : data.totals.transactions === 0 ? (
-          <EmptyState month={month} />
+          <>
+            <BusinessAlerts data={data} />
+            <EmptyState month={month} />
+          </>
         ) : (
           <>
-            <MonthlyKpiCards totals={data.totals} />
+            <BusinessAlerts data={data} />
+
+            <MonthlyKpiCards
+              totals={data.totals}
+              customerCount={data.customerCount}
+              pendingReviewCount={(data.txStatusStats?.pending ?? 0) + (data.batchStats?.pendingReview ?? 0)}
+            />
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <SourceBreakdownCard bySource={data.bySource} />

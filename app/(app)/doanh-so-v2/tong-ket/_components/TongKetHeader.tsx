@@ -1,12 +1,15 @@
 'use client';
 
 // PR-TK1 (2026-06-21) — Header card cho /tong-ket. Tách từ TongKetClient.tsx.
-// Tiêu đề + subtitle theo scope + month picker prev/next + branch filter (chỉ top).
+// PR-TK2 (2026-06-21) — Thêm MonthLockBadge cạnh title + CTA "Sang đối chiếu".
 
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import Link from 'next/link';
+import { ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react';
 import { BRANCHES, type BranchId } from '@/lib/branches';
 import type { ScopeRole } from '@/lib/sales-v2/scope';
 import { currentMonthVN, fmtMonth, shiftMonth } from './utils';
+import MonthLockBadge from './MonthLockBadge';
+import type { MonthLockSingle, MonthLockSummary } from './types';
 
 interface Props {
   scope: ScopeRole;
@@ -15,10 +18,18 @@ interface Props {
   showBranchFilter: boolean;
   onMonthChange: (month: string) => void;
   onBranchChange: (branchId: BranchId | 'all') => void;
+  /** PR-TK2: trạng thái khóa tháng. Sale → null → badge ẩn. */
+  monthLock?: MonthLockSingle | MonthLockSummary | null;
+  /** PR-TK2: hiện CTA "Sang đối chiếu" cho role có quyền. Sale ẩn. */
+  showReconcileCta?: boolean;
 }
 
 export default function TongKetHeader(props: Props) {
-  const { scope, month, branchId, showBranchFilter, onMonthChange, onBranchChange } = props;
+  const {
+    scope, month, branchId, showBranchFilter,
+    onMonthChange, onBranchChange,
+    monthLock, showReconcileCta,
+  } = props;
   const cur = currentMonthVN();
 
   const subtitle = scope === 'sale'
@@ -31,10 +42,13 @@ export default function TongKetHeader(props: Props) {
     <div className="card">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-lg font-bold text-slate-800">Tổng kết tháng {fmtMonth(month)}</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-lg font-bold text-slate-800">Tổng kết tháng {fmtMonth(month)}</h1>
+            <MonthLockBadge monthLock={monthLock} />
+          </div>
           <p className="mt-1 text-sm text-slate-600">{subtitle}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             type="button"
             onClick={() => onMonthChange(shiftMonth(month, -1))}
@@ -68,6 +82,16 @@ export default function TongKetHeader(props: Props) {
               <option value="all">Tất cả cơ sở</option>
               {BRANCHES.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
             </select>
+          )}
+          {showReconcileCta && (
+            <Link
+              href="/doanh-so-v2/doi-chieu"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-emerald-700 bg-emerald-50 ring-1 ring-emerald-200 hover:bg-emerald-100 transition"
+              title="Sang trang đối chiếu doanh số"
+            >
+              Sang đối chiếu
+              <ArrowRight size={14} />
+            </Link>
           )}
         </div>
       </div>

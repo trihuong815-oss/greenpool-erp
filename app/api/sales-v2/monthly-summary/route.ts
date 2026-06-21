@@ -22,8 +22,9 @@ import { getFirebaseAdminDb } from '@/lib/firebase/admin';
 import { COLLECTIONS } from '@/lib/firebase/collections';
 import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-auth';
 import { getScopeRole } from '@/lib/sales-v2/scope';
-import { isBranchId } from '@/lib/branches';
+import { isBranchId, BRANCHES, type BranchId } from '@/lib/branches';
 import { fetchFreshPackageMap, applyFreshPackageName, collectPackageIds } from '@/lib/sales-v2/resolve-package-names';
+import { getMonthLockState } from '@/lib/sales-v2/month-lock';
 import type { SalesV2Source } from '@/lib/types/sales-v2';
 
 export const runtime = 'nodejs';
@@ -101,6 +102,12 @@ export async function GET(req: NextRequest) {
     const byPackage: Record<string, PackageBucket> = {};
     const bySale: Record<string, NamedBucket> = {};
     const byBranch: Record<string, NamedBucket> = {};
+    // PR-TK2 (2026-06-21): txStatusStats — đếm theo reviewStatus TRƯỚC khi filter approved.
+    // Phục vụ alert "còn N tx chờ duyệt/từ chối". KPI doanh số vẫn chỉ dùng approved.
+    const txStatusStats = { total: 0, approved: 0, pending: 0, rejected: 0 };
+    // PR-TK2: customerCount — distinct phone trong scope.
+    // Fallback nếu thiếu phone: dùng customerName + saleId làm key (tránh underestimate).
+    const customerKeys = new Set<string>();
     // V6 PT (2026-06-17): gói tính theo buổi. Aggregate riêng để báo cáo dịch vụ buổi.
     // Chỉ tính tx có packageIsCustomQuantity=true, KHÔNG bao gồm thanh_toan_not.
     const ptTotals = { transactions: 0, sessions: 0, sales: 0 };
@@ -148,10 +155,25 @@ export async function GET(req: NextRequest) {
 
     for (const d of snap.docs) {
       const x = d.data() as Record<string, any>;
-      if (x.reviewStatus !== 'approved') continue;
       // BUG-2: filter branchId client-side
       if (scopeBranchId && x.branchId !== scopeBranchId) continue;
       if (scopeSaleId && x.saleId !== scopeSaleId) continue;
+
+      // PR-TK2: count theo reviewStatus TRƯỚC khi filter approved.
+      const status = String(x.reviewStatus ?? '');
+      txStatusStats.total += 1;
+      if (status === 'approved') txStatusStats.approved += 1;
+      else if (status === 'rejected') txStatusStats.rejected += 1;
+      else txStatusStats.pending += 1;  // pending hoặc bất kỳ status khác
+
+      // CHỈ approved mới vào aggregation tiếp theo (giữ semantics cũ)
+      if (x.reviewStatus !== 'approved') continue;
+
+      // PR-TK2: customerCount — distinct theo phone (chuẩn hóa trim+lowercase),
+      // fallback customerName+saleId nếu thiếu phone (tránh underestimate).
+      const phoneRaw = String(x.phone ?? '').trim();
+      if (phoneRaw) customerKeys.add(`p:${phoneRaw}`);
+      else customerKeys.add(`n:${String(x.customerName ?? '').trim()}:${String(x.saleId ?? '')}`);
 
       const pv = Number(x.packageValue ?? 0);
       const ct = Number(x.collectedToday ?? 0);
@@ -328,6 +350,69 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // ─── PR-TK2 (2026-06-21) — batchStats + monthLock ───────────────────────────
+    // batchStats: query salesDailyBatches WHERE month=X (pattern same monthly-summary),
+    // filter scope client-side, count theo status. Limit 2000 đủ cho 1 tháng × 5 cơ sở.
+    const batchStats = { total: 0, pendingReview: 0, approved: 0, returned: 0 };
+    if (role !== 'sale') {
+      // Sale không cần batch stats — defer null. Top/Acct/QLCS cần.
+      try {
+        const batchSnap = await db.collection(COLLECTIONS.SALES_DAILY_BATCHES)
+          .where('month', '==', month)
+          .limit(2000)
+          .get();
+        for (const bd of batchSnap.docs) {
+          const b = bd.data();
+          if (scopeBranchId && b.branchId !== scopeBranchId) continue;
+          // Skip draft+0tx (orphan placeholder — đồng nhất với /batches route filter)
+          if (b.status === 'draft' && Number(b.totalTransactions ?? 0) === 0) continue;
+          batchStats.total += 1;
+          if (b.status === 'pending_review') batchStats.pendingReview += 1;
+          else if (b.status === 'approved') batchStats.approved += 1;
+          else if (b.status === 'returned') batchStats.returned += 1;
+        }
+      } catch (e) {
+        console.warn('[monthly-summary] batchStats fail (swallowed):', (e as Error)?.message);
+      }
+    }
+
+    // monthLock: docId deterministic `${branchId}_${month}` → đọc trực tiếp.
+    // - QLCS/Accountant: lock của branch caller (scopeBranchId)
+    // - Top + filter 1 branch: lock của branch đó
+    // - Top + xem all: trả summary { lockedCount, totalBranches, lockedBranchIds }
+    // - Sale: null (không quan tâm)
+    type MonthLockSingle = { branchId: string; locked: boolean; lockedByName: string | null; lockedAt: string | null };
+    type MonthLockSummary = { totalBranches: number; lockedCount: number; lockedBranchIds: string[] };
+    let monthLock: MonthLockSingle | MonthLockSummary | null = null;
+    if (role !== 'sale') {
+      try {
+        if (scopeBranchId) {
+          // 1 cơ sở cụ thể
+          const st = await getMonthLockState(scopeBranchId as BranchId, month);
+          monthLock = {
+            branchId: scopeBranchId,
+            locked: st.locked,
+            lockedByName: st.lockedByName,
+            lockedAt: st.lockedAt ? st.lockedAt.toDate().toISOString() : null,
+          };
+        } else if (role === 'top') {
+          // Top xem all branches → summary
+          const allBranches: BranchId[] = BRANCHES.map((b) => b.id as BranchId);
+          const results = await Promise.all(
+            allBranches.map(async (bid) => ({ bid, st: await getMonthLockState(bid, month) })),
+          );
+          const lockedBranchIds = results.filter((r) => r.st.locked).map((r) => r.bid);
+          monthLock = {
+            totalBranches: allBranches.length,
+            lockedCount: lockedBranchIds.length,
+            lockedBranchIds,
+          };
+        }
+      } catch (e) {
+        console.warn('[monthly-summary] monthLock fail (swallowed):', (e as Error)?.message);
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       month,
@@ -348,6 +433,11 @@ export async function GET(req: NextRequest) {
       // V8.X audit fix: cảnh báo khi snap chạm limit (5000 tx) → số liệu thiếu
       truncated,
       limit: LIMIT,
+      // ─── PR-TK2 (2026-06-21) — Data completeness ───
+      customerCount: customerKeys.size,
+      txStatusStats,
+      batchStats,    // sale → tất cả = 0 (không trả null để tránh check null khắp UI)
+      monthLock,     // sale → null; QLCS/branch-specific → single; top all → summary
     });
   } catch (err: any) {
     if (err instanceof UnauthorizedError) {
