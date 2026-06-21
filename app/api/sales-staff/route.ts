@@ -3,13 +3,21 @@
 //   Admin only (CEO/GD_KD/GD_VP). Email auto-gen, password mặc định Greenpool@2026.
 //   Idempotent: nếu email đã tồn tại → trả lỗi 409.
 //   roleId mặc định 'NV_SALE'. 'NV_SALE_PT' chỉ chấp nhận cho cơ sở 24 (Sale PT Gym).
+//
+// GET /api/sales-staff?branchId=X
+//   PR-TK3B (2026-06-21): list active Sale (NV_SALE + NV_SALE_PT) thuộc 1 cơ sở.
+//   Dùng cho form nhập staffTargets trong tab "Chỉ tiêu" /tong-ket.
+//   Permission:
+//     - Top role (ADMIN/CEO/CHU_TICH/GD_KD/GD_VP/TP_KE/TP_GS): xem mọi branch
+//     - QLCS: chỉ branch mình
+//     - Sale/NV_KE/khác: 403
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getFirebaseAdminDb, getFirebaseAdminAuth } from '@/lib/firebase/admin';
 import { COLLECTIONS } from '@/lib/firebase/collections';
 import { writeAuditLog } from '@/lib/firebase/audit-log';
 import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-auth';
-import { isAdmin } from '@/lib/firebase/checklist-scope';
+import { isAdmin, isTP, isQLCS } from '@/lib/firebase/checklist-scope';
 import { isSaleRole } from '@/lib/sales-roles';
 
 const ALLOWED_BRANCH_IDS = new Set(['HM', 'TK', 'CTT', '24', 'TT']);
@@ -23,6 +31,53 @@ function slugify(name: string): string {
     .replace(/đ/gi, 'd')
     .replace(/[^a-zA-Z0-9]+/g, '')
     .toLowerCase();
+}
+
+// PR-TK3B (2026-06-21) — GET ?branchId=X — list active Sale per branch
+export async function GET(req: NextRequest) {
+  try {
+    const caller = await getAuthedCaller();
+    const branchId = req.nextUrl.searchParams.get('branchId') ?? '';
+    if (!ALLOWED_BRANCH_IDS.has(branchId)) {
+      return NextResponse.json({ error: 'branchId không hợp lệ' }, { status: 400 });
+    }
+
+    // Permission: top role (admin+TP) cross-branch; QLCS own branch only
+    const p = caller.profile;
+    const isTopReader = isAdmin(p) || isTP(p);
+    const isQlcsOwn = isQLCS(p) && p.facility_id === branchId;
+    if (!isTopReader && !isQlcsOwn) {
+      return NextResponse.json({ error: 'Không có quyền xem danh sách Sale' }, { status: 403 });
+    }
+
+    const db = getFirebaseAdminDb();
+    const snap = await db.collection(COLLECTIONS.USERS)
+      .where('branchId', '==', branchId)
+      .where('status', '==', 'active')
+      .get();
+
+    const sales = snap.docs
+      .map((d) => {
+        const data = d.data();
+        return {
+          uid: d.id,
+          displayName: String(data.displayName ?? ''),
+          email: String(data.email ?? ''),
+          roleId: String(data.roleId ?? ''),
+          branchId: String(data.branchId ?? ''),
+        };
+      })
+      .filter((u) => isSaleRole(u.roleId))
+      .sort((a, b) => a.displayName.localeCompare(b.displayName, 'vi'));
+
+    return NextResponse.json({ ok: true, branchId, sales });
+  } catch (err: any) {
+    if (err instanceof UnauthorizedError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
+    console.error('[sales-staff GET]', err);
+    return NextResponse.json({ error: err?.message ?? 'Lỗi server' }, { status: 500 });
+  }
 }
 
 export async function POST(req: NextRequest) {

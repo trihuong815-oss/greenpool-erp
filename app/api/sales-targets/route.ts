@@ -125,7 +125,19 @@ export async function POST(req: NextRequest) {
 
     const db = getFirebaseAdminDb();
     const now = new Date();
+
+    // PR-TK3B (2026-06-21): pre-read snapshots TRƯỚC khi ghi → audit log có before+after
+    // để diff được. Pattern same M2.1 PR-3B (read trước transaction). Safe vì sales-targets
+    // không cần atomic giữa read/write — race chỉ ms-level, audit chấp nhận.
+    const beforeSnapshots = new Map<string, Record<string, any> | null>();
+    await Promise.all(entries.map(async (e: { year: number; branchId: string }) => {
+      const id = docId(e.year, e.branchId);
+      const snap = await db.collection(COL).doc(id).get();
+      beforeSnapshots.set(id, snap.exists ? snap.data() ?? null : null);
+    }));
+
     const batch = db.batch();
+    const auditDiffs: Array<{ id: string; branchId: string; year: number; before: any; after: any }> = [];
     for (const e of entries) {
       const id = docId(e.year, e.branchId);
       const docRef = db.collection(COL).doc(id);
@@ -180,16 +192,36 @@ export async function POST(req: NextRequest) {
       }
 
       batch.set(docRef, patch, { merge: true });
+
+      // Collect cho audit log — trích chỉ field thay đổi để gọn
+      const before = beforeSnapshots.get(id) ?? null;
+      const beforeSlim = before ? {
+        monthTargets: before.monthTargets ?? null,
+        staffTargets: before.staffTargets ?? null,
+        leadTargets: before.leadTargets ?? null,
+      } : null;
+      const afterSlim: Record<string, unknown> = {};
+      if (e.monthTargets !== undefined) afterSlim.monthTargets = patch.monthTargets;
+      if (e.staffTargets !== undefined) afterSlim.staffTargets = patch.staffTargets;
+      if (e.leadTargets !== undefined) afterSlim.leadTargets = patch.leadTargets;
+      auditDiffs.push({
+        id, branchId: e.branchId, year: e.year,
+        before: beforeSlim, after: afterSlim,
+      });
     }
     await batch.commit();
 
+    // PR-TK3B: ghi audit log với before+after snapshot per entry để diff được.
+    // 1 audit log gộp tất cả entries (1 request = 1 audit row).
     await writeAuditLog({
       action: 'bulk_upsert_sales_targets',
       module: 'sales',
       userId: caller.profile.uid,
       branchId: entries.length === 1 ? entries[0].branchId : null,
-      before: null,
-      after: { count: entries.length, year: entries[0].year },
+      before: entries.length === 1 ? auditDiffs[0].before : { count: entries.length },
+      after: entries.length === 1
+        ? auditDiffs[0].after
+        : { count: entries.length, year: entries[0].year, diffs: auditDiffs },
       actorName: caller.actorName,
       actorRole: caller.actorRole,
       source: 'api',

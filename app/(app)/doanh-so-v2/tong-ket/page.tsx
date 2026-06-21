@@ -5,6 +5,7 @@ import { canAccessRoute } from '@/lib/permissions';
 import { requireAuthedProfile } from '@/lib/firebase/current-profile';
 import { AppTopBar } from '@/components/AppTopBar';
 import { getScopeRole } from '@/lib/sales-v2/scope';
+import { isBranchId, type BranchId } from '@/lib/branches';
 import TongKetClient from './TongKetClient';
 
 export const dynamic = 'force-dynamic';
@@ -27,10 +28,16 @@ export default async function TongKetPage() {
   }
 
   const role = getScopeRole(profile.roleCode) ?? 'qlcs';
+  const myBranchId: BranchId | null = isBranchId(profile.branchId) ? profile.branchId : null;
   return (
     <>
       <AppTopBar title="Tổng kết tháng" icon="task" />
-      <TongKetClient scope={role} />
+      <TongKetClient
+        scope={role}
+        myRoleCode={profile.roleCode}
+        myUid={profile.id}
+        myBranchId={myBranchId}
+      />
     </>
   );
 }
