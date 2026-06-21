@@ -12,6 +12,7 @@ import TongKetHeader from './_components/TongKetHeader';
 import { LoadingState, ErrorState, EmptyState } from './_components/TongKetStates';
 import MonthlyKpiCards from './_components/MonthlyKpiCards';
 import BusinessAlerts from './_components/BusinessAlerts';
+import TargetProgressCard from './_components/TargetProgressCard';
 import SourceBreakdownCard from './_components/SourceBreakdownCard';
 import TopPackagesCard from './_components/TopPackagesCard';
 import PromoSummaryCard from './_components/PromoSummaryCard';
@@ -94,6 +95,10 @@ export default function TongKetClient({ scope }: Props) {
               pendingReviewCount={(data.txStatusStats?.pending ?? 0) + (data.batchStats?.pendingReview ?? 0)}
             />
 
+            {/* PR-TK3A: hiển thị target progress card. Sale → null target = "Chưa đặt".
+                Top all branches: target = tổng monthTargets các cơ sở có target. */}
+            <TargetProgressCard targetSummary={data.targetSummary} />
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <SourceBreakdownCard bySource={data.bySource} />
               <TopPackagesCard byPackage={data.byPackage} />
@@ -113,7 +118,12 @@ export default function TongKetClient({ scope }: Props) {
               />
             )}
 
-            {showSaleTable && <TopSalesTable bySale={data.bySale} />}
+            {showSaleTable && (
+              <TopSalesTable
+                bySale={data.bySale}
+                saleTargetsThisMonth={data.saleTargetsThisMonth}
+              />
+            )}
 
             {showBranchTable && <BranchSummaryTable byBranch={data.byBranch} />}
           </>

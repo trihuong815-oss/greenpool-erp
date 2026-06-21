@@ -112,6 +112,31 @@ export interface Summary {
    *  - Sale: null
    */
   monthLock?: MonthLockSingle | MonthLockSummary | null;
+  // ─── PR-TK3A (2026-06-21) — Chỉ tiêu doanh số tháng (read-only) ───
+  /** Tổng hợp tiến độ chỉ tiêu tháng theo scope. Luôn có (status='not_set' nếu chưa đặt). */
+  targetSummary?: TargetSummary;
+  /** Map saleId → target VND của tháng đang xem.
+   *  - Sale: chỉ chứa { [ownUid]: target } (nếu có)
+   *  - QLCS/Acct: tất cả Sale trong branch
+   *  - Top: tất cả Sale trong scope (branch filter hoặc all)
+   *  - Empty {} nếu chưa đặt target Sale nào.
+   */
+  saleTargetsThisMonth?: Record<string, number>;
+}
+
+// ─── PR-TK3A (2026-06-21) — Target types ───
+export type TargetScope = 'sale' | 'branch' | 'system' | 'none';
+export type TargetStatus = 'achieved' | 'on_track' | 'watch' | 'behind' | 'not_set';
+
+export interface TargetSummary {
+  scope: TargetScope;
+  targetRevenue: number | null;
+  actualRevenue: number;
+  percentComplete: number | null;
+  remaining: number | null;
+  daysElapsedPercent: number;
+  progressGap: number | null;
+  status: TargetStatus;
 }
 
 export interface MonthLockSingle {

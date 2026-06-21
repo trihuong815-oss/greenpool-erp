@@ -25,6 +25,7 @@ import { getScopeRole } from '@/lib/sales-v2/scope';
 import { isBranchId, BRANCHES, type BranchId } from '@/lib/branches';
 import { fetchFreshPackageMap, applyFreshPackageName, collectPackageIds } from '@/lib/sales-v2/resolve-package-names';
 import { getMonthLockState } from '@/lib/sales-v2/month-lock';
+import { buildTargetSummary, parseMonth, type TargetScope } from '@/lib/sales-v2/target-progress';
 import type { SalesV2Source } from '@/lib/types/sales-v2';
 
 export const runtime = 'nodejs';
@@ -413,6 +414,98 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // ─── PR-TK3A (2026-06-21) — Chỉ tiêu doanh số tháng (read-only) ────────────
+    // Đọc salesTargets/{year}_{branchId} → trích monthTargets[monthIdx] + staffTargets.
+    // Scope:
+    //   - sale: target cá nhân từ staffTargets[uid][monthIdx] của branch chính của Sale.
+    //   - qlcs/accountant: target cơ sở mình (scopeBranchId).
+    //   - top + filter 1 branch: target cơ sở filter.
+    //   - top + all: tổng monthTargets của all branches có target.
+    // KHÔNG đọc leadTargets (defer). KHÔNG ghi (read-only PR-TK3A).
+    const { year, monthIndex } = parseMonth(month);
+    let targetScope: TargetScope = 'none';
+    let targetRevenue: number | null = null;
+    const saleTargetsThisMonth: Record<string, number> = {};
+
+    try {
+      if (role === 'sale') {
+        // Sale: chỉ xem target cá nhân. Đọc target doc của branch Sale → staffTargets[uid][monthIdx]
+        const saleBranch = caller.profile.facility_id;
+        if (saleBranch && isBranchId(saleBranch)) {
+          const docSnap = await db.collection(COLLECTIONS.SALES_TARGETS)
+            .doc(`${year}_${saleBranch}`).get();
+          if (docSnap.exists) {
+            const d = docSnap.data() ?? {};
+            const staff = (d.staffTargets ?? {}) as Record<string, number[]>;
+            const own = staff[caller.profile.uid];
+            if (Array.isArray(own) && own.length >= 12) {
+              const v = Number(own[monthIndex] ?? 0);
+              if (v > 0) {
+                targetScope = 'sale';
+                targetRevenue = v;
+                saleTargetsThisMonth[caller.profile.uid] = v;
+              }
+            }
+          }
+        }
+      } else if (scopeBranchId) {
+        // QLCS / Acct / Top filter 1 branch
+        const docSnap = await db.collection(COLLECTIONS.SALES_TARGETS)
+          .doc(`${year}_${scopeBranchId}`).get();
+        if (docSnap.exists) {
+          const d = docSnap.data() ?? {};
+          const mt = (d.monthTargets ?? null) as number[] | null;
+          if (Array.isArray(mt) && mt.length >= 12) {
+            const v = Number(mt[monthIndex] ?? 0);
+            targetScope = 'branch';
+            targetRevenue = v > 0 ? v : null;
+          }
+          // staffTargets của branch này — fill tất cả Sale
+          const staff = (d.staffTargets ?? {}) as Record<string, number[]>;
+          for (const [sid, arr] of Object.entries(staff)) {
+            if (Array.isArray(arr) && arr.length >= 12) {
+              const v = Number(arr[monthIndex] ?? 0);
+              if (v > 0) saleTargetsThisMonth[sid] = v;
+            }
+          }
+        } else {
+          targetScope = 'branch';
+        }
+      } else if (role === 'top') {
+        // Top xem all: sum monthTargets của tất cả branches có target + collect tất cả staffTargets
+        const allBranches: BranchId[] = BRANCHES.map((b) => b.id as BranchId);
+        const docs = await Promise.all(
+          allBranches.map((bid) =>
+            db.collection(COLLECTIONS.SALES_TARGETS).doc(`${year}_${bid}`).get(),
+          ),
+        );
+        let sumTarget = 0;
+        let anyTarget = false;
+        for (const ds of docs) {
+          if (!ds.exists) continue;
+          const d = ds.data() ?? {};
+          const mt = (d.monthTargets ?? null) as number[] | null;
+          if (Array.isArray(mt) && mt.length >= 12) {
+            const v = Number(mt[monthIndex] ?? 0);
+            if (v > 0) { sumTarget += v; anyTarget = true; }
+          }
+          const staff = (d.staffTargets ?? {}) as Record<string, number[]>;
+          for (const [sid, arr] of Object.entries(staff)) {
+            if (Array.isArray(arr) && arr.length >= 12) {
+              const v = Number(arr[monthIndex] ?? 0);
+              if (v > 0) saleTargetsThisMonth[sid] = v;
+            }
+          }
+        }
+        targetScope = 'system';
+        targetRevenue = anyTarget ? sumTarget : null;
+      }
+    } catch (e) {
+      console.warn('[monthly-summary] target read fail (swallowed):', (e as Error)?.message);
+    }
+
+    const targetSummary = buildTargetSummary(targetScope, targetRevenue, totals.sales, month);
+
     return NextResponse.json({
       ok: true,
       month,
@@ -438,6 +531,9 @@ export async function GET(req: NextRequest) {
       txStatusStats,
       batchStats,    // sale → tất cả = 0 (không trả null để tránh check null khắp UI)
       monthLock,     // sale → null; QLCS/branch-specific → single; top all → summary
+      // ─── PR-TK3A (2026-06-21) — Chỉ tiêu (read-only) ───
+      targetSummary,
+      saleTargetsThisMonth,
     });
   } catch (err: any) {
     if (err instanceof UnauthorizedError) {
