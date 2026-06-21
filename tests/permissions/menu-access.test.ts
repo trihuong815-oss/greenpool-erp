@@ -39,4 +39,41 @@ describe('canAccessRoute matrix', () => {
     expect(canAccessRoute('NONEXISTENT_ROLE', 'users')).toBe(false);
     expect(canAccessRoute('', 'doanh-so')).toBe(false);
   });
+
+  // PR-TK2.1 (2026-06-21): TP_GS được xem /doanh-so-v2/tong-ket để giám sát.
+  // Quyền Export Excel VẪN bị chặn ở canExportSalesExcel (PR-6.3, scope.ts test riêng).
+  describe('TP_GS — giám sát doanh số tháng', () => {
+    it('TP_GS được xem /doanh-so-v2/tong-ket', () => {
+      expect(canAccessRoute('TP_GS', 'doanh-so-v2/tong-ket')).toBe(true);
+    });
+
+    it('TP_GS KHÔNG vào các route doanh số khác (nhập/đối chiếu/công nợ/chương trình)', () => {
+      expect(canAccessRoute('TP_GS', 'doanh-so-v2/nhap')).toBe(false);
+      expect(canAccessRoute('TP_GS', 'doanh-so-v2/doi-chieu')).toBe(false);
+      expect(canAccessRoute('TP_GS', 'doanh-so-v2/cong-no')).toBe(false);
+      expect(canAccessRoute('TP_GS', 'doanh-so-v2/chuong-trinh')).toBe(false);
+    });
+
+    it('TP_GS giữ nguyên các route giám sát cũ (bao-cao/sodo/phe-duyet/giao-viec)', () => {
+      expect(canAccessRoute('TP_GS', 'bao-cao')).toBe(true);
+      expect(canAccessRoute('TP_GS', 'sodo')).toBe(true);
+      expect(canAccessRoute('TP_GS', 'phe-duyet')).toBe(true);
+      expect(canAccessRoute('TP_GS', 'giao-viec')).toBe(true);
+    });
+  });
+
+  // PR-TK2.1: regression — các role khác KHÔNG đổi quyền /tong-ket
+  it('Các role hiện tại vẫn vào được /tong-ket như cũ', () => {
+    expect(canAccessRoute('ADMIN', 'doanh-so-v2/tong-ket')).toBe(true);
+    expect(canAccessRoute('CEO', 'doanh-so-v2/tong-ket')).toBe(true);
+    expect(canAccessRoute('CHU_TICH', 'doanh-so-v2/tong-ket')).toBe(true);
+    expect(canAccessRoute('GD_KD', 'doanh-so-v2/tong-ket')).toBe(true);
+    expect(canAccessRoute('GD_VP', 'doanh-so-v2/tong-ket')).toBe(true);
+    expect(canAccessRoute('TP_KE', 'doanh-so-v2/tong-ket')).toBe(true);
+    expect(canAccessRoute('NV_KE', 'doanh-so-v2/tong-ket')).toBe(true);
+    expect(canAccessRoute('QLCS_HM', 'doanh-so-v2/tong-ket')).toBe(true);
+    expect(canAccessRoute('QLCS_TT', 'doanh-so-v2/tong-ket')).toBe(true);
+    expect(canAccessRoute('NV_SALE', 'doanh-so-v2/tong-ket')).toBe(true);
+    expect(canAccessRoute('NV_SALE_PT', 'doanh-so-v2/tong-ket')).toBe(true);
+  });
 });

@@ -73,7 +73,9 @@ export const MENU_PERMISSIONS: Record<string, string[]> = {
   TP_MKT:    ['dashboard','tin-nhan','quy-trinh','giao-viec','dieu-phoi','de-xuat','quan-ly-cong-viec','bao-cao','mkt','cong-viec-ca-nhan','bao-mat','phe-duyet','thong-bao'],
   // TIBAN_TT (Trưởng tiểu ban Truyền thông Nội bộ): thuộc phòng NS (tầng 4) — KHÔNG dùng /giao-viec.
   TIBAN_TT:  ['dashboard','tin-nhan','quy-trinh','quan-ly-cong-viec','bao-cao','cong-viec-ca-nhan','bao-mat','thong-bao'],
-  TP_GS:     ['dashboard','tin-nhan','quy-trinh','giao-viec','dieu-phoi','de-xuat','quan-ly-cong-viec','bao-cao','sodo','cong-viec-ca-nhan','bao-mat','phe-duyet','thong-bao','co-so'],
+  // PR-TK2.1 (2026-06-21): + 'doanh-so-v2/tong-ket' cho TP_GS để giám sát doanh số.
+  // TP_GS VẪN KHÔNG được Export Excel — chặn riêng ở canExportSalesExcel (PR-6.3, scope.ts).
+  TP_GS:     ['dashboard','tin-nhan','doanh-so-v2/tong-ket','quy-trinh','giao-viec','dieu-phoi','de-xuat','quan-ly-cong-viec','bao-cao','sodo','cong-viec-ca-nhan','bao-mat','phe-duyet','thong-bao','co-so'],
   TP_KE:     ['dashboard','tin-nhan','doanh-so-v2/doi-chieu','doanh-so-v2/cong-no','doanh-so-v2/tong-ket','doanh-so-v2/chuong-trinh','doanh-so-v2/quay-le-tan/nhap','doanh-so-v2/quay-le-tan/cau-hinh','quy-trinh','giao-viec','dieu-phoi','de-xuat','quan-ly-cong-viec','bao-cao','luong','cong-viec-ca-nhan','bao-mat','phe-duyet','thong-bao'],
   // NV_KE — Nhân viên kế toán cơ sở. Đối chiếu doanh số daily của Sale, xem công nợ cơ sở.
   NV_KE:     ['dashboard','tin-nhan','doanh-so-v2/doi-chieu','doanh-so-v2/cong-no','doanh-so-v2/tong-ket','doanh-so-v2/chuong-trinh','doanh-so-v2/quay-le-tan/nhap','cong-viec-ca-nhan','bao-mat','thong-bao','co-so'],
