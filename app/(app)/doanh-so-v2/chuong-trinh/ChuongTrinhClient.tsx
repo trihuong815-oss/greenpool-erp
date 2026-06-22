@@ -20,12 +20,27 @@ import {
 } from '@/lib/types/sales-program';
 import { showConfirm } from '@/components/ui/imperative-modal';
 import { useFeatureFlag } from '@/lib/feature-flags/client';
+// PR-PROMO1A (2026-06-22): UI permission + query + deadline helpers (tested, mirror server).
+import {
+  canCreateProgram, canSubmitProgram, canEditProgram, canDeleteProgram,
+  canApproveProgram, canRejectProgram, canConfigureProgram, canToggleProgram,
+  isPromoReadOnlyRole, getCurrentApprovalStep,
+} from '@/lib/sales-v2/promo-permissions';
+import {
+  mapFilterToStatus, isProposalScope,
+  type PromoQueryParams,
+} from '@/lib/sales-v2/promo-query-params';
+import {
+  getDeadlineStatus, getDeadlineMessage, getDeadlineTone,
+} from '@/lib/sales-v2/promo-deadline';
 
 interface Props {
   callerUid: string;
   callerRole: string;
   callerBranch: string | null;
   callerName: string;
+  /** PR-PROMO1A: query params từ URL ?filter=&step=&action= — auto-focus tab. */
+  initialQuery: PromoQueryParams;
 }
 
 const STATUS_TONE: Record<ProgramStatus, string> = {
@@ -68,10 +83,17 @@ function fmtPromoValue(type: PromoType, value: number, unitName: string = 'buổ
   return String(value);
 }
 
-export default function ChuongTrinhClient({ callerUid, callerRole, callerBranch, callerName }: Props) {
+export default function ChuongTrinhClient({ callerUid, callerRole, callerBranch, callerName, initialQuery }: Props) {
   const [month, setMonth] = useState<string>(currentMonthVN());
   const [branchFilter, setBranchFilter] = useState<BranchId | 'all'>('all');
-  const [statusFilter, setStatusFilter] = useState<ProgramStatus | 'all'>('all');
+  // PR-PROMO1A: initial status filter từ query param (vd ?filter=pending_approval → tab "Chờ duyệt").
+  const [statusFilter, setStatusFilter] = useState<ProgramStatus | 'all'>(
+    () => mapFilterToStatus(initialQuery.filter),
+  );
+  // PR-PROMO1A: sub-filter từ query — chỉ active khi từ sidebar entry, user click tab → reset.
+  const [proposalScope, setProposalScope] = useState<boolean>(() => isProposalScope(initialQuery.filter));
+  const [approverStep, setApproverStep] = useState<'gd_kd' | 'gd_vp' | null>(() => initialQuery.step);
+  const [configureAction, setConfigureAction] = useState<boolean>(() => initialQuery.action === 'configure');
   const [programs, setPrograms] = useState<SalesProgram[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -84,11 +106,13 @@ export default function ChuongTrinhClient({ callerUid, callerRole, callerBranch,
   const [configureOpen, setConfigureOpen] = useState<SalesProgram | null>(null);
   const [rejectOpen, setRejectOpen] = useState<SalesProgram | null>(null);
 
-  // Role-based capabilities
+  // Role-based capabilities (PR-PROMO1A: dùng helper tách file — testable)
   const isQLCS = callerRole.startsWith('QLCS_');
   const isTopReadAll = ['CEO', 'ADMIN', 'CHU_TICH', 'GD_KD', 'GD_VP', 'TP_KE'].includes(callerRole);
   const isAccountant = callerRole === 'NV_KE' || callerRole === 'TP_KE';
   const showBranchFilter = isTopReadAll;
+  const isReadOnly = isPromoReadOnlyRole(callerRole);   // CEO / CHU_TICH / TP_GS
+  const canCreate = canCreateProgram(callerRole);        // chỉ QLCS
 
   function showToast(type: 'ok' | 'err', msg: string) {
     setToast({ type, msg });
@@ -112,10 +136,33 @@ export default function ChuongTrinhClient({ callerUid, callerRole, callerBranch,
 
   useEffect(() => { void fetchPrograms(); }, [fetchPrograms, refreshTick]);
 
+  // PR-PROMO1A: filter logic — server đã filter month+branch, client filter:
+  //   1. statusFilter (chip)        — base
+  //   2. proposalScope (?filter=proposal) — chỉ program QLCS hiện tại tạo
+  //   3. approverStep (?step=gd_kd|gd_vp) — chỉ pending_approval đúng bước
+  //   4. configureAction (?action=configure) — chỉ approved (chưa active)
   const filtered = useMemo(() => {
-    if (statusFilter === 'all') return programs;
-    return programs.filter((p) => p.status === statusFilter);
-  }, [programs, statusFilter]);
+    let list = programs;
+    if (statusFilter !== 'all') list = list.filter((p) => p.status === statusFilter);
+    if (proposalScope) list = list.filter((p) => p.createdBy === callerUid);
+    if (approverStep) {
+      list = list.filter((p) => {
+        const step = getCurrentApprovalStep(p);
+        return step === approverStep;
+      });
+    }
+    if (configureAction) list = list.filter((p) => p.status === 'approved');
+    return list;
+  }, [programs, statusFilter, proposalScope, approverStep, configureAction, callerUid]);
+
+  // PR-PROMO1A: khi user click tab chip → reset sub-filter để không bị "kẹt" view.
+  // Giữ proposalScope nếu là QLCS (bản chất QLCS chỉ xem của mình).
+  function handleStatusFilterClick(s: ProgramStatus | 'all') {
+    setStatusFilter(s);
+    setApproverStep(null);
+    setConfigureAction(false);
+    // proposalScope KHÔNG reset — nếu QLCS đã vào /chuong-trinh?filter=proposal thì giữ nguyên scope của mình.
+  }
 
   const counts = useMemo(() => {
     const c: Record<ProgramStatus | 'all', number> = {
@@ -241,7 +288,9 @@ export default function ChuongTrinhClient({ callerUid, callerRole, callerBranch,
                 {callerRole === 'NV_KE' && 'Cài đặt mã promo cho chương trình đã duyệt + tạm dừng / kích hoạt.'}
                 {callerRole === 'TP_KE' && 'Cài đặt mã promo (toàn hệ thống) + tạm dừng / kích hoạt.'}
                 {isQLCS && 'Bạn tạo chương trình cho cơ sở mình → gửi duyệt GD_KD → GD_VP → kế toán cài đặt mã → Sale dùng ở /nhap.'}
-                {!isQLCS && callerRole !== 'GD_KD' && callerRole !== 'GD_VP' && callerRole !== 'NV_KE' && callerRole !== 'TP_KE' && 'Tổng quan chương trình khuyến mãi.'}
+                {/* PR-PROMO1A: CEO/CHU_TICH/TP_GS read-only — text rõ ràng KHÔNG thao tác. */}
+                {isReadOnly && '🔒 Chế độ xem (read-only). Theo dõi lifecycle chương trình khuyến mãi — không thao tác workflow.'}
+                {!isReadOnly && !isQLCS && callerRole !== 'GD_KD' && callerRole !== 'GD_VP' && callerRole !== 'NV_KE' && callerRole !== 'TP_KE' && 'Tổng quan chương trình khuyến mãi.'}
               </p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
@@ -262,7 +311,7 @@ export default function ChuongTrinhClient({ callerUid, callerRole, callerBranch,
                   {BRANCHES.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
                 </select>
               )}
-              {isQLCS && (
+              {canCreate && (
                 <button type="button" onClick={() => setFormOpen({ mode: 'create' })}
                   className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 shadow-sm">
                   <Plus size={16} /> Tạo chương trình
@@ -278,7 +327,7 @@ export default function ChuongTrinhClient({ callerUid, callerRole, callerBranch,
               const active = statusFilter === s;
               const count = counts[s];
               return (
-                <button key={s} type="button" onClick={() => setStatusFilter(s)}
+                <button key={s} type="button" onClick={() => handleStatusFilterClick(s)}
                   className={`px-3 py-1 rounded-full text-xs font-medium ring-1 transition ${
                     active ? 'bg-emerald-600 text-white ring-emerald-600' : 'bg-white text-slate-700 ring-slate-200 hover:bg-slate-50'
                   }`}>
@@ -303,7 +352,7 @@ export default function ChuongTrinhClient({ callerUid, callerRole, callerBranch,
             <div className="text-base font-medium text-slate-600">
               {statusFilter === 'all' ? 'Tháng này chưa có chương trình' : `Không có chương trình "${PROGRAM_STATUS_LABEL[statusFilter as ProgramStatus]}"`}
             </div>
-            {isQLCS && statusFilter === 'all' && (
+            {canCreate && statusFilter === 'all' && (
               <button type="button" onClick={() => setFormOpen({ mode: 'create' })}
                 className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700">
                 <Plus size={16} /> Tạo chương trình đầu tiên
@@ -401,12 +450,23 @@ function ProgramCard({ program: p, callerUid, callerRole, callerBranch, onClick,
   onToggle: () => void;
   onDelete: () => void;
 }) {
-  const isMyDraft = p.createdBy === callerUid && (p.status === 'draft' || p.status === 'rejected');
-  const isMyTurnApprove = p.status === 'pending_approval' && p.currentApprover === callerUid;
-  const isAccountant = (callerRole === 'TP_KE') || (callerRole === 'NV_KE' && callerBranch === p.branchId);
-  const canConfigure = isAccountant && ['approved', 'active', 'paused'].includes(p.status);
-  const canToggle = isAccountant && (p.status === 'active' || p.status === 'paused');
-  const canDelete = isMyDraft && p.status === 'draft' && p.usageCount === 0;
+  // PR-PROMO1A (2026-06-22): dùng helper testable thay vì inline check.
+  // CEO/CHU_TICH/TP_GS read-only → tất cả helper trả false → KHÔNG hiện nút.
+  const canEdit = canEditProgram(callerRole, callerUid, p);
+  const canSubmit = canSubmitProgram(callerRole, callerUid, p);
+  const canDelete = canDeleteProgram(callerRole, callerUid, p);
+  const canApprove = canApproveProgram(callerRole, callerUid, p);
+  const canReject = canRejectProgram(callerRole, callerUid, p);
+  const canConfigure = canConfigureProgram(callerRole, callerBranch, p);
+  const canToggle = canToggleProgram(callerRole, callerBranch, p);
+  // Compute "Chờ cấu hình >24h" — từ approvalSteps[last approved].timestamp khi status=approved.
+  const configOverdueHours = (() => {
+    if (p.status !== 'approved') return null;
+    const lastApproved = [...(p.approvalSteps ?? [])].reverse().find((s) => s.action === 'approved');
+    if (!lastApproved) return null;
+    const hours = Math.floor((Date.now() - new Date(lastApproved.timestamp).getTime()) / 3600_000);
+    return hours >= 24 ? hours : null;
+  })();
 
   return (
     <div className="rounded-xl bg-white ring-1 ring-slate-200 hover:ring-emerald-300 hover:shadow-md transition overflow-hidden cursor-pointer"
@@ -493,46 +553,53 @@ function ProgramCard({ program: p, callerUid, callerRole, callerBranch, onClick,
         )}
       </div>
 
-      {/* Actions */}
+      {/* PR-PROMO1A: badge "Chờ cấu hình >24h" — chỉ status=approved + lastApproved >24h */}
+      {configOverdueHours !== null && (
+        <div className="px-4 py-1.5 bg-amber-50 border-t border-amber-100 text-xs text-amber-700 flex items-center gap-1.5">
+          <AlertCircle size={12} />
+          <span>Chờ cấu hình mã promo đã <strong>{configOverdueHours} giờ</strong></span>
+        </div>
+      )}
+
+      {/* Actions — PR-PROMO1A: dùng helper canEdit/canSubmit/canApprove/... mirror server.
+          CEO/CHU_TICH/TP_GS read-only → helper trả false → empty action bar. */}
       <div className="px-4 py-2.5 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-1.5"
         onClick={(e) => e.stopPropagation()}>
-        {isMyDraft && (
-          <>
-            <button type="button" onClick={onEdit}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium bg-white ring-1 ring-slate-200 text-slate-700 hover:bg-slate-50">
-              <Edit3 size={12} /> Sửa
-            </button>
-            {p.status === 'draft' && (
-              <button type="button" onClick={onSubmit}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-700">
-                <Send size={12} /> Gửi duyệt
-              </button>
-            )}
-            {p.status === 'rejected' && (
-              <button type="button" onClick={onSubmit}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium bg-amber-600 text-white hover:bg-amber-700">
-                <Send size={12} /> Gửi lại
-              </button>
-            )}
-            {canDelete && (
-              <button type="button" onClick={onDelete}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium bg-white ring-1 ring-rose-200 text-rose-700 hover:bg-rose-50">
-                <Trash2 size={12} />
-              </button>
-            )}
-          </>
+        {canEdit && (
+          <button type="button" onClick={onEdit}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium bg-white ring-1 ring-slate-200 text-slate-700 hover:bg-slate-50">
+            <Edit3 size={12} /> Sửa
+          </button>
         )}
-        {isMyTurnApprove && (
-          <>
-            <button type="button" onClick={onReject}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium bg-white ring-1 ring-rose-200 text-rose-700 hover:bg-rose-50">
-              <XCircle size={12} /> Từ chối
-            </button>
-            <button type="button" onClick={onApprove}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-700">
-              <CheckCircle2 size={12} /> Duyệt
-            </button>
-          </>
+        {canSubmit && p.status === 'draft' && (
+          <button type="button" onClick={onSubmit}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-700">
+            <Send size={12} /> Gửi duyệt
+          </button>
+        )}
+        {canSubmit && p.status === 'rejected' && (
+          <button type="button" onClick={onSubmit}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium bg-amber-600 text-white hover:bg-amber-700">
+            <Send size={12} /> Gửi lại
+          </button>
+        )}
+        {canDelete && (
+          <button type="button" onClick={onDelete}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium bg-white ring-1 ring-rose-200 text-rose-700 hover:bg-rose-50">
+            <Trash2 size={12} />
+          </button>
+        )}
+        {canReject && (
+          <button type="button" onClick={onReject}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium bg-white ring-1 ring-rose-200 text-rose-700 hover:bg-rose-50">
+            <XCircle size={12} /> Từ chối
+          </button>
+        )}
+        {canApprove && (
+          <button type="button" onClick={onApprove}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-700">
+            <CheckCircle2 size={12} /> Duyệt
+          </button>
         )}
         {canConfigure && (
           <button type="button" onClick={onConfigure}
@@ -1034,43 +1101,31 @@ function Stat({ label, value, tone }: { label: string; value: string; tone: 'sla
 
 /** Banner cảnh báo deadline ngày 25 cho tháng `month`. Flag-gated.
  *  Compute today VN vs 25/MM/YYYY. Render khác nhau theo dayDelta. */
+// PR-PROMO1A (2026-06-22): wire helper getDeadlineStatus/getDeadlineMessage/getDeadlineTone
+// (tested) thay vì compute inline. Business rule chuẩn: deadline = ngày 25 của
+// THÁNG TRƯỚC tháng áp dụng (vd KM tháng 7 → deadline 25/6).
 function DeadlineBanner({ month }: { month: string }) {
   const flagOn = useFeatureFlag('SALES_V2_PROGRAM_DEADLINE');
   if (!flagOn) return null;
-  if (!/^\d{4}-\d{2}$/.test(month)) return null;
 
-  // Compute today VN day-of-month + diff với deadline 25
-  const nowMs = Date.now() + 7 * 3600 * 1000;
-  const today = new Date(nowMs);
-  const todayMonth = `${today.getUTCFullYear()}-${String(today.getUTCMonth() + 1).padStart(2, '0')}`;
-  // Chỉ hiển thị banner cho currentMonth (xem tháng cũ/tháng mới thì không nhắc deadline)
-  if (todayMonth !== month) return null;
+  const status = getDeadlineStatus(month, Date.now());
+  if (status === 'no_warning') return null;
 
-  const day = today.getUTCDate();
-  const daysUntil = 25 - day; // <0 = past, 0 = today, >0 = future
+  const text = getDeadlineMessage(status, month);
+  const tone = getDeadlineTone(status);
+  const toneClass: Record<typeof tone, string> = {
+    slate: 'bg-slate-50 text-slate-800 ring-slate-200',
+    amber: 'bg-amber-50 text-amber-800 ring-amber-300',
+    orange: 'bg-orange-50 text-orange-800 ring-orange-300',
+    rose: 'bg-rose-50 text-rose-800 ring-rose-300',
+  };
+  const iconChar: Record<typeof tone, string> = {
+    slate: '📅', amber: '⚠️', orange: '🔔', rose: '❌',
+  };
 
-  let tone = 'bg-sky-50 text-sky-800 ring-sky-200';
-  let icon = '📅';
-  let text = '';
-  if (daysUntil >= 3) {
-    text = `Hạn nộp chương trình tháng ${month}: ngày 25 — còn ${daysUntil} ngày.`;
-  } else if (daysUntil === 2 || daysUntil === 1) {
-    tone = 'bg-amber-50 text-amber-800 ring-amber-300';
-    icon = '⚠️';
-    text = `Còn ${daysUntil} ngày tới hạn nộp ngày 25. Đừng quên gửi duyệt!`;
-  } else if (daysUntil === 0) {
-    tone = 'bg-orange-50 text-orange-800 ring-orange-300';
-    icon = '🔔';
-    text = `Hôm nay là hạn cuối nộp chương trình tháng ${month}.`;
-  } else {
-    // daysUntil < 0 → quá hạn
-    tone = 'bg-rose-50 text-rose-800 ring-rose-300';
-    icon = '❌';
-    text = `Đã quá hạn ${Math.abs(daysUntil)} ngày. Vẫn có thể gửi (cần nhập lý do nộp trễ).`;
-  }
   return (
-    <div className={`rounded-lg ring-1 px-4 py-2.5 text-sm font-medium flex items-center gap-2 ${tone}`}>
-      <span aria-hidden>{icon}</span>
+    <div className={`rounded-lg ring-1 px-4 py-2.5 text-sm font-medium flex items-center gap-2 ${toneClass[tone]}`}>
+      <span aria-hidden>{iconChar[tone]}</span>
       <span>{text}</span>
     </div>
   );

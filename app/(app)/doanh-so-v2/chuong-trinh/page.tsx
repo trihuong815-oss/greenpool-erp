@@ -1,14 +1,20 @@
 // V7 Promo (2026-06-18) — Module quản lý Chương trình khuyến mãi.
 // QLCS tạo → GD_KD/GD_VP duyệt theo thứ tự → Kế toán cài đặt mã → Sale dùng.
+// PR-PROMO1A (2026-06-22): nhận searchParams + parse query auto-focus tab theo workflow.
 
 import { canAccessRoute } from '@/lib/permissions';
 import { requireAuthedProfile } from '@/lib/firebase/current-profile';
 import { AppTopBar } from '@/components/AppTopBar';
+import { parsePromoQueryParams } from '@/lib/sales-v2/promo-query-params';
 import ChuongTrinhClient from './ChuongTrinhClient';
 
 export const dynamic = 'force-dynamic';
 
-export default async function ChuongTrinhPage() {
+interface PageProps {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}
+
+export default async function ChuongTrinhPage({ searchParams }: PageProps) {
   const { profile } = await requireAuthedProfile();
 
   if (!canAccessRoute(profile.roleCode, 'doanh-so-v2/chuong-trinh', profile.menuOverrides)) {
@@ -25,6 +31,10 @@ export default async function ChuongTrinhPage() {
     );
   }
 
+  // PR-PROMO1A: parse query auto-focus tab. Safe — không throw.
+  const sp = (await searchParams) ?? {};
+  const initialQuery = parsePromoQueryParams(sp);
+
   return (
     <>
       <AppTopBar title="Chương trình khuyến mãi" icon="task" />
@@ -33,6 +43,7 @@ export default async function ChuongTrinhPage() {
         callerRole={profile.roleCode}
         callerBranch={profile.branchId ?? null}
         callerName={profile.displayName ?? profile.email ?? ''}
+        initialQuery={initialQuery}
       />
     </>
   );

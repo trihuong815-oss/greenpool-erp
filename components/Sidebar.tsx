@@ -39,6 +39,10 @@ interface MenuItem {
    *  Khi cùng route lặp lại trong children list, render key = `${route}_${label}` để
    *  tránh React duplicate key conflict. */
   showOnlyForRoles?: string[];
+  /** PR-PROMO1A (2026-06-22): query string append vào href để auto-focus tab/filter
+   *  đúng workflow theo role. Bao gồm dấu '?' (vd '?filter=proposal'). KHÔNG có
+   *  queryParams thì link không thay đổi. Active state vẫn match theo route base. */
+  queryParams?: string;
 }
 
 // PR-IA1A: helper render key cho item — bao gồm label để 2 entry cùng route
@@ -100,9 +104,12 @@ const MENU_SECTIONS: MenuSection[] = [
           { route: 'doanh-so-v2/cong-no',      label: 'Công nợ bán hàng',        icon: CreditCard },
           { route: 'doanh-so-v2/tong-ket',     label: 'Tổng kết doanh số tháng', icon: TrendingUp },
           // PR-IA1A: 2 entry promo workflow-specific (cùng route, label khác)
+          // PR-PROMO1A (2026-06-22): + queryParams auto-focus tab đúng workflow.
           { route: 'doanh-so-v2/chuong-trinh', label: 'Đề xuất khuyến mãi',      icon: Tag,
+            queryParams: '?filter=proposal',
             showOnlyForRoles: ['QLCS_HM', 'QLCS_TK', 'QLCS_CTT', 'QLCS_24NCT', 'QLCS_TT'] },
           { route: 'doanh-so-v2/chuong-trinh', label: 'Duyệt khuyến mãi',        icon: CheckSquare,
+            queryParams: '?filter=pending_approval&step=gd_kd',
             showOnlyForRoles: ['GD_KD'] },
           // PR-7A (2026-06-22): GD_KD chỉ thuộc KKD (KHÔNG có TCKT) — entry "Lịch sử thao tác" ở đây.
           // GD_VP/TP_KE entry ở TCKT. ADMIN/CEO/CHU_TICH entry ở TCKT (đã có nested expandable đầy đủ).
@@ -143,9 +150,13 @@ const MENU_SECTIONS: MenuSection[] = [
           { route: 'doanh-so-v2/cong-no',               label: 'Công nợ phải thu',       icon: CreditCard },
           { route: 'doanh-so-v2/tong-ket',              label: 'Báo cáo doanh thu tháng', icon: TrendingUp },
           // PR-IA1A: 3 entry promo workflow-specific (cùng route, label khác theo role)
+          // PR-PROMO1A (2026-06-22): + queryParams auto-focus workflow tab.
+          // ADMIN/CEO/CHU_TICH KHÔNG có queryParams — vào /chuong-trinh xem overview.
           { route: 'doanh-so-v2/chuong-trinh',          label: 'Cấu hình khuyến mãi',    icon: Tag,
+            queryParams: '?filter=approved&action=configure',
             showOnlyForRoles: ['TP_KE', 'NV_KE'] },
           { route: 'doanh-so-v2/chuong-trinh',          label: 'Duyệt khuyến mãi',       icon: CheckSquare,
+            queryParams: '?filter=pending_approval&step=gd_vp',
             showOnlyForRoles: ['GD_VP'] },
           { route: 'doanh-so-v2/chuong-trinh',          label: 'Chương trình KM',        icon: Tag,
             showOnlyForRoles: ['ADMIN', 'CEO', 'CHU_TICH'] },
@@ -407,10 +418,13 @@ function FlatMenuItem({
     item.route === 'de-xuat' && (roleCode.startsWith('TP_') || roleCode.startsWith('QLCS_'))
       ? 'Xem đề xuất bạn tạo + đề xuất bạn được phê duyệt (theo khối của bạn)'
       : undefined;
+  // PR-PROMO1A: append queryParams nếu có (workflow auto-focus). Active state vẫn
+  // match theo pathname base — query không ảnh hưởng highlight.
+  const href = item.queryParams ? `/${item.route}${item.queryParams}` : `/${item.route}`;
   return (
     <li>
       <Link
-        href={`/${item.route}`}
+        href={href}
         aria-current={isActive ? 'page' : undefined}
         className={`group relative flex items-center gap-3 rounded-lg ${indent ? 'pl-9 pr-3' : 'px-3'} py-2 text-sm transition ${
           isActive
