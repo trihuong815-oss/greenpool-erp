@@ -71,11 +71,14 @@ const MENU_SECTIONS: MenuSection[] = [
       // V9.2: Doanh số = nested expandable. Sub-items chỉ show nếu có permission.
       // Parent route 'doanh-so-v2-kkd' chỉ là key cho React, không phải URL thực.
       {
+        // PR-NAV1A (2026-06-22): đổi label "Công nợ" → "Công nợ bán hàng" và
+        // "Tổng kết tháng" → "Tổng kết doanh số tháng" để phân biệt với TCKT
+        // (cùng route nhưng 2 góc nhìn nghiệp vụ khác — KD vs Tài chính).
         route: 'doanh-so-v2-kkd', label: 'Doanh số', icon: BarChart3,
         children: [
-          { route: 'doanh-so-v2/nhap',     label: 'Nhập doanh số',  icon: PencilLine },
-          { route: 'doanh-so-v2/cong-no',  label: 'Công nợ',        icon: CreditCard },
-          { route: 'doanh-so-v2/tong-ket', label: 'Tổng kết tháng', icon: TrendingUp },
+          { route: 'doanh-so-v2/nhap',     label: 'Nhập doanh số',           icon: PencilLine },
+          { route: 'doanh-so-v2/cong-no',  label: 'Công nợ bán hàng',        icon: CreditCard },
+          { route: 'doanh-so-v2/tong-ket', label: 'Tổng kết doanh số tháng', icon: TrendingUp },
         ],
       },
       { route: 'mkt',      label: 'Marketing',           icon: Megaphone },
@@ -93,14 +96,18 @@ const MENU_SECTIONS: MenuSection[] = [
       // cong-no + tong-ket nhưng KHÔNG thuộc workflow Kế toán → ẩn nhánh này.
       // Sale dùng KKD>Doanh số (3 sub) cho công việc daily.
       {
+        // PR-NAV1A (2026-06-22): đổi label "Công nợ" → "Công nợ phải thu" và
+        // "Tổng kết" → "Báo cáo doanh thu tháng" — góc nhìn kế toán theo chuẩn
+        // tài chính. Cùng route /doanh-so-v2/cong-no và /tong-ket như KKD (PR-TK4A
+        // đã render khác theo role).
         route: 'tai-chinh-ke-toan', label: 'Tài chính kế toán', icon: BriefcaseBusiness,
         hideForRoles: ['NV_SALE', 'NV_SALE_PT'],
         children: [
-          { route: 'doanh-so-v2/doi-chieu',             label: 'Đối chiếu doanh số',   icon: ClipboardCheck },
-          { route: 'doanh-so-v2/cong-no',               label: 'Công nợ',              icon: CreditCard },
-          { route: 'doanh-so-v2/tong-ket',              label: 'Tổng kết',             icon: TrendingUp },
-          { route: 'doanh-so-v2/chuong-trinh',          label: 'Chương trình KM',      icon: Tag },
-          { route: 'doanh-so-v2/quay-le-tan/nhap',      label: 'Quầy lễ tân — Nhập',   icon: Calculator },
+          { route: 'doanh-so-v2/doi-chieu',             label: 'Đối chiếu doanh số',     icon: ClipboardCheck },
+          { route: 'doanh-so-v2/cong-no',               label: 'Công nợ phải thu',       icon: CreditCard },
+          { route: 'doanh-so-v2/tong-ket',              label: 'Báo cáo doanh thu tháng', icon: TrendingUp },
+          { route: 'doanh-so-v2/chuong-trinh',          label: 'Chương trình KM',        icon: Tag },
+          { route: 'doanh-so-v2/quay-le-tan/nhap',      label: 'Quầy lễ tân — Nhập',     icon: Calculator },
           { route: 'doanh-so-v2/quay-le-tan/cau-hinh',  label: 'Quầy lễ tân — Cấu hình', icon: Sliders },
         ],
       },

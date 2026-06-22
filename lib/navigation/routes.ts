@@ -117,10 +117,13 @@ export const NAV_ROUTES: NavRoute[] = [
     keywords: ['nhap doanh so', 'sale v2', 'daily batch', 'nv sale', 'sale entry'] },
   { route: 'doanh-so-v2/doi-chieu',              section: 'Tài chính kế toán', label: 'Đối chiếu doanh số', icon: 'check-square',
     keywords: ['doi chieu', 'reconcile', 'ke toan duyet', 'review batch'] },
-  { route: 'doanh-so-v2/cong-no',                section: 'Tài chính kế toán', label: 'Công nợ',           icon: 'dollar',
-    keywords: ['cong no', 'debt', 'khach no', 'receivable', 'no con lai'] },
-  { route: 'doanh-so-v2/tong-ket',               section: 'Tài chính kế toán', label: 'Tổng kết tháng',    icon: 'chart',
-    keywords: ['tong ket', 'monthly summary', 'kpi thang', 'thong ke', 'report'] },
+  // PR-NAV1A (2026-06-22): label trong Cmd+K dùng tên TCKT (góc nhìn kế toán —
+  // phục vụ nhiều role + chuẩn nghiệp vụ). Keywords mở rộng để Cmd+K vẫn tìm
+  // được cả tên cũ + tên KKD mới ("công nợ bán hàng" / "tổng kết doanh số").
+  { route: 'doanh-so-v2/cong-no',                section: 'Tài chính kế toán', label: 'Công nợ phải thu',           icon: 'dollar',
+    keywords: ['cong no', 'cong no ban hang', 'cong no phai thu', 'debt', 'khach no', 'receivable', 'no con lai'] },
+  { route: 'doanh-so-v2/tong-ket',               section: 'Tài chính kế toán', label: 'Báo cáo doanh thu tháng',    icon: 'chart',
+    keywords: ['bao cao doanh thu', 'tong ket', 'tong ket thang', 'tong ket doanh so', 'doanh thu thang', 'monthly summary', 'kpi thang', 'thong ke', 'report'] },
   { route: 'doanh-so-v2/chuong-trinh',           section: 'Tài chính kế toán', label: 'Chương trình KM',   icon: 'megaphone',
     keywords: ['chuong trinh', 'promo', 'km', 'khuyen mai', 'giam gia'] },
   { route: 'doanh-so-v2/quay-le-tan/nhap',       section: 'Tài chính kế toán', label: 'Quầy lễ tân — Nhập', icon: 'chart',
