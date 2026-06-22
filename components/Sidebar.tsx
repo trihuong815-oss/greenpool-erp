@@ -31,6 +31,19 @@ interface MenuItem {
    *  (vd: KVP > Tài chính kế toán KHÔNG hiển thị cho Sale dù họ có share permission
    *  cong-no/tong-ket — đây là workflow-based separation). */
   hideForRoles?: string[];
+  /** PR-IA1A (2026-06-22): inverse của hideForRoles — chỉ hiện item cho role list này.
+   *  Dùng cho entry workflow-specific: vd "Đề xuất khuyến mãi" chỉ QLCS thấy,
+   *  "Duyệt khuyến mãi" chỉ GD_KD/GD_VP thấy, "Cấu hình khuyến mãi" chỉ TP_KE/NV_KE.
+   *  Cùng route + multiple entry → label khác theo workflow của role.
+   *  Khi cùng route lặp lại trong children list, render key = `${route}_${label}` để
+   *  tránh React duplicate key conflict. */
+  showOnlyForRoles?: string[];
+}
+
+// PR-IA1A: helper render key cho item — bao gồm label để 2 entry cùng route
+// (vd "Đề xuất khuyến mãi" vs "Duyệt khuyến mãi" → /chuong-trinh) không bị conflict key.
+function menuItemKey(item: MenuItem): string {
+  return `${item.route}__${item.label}`;
 }
 
 interface MenuSection {
@@ -71,14 +84,25 @@ const MENU_SECTIONS: MenuSection[] = [
       // V9.2: Doanh số = nested expandable. Sub-items chỉ show nếu có permission.
       // Parent route 'doanh-so-v2-kkd' chỉ là key cho React, không phải URL thực.
       {
-        // PR-NAV1A (2026-06-22): đổi label "Công nợ" → "Công nợ bán hàng" và
-        // "Tổng kết tháng" → "Tổng kết doanh số tháng" để phân biệt với TCKT
-        // (cùng route nhưng 2 góc nhìn nghiệp vụ khác — KD vs Tài chính).
+        // PR-IA1A (2026-06-22): nhánh "Doanh số" KKD theo luồng nghiệp vụ Sale/QLCS/GD_KD.
+        //   - hideForRoles: ẨN cho TP_KE/NV_KE (workflow kế toán → vào TCKT)
+        //   - Children mở rộng: + Đối chiếu (QLCS), + Đề xuất KM (QLCS), + Duyệt KM (GD_KD)
+        //   - 3 entry chung route /chuong-trinh nhưng label khác workflow:
+        //     QLCS → "Đề xuất khuyến mãi"
+        //     GD_KD → "Duyệt khuyến mãi"
+        //     (TP_KE/NV_KE → "Cấu hình KM" trong TCKT, GD_VP → "Duyệt KM" trong TCKT)
         route: 'doanh-so-v2-kkd', label: 'Doanh số', icon: BarChart3,
+        hideForRoles: ['TP_KE', 'NV_KE'],
         children: [
-          { route: 'doanh-so-v2/nhap',     label: 'Nhập doanh số',           icon: PencilLine },
-          { route: 'doanh-so-v2/cong-no',  label: 'Công nợ bán hàng',        icon: CreditCard },
-          { route: 'doanh-so-v2/tong-ket', label: 'Tổng kết doanh số tháng', icon: TrendingUp },
+          { route: 'doanh-so-v2/nhap',         label: 'Nhập doanh số',           icon: PencilLine },
+          { route: 'doanh-so-v2/doi-chieu',    label: 'Đối chiếu doanh số',      icon: ClipboardCheck },
+          { route: 'doanh-so-v2/cong-no',      label: 'Công nợ bán hàng',        icon: CreditCard },
+          { route: 'doanh-so-v2/tong-ket',     label: 'Tổng kết doanh số tháng', icon: TrendingUp },
+          // PR-IA1A: 2 entry promo workflow-specific (cùng route, label khác)
+          { route: 'doanh-so-v2/chuong-trinh', label: 'Đề xuất khuyến mãi',      icon: Tag,
+            showOnlyForRoles: ['QLCS_HM', 'QLCS_TK', 'QLCS_CTT', 'QLCS_24NCT', 'QLCS_TT'] },
+          { route: 'doanh-so-v2/chuong-trinh', label: 'Duyệt khuyến mãi',        icon: CheckSquare,
+            showOnlyForRoles: ['GD_KD'] },
         ],
       },
       { route: 'mkt',      label: 'Marketing',           icon: Megaphone },
@@ -96,19 +120,44 @@ const MENU_SECTIONS: MenuSection[] = [
       // cong-no + tong-ket nhưng KHÔNG thuộc workflow Kế toán → ẩn nhánh này.
       // Sale dùng KKD>Doanh số (3 sub) cho công việc daily.
       {
-        // PR-NAV1A (2026-06-22): đổi label "Công nợ" → "Công nợ phải thu" và
-        // "Tổng kết" → "Báo cáo doanh thu tháng" — góc nhìn kế toán theo chuẩn
-        // tài chính. Cùng route /doanh-so-v2/cong-no và /tong-ket như KKD (PR-TK4A
-        // đã render khác theo role).
+        // PR-IA1A (2026-06-22): nhánh TCKT theo luồng kế toán workflow.
+        //   - hideForRoles: ẨN Sale + 5 QLCS (workflow KD → vào KKD>Doanh số)
+        //                   + TP_GS (workflow giám sát → vào nhánh "Giám sát" riêng)
+        //   - 3 entry promo workflow-specific:
+        //     TP_KE/NV_KE → "Cấu hình khuyến mãi"
+        //     GD_VP → "Duyệt khuyến mãi" (bước 2)
+        //     ADMIN/CEO/CHU_TICH → "Chương trình KM" (toàn quyền)
         route: 'tai-chinh-ke-toan', label: 'Tài chính kế toán', icon: BriefcaseBusiness,
-        hideForRoles: ['NV_SALE', 'NV_SALE_PT'],
+        hideForRoles: [
+          'NV_SALE', 'NV_SALE_PT',
+          'QLCS_HM', 'QLCS_TK', 'QLCS_CTT', 'QLCS_24NCT', 'QLCS_TT',
+          'TP_GS',
+        ],
         children: [
           { route: 'doanh-so-v2/doi-chieu',             label: 'Đối chiếu doanh số',     icon: ClipboardCheck },
           { route: 'doanh-so-v2/cong-no',               label: 'Công nợ phải thu',       icon: CreditCard },
           { route: 'doanh-so-v2/tong-ket',              label: 'Báo cáo doanh thu tháng', icon: TrendingUp },
-          { route: 'doanh-so-v2/chuong-trinh',          label: 'Chương trình KM',        icon: Tag },
+          // PR-IA1A: 3 entry promo workflow-specific (cùng route, label khác theo role)
+          { route: 'doanh-so-v2/chuong-trinh',          label: 'Cấu hình khuyến mãi',    icon: Tag,
+            showOnlyForRoles: ['TP_KE', 'NV_KE'] },
+          { route: 'doanh-so-v2/chuong-trinh',          label: 'Duyệt khuyến mãi',       icon: CheckSquare,
+            showOnlyForRoles: ['GD_VP'] },
+          { route: 'doanh-so-v2/chuong-trinh',          label: 'Chương trình KM',        icon: Tag,
+            showOnlyForRoles: ['ADMIN', 'CEO', 'CHU_TICH'] },
           { route: 'doanh-so-v2/quay-le-tan/nhap',      label: 'Quầy lễ tân — Nhập',     icon: Calculator },
           { route: 'doanh-so-v2/quay-le-tan/cau-hinh',  label: 'Quầy lễ tân — Cấu hình', icon: Sliders },
+        ],
+      },
+      // PR-IA1A (2026-06-22): section "Giám sát" CHỈ cho TP_GS — read-only audit role.
+      // Render trong cùng "Khối văn phòng" để không tạo section thứ 8 riêng.
+      // Hiện chỉ có 1 child: "Báo cáo doanh thu tháng" (TP_GS đã được cấp quyền từ PR-TK2.1).
+      // KHÔNG mở /chuong-trinh cho TP_GS trong PR-IA1A (chờ PR-PROMO1A harden UI read-only).
+      // KHÔNG mở /cong-no /doi-chieu vì TP_GS chưa có permission (anh chốt KHÔNG sửa permission).
+      {
+        route: 'giam-sat-gs', label: 'Giám sát', icon: ClipboardCheck,
+        showOnlyForRoles: ['TP_GS'],
+        children: [
+          { route: 'doanh-so-v2/tong-ket', label: 'Báo cáo doanh thu tháng', icon: TrendingUp },
         ],
       },
       // Nhân sự → /sodo (sơ đồ tổ chức)
@@ -167,10 +216,14 @@ export function Sidebar({ userName, userRole, roleCode, avatarUrl, menuOverrides
       .map((it) => {
         // V9.3: explicit hide cho role (ưu tiên cao nhất)
         if (it.hideForRoles?.includes(roleCode)) return null;
+        // PR-IA1A: showOnlyForRoles — chỉ hiện cho role list (inverse hide)
+        if (it.showOnlyForRoles && !it.showOnlyForRoles.includes(roleCode)) return null;
         if (it.children && it.children.length > 0) {
-          const visibleChildren = it.children.filter((c) =>
-            !c.hideForRoles?.includes(roleCode) && allowed.has(c.route),
-          );
+          const visibleChildren = it.children.filter((c) => {
+            if (c.hideForRoles?.includes(roleCode)) return false;
+            if (c.showOnlyForRoles && !c.showOnlyForRoles.includes(roleCode)) return false;
+            return allowed.has(c.route);
+          });
           if (visibleChildren.length === 0) return null;
           return { ...it, children: visibleChildren };
         }
@@ -243,14 +296,14 @@ export function Sidebar({ userName, userRole, roleCode, avatarUrl, menuOverrides
               {section.items.map((item) =>
                 item.children && item.children.length > 0 ? (
                   <NestedMenuItem
-                    key={item.route}
+                    key={menuItemKey(item)}
                     item={item}
                     pathname={pathname}
                     roleCode={roleCode}
                   />
                 ) : (
                   <FlatMenuItem
-                    key={item.route}
+                    key={menuItemKey(item)}
                     item={item}
                     pathname={pathname}
                     roleCode={roleCode}
@@ -422,7 +475,7 @@ function NestedMenuItem({
         <ul className="mt-0.5 space-y-0.5">
           {item.children?.map((c) => (
             <FlatMenuItem
-              key={c.route}
+              key={menuItemKey(c)}
               item={c}
               pathname={pathname}
               roleCode={roleCode}

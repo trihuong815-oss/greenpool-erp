@@ -124,8 +124,14 @@ export const NAV_ROUTES: NavRoute[] = [
     keywords: ['cong no', 'cong no ban hang', 'cong no phai thu', 'debt', 'khach no', 'receivable', 'no con lai'] },
   { route: 'doanh-so-v2/tong-ket',               section: 'Tài chính kế toán', label: 'Báo cáo doanh thu tháng',    icon: 'chart',
     keywords: ['bao cao doanh thu', 'tong ket', 'tong ket thang', 'tong ket doanh so', 'doanh thu thang', 'monthly summary', 'kpi thang', 'thong ke', 'report'] },
+  // PR-IA1A (2026-06-22): /chuong-trinh có nhiều entry sidebar theo workflow:
+  //   QLCS → "Đề xuất khuyến mãi"; GD_KD/GD_VP → "Duyệt khuyến mãi";
+  //   TP_KE/NV_KE → "Cấu hình khuyến mãi"; ADMIN/CEO/CHU_TICH → "Chương trình KM".
+  // Cmd+K hiện 1 label trung tính + keywords đủ cho mọi cách gọi.
   { route: 'doanh-so-v2/chuong-trinh',           section: 'Tài chính kế toán', label: 'Chương trình KM',   icon: 'megaphone',
-    keywords: ['chuong trinh', 'promo', 'km', 'khuyen mai', 'giam gia'] },
+    keywords: ['chuong trinh', 'chuong trinh km', 'promo', 'km', 'khuyen mai', 'giam gia',
+               'de xuat khuyen mai', 'de xuat km', 'duyet khuyen mai', 'duyet km',
+               'cau hinh khuyen mai', 'cau hinh km', 'approve promo', 'submit promo'] },
   { route: 'doanh-so-v2/quay-le-tan/nhap',       section: 'Tài chính kế toán', label: 'Quầy lễ tân — Nhập', icon: 'chart',
     keywords: ['quay le tan', 'le tan', 'reception', 'cashier', 'walk-in', 'walkin', 'quay le tan nhap', 'quầy lễ tân nhập'] },
   { route: 'doanh-so-v2/quay-le-tan/cau-hinh',   section: 'Tài chính kế toán', label: 'Quầy lễ tân — Cấu hình', icon: 'settings',
