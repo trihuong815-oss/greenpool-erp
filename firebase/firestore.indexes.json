@@ -386,6 +386,24 @@
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "submittedAt", "order": "ASCENDING" }
       ]
+    },
+    {
+      "_comment": "PR-7A (2026-06-22): Audit History UI filter chỉ branchId (không kèm month). orderBy changedAt DESC.",
+      "collectionGroup": "salesAuditLogs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "branchId", "order": "ASCENDING" },
+        { "fieldPath": "changedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "_comment": "PR-7A (2026-06-22): Audit History UI filter chỉ month (không kèm branchId). orderBy changedAt DESC.",
+      "collectionGroup": "salesAuditLogs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "month", "order": "ASCENDING" },
+        { "fieldPath": "changedAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

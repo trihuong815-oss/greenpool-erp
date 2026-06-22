@@ -136,6 +136,12 @@ export const NAV_ROUTES: NavRoute[] = [
     keywords: ['quay le tan', 'le tan', 'reception', 'cashier', 'walk-in', 'walkin', 'quay le tan nhap', 'quầy lễ tân nhập'] },
   { route: 'doanh-so-v2/quay-le-tan/cau-hinh',   section: 'Tài chính kế toán', label: 'Quầy lễ tân — Cấu hình', icon: 'settings',
     keywords: ['quay le tan cau hinh', 'le tan price', 'reception config', 'don gia le tan'] },
+
+  // PR-7A (2026-06-22): Audit History UI cho Sales V2 (salesAuditLogs).
+  // Permission: ADMIN/CEO/CHU_TICH/GD_KD/GD_VP/TP_KE/TP_GS — sidebar tự filter qua allowed set.
+  { route: 'audit-history', section: 'Giám sát', label: 'Lịch sử thao tác', icon: 'shield',
+    keywords: ['audit', 'audit history', 'lich su thao tac', 'lich su', 'log', 'history',
+               'truy vet', 'audit log', 'audit trail', 'mutation log'] },
 ];
 
 /** Chuẩn hoá string để fuzzy search: lowercase + bỏ dấu tiếng Việt. */

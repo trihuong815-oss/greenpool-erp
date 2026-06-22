@@ -9,6 +9,7 @@ import {
   Users, FileBarChart, GraduationCap, Megaphone, Settings, LogOut, UserCog, Wrench, KeyRound, X, Briefcase, ShieldCheck, Search,
   Sliders, Bell, Building2, Factory, Briefcase as BriefcaseBusiness, Rocket, ChevronDown,
   PencilLine, ClipboardCheck, CreditCard, TrendingUp, Tag, Calculator, BarChart3,
+  History,
   type LucideIcon,
 } from 'lucide-react';
 import { DispatchBadge } from './DispatchBadge';
@@ -103,6 +104,10 @@ const MENU_SECTIONS: MenuSection[] = [
             showOnlyForRoles: ['QLCS_HM', 'QLCS_TK', 'QLCS_CTT', 'QLCS_24NCT', 'QLCS_TT'] },
           { route: 'doanh-so-v2/chuong-trinh', label: 'Duyệt khuyến mãi',        icon: CheckSquare,
             showOnlyForRoles: ['GD_KD'] },
+          // PR-7A (2026-06-22): GD_KD chỉ thuộc KKD (KHÔNG có TCKT) — entry "Lịch sử thao tác" ở đây.
+          // GD_VP/TP_KE entry ở TCKT. ADMIN/CEO/CHU_TICH entry ở TCKT (đã có nested expandable đầy đủ).
+          { route: 'audit-history', label: 'Lịch sử thao tác', icon: History,
+            showOnlyForRoles: ['GD_KD'] },
         ],
       },
       { route: 'mkt',      label: 'Marketing',           icon: Megaphone },
@@ -146,11 +151,15 @@ const MENU_SECTIONS: MenuSection[] = [
             showOnlyForRoles: ['ADMIN', 'CEO', 'CHU_TICH'] },
           { route: 'doanh-so-v2/quay-le-tan/nhap',      label: 'Quầy lễ tân — Nhập',     icon: Calculator },
           { route: 'doanh-so-v2/quay-le-tan/cau-hinh',  label: 'Quầy lễ tân — Cấu hình', icon: Sliders },
+          // PR-7A (2026-06-22): TCKT thấy "Lịch sử thao tác" — TP_KE + top role (đã có permission).
+          // GD_VP có entry này (cùng cấp với GD_KD). Sale/QLCS/TP_GS bị hideForRoles ở parent → KHÔNG thấy.
+          { route: 'audit-history', label: 'Lịch sử thao tác', icon: History,
+            showOnlyForRoles: ['TP_KE', 'ADMIN', 'CEO', 'CHU_TICH', 'GD_VP'] },
         ],
       },
       // PR-IA1A (2026-06-22): section "Giám sát" CHỈ cho TP_GS — read-only audit role.
       // Render trong cùng "Khối văn phòng" để không tạo section thứ 8 riêng.
-      // Hiện chỉ có 1 child: "Báo cáo doanh thu tháng" (TP_GS đã được cấp quyền từ PR-TK2.1).
+      // PR-7A (2026-06-22): + "Lịch sử thao tác" — TP_GS audit log Sales V2 (read-only).
       // KHÔNG mở /chuong-trinh cho TP_GS trong PR-IA1A (chờ PR-PROMO1A harden UI read-only).
       // KHÔNG mở /cong-no /doi-chieu vì TP_GS chưa có permission (anh chốt KHÔNG sửa permission).
       {
@@ -158,6 +167,7 @@ const MENU_SECTIONS: MenuSection[] = [
         showOnlyForRoles: ['TP_GS'],
         children: [
           { route: 'doanh-so-v2/tong-ket', label: 'Báo cáo doanh thu tháng', icon: TrendingUp },
+          { route: 'audit-history',        label: 'Lịch sử thao tác',         icon: History },
         ],
       },
       // Nhân sự → /sodo (sơ đồ tổ chức)
