@@ -179,6 +179,10 @@ const MENU_SECTIONS: MenuSection[] = [
         children: [
           { route: 'doanh-so-v2/tong-ket', label: 'Báo cáo doanh thu tháng', icon: TrendingUp },
           { route: 'audit-history',        label: 'Lịch sử thao tác',         icon: History },
+          // PR-PROMO1B (2026-06-23): TP_GS giám sát KM đang áp dụng — read-only.
+          // queryParams=?filter=active auto-focus tab "Đang áp dụng" (PR-PROMO1A).
+          { route: 'doanh-so-v2/chuong-trinh', label: 'Khuyến mãi đang áp dụng', icon: Tag,
+            queryParams: '?filter=active' },
         ],
       },
       // Nhân sự → /sodo (sơ đồ tổ chức)

@@ -42,16 +42,21 @@ describe('canAccessRoute matrix', () => {
 
   // PR-TK2.1 (2026-06-21): TP_GS được xem /doanh-so-v2/tong-ket để giám sát.
   // Quyền Export Excel VẪN bị chặn ở canExportSalesExcel (PR-6.3, scope.ts test riêng).
-  describe('TP_GS — giám sát doanh số tháng', () => {
+  // PR-PROMO1B (2026-06-23): + /chuong-trinh read-only (giám sát workflow KM).
+  //   UI đã harden từ PR-PROMO1A — isPromoReadOnlyRole(TP_GS)=true → ẩn mọi button.
+  describe('TP_GS — giám sát doanh số tháng + KM', () => {
     it('TP_GS được xem /doanh-so-v2/tong-ket', () => {
       expect(canAccessRoute('TP_GS', 'doanh-so-v2/tong-ket')).toBe(true);
     });
 
-    it('TP_GS KHÔNG vào các route doanh số khác (nhập/đối chiếu/công nợ/chương trình)', () => {
+    it('TP_GS được xem /doanh-so-v2/chuong-trinh (read-only — PR-PROMO1B)', () => {
+      expect(canAccessRoute('TP_GS', 'doanh-so-v2/chuong-trinh')).toBe(true);
+    });
+
+    it('TP_GS KHÔNG vào các route doanh số nhập/đối chiếu/công nợ (mutation workflow)', () => {
       expect(canAccessRoute('TP_GS', 'doanh-so-v2/nhap')).toBe(false);
       expect(canAccessRoute('TP_GS', 'doanh-so-v2/doi-chieu')).toBe(false);
       expect(canAccessRoute('TP_GS', 'doanh-so-v2/cong-no')).toBe(false);
-      expect(canAccessRoute('TP_GS', 'doanh-so-v2/chuong-trinh')).toBe(false);
     });
 
     it('TP_GS giữ nguyên các route giám sát cũ (bao-cao/sodo/phe-duyet/giao-viec)', () => {

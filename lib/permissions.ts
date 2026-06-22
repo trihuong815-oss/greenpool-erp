@@ -76,7 +76,11 @@ export const MENU_PERMISSIONS: Record<string, string[]> = {
   TIBAN_TT:  ['dashboard','tin-nhan','quy-trinh','quan-ly-cong-viec','bao-cao','cong-viec-ca-nhan','bao-mat','thong-bao'],
   // PR-TK2.1 (2026-06-21): + 'doanh-so-v2/tong-ket' cho TP_GS để giám sát doanh số.
   // TP_GS VẪN KHÔNG được Export Excel — chặn riêng ở canExportSalesExcel (PR-6.3, scope.ts).
-  TP_GS:     ['dashboard','tin-nhan','doanh-so-v2/tong-ket','quy-trinh','giao-viec','dieu-phoi','de-xuat','quan-ly-cong-viec','bao-cao','sodo','cong-viec-ca-nhan','bao-mat','phe-duyet','thong-bao','co-so','audit-history'],
+  // PR-PROMO1B (2026-06-23): + 'doanh-so-v2/chuong-trinh' — TP_GS giám sát read-only
+  // workflow khuyến mãi. UI đã harden từ PR-PROMO1A: isPromoReadOnlyRole(TP_GS)=true
+  // → tất cả helper can*Program trả false → KHÔNG hiện button mutation. Sale rule
+  // salesPrograms KHÔNG đụng (TP_GS đọc qua API Admin SDK, bypass rules).
+  TP_GS:     ['dashboard','tin-nhan','doanh-so-v2/tong-ket','doanh-so-v2/chuong-trinh','quy-trinh','giao-viec','dieu-phoi','de-xuat','quan-ly-cong-viec','bao-cao','sodo','cong-viec-ca-nhan','bao-mat','phe-duyet','thong-bao','co-so','audit-history'],
   TP_KE:     ['dashboard','tin-nhan','doanh-so-v2/doi-chieu','doanh-so-v2/cong-no','doanh-so-v2/tong-ket','doanh-so-v2/chuong-trinh','doanh-so-v2/quay-le-tan/nhap','doanh-so-v2/quay-le-tan/cau-hinh','quy-trinh','giao-viec','dieu-phoi','de-xuat','quan-ly-cong-viec','bao-cao','luong','cong-viec-ca-nhan','bao-mat','phe-duyet','thong-bao','audit-history'],
   // NV_KE — Nhân viên kế toán cơ sở. Đối chiếu doanh số daily của Sale, xem công nợ cơ sở.
   NV_KE:     ['dashboard','tin-nhan','doanh-so-v2/doi-chieu','doanh-so-v2/cong-no','doanh-so-v2/tong-ket','doanh-so-v2/chuong-trinh','doanh-so-v2/quay-le-tan/nhap','cong-viec-ca-nhan','bao-mat','thong-bao','co-so'],

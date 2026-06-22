@@ -26,7 +26,9 @@ export const dynamic = 'force-dynamic';
 const VALID_PROMO_TYPES: ReadonlyArray<PromoType> = ['percent', 'fixed_amount', 'bonus_sessions', 'bonus_days'];
 
 function isProgramReader(roleCode: string): boolean {
-  if (['CEO', 'ADMIN', 'CHU_TICH', 'GD_KD', 'GD_VP', 'TP_KE'].includes(roleCode)) return true;
+  // PR-PROMO1B (2026-06-23): + TP_GS đọc read-only (giám sát workflow KM).
+  // KHÔNG mở quyền write/approve/configure — các helper riêng vẫn deny TP_GS.
+  if (['CEO', 'ADMIN', 'CHU_TICH', 'GD_KD', 'GD_VP', 'TP_KE', 'TP_GS'].includes(roleCode)) return true;
   if (roleCode.startsWith('QLCS_')) return true;
   if (roleCode === 'NV_KE') return true;
   return false;
