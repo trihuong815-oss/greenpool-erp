@@ -29,6 +29,13 @@ const CLASS_BADGE: Record<PromoClassification, string> = {
   insufficient_data:  'bg-amber-50 text-amber-700 ring-amber-200',
 };
 
+const CLASS_SHORT: Record<PromoClassification, string> = {
+  high: 'Cao',
+  normal: 'Bình thường',
+  review: 'Thấp',
+  insufficient_data: 'Chưa đủ data',
+};
+
 const CLASS_ICON: Record<PromoClassification, React.ReactNode> = {
   high:               <CheckCircle2 size={12} />,
   normal:             null,
@@ -84,64 +91,116 @@ export default function PromoEffectivenessCard({ month, promoTotals, promoByCode
         <KpiCard label="Tổng tiền giảm" value={fmtMoney(promoTotals.totalDiscount)} icon={<Wallet size={18} />} tone="rose" />
       </div>
 
-      {/* Bảng hiệu quả per chương trình */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
-            <tr>
-              <th className="px-2 py-2 text-left w-10">#</th>
-              <th className="px-2 py-2 text-left">Mã</th>
-              <th className="px-2 py-2 text-left">Tên chương trình</th>
-              <th className="px-2 py-2 text-right">Số GD</th>
-              <th className="px-2 py-2 text-right">Doanh số sau ƯĐ</th>
-              <th className="px-2 py-2 text-right">Tiền giảm</th>
-              <th className="px-2 py-2 text-right">Cost ratio</th>
-              <th className="px-2 py-2 text-right">Tỷ trọng DS</th>
-              <th className="px-2 py-2 text-left">Hiệu quả</th>
-              <th className="px-2 py-2 text-left">Khuyến nghị</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {rows.map((r, i) => {
-              const costRatioCls = r.classification === 'review'
-                ? 'text-rose-700 font-semibold'
-                : r.classification === 'high'
-                  ? 'text-emerald-700'
-                  : 'text-slate-700';
-              return (
-                <tr key={r.code} className="hover:bg-slate-50/60">
-                  <td className="px-2 py-1.5 tabular-nums text-slate-400">{i + 1}</td>
-                  <td className="px-2 py-1.5">
-                    <span className="font-mono font-bold text-violet-700 bg-violet-50 px-1.5 py-0.5 rounded ring-1 ring-violet-200 text-xs">
-                      {r.code}
-                    </span>
-                  </td>
-                  <td className="px-2 py-1.5 text-slate-700 font-medium truncate max-w-[280px]" title={r.name}>{r.name}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums">{r.transactionCount}</td>
-                  <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-emerald-700">
-                    {r.promoSales > 0 ? fmtMoney(r.promoSales) : <span className="text-slate-300 text-xs italic">—</span>}
-                  </td>
-                  <td className="px-2 py-1.5 text-right tabular-nums text-rose-700">
-                    {r.totalDiscount > 0 ? fmtMoney(r.totalDiscount) : <span className="text-slate-300 text-xs">—</span>}
-                  </td>
-                  <td className={`px-2 py-1.5 text-right tabular-nums ${costRatioCls}`}>
-                    {r.promoSales > 0 ? fmtPct(r.costRatio) : <span className="text-slate-300 text-xs">—</span>}
-                  </td>
-                  <td className="px-2 py-1.5 text-right tabular-nums text-slate-600">
-                    {r.salesShare > 0 ? fmtPct(r.salesShare) : <span className="text-slate-300 text-xs">—</span>}
-                  </td>
-                  <td className="px-2 py-1.5">
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ring-1 ${CLASS_BADGE[r.classification]}`}>
-                      {CLASS_ICON[r.classification]}
-                      {r.classification === 'high' ? 'Cao' : r.classification === 'normal' ? 'Bình thường' : r.classification === 'review' ? 'Thấp' : 'Chưa đủ data'}
-                    </span>
-                  </td>
-                  <td className="px-2 py-1.5 text-xs text-slate-600 italic">{r.recommendation}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      {/* PR-TK4D: Desktop ≥md table với sticky thead. Mobile <md card stack. */}
+      <div className="hidden md:block">
+        <div className="overflow-auto max-h-[70vh] rounded ring-1 ring-slate-200">
+          <table className="w-full text-sm">
+            <thead className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold bg-slate-50 sticky top-0 z-10">
+              <tr>
+                <th className="px-2 py-2 text-left w-10">#</th>
+                <th className="px-2 py-2 text-left">Mã</th>
+                <th className="px-2 py-2 text-left">Tên chương trình</th>
+                <th className="px-2 py-2 text-right">Số GD</th>
+                <th className="px-2 py-2 text-right">Doanh số sau ƯĐ</th>
+                <th className="px-2 py-2 text-right">Tiền giảm</th>
+                <th className="px-2 py-2 text-right">Cost ratio</th>
+                <th className="px-2 py-2 text-right">Tỷ trọng DS</th>
+                <th className="px-2 py-2 text-left">Hiệu quả</th>
+                <th className="px-2 py-2 text-left">Khuyến nghị</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {rows.map((r, i) => {
+                const costRatioCls = r.classification === 'review'
+                  ? 'text-rose-700 font-semibold'
+                  : r.classification === 'high'
+                    ? 'text-emerald-700'
+                    : 'text-slate-700';
+                return (
+                  <tr key={r.code} className="hover:bg-slate-50/60">
+                    <td className="px-2 py-1.5 tabular-nums text-slate-400">{i + 1}</td>
+                    <td className="px-2 py-1.5">
+                      <span className="font-mono font-bold text-violet-700 bg-violet-50 px-1.5 py-0.5 rounded ring-1 ring-violet-200 text-xs">
+                        {r.code}
+                      </span>
+                    </td>
+                    <td className="px-2 py-1.5 text-slate-700 font-medium truncate max-w-[280px]" title={r.name}>{r.name}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">{r.transactionCount}</td>
+                    <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-emerald-700">
+                      {r.promoSales > 0 ? fmtMoney(r.promoSales) : <span className="text-slate-300 text-xs italic">—</span>}
+                    </td>
+                    <td className="px-2 py-1.5 text-right tabular-nums text-rose-700">
+                      {r.totalDiscount > 0 ? fmtMoney(r.totalDiscount) : <span className="text-slate-300 text-xs">—</span>}
+                    </td>
+                    <td className={`px-2 py-1.5 text-right tabular-nums ${costRatioCls}`}>
+                      {r.promoSales > 0 ? fmtPct(r.costRatio) : <span className="text-slate-300 text-xs">—</span>}
+                    </td>
+                    <td className="px-2 py-1.5 text-right tabular-nums text-slate-600">
+                      {r.salesShare > 0 ? fmtPct(r.salesShare) : <span className="text-slate-300 text-xs">—</span>}
+                    </td>
+                    <td className="px-2 py-1.5">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ring-1 ${CLASS_BADGE[r.classification]}`}>
+                        {CLASS_ICON[r.classification]}
+                        {CLASS_SHORT[r.classification]}
+                      </span>
+                    </td>
+                    <td className="px-2 py-1.5 text-xs text-slate-600 italic">{r.recommendation}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Mobile card stack */}
+      <div className="md:hidden space-y-2">
+        {rows.map((r, i) => (
+          <div key={r.code} className="rounded-lg ring-1 ring-slate-200 p-3 bg-white">
+            <div className="flex items-start justify-between gap-2 mb-2">
+              <div className="min-w-0 flex-1">
+                <div className="text-xs text-slate-400 tabular-nums">#{i + 1}</div>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <span className="font-mono font-bold text-violet-700 bg-violet-50 px-1.5 py-0.5 rounded ring-1 ring-violet-200 text-xs shrink-0">
+                    {r.code}
+                  </span>
+                  <span className="text-sm text-slate-700 font-medium truncate" title={r.name}>{r.name}</span>
+                </div>
+              </div>
+              <span className={`shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ring-1 ${CLASS_BADGE[r.classification]}`}>
+                {CLASS_ICON[r.classification]}
+                {CLASS_SHORT[r.classification]}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div>
+                <div className="text-slate-500">Số GD</div>
+                <div className="font-semibold tabular-nums">{r.transactionCount}</div>
+              </div>
+              <div>
+                <div className="text-slate-500">Cost ratio</div>
+                <div className={`font-semibold tabular-nums ${r.classification === 'review' ? 'text-rose-700' : r.classification === 'high' ? 'text-emerald-700' : ''}`}>
+                  {r.promoSales > 0 ? fmtPct(r.costRatio) : '—'}
+                </div>
+              </div>
+              <div>
+                <div className="text-slate-500">Doanh số sau ƯĐ</div>
+                <div className="font-semibold text-emerald-700 tabular-nums">{r.promoSales > 0 ? fmtMoney(r.promoSales) : '—'}</div>
+              </div>
+              <div>
+                <div className="text-slate-500">Tiền giảm</div>
+                <div className="font-semibold text-rose-700 tabular-nums">{r.totalDiscount > 0 ? fmtMoney(r.totalDiscount) : '—'}</div>
+              </div>
+              <div className="col-span-2">
+                <div className="text-slate-500">Tỷ trọng DS · Khuyến nghị</div>
+                <div className="text-slate-700 mt-0.5">
+                  <span className="tabular-nums">{r.salesShare > 0 ? fmtPct(r.salesShare) : '—'}</span>
+                  <span className="ml-2 italic text-slate-600">{r.recommendation}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
 
       <div className="mt-3 text-xs text-slate-500 leading-relaxed">

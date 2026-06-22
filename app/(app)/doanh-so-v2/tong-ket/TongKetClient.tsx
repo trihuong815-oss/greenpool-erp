@@ -124,7 +124,7 @@ export default function TongKetClient({ scope, myRoleCode, myUid, myBranchId }: 
             ) : !data ? null : data.totals.transactions === 0 ? (
               <>
                 <BusinessAlerts data={data} />
-                <EmptyState month={month} />
+                <EmptyState month={month} scope={scope} roleCode={myRoleCode} />
               </>
             ) : (
               // PR-TK4A: render view component theo role/scope.

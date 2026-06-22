@@ -97,11 +97,12 @@ export default function SaleCustomerDrawer({ sale, target, daysElapsedPercent, s
             <button
               type="button"
               onClick={onClose}
-              className="shrink-0 p-1.5 rounded-md text-slate-500 hover:bg-slate-100"
+              className="shrink-0 inline-flex items-center gap-1 px-2 py-1.5 rounded-md text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-800"
               aria-label="Đóng"
               title="Đóng (ESC)"
             >
               <X size={18} />
+              <span className="hidden sm:inline">Đóng</span>
             </button>
           </div>
         </div>
