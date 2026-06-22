@@ -10,6 +10,7 @@
 
 - **2026-06-22**: bản gốc (NEEDS REVIEW: `originalDebt` + `promoSnapshots` field-level immutability).
 - **2026-06-23**: manual review `app/api/sales-v2/transactions/*` xác nhận `EDITABLE_FIELDS` whitelist L28-33 chặn `originalDebt`/`promoSnapshots`/`promoIds`/`matchedTransactionId`/`reviewStatus`/`batchId`/`saleId`/`branchId`/`createdAt`. Verdict 2 row hạ về **PASS**. Risk Register: 0 HIGH · 3 MED (giảm từ 5) · 4 LOW. Thêm hardening LOW (audit silent tamper attempt + Sale self-edit). Deploy rule fix `salesPrograms` (commit `64aa0b9`) — info leak Sale → ĐÃ FIX, production active.
+- **2026-06-23 (PR-7B)**: union `salesAuditLogs` + `auditLogs (module=sales)` vào `/audit-history` (commit `7fec39a`). Deploy 2 composite index `auditLogs` (module+createdAt, module+branchId+createdAt) — Activated. Runtime verification OK trên production: TP_GS vào Giám sát → Lịch sử thao tác, drawer chi tiết oldValue/newValue + before/after hoạt động đúng theo source. **Audit log row hạ MED → PASS** (còn LOW legacy limitation). Risk Register: 0 HIGH · 2 MED (giảm từ 3, gỡ "Audit chia 2 collection") · 7 LOW (thêm 1 LOW legacy limitation).
 
 ---
 
@@ -31,7 +32,7 @@ Các kết luận trong `APP_AUDIT_SUMMARY.md` về security/permission/audit lo
 | "100% server-side enforce" | ✅ ĐÚNG cho 16 endpoint Sales V2 audit hôm nay |
 | "Defense in depth 8 layer" | ⚠️ Đếm 4 layer thực sự (Auth+Layout+Page+API+Rules+Audit log). "8 layer" trong summary là tính rộng (gồm flag + audit log + rate limit). Không sai về bản chất nhưng phóng đại |
 | "salesAuditLogs vĩnh viễn ≥10 năm" | ✅ Rule WORM trên `auditLogs` ([L182-185](firebase/firestore.rules#L182-L185)). `salesAuditLogs` cũng write deny ([L432-439](firebase/firestore.rules#L432-L439)) nhưng KHÔNG có rule explicit chống update/delete WORM — chỉ chống qua "Admin SDK only", nếu code server cố ý update thì rules không chặn. Risk LOW (codebase grep CI guard) |
-| "Audit log mọi mutation" | ⚠️ PARTIAL — chia 2 collection (`salesAuditLogs` + `auditLogs` generic), 12 action ngoài enum (xem mục 6). Đã defer PR-7B union |
+| "Audit log mọi mutation" | ✅ **PASS** (update 2026-06-23 PR-7B) — `/audit-history` đã union cả `salesAuditLogs` + `auditLogs (module=sales)`. TP_KE/TP_GS/top role thấy đầy đủ tx/batch/lock/export + program lifecycle + target update trong 1 UI. Limitation LOW còn lại: legacy salesAuditLogs (writeSalesAudit) thiếu branchId/month → silent skip khi filter strict; auditLogs generic không có month → filter tháng trả empty cho source này. UI banner cảnh báo rõ |
 | "Refund/Discount approval chưa có" | ✅ ĐÚNG (chưa có code) |
 | **"originalDebt immutable"** (SUMMARY §7) | ✅ **PASS** (update 2026-06-23) — manual review xác nhận: POST set 1 lần L268 (`transactionType === 'dat_coc' ? debtAmount : 0`); PATCH `EDITABLE_FIELDS` whitelist L28-33 KHÔNG có field này → silent skip; không có route nào update sau POST. **Field-level immutability đảm bảo qua whitelist + server compute layer, không phải chỉ "app logic".** |
 | **"promoSnapshots immutable"** (SUMMARY §7) | ✅ **PASS** (update 2026-06-23) — manual review xác nhận: POST resolve qua `getProgramsByIds` + `toSnapshot` L222 lưu `{id, code, name, type, value}`; PATCH whitelist KHÔNG có `promoSnapshots`/`promoIds` → user gửi body sẽ silent skip; server chỉ READ snapshots L189 để recompute discount, KHÔNG WRITE. **Sửa chương trình KM gốc KHÔNG phá tx cũ.** |
@@ -51,7 +52,7 @@ Em rà soát tất cả nhóm — không phát hiện rủi ro HIGH/CRITICAL tro
 | 3 | API permission Sales V2 | "16 endpoint, 100% enforce" | Explore agent đọc 16 file, đầy đủ chi tiết ở [§3.3](#33-api-permission-sales-v2) | PASS | HIGH if fail | All 16 PASS |
 | 4 | Firestore Rules | "513 lines, write deny Sales V2" | [firebase/firestore.rules](firebase/firestore.rules) full 513 lines | PASS | HIGH if fail | Catch-all deny L509-511 |
 | 5 | Cross-branch/Sale | "QLCS/Sale force scope" | [lib/sales-v2/scope.ts:78-127](lib/sales-v2/scope.ts#L78-L127), [monthly-summary L77-88] | PASS | HIGH if fail | getScopeRole + canReadBatch + canEditTransaction |
-| 6 | Audit log | "salesAuditLogs vĩnh viễn" | [lib/sales-v2/audit-log.ts](lib/sales-v2/audit-log.ts), [lib/firebase/audit-log.ts](lib/firebase/audit-log.ts) | PARTIAL | MED | 2 collection riêng, 12 action ngoài enum |
+| 6 | Audit log | "salesAuditLogs vĩnh viễn" + union UI | [lib/sales-v2/audit-log.ts](lib/sales-v2/audit-log.ts), [lib/firebase/audit-log.ts](lib/firebase/audit-log.ts), [lib/audit-history/normalize.ts](lib/audit-history/normalize.ts), [app/api/audit-history/route.ts](app/api/audit-history/route.ts) | **PASS** | LOW | **2026-06-23 update (PR-7B)**: UI `/audit-history` union 2 collection. Legacy salesAuditLogs (writeSalesAudit) thiếu metadata + auditLogs không có month → LOW legacy limitation, UI banner cảnh báo |
 | 7 | Khuyến mãi workflow | "PR-PROMO1A UI harden, server đầy đủ" + tx.promoSnapshots immutable | [lib/sales-v2/promo-permissions.ts](lib/sales-v2/promo-permissions.ts), 7 API programs, [app/api/sales-v2/transactions/[id]/route.ts L28-33](app/api/sales-v2/transactions/[id]/route.ts#L28-L33) | **PASS** | LOW | UI helper + server enforce. **2026-06-23 update**: promoSnapshots immutability CONFIRMED qua PATCH whitelist |
 | 8 | Công nợ — originalDebt + debtAmount + matchedTransactionId immutability | "originalDebt immutable" | [app/api/sales-v2/transactions/route.ts L268](app/api/sales-v2/transactions/route.ts#L268), [app/api/sales-v2/transactions/[id]/route.ts L28-33](app/api/sales-v2/transactions/[id]/route.ts#L28-L33) | **PASS** | LOW | **2026-06-23 update**: PATCH `EDITABLE_FIELDS` whitelist L28-33 chặn `originalDebt`/`debtAmount`/`matchedTransactionId`. Server compute `debtAmount` mỗi PATCH (L228). Field-level immutability OK |
 | 9 | Module WIP | "dashboard-ceo/phe-duyet/thong-bao/du-an WIP" | 4 page.tsx kiểm tra | PASS | LOW | Đều có PlaceholderPage status="wip", route gate vẫn enforce |
@@ -429,7 +430,11 @@ export async function recordSalesAudit(input): Promise<string | null> {
 | Export Excel | ✅ salesAuditLogs `export_sales_excel` | LOW |
 | Reception pricing | ✅ salesAuditLogs `update_reception_pricing` | LOW |
 
-**Verdict §3.6: PARTIAL** — audit mọi mutation OK, NHƯNG chia 2 collection → /audit-history PR-7A chỉ thấy 50% workflow. Defer PR-7B.
+**Verdict §3.6: ✅ PASS** (update 2026-06-23 PR-7B) — audit mọi mutation OK + UI `/audit-history` đã union 2 collection (commit `7fec39a` + 2 composite index auditLogs deployed Activated). Runtime verified: TP_GS thấy đầy đủ program lifecycle (Generic badge violet) + tx/batch/lock (Sales badge sky) trong 1 view. Drawer chi tiết switch shape theo source.
+
+**LOW legacy limitation còn lại** (intentional, UI banner cảnh báo rõ):
+- Legacy salesAuditLogs (writeSalesAudit Phase 2) thiếu `branchId`/`month`/`changedByRole` → silent skip khi user filter strict cơ sở/tháng. UI hiển thị "Không rõ cơ sở" cho docs này.
+- auditLogs generic KHÔNG có field `month` → user filter tháng + source=all/auditLogs → Generic subset trả empty (semantic đúng). UI banner: "Một số audit cũ thiếu metadata cơ sở/tháng nên có thể không xuất hiện khi lọc theo cơ sở hoặc tháng cụ thể. Chọn 'Tất cả' để xem nhiều hơn."
 
 ---
 
@@ -646,15 +651,17 @@ Xem [§4 Risk Register](#4-risk-register).
 
 ## 4. Risk Register
 
-> **Update 2026-06-23**: 0 HIGH · 3 MED · 6 LOW · 0 NEEDS REVIEW. Gỡ 2 MED (originalDebt + Sale info leak rule — đã DEPLOYED `64aa0b9`) + 1 NEEDS REVIEW (promoSnapshots).
+> **Update 2026-06-23 (PR-7B)**: 0 HIGH · **2 MED** · **7 LOW** · 0 NEEDS REVIEW. Gỡ 1 MED ("Audit chia 2 collection" — đã RESOLVED qua PR-7B union commit `7fec39a` + indexes Activated + runtime OK). Thêm 1 LOW: legacy audit limitation.
 >
-> Trước (2026-06-22): 0 HIGH · 5 MED · 4 LOW · 1 NEEDS REVIEW.
+> 2026-06-23 (earlier): 0 HIGH · 3 MED · 6 LOW · 0 NEEDS REVIEW (gỡ 2 MED + 1 NEEDS REVIEW).
+> 2026-06-22 (gốc): 0 HIGH · 5 MED · 4 LOW · 1 NEEDS REVIEW.
 
 | Sev | Module | Vấn đề | File / Code | Vì sao là rủi ro | Ảnh hưởng vận hành | Xử lý đề xuất | PR đề xuất |
 |:---:|---|---|---|---|---|---|---|
-| **MED** | Audit | 12 action ngoài enum `SalesAuditAction` + audit chia 2 collection | [lib/types/sales-audit.ts:25-40](lib/types/sales-audit.ts#L25-L40) vs code thực ghi | UI `/audit-history` PR-7A chỉ thấy `salesAuditLogs` → 50% lifecycle KM/batch approve/target update không truy vết được trong 1 chỗ. Audit compliance khó | TP_KE/TP_GS chỉ thấy half history | Union 2 collection + normalize schema + unify action enum | **PR-7B** |
 | **MED** | Sales V2 | Refund / hoàn tiền chưa có workflow | (chưa có code) | Sale yêu cầu hoàn tiền sau approved → workaround edit tx tay → mất audit trail rõ | Nếu nghiệp vụ refund thường → control yếu | Tạo collection `salesRefunds` + workflow approve | **PR-8** |
 | **MED** | Sales V2 | Discount approval threshold chưa có | (chưa có code) | Sale có thể nhập tx với `discountAmount` lớn không cần duyệt | Rủi ro tài chính nếu Sale lạm dụng | Config thresholds + workflow approval tx vượt | **PR-9** |
+| LOW | Audit (legacy) | Legacy salesAuditLogs (writeSalesAudit Phase 2) thiếu branchId/month/changedByRole + auditLogs generic không có month | [lib/sales-v2/audit.ts:24-41](lib/sales-v2/audit.ts#L24-L41), normalize handle null | Filter strict cơ sở/tháng → silent skip docs cũ. User chọn "Tất cả" để xem hết | LOW (intentional, UI banner cảnh báo) | Không backfill / migrate. Future PR audit writer chuẩn hoá khi tiện | Defer |
+| LOW | Audit | 12 action ngoài enum `SalesAuditAction` | [lib/types/sales-audit.ts:25-40](lib/types/sales-audit.ts#L25-L40) vs code thực ghi | Action mapper tolerant string (PR-7A) + label mới (PR-7B) đã cover. Type-safe enum chưa update | LOW (UI handle, không break) | Future PR chuẩn hoá enum union 2 source | Defer |
 | LOW | Audit | PATCH `/transactions/[id]` silently ignore field ngoài `EDITABLE_FIELDS` (không audit attempt tamper) | [transactions/[id]/route.ts:76-79](app/api/sales-v2/transactions/[id]/route.ts#L76-L79) | User/attacker thử PATCH `originalDebt`/`promoSnapshots`/`debtAmount` → bị block (whitelist) NHƯNG KHÔNG ghi log attempt. Khó forensic | Không impact data integrity (vẫn block) — chỉ thiếu evidence | Add `console.warn` hoặc audit attempt khi body chứa field ngoài whitelist (tiny PR ~5-10 LOC) | Defer (LOW) |
 | LOW | Audit | Sale tự sửa batch draft KHÔNG ghi audit (comment "đỡ noise") | [transactions/[id]/route.ts:275](app/api/sales-v2/transactions/[id]/route.ts#L275) `isReviewerEdit` check | Sale sửa nhiều lần trong draft → không thấy history nội bộ. Quyết định nghiệp vụ trước đây | Inconvenience, không impact data integrity | Defer — quyết định nghiệp vụ; review lại khi PR-7B union | Defer |
 | LOW | Promotion | CEO/CHU_TICH UI ẨN button nhưng server KHÔNG có `isPromoReadOnlyRole` enforcement | [lib/sales-v2/promo-permissions.ts:13-18](lib/sales-v2/promo-permissions.ts#L13-L18) | Nếu sau này CEO custom được set làm approver → server cho duyệt (vì hiện tại logic là `currentApprover===uid`) | Theoretical — chưa có flow set CEO làm approver | Khi mở CEO override → add explicit check | Defer (no PR cần ngay) |
@@ -670,54 +677,59 @@ Xem [§4 Risk Register](#4-risk-register).
 | ~~MED~~ | Promotion | `salesPrograms` rules cho Sale đọc TẤT CẢ programs trong branch | ✅ **FIXED + DEPLOYED 2026-06-23** — commit `64aa0b9` tách Sale role block với `status == 'active'` filter. Production rules active |
 | ~~MED~~ | Sales V2 | `originalDebt` immutability dựa app logic | ✅ **PASS** — manual review 2026-06-23 xác nhận PATCH whitelist L28-33 + server compute layer chặn |
 | ~~NEEDS REVIEW~~ | Promotion | tx.promoSnapshots field-level immutability | ✅ **PASS** — manual review 2026-06-23 xác nhận PATCH whitelist không có `promoSnapshots`/`promoIds`, server chỉ READ |
+| ~~MED~~ | Audit | Chia 2 collection (`salesAuditLogs` + `auditLogs` generic) → UI `/audit-history` chỉ thấy 50% workflow | ✅ **RESOLVED via PR-7B** — commit `7fec39a` union 2 collection + 2 composite index `auditLogs` deployed Activated + runtime OK trên production. TP_GS/TP_KE thấy đầy đủ tx + program lifecycle + target update trong 1 view. Còn LOW legacy limitation (filter strict cơ sở/tháng skip docs cũ thiếu metadata) |
 
 ---
 
-## 5. Recommended Next PRs (xếp ưu tiên — update 2026-06-23)
+## 5. Recommended Next PRs (xếp ưu tiên — update 2026-06-23 PR-7B)
 
 ### ✅ Đã hoàn thành
 - **Rule fix `salesPrograms` Sale info leak** — commit `64aa0b9`, DEPLOYED 2026-06-23
 - **Manual review `originalDebt` + `promoSnapshots` field whitelist** — PASS dứt điểm, không cần PR fix
+- **PR-PROMO1B mở TP_GS read-only `/chuong-trinh`** — commit `68a4f91`
+- **PR-7B Union audit collections** — commit `7fec39a`, indexes Activated, runtime OK
 
-### Priority 1 — PR-PROMO1B (mở TP_GS permission `/chuong-trinh`)
-**Scope**: ~20 LOC (permission + sidebar entry "Khuyến mãi đang áp dụng" trong section Giám sát)
-**Risk giảm**: LOW (TP_GS giám sát workflow KM)
-**LOC**: tiny
-**Không làm**: KHÔNG đổi UI (đã harden PR-PROMO1A — TP_GS read-only mode đã prep helper `isPromoReadOnlyRole`)
-**Tại sao Priority 1**: tiny, low risk, mở khóa giám sát KM ngay
-
-### Priority 2 — PR-7B: Union audit collections
-**Scope**: API + Client
-**Risk giảm**: MED → LOW (compliance/audit)
-**LOC**: ~400-500
-**Không làm**:
-- KHÔNG sửa audit writer (giữ 2 collection)
-- KHÔNG migrate data
-- KHÔNG mở NV_KE/QLCS scope nếu chưa có branch-scope filter chặt
-
-### Priority 3 — PR-PROMO2 (Ưu đãi ngoài CT)
+### Priority 1 — PR-PROMO2 (Ưu đãi ngoài CT)
 - Tx có `discountAmount > 0` nhưng `promoSnapshots = []` → flag "ưu đãi ngoài KM"
 - Section/page review cho NV_KE/TP_KE/GD_VP xác nhận hợp lệ
 - Audit log "manual_discount"
-- Chờ anh chốt threshold (vd > 5% tổng giá trị → flag review)
+- **Chờ anh chốt threshold** (vd > 5% tổng giá trị → flag review)
+- LOC ~500-700
+- Risk MED
 
-### Priority 4 — PR-8 Refund
-- Chờ spec nghiệp vụ rõ (kích bằng dấu / điều kiện hoàn / role duyệt)
+### Priority 2 — PR-8 Refund workflow
+- **Chờ spec nghiệp vụ** rõ (kích bằng dấu / điều kiện hoàn / role duyệt)
 - Collection mới `salesRefunds` + workflow approve
 - LOC ~600-800
+- Risk HIGH (đụng financial workflow)
 
-### Priority 5 — PR-9 Discount approval threshold
-- Chờ policy của lãnh đạo về % giảm cần duyệt
-- Config thresholds + workflow approval
+### Priority 3 — PR-9 Discount approval threshold
+- **Chờ policy lãnh đạo** về % giảm cần duyệt
+- Config thresholds + workflow approval tx vượt
+- LOC ~400-500
+- Risk MED
+
+### Priority 4 — PR-7C: mở NV_KE/QLCS audit branch-scope
+- Mở `/audit-history` cho NV_KE + QLCS với branch-scope filter chặt
+- Server force `branchId = caller.facility_id` cho 2 role này
+- LOC ~100-200
+- Risk LOW (UI đã sẵn sàng, chỉ thêm permission + scope helper)
+
+### Priority 5 — PR-NAV1B: cleanup V1 deprecated routes
+- `/doanh-so/*` (V1) còn permission, Cmd+K access được
+- Redirect V1 → V2 hoặc xóa permission
+- LOC tiny
+- Risk LOW
 
 ### Optional — Hardening LOW (defer)
-- PATCH audit silent tamper attempt (~5-10 LOC)
-- Sale self-edit batch draft audit (quyết định nghiệp vụ)
+- PATCH audit silent tamper attempt (~5-10 LOC) — log khi user gửi field ngoài whitelist
+- Sale self-edit batch draft audit (quyết định nghiệp vụ noise vs completeness)
+- Audit writer chuẩn hoá enum union 2 source (label tolerant đã đủ trong PR-7B)
 
 ### KHÔNG nên làm ngay
-- ❌ Mở permission rộng (NV_KE/QLCS vào /audit-history) trước khi PR-7B có branch-scope filter
 - ❌ Mở CEO override workflow KM khi server-side chưa có explicit role guard
 - ❌ Bulk delete V1 legacy data — defer cleanup
+- ❌ Migrate legacy salesAuditLogs (writeSalesAudit) backfill branchId/month — không cần thiết, UI banner đã handle
 
 ---
 
@@ -746,10 +758,21 @@ Xem [§4 Risk Register](#4-risk-register).
 16. `lib/types/sales-v2.ts` (231 LOC — full schema SalesTransaction + SalesDailyBatch)
 17. `app/api/sales-v2/transactions/route.ts` (351 LOC — POST + GET)
 18. `app/api/sales-v2/transactions/[id]/route.ts` (399 LOC — PATCH + DELETE)
+19. `lib/sales-v2/audit.ts` (76 LOC — writeSalesAudit Phase 2 legacy helper)
 
 UI callers identified (KHÔNG deep-read — chỉ verify tồn tại + grep tên):
 - `app/(app)/doanh-so-v2/nhap/NhapClient.tsx` (Sale entry — gọi POST + PATCH)
 - `app/(app)/doanh-so-v2/doi-chieu/_components/BatchDetailModal.tsx` (Accountant edit — gọi PATCH)
+
+**PR-7B 2026-06-23** (union audit collections):
+- Commit: `7fec39a` (push origin/main, App Hosting rollout OK)
+- Files NEW: `lib/audit-history/normalize.ts` (144 LOC), `tests/audit-history/normalize.test.ts` (249 LOC)
+- Files MOD: types.ts, action-labels.ts, query-params.ts, route.ts, AuditHistoryClient.tsx, 4 sub-components, firestore.indexes.json
+- 2 composite index `auditLogs` đã deploy + Activated:
+  - `auditLogs (module ASC, createdAt DESC)`
+  - `auditLogs (module ASC, branchId ASC, createdAt DESC)`
+- Tests: 393/393 PASS local
+- **Runtime verification trên production OK**: TP_GS vào Giám sát → Lịch sử thao tác, drawer chi tiết oldValue/newValue + before/after hoạt động đúng theo source. KHÔNG cần hotfix
 
 ### API đã kiểm tra (qua Explore agent)
 
@@ -788,24 +811,24 @@ UI callers identified (KHÔNG deep-read — chỉ verify tồn tại + grep tên
 - `lib/audit-history/can-read.ts`: canReadAuditHistory (PR-7A)
 - `lib/sales-v2/promo-permissions.ts`: 10 helper PR-PROMO1A
 
-### Tests confirmed (368/368 PASS — em không re-run trong audit)
-- 22 test file, 368 test PASS (state sau PR-PROMO1A)
-- Cover: permissions, audit-history, promo-permissions/deadline/query-params, sales-v2 scope/target/programs/promo-effectiveness, feature-flags, notifications, rate-limit, types/branches, audit WORM contract
+### Tests confirmed
+- **2026-06-23 (PR-7B latest)**: 23 test file, **393/393 test PASS**
+- Cover: permissions, audit-history (normalize/action-labels/query-params/can-read), promo-permissions/deadline/query-params, sales-v2 scope/target/programs/promo-effectiveness, feature-flags, notifications, rate-limit, types/branches, audit WORM contract
 
 ---
 
 ## Kết luận
 
-> **App ở trạng thái strong defense-in-depth.** Auth/Session/Route/API/Rules/Audit 4-5 layer enforce thật, không phải UI-only. 16/16 API Sales V2 audit hôm nay PASS 100% server-side enforcement. Firestore Rules có catch-all deny + WORM cho audit. **0 HIGH risks** trong scope audit này.
+> **App ở trạng thái strong defense-in-depth.** Auth/Session/Route/API/Rules/Audit 4-5 layer enforce thật, không phải UI-only. 16/16 API Sales V2 audit PASS 100% server-side enforcement. Firestore Rules có catch-all deny + WORM cho audit. **0 HIGH risks**.
 >
-> **Cần xử lý trước khi mở thêm quyền hoặc làm PR tài chính (Refund/Discount)**:
-> 1. ✅ ~~**Tiny rule fix `salesPrograms` Sale info leak**~~ — **DONE** commit `64aa0b9` + DEPLOYED 2026-06-23
-> 2. ⏳ **PR-7B union audit collections** (PR-7A chỉ thấy 50% workflow) — MED risk còn
-> 3. ✅ ~~**Manual review field-level immutability** `originalDebt` + `promoSnapshots`~~ — **PASS dứt điểm** 2026-06-23, không cần PR fix
+> **3 item HIGH-priority đã xử lý xong**:
+> 1. ✅ **Rule fix `salesPrograms` Sale info leak** — commit `64aa0b9` DEPLOYED 2026-06-23
+> 2. ✅ **Manual review `originalDebt` + `promoSnapshots` field immutability** — PASS dứt điểm 2026-06-23
+> 3. ✅ **PR-7B union audit collections** — commit `7fec39a` + indexes Activated + runtime OK 2026-06-23
 >
-> Update 2026-06-23: chỉ còn **1 item MED priority** trước khi mở PR tài chính (PR-7B). Sau đó có thể mở:
-> - **PR-PROMO1B** (TP_GS permission — Priority 1 mới — tiny ~20 LOC, an toàn)
-> - PR-7B (audit union — Priority 2)
-> - PR-PROMO2 (Ưu đãi ngoài CT)
-> - PR-8 Refund (cần spec)
-> - PR-9 Discount threshold (cần policy)
+> **Update 2026-06-23 (PR-7B)**: chỉ còn **2 MED risks** (Refund + Discount threshold — đều chờ spec/policy ngoài kỹ thuật). Có thể mở PR tài chính an toàn:
+> - **PR-PROMO2** Ưu đãi ngoài CT — Priority 1 mới (cần threshold)
+> - PR-8 Refund — cần spec nghiệp vụ
+> - PR-9 Discount threshold — cần policy lãnh đạo
+> - PR-7C mở NV_KE/QLCS audit branch-scope — Priority thấp hơn
+> - PR-NAV1B cleanup V1 deprecated — Tiny
