@@ -18,18 +18,24 @@
 // Server đã enforce server-side: bySale = {}, byBranch = {}, salesCustomers chỉ
 // chứa Sale của mình. Component tin tưởng data từ API.
 
+import { Users } from 'lucide-react';
 import MonthlyKpiCards from '../MonthlyKpiCards';
 import BusinessAlerts from '../BusinessAlerts';
 import TargetProgressCard from '../TargetProgressCard';
-import SalesCustomerDrilldown from '../SalesCustomerDrilldown';
+import SaleCustomerTable from '../SaleCustomerTable';
 import type { Summary } from '../types';
 
 interface Props {
   data: Summary;
+  /** uid của Sale đang login — tìm row trong salesCustomers. */
+  uid: string;
 }
 
-export default function SaleView({ data }: Props) {
-  const hasCustomerDrilldown = data.salesCustomers && Object.keys(data.salesCustomers).length > 0;
+export default function SaleView({ data, uid }: Props) {
+  // PR-TK4B: Sale render trực tiếp "Khách hàng của tôi" — KHÔNG dùng ranking/drawer.
+  // Server đã enforce: salesCustomers chỉ chứa Sale của mình (1 entry hoặc rỗng).
+  const myCustomers = data.salesCustomers?.[uid] ?? null;
+  const transactions = myCustomers?.transactions ?? [];
 
   return (
     <>
@@ -43,10 +49,16 @@ export default function SaleView({ data }: Props) {
 
       <TargetProgressCard targetSummary={data.targetSummary} />
 
-      {/* "Khách hàng của tôi" — SalesCustomerDrilldown auto handle 1 Sale = no switcher */}
-      {hasCustomerDrilldown && (
-        <SalesCustomerDrilldown salesCustomers={data.salesCustomers!} />
-      )}
+      <div className="card">
+        <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
+          <Users size={16} className="text-emerald-600" />
+          Khách hàng của tôi ({transactions.length} giao dịch)
+        </h3>
+        <SaleCustomerTable
+          transactions={transactions}
+          emptyMessage="Bạn chưa có giao dịch nào đã đối chiếu trong tháng này"
+        />
+      </div>
     </>
   );
 }

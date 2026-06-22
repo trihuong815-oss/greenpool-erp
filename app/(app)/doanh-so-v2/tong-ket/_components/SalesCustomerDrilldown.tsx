@@ -3,6 +3,12 @@
 // PR-TK1 (2026-06-21) — V8.X "Khách hàng theo Sale" drill-down.
 // Tách từ TongKetClient.tsx — gộp BranchChipFilter + SaleTabs + TxTable.
 // CHỈ refactor — không đổi logic state, filter, sort, format.
+//
+// ⚠️ DEPRECATED — PR-TK4B (2026-06-22):
+// File này KHÔNG còn được sử dụng trong 5 view (TopExecutive/Accountant/Qlcs/Sale/ReadOnlyAudit).
+// Pattern card ngang Sale + tabs đã được THAY bằng SaleRankingTable + SaleCustomerDrawer
+// (top role/QLCS/TP_GS/TP_KE) và SaleCustomerTable trực tiếp (Sale).
+// Giữ file để rollback nếu cần. Có thể xoá sau 2 tuần verify production stable.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Users } from 'lucide-react';

@@ -19,23 +19,26 @@ import MonthlyKpiCards from '../MonthlyKpiCards';
 import BusinessAlerts from '../BusinessAlerts';
 import TargetProgressCard from '../TargetProgressCard';
 import BranchSummaryTable from '../BranchSummaryTable';
-import TopSalesTable from '../TopSalesTable';
+import SaleRankingTable from '../SaleRankingTable';
 import SourceBreakdownCard from '../SourceBreakdownCard';
 import TopPackagesCard from '../TopPackagesCard';
 import PromoSummaryCard from '../PromoSummaryCard';
-import SalesCustomerDrilldown from '../SalesCustomerDrilldown';
 import type { Summary } from '../types';
 
 interface Props {
   data: Summary;
   month: string;
+  /** Top role có thể đang xem all (no branchId filter) hoặc filter 1 branch.
+   *  showBranchColumn = true khi scope.branchId === null (xem all). */
+  scopeBranchId?: string | null;
 }
 
-export default function TopExecutiveView({ data, month }: Props) {
+export default function TopExecutiveView({ data, month, scopeBranchId }: Props) {
   const hasPromoData = (data.promoTotals?.transactions ?? 0) > 0;
   const showBranchTable = Object.keys(data.byBranch).length > 0;
-  const showSaleTable = Object.keys(data.bySale).length > 0;
-  const hasCustomerDrilldown = data.salesCustomers && Object.keys(data.salesCustomers).length > 0;
+  const hasSalesCustomers = data.salesCustomers && Object.keys(data.salesCustomers).length > 0;
+  // PR-TK4B: Top role xem all → showBranchColumn=true. Filter 1 branch → ẩn cột.
+  const showBranchColumn = scopeBranchId == null;
 
   return (
     <>
@@ -52,10 +55,13 @@ export default function TopExecutiveView({ data, month }: Props) {
       {/* PR-TK4A: BranchSummaryTable ĐẶT CAO — là tâm điểm xem all branches */}
       {showBranchTable && <BranchSummaryTable byBranch={data.byBranch} />}
 
-      {showSaleTable && (
-        <TopSalesTable
-          bySale={data.bySale}
+      {/* PR-TK4B: Replace TopSalesTable + SalesCustomerDrilldown bằng SaleRankingTable + Drawer */}
+      {hasSalesCustomers && (
+        <SaleRankingTable
+          salesCustomers={data.salesCustomers!}
           saleTargetsThisMonth={data.saleTargetsThisMonth}
+          daysElapsedPercent={data.targetSummary?.daysElapsedPercent ?? 0}
+          showBranchColumn={showBranchColumn}
         />
       )}
 
@@ -70,12 +76,6 @@ export default function TopExecutiveView({ data, month }: Props) {
           promoTotals={data.promoTotals}
           promoByCode={data.promoByCode}
         />
-      )}
-
-      {/* PR-TK4A: SalesCustomerDrilldown đặt CUỐI để không tự chiếm trung tâm.
-          Vẫn dùng pattern hiện tại — drawer pattern defer PR-TK4B. */}
-      {hasCustomerDrilldown && (
-        <SalesCustomerDrilldown salesCustomers={data.salesCustomers!} />
       )}
     </>
   );

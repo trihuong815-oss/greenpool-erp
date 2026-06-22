@@ -21,11 +21,10 @@ import MonthlyKpiCards from '../MonthlyKpiCards';
 import BusinessAlerts from '../BusinessAlerts';
 import TargetProgressCard from '../TargetProgressCard';
 import BranchSummaryTable from '../BranchSummaryTable';
-import TopSalesTable from '../TopSalesTable';
+import SaleRankingTable from '../SaleRankingTable';
 import SourceBreakdownCard from '../SourceBreakdownCard';
 import TopPackagesCard from '../TopPackagesCard';
 import PromoSummaryCard from '../PromoSummaryCard';
-import SalesCustomerDrilldown from '../SalesCustomerDrilldown';
 import type { Summary } from '../types';
 
 interface Props {
@@ -33,14 +32,17 @@ interface Props {
   month: string;
   /** roleCode để phân biệt TP_KE (system view) vs NV_KE (single branch). */
   roleCode: string;
+  /** Top scope đang filter branch nào, null = xem all. */
+  scopeBranchId?: string | null;
 }
 
-export default function AccountantView({ data, month, roleCode }: Props) {
+export default function AccountantView({ data, month, roleCode, scopeBranchId }: Props) {
   const hasPromoData = (data.promoTotals?.transactions ?? 0) > 0;
-  const hasCustomerDrilldown = data.salesCustomers && Object.keys(data.salesCustomers).length > 0;
-  const showSaleTable = Object.keys(data.bySale).length > 0;
+  const hasSalesCustomers = data.salesCustomers && Object.keys(data.salesCustomers).length > 0;
   // TP_KE xem all → có byBranch nhiều entries. NV_KE chỉ thấy 1 cơ sở → byBranch có 1 entry OR rỗng.
   const showBranchTable = roleCode === 'TP_KE' && Object.keys(data.byBranch).length > 0;
+  // PR-TK4B: cột Cơ sở chỉ khi TP_KE xem all (scopeBranchId === null). NV_KE 1 cơ sở → ẩn.
+  const showBranchColumn = roleCode === 'TP_KE' && scopeBranchId == null;
 
   return (
     <>
@@ -59,10 +61,13 @@ export default function AccountantView({ data, month, roleCode }: Props) {
 
       {showBranchTable && <BranchSummaryTable byBranch={data.byBranch} />}
 
-      {showSaleTable && (
-        <TopSalesTable
-          bySale={data.bySale}
+      {/* PR-TK4B: Replace TopSalesTable + SalesCustomerDrilldown bằng SaleRankingTable + Drawer */}
+      {hasSalesCustomers && (
+        <SaleRankingTable
+          salesCustomers={data.salesCustomers!}
           saleTargetsThisMonth={data.saleTargetsThisMonth}
+          daysElapsedPercent={data.targetSummary?.daysElapsedPercent ?? 0}
+          showBranchColumn={showBranchColumn}
         />
       )}
 
@@ -77,10 +82,6 @@ export default function AccountantView({ data, month, roleCode }: Props) {
           promoTotals={data.promoTotals}
           promoByCode={data.promoByCode}
         />
-      )}
-
-      {hasCustomerDrilldown && (
-        <SalesCustomerDrilldown salesCustomers={data.salesCustomers!} />
       )}
     </>
   );

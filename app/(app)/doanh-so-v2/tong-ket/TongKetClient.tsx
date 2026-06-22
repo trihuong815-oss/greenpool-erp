@@ -93,6 +93,11 @@ export default function TongKetClient({ scope, myRoleCode, myUid, myBranchId }: 
 
   // PR-TK4A: chọn view component theo role/scope
   const ViewComponent = pickView(scope, myRoleCode);
+  // PR-TK4B: scopeBranchId cho SaleRankingTable showBranchColumn check.
+  // showBranchFilter=true (top scope) + branchId='all' → scope all → showBranchColumn=true.
+  // showBranchFilter=true + branchId chọn 1 → showBranchColumn=false (filter 1 branch).
+  // showBranchFilter=false (QLCS/NV_KE/Sale) → branchId hardcoded → showBranchColumn=false.
+  const scopeBranchId = (showBranchFilter && branchId !== 'all') ? branchId : (showBranchFilter ? null : myBranchId);
 
   return (
     <div className="flex-1 p-3 md:p-5 bg-slate-50 overflow-y-auto">
@@ -124,10 +129,13 @@ export default function TongKetClient({ scope, myRoleCode, myUid, myBranchId }: 
             ) : (
               // PR-TK4A: render view component theo role/scope.
               // Mỗi view tự handle section order + filter section nào hiển thị.
+              // PR-TK4B: pass scopeBranchId + uid để SaleRankingTable/SaleView nhận đúng prop.
               <ViewComponent
                 data={data}
                 month={month}
                 roleCode={myRoleCode}
+                scopeBranchId={scopeBranchId}
+                uid={myUid}
               />
             )}
           </>

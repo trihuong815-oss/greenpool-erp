@@ -18,11 +18,10 @@
 import MonthlyKpiCards from '../MonthlyKpiCards';
 import BusinessAlerts from '../BusinessAlerts';
 import TargetProgressCard from '../TargetProgressCard';
-import TopSalesTable from '../TopSalesTable';
+import SaleRankingTable from '../SaleRankingTable';
 import SourceBreakdownCard from '../SourceBreakdownCard';
 import TopPackagesCard from '../TopPackagesCard';
 import PromoSummaryCard from '../PromoSummaryCard';
-import SalesCustomerDrilldown from '../SalesCustomerDrilldown';
 import type { Summary } from '../types';
 
 interface Props {
@@ -32,8 +31,7 @@ interface Props {
 
 export default function QlcsView({ data, month }: Props) {
   const hasPromoData = (data.promoTotals?.transactions ?? 0) > 0;
-  const hasCustomerDrilldown = data.salesCustomers && Object.keys(data.salesCustomers).length > 0;
-  const showSaleTable = Object.keys(data.bySale).length > 0;
+  const hasSalesCustomers = data.salesCustomers && Object.keys(data.salesCustomers).length > 0;
 
   return (
     <>
@@ -47,10 +45,14 @@ export default function QlcsView({ data, month }: Props) {
 
       <TargetProgressCard targetSummary={data.targetSummary} />
 
-      {showSaleTable && (
-        <TopSalesTable
-          bySale={data.bySale}
+      {/* PR-TK4B: SaleRankingTable + Drawer thay TopSalesTable + SalesCustomerDrilldown.
+          QLCS ẩn cột Cơ sở (chỉ 1 cơ sở). */}
+      {hasSalesCustomers && (
+        <SaleRankingTable
+          salesCustomers={data.salesCustomers!}
           saleTargetsThisMonth={data.saleTargetsThisMonth}
+          daysElapsedPercent={data.targetSummary?.daysElapsedPercent ?? 0}
+          showBranchColumn={false}
         />
       )}
 
@@ -65,10 +67,6 @@ export default function QlcsView({ data, month }: Props) {
           promoTotals={data.promoTotals}
           promoByCode={data.promoByCode}
         />
-      )}
-
-      {hasCustomerDrilldown && (
-        <SalesCustomerDrilldown salesCustomers={data.salesCustomers!} />
       )}
     </>
   );

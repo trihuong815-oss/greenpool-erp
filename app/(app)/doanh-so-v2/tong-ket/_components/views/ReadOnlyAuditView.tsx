@@ -34,24 +34,25 @@ import MonthlyKpiCards from '../MonthlyKpiCards';
 import BusinessAlerts from '../BusinessAlerts';
 import TargetProgressCard from '../TargetProgressCard';
 import BranchSummaryTable from '../BranchSummaryTable';
-import TopSalesTable from '../TopSalesTable';
+import SaleRankingTable from '../SaleRankingTable';
 import SourceBreakdownCard from '../SourceBreakdownCard';
 import TopPackagesCard from '../TopPackagesCard';
 import PromoSummaryCard from '../PromoSummaryCard';
-import SalesCustomerDrilldown from '../SalesCustomerDrilldown';
 import ReadOnlyBanner from '../ReadOnlyBanner';
 import type { Summary } from '../types';
 
 interface Props {
   data: Summary;
   month: string;
+  /** TP_GS có scope=top → có thể filter branch. null = xem all. */
+  scopeBranchId?: string | null;
 }
 
-export default function ReadOnlyAuditView({ data, month }: Props) {
+export default function ReadOnlyAuditView({ data, month, scopeBranchId }: Props) {
   const hasPromoData = (data.promoTotals?.transactions ?? 0) > 0;
   const showBranchTable = Object.keys(data.byBranch).length > 0;
-  const showSaleTable = Object.keys(data.bySale).length > 0;
-  const hasCustomerDrilldown = data.salesCustomers && Object.keys(data.salesCustomers).length > 0;
+  const hasSalesCustomers = data.salesCustomers && Object.keys(data.salesCustomers).length > 0;
+  const showBranchColumn = scopeBranchId == null;
 
   return (
     <>
@@ -69,10 +70,13 @@ export default function ReadOnlyAuditView({ data, month }: Props) {
 
       {showBranchTable && <BranchSummaryTable byBranch={data.byBranch} />}
 
-      {showSaleTable && (
-        <TopSalesTable
-          bySale={data.bySale}
+      {/* PR-TK4B: ranking + drawer read-only (drawer KHÔNG có nút mutation/export) */}
+      {hasSalesCustomers && (
+        <SaleRankingTable
+          salesCustomers={data.salesCustomers!}
           saleTargetsThisMonth={data.saleTargetsThisMonth}
+          daysElapsedPercent={data.targetSummary?.daysElapsedPercent ?? 0}
+          showBranchColumn={showBranchColumn}
         />
       )}
 
@@ -87,10 +91,6 @@ export default function ReadOnlyAuditView({ data, month }: Props) {
           promoTotals={data.promoTotals}
           promoByCode={data.promoByCode}
         />
-      )}
-
-      {hasCustomerDrilldown && (
-        <SalesCustomerDrilldown salesCustomers={data.salesCustomers!} />
       )}
     </>
   );
