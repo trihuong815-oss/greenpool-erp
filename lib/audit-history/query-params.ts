@@ -10,15 +10,21 @@ const MAX_PAGE_SIZE = 100;
 /** YYYY-MM regex — month filter validation. */
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
+/** PR-7B (2026-06-23): nguồn audit để query. */
+export type AuditSourceFilter = 'all' | 'salesAuditLogs' | 'auditLogs';
+const VALID_SOURCES: ReadonlySet<string> = new Set(['all', 'salesAuditLogs', 'auditLogs']);
+
 export interface AuditHistoryQuery {
   /** YYYY-MM hoặc null. Server-side filter (dùng index). */
   month: string | null;
   /** BranchId hợp lệ hoặc null. Server-side filter (dùng index). */
   branchId: BranchId | null;
-  /** Cursor pagination — encoded changedAt millis của doc cuối page trước. */
+  /** Cursor pagination — encoded occurredAt millis của doc cuối page trước. */
   cursor: string | null;
   /** PageSize 1..100, default 50. */
   pageSize: number;
+  /** PR-7B: nguồn — default 'all' (union salesAuditLogs + auditLogs). */
+  source: AuditSourceFilter;
 }
 
 /** Parse URLSearchParams → AuditHistoryQuery. Throw Error nếu input invalid (caller catch → 400). */
@@ -61,7 +67,17 @@ export function parseAuditHistoryQuery(sp: URLSearchParams): AuditHistoryQuery {
     pageSize = Math.min(n, MAX_PAGE_SIZE);
   }
 
-  return { month, branchId, cursor, pageSize };
+  // source — PR-7B: default 'all' (union 2 collection)
+  const rawSource = sp.get('source')?.trim() ?? '';
+  let source: AuditSourceFilter = 'all';
+  if (rawSource) {
+    if (!VALID_SOURCES.has(rawSource)) {
+      throw new Error(`source phải là một trong: all | salesAuditLogs | auditLogs`);
+    }
+    source = rawSource as AuditSourceFilter;
+  }
+
+  return { month, branchId, cursor, pageSize, source };
 }
 
 export const AUDIT_HISTORY_DEFAULTS = {

@@ -404,6 +404,25 @@
         { "fieldPath": "month", "order": "ASCENDING" },
         { "fieldPath": "changedAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "_comment": "PR-7B (2026-06-23): Audit History query auditLogs generic theo module='sales' — orderBy createdAt DESC.",
+      "collectionGroup": "auditLogs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "module", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "_comment": "PR-7B (2026-06-23): Audit History query auditLogs theo module + branchId filter — orderBy createdAt DESC.",
+      "collectionGroup": "auditLogs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "module", "order": "ASCENDING" },
+        { "fieldPath": "branchId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

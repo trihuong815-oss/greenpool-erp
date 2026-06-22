@@ -1,20 +1,26 @@
-// GET /api/audit-history?month=YYYY-MM&branchId=X&cursor=<millis>&pageSize=50
+// GET /api/audit-history?month=YYYY-MM&branchId=X&source=all|salesAuditLogs|auditLogs&cursor=<millis>&pageSize=50
 //
-// PR-7A (2026-06-22) — Read-only list audit log Sales V2.
-// Scope: chỉ collection salesAuditLogs (Option A đã chốt). auditLogs generic defer PR-7B.
+// PR-7A (2026-06-22): scope hẹp — chỉ salesAuditLogs.
+// PR-7B (2026-06-23): UNION 2 collection — salesAuditLogs + auditLogs (module='sales').
+//   source=all (default) → query cả 2, merge in-memory sort DESC theo occurredAtMs.
+//   source=salesAuditLogs / source=auditLogs → query 1 collection (backward compat + debug).
+//
 // Permission: 7 role (ADMIN/CEO/CHU_TICH/GD_KD/GD_VP/TP_KE/TP_GS).
-// Pagination: cursor-based (changedAt millis). pageSize 50, max 100.
-// Ordering: changedAt DESC (mới nhất trước).
+// Pagination: cursor = millis nhỏ nhất trong page hiện tại. Trang sau query
+//   2 collection với startAfter(Timestamp.fromMillis(cursor)) DESC.
+//   Safe: no duplicate, no skip. Trade-off: pageSize thực tế có thể < pageSize
+//   nếu 1 source hết hoặc filter làm rỗng.
+// Ordering: occurredAtMs DESC, tie-break source ('auditLogs' < 'salesAuditLogs')
+//   rồi docId ASC (helper mergeAuditEntries).
 //
-// Server-side filter (dùng Firestore index):
-//   - month + branchId   → reuse index branchId+month+changedAt (M2.1 PR-1)
-//   - month only         → cần composite mới (month+changedAt DESC) — PR-7A thêm
-//   - branchId only      → cần composite mới (branchId+changedAt DESC) — PR-7A thêm
-//   - none               → orderBy changedAt DESC standalone (Firestore default single-field DESC)
+// Filter strategy (chốt 2026-06-23):
+//   - month + branchId: server-side. Docs salesAuditLogs LEGACY (writeSalesAudit)
+//     thiếu month/branchId → silent skip khi filter strict. UI banner cảnh báo.
+//   - auditLogs generic không có month field → filter month CHỈ áp dụng cho
+//     salesAuditLogs. Source 'all' với filter month: auditLogs subset trả empty.
 //
-// Client-side filter (defer PR-7B nếu cần index):
-//   - action, module, changedBy, dateRange → UI filter trên page hiện tại (sau khi server trả ≤100).
-//   - Trade-off ghi rõ trong UI tooltip.
+// Friendly error nếu thiếu Firestore index:
+//   "Audit index chưa sẵn sàng hoặc chưa được deploy. Vui lòng deploy Firestore indexes rồi thử lại."
 
 import { NextRequest, NextResponse } from 'next/server';
 import { Timestamp } from 'firebase-admin/firestore';
@@ -22,12 +28,67 @@ import { getFirebaseAdminDb } from '@/lib/firebase/admin';
 import { COLLECTIONS } from '@/lib/firebase/collections';
 import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-auth';
 import { canReadAuditHistory } from '@/lib/audit-history/can-read';
-import { parseAuditHistoryQuery } from '@/lib/audit-history/query-params';
+import { parseAuditHistoryQuery, type AuditSourceFilter } from '@/lib/audit-history/query-params';
+import {
+  normalizeSalesAuditLog, normalizeGenericAuditLog, mergeAuditEntries,
+} from '@/lib/audit-history/normalize';
 import type { AuditHistoryEntry, AuditHistoryResponse } from '@/lib/audit-history/types';
-import type { SalesAuditLogDoc } from '@/lib/types/sales-audit';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+/** True nếu error message từ Firestore là missing-index. */
+function isMissingIndexError(err: unknown): boolean {
+  const m = err instanceof Error ? err.message : String(err);
+  return /index|FAILED_PRECONDITION|requires an index/i.test(m);
+}
+
+/** Query salesAuditLogs theo filter + cursor. Trả array AuditHistoryEntry đã normalize.
+ *  Throw nếu Firestore lỗi (caller catch để build friendly error). */
+async function querySalesAuditLogs(
+  db: FirebaseFirestore.Firestore,
+  params: { month: string | null; branchId: string | null; cursorMs: number | null; pageSize: number },
+): Promise<AuditHistoryEntry[]> {
+  let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.SALES_AUDIT_LOGS);
+  if (params.month && params.branchId) {
+    q = q.where('branchId', '==', params.branchId).where('month', '==', params.month);
+  } else if (params.month) {
+    q = q.where('month', '==', params.month);
+  } else if (params.branchId) {
+    q = q.where('branchId', '==', params.branchId);
+  }
+  q = q.orderBy('changedAt', 'desc');
+  if (params.cursorMs !== null) {
+    q = q.startAfter(Timestamp.fromMillis(params.cursorMs));
+  }
+  q = q.limit(params.pageSize);
+  const snap = await q.get();
+  return snap.docs.map((d) => normalizeSalesAuditLog(d.id, d.data()));
+}
+
+/** Query auditLogs generic (module='sales') theo filter + cursor.
+ *  Note: auditLogs KHÔNG có field `month` → filter month=non-null trả empty cho source này. */
+async function queryGenericAuditLogs(
+  db: FirebaseFirestore.Firestore,
+  params: { month: string | null; branchId: string | null; cursorMs: number | null; pageSize: number },
+): Promise<AuditHistoryEntry[]> {
+  // PR-7B: auditLogs không có month → nếu user filter month, source này trả empty
+  // (semantic đúng: không có dữ liệu month-specific trong generic logs).
+  if (params.month) return [];
+
+  let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.AUDIT_LOGS)
+    .where('module', '==', 'sales');
+  if (params.branchId) {
+    q = q.where('branchId', '==', params.branchId);
+  }
+  q = q.orderBy('createdAt', 'desc');
+  if (params.cursorMs !== null) {
+    q = q.startAfter(new Date(params.cursorMs));
+  }
+  q = q.limit(params.pageSize);
+  const snap = await q.get();
+  return snap.docs.map((d) => normalizeGenericAuditLog(d.id, d.data()));
+}
 
 export async function GET(req: NextRequest) {
   // ─── Auth ──────────────────────────────────────────────────────────────
@@ -57,86 +118,69 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  // ─── Build Firestore query ─────────────────────────────────────────────
+  const cursorMs = query.cursor ? Number(query.cursor) : null;
   const db = getFirebaseAdminDb();
-  let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.SALES_AUDIT_LOGS);
+  // Mỗi source query pageSize riêng → đảm bảo merge có đủ dữ liệu cho page.
+  const perSourceSize = query.pageSize;
 
-  if (query.month && query.branchId) {
-    // Index có sẵn: branchId + month + changedAt DESC
-    q = q.where('branchId', '==', query.branchId).where('month', '==', query.month);
-  } else if (query.month) {
-    // Index PR-7A mới: month + changedAt DESC
-    q = q.where('month', '==', query.month);
-  } else if (query.branchId) {
-    // Index PR-7A mới: branchId + changedAt DESC
-    q = q.where('branchId', '==', query.branchId);
+  // ─── Fetch theo source ─────────────────────────────────────────────────
+  const warnings: string[] = [];
+  const tasks: Array<Promise<AuditHistoryEntry[]>> = [];
+  const taskLabels: AuditSourceFilter[] = [];
+
+  if (query.source === 'all' || query.source === 'salesAuditLogs') {
+    tasks.push(querySalesAuditLogs(db, {
+      month: query.month, branchId: query.branchId, cursorMs, pageSize: perSourceSize,
+    }));
+    taskLabels.push('salesAuditLogs');
   }
-  // else: không filter equality → orderBy changedAt DESC standalone (Firestore default)
-
-  q = q.orderBy('changedAt', 'desc');
-
-  // Cursor pagination: startAfter timestamp (parse cursor as millis)
-  if (query.cursor) {
-    const cursorMs = Number(query.cursor);
-    q = q.startAfter(Timestamp.fromMillis(cursorMs));
-  }
-
-  // Limit + 1 để biết còn page tiếp không
-  q = q.limit(query.pageSize + 1);
-
-  // ─── Execute ───────────────────────────────────────────────────────────
-  let snap;
-  try {
-    snap = await q.get();
-  } catch (err) {
-    console.error('[audit-history] firestore query failed:', {
-      err: err instanceof Error ? err.message : String(err),
-      query,
-    });
-    return NextResponse.json(
-      { error: 'Lỗi truy vấn audit log. Có thể thiếu Firestore index.' },
-      { status: 500 },
-    );
+  if (query.source === 'all' || query.source === 'auditLogs') {
+    tasks.push(queryGenericAuditLogs(db, {
+      month: query.month, branchId: query.branchId, cursorMs, pageSize: perSourceSize,
+    }));
+    taskLabels.push('auditLogs');
   }
 
-  const docs = snap.docs;
-  const hasMore = docs.length > query.pageSize;
-  const pageDocs = hasMore ? docs.slice(0, query.pageSize) : docs;
+  // Promise.allSettled — 1 source fail không phá toàn bộ
+  const results = await Promise.allSettled(tasks);
+  const batches: AuditHistoryEntry[][] = [];
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i];
+    const src = taskLabels[i];
+    if (r.status === 'fulfilled') {
+      batches.push(r.value);
+    } else {
+      const err = r.reason;
+      console.error('[audit-history] query failed:', { source: src, err: err instanceof Error ? err.message : String(err) });
+      if (isMissingIndexError(err)) {
+        warnings.push(
+          `Audit index chưa sẵn sàng hoặc chưa được deploy cho nguồn "${src}". Vui lòng deploy Firestore indexes rồi thử lại.`,
+        );
+      } else {
+        warnings.push(`Lỗi truy vấn nguồn "${src}": ${err instanceof Error ? err.message : 'unknown'}`);
+      }
+      batches.push([]);
+    }
+  }
 
-  // ─── Map → response ────────────────────────────────────────────────────
-  const items: AuditHistoryEntry[] = pageDocs.map((d) => {
-    const data = d.data() as SalesAuditLogDoc;
-    const changedAt = data.changedAt;
-    const ms = changedAt && typeof changedAt.toMillis === 'function' ? changedAt.toMillis() : 0;
-    return {
-      id: d.id,
-      changedAtMs: ms,
-      changedBy: data.changedBy ?? '',
-      changedByName: data.changedByName ?? '',
-      changedByRole: data.changedByRole ?? '',
-      module: String(data.module ?? ''),
-      branchId: data.branchId,
-      month: data.month ?? '',
-      batchId: data.batchId ?? null,
-      transactionId: data.transactionId ?? null,
-      programId: data.programId ?? null,
-      action: String(data.action ?? ''),
-      field: data.field ?? null,
-      oldValue: data.oldValue ?? null,
-      newValue: data.newValue ?? null,
-      reason: data.reason ?? null,
-      ip: data.ip ?? null,
-    };
-  });
+  // ─── Merge + slice ─────────────────────────────────────────────────────
+  const merged = mergeAuditEntries(...batches);
+  // Slice tối đa pageSize sau merge
+  const pageItems = merged.slice(0, query.pageSize);
 
-  const nextCursor = hasMore && pageDocs.length > 0
-    ? String(pageDocs[pageDocs.length - 1].data().changedAt.toMillis())
+  // nextCursor = millis nhỏ nhất trong page hiện tại (nếu có item)
+  // Trang sau query both collection startAfter(cursor) → safe no dup
+  // Trả null nếu cả 2 source đều trả < perSourceSize → hết dữ liệu
+  const allSourcesExhausted = batches.every((b) => b.length < perSourceSize);
+  const nextCursor = (pageItems.length > 0 && !allSourcesExhausted)
+    ? String(pageItems[pageItems.length - 1].occurredAtMs)
     : null;
 
   const response: AuditHistoryResponse = {
-    items,
+    items: pageItems,
     nextCursor,
-    count: items.length,
+    count: pageItems.length,
+    ...(warnings.length > 0 ? { warnings } : {}),
   };
 
   return NextResponse.json(response);

@@ -43,6 +43,7 @@ export default function AuditTable({ items, onSelect }: Props) {
           <thead className="bg-slate-50 sticky top-0 z-10 border-b border-slate-200">
             <tr className="text-left text-xs font-semibold text-slate-600">
               <th className="px-3 py-2 whitespace-nowrap">Thời gian</th>
+              <th className="px-3 py-2">Nguồn</th>
               <th className="px-3 py-2">Người thao tác</th>
               <th className="px-3 py-2">Cơ sở</th>
               <th className="px-3 py-2">Tháng</th>
@@ -56,7 +57,7 @@ export default function AuditTable({ items, onSelect }: Props) {
           <tbody>
             {items.map((it) => {
               const known = isKnownAction(it.action);
-              const branch = BRANCH_BY_ID[it.branchId];
+              const branch = it.branchId ? BRANCH_BY_ID[it.branchId] : undefined;
               return (
                 <tr
                   key={it.id}
@@ -67,16 +68,33 @@ export default function AuditTable({ items, onSelect }: Props) {
                     {fmtTimeVN(it.changedAtMs)}
                   </td>
                   <td className="px-3 py-2">
-                    <div className="font-medium text-slate-800">{it.changedByName || '(không tên)'}</div>
-                    <div className="text-xs text-slate-500">{it.changedByRole}</div>
+                    {/* PR-7B: source badge */}
+                    <span
+                      className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium ${
+                        it.source === 'salesAuditLogs'
+                          ? 'bg-sky-50 text-sky-700 border border-sky-200'
+                          : 'bg-violet-50 text-violet-700 border border-violet-200'
+                      }`}
+                      title={it.source}
+                    >
+                      {it.source === 'salesAuditLogs' ? 'Sales' : 'Generic'}
+                    </span>
                   </td>
                   <td className="px-3 py-2">
-                    <span
-                      className="inline-block px-2 py-0.5 rounded-full text-xs font-medium text-white"
-                      style={{ backgroundColor: branch?.color ?? '#64748b' }}
-                    >
-                      {branch?.id ?? it.branchId}
-                    </span>
+                    <div className="font-medium text-slate-800">{it.changedByName || '(không tên)'}</div>
+                    <div className="text-xs text-slate-500">{it.changedByRole || '—'}</div>
+                  </td>
+                  <td className="px-3 py-2">
+                    {it.branchId ? (
+                      <span
+                        className="inline-block px-2 py-0.5 rounded-full text-xs font-medium text-white"
+                        style={{ backgroundColor: branch?.color ?? '#64748b' }}
+                      >
+                        {branch?.id ?? it.branchId}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-slate-400 italic">Không rõ</span>
+                    )}
                   </td>
                   <td className="px-3 py-2 tabular-nums text-slate-700">{it.month || '—'}</td>
                   <td className="px-3 py-2 text-slate-700">{moduleLabel(it.module)}</td>

@@ -6,10 +6,13 @@
 
 import { RotateCcw } from 'lucide-react';
 import { BRANCHES, type BranchId } from '@/lib/branches';
+import type { AuditSourceFilter } from '@/lib/audit-history/query-params';
 
 export interface AuditFiltersState {
   month: string;                   // 'YYYY-MM' hoặc 'all'
   branchId: BranchId | 'all';
+  /** PR-7B: nguồn audit. */
+  source: AuditSourceFilter;
   action: string;                  // substring search (client-side)
   module: 'all' | 'batch' | 'transaction' | 'program';
   changedBy: string;               // substring search trên name/uid (client-side)
@@ -50,6 +53,19 @@ export default function AuditFilters({ state, onChange, onReset }: Props) {
             {BRANCHES.map((b) => (
               <option key={b.id} value={b.id}>{b.name}</option>
             ))}
+          </select>
+        </Field>
+
+        {/* PR-7B: source filter (server-side) */}
+        <Field label="Nguồn audit" hint="server-side">
+          <select
+            value={state.source}
+            onChange={(e) => update('source', e.target.value as AuditSourceFilter)}
+            className="w-full px-3 py-1.5 text-sm rounded-md border border-slate-200 focus:border-emerald-500 outline-none"
+          >
+            <option value="all">Tất cả nguồn</option>
+            <option value="salesAuditLogs">Sales Audit (tx/batch/lock/export)</option>
+            <option value="auditLogs">Generic Audit (program/target)</option>
           </select>
         </Field>
 

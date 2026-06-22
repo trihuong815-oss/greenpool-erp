@@ -23,7 +23,7 @@ export default function AuditCardStack({ items, onSelect }: Props) {
     <div className="space-y-2">
       {items.map((it) => {
         const known = isKnownAction(it.action);
-        const branch = BRANCH_BY_ID[it.branchId];
+        const branch = it.branchId ? BRANCH_BY_ID[it.branchId] : undefined;
         return (
           <button
             key={it.id}
@@ -33,7 +33,7 @@ export default function AuditCardStack({ items, onSelect }: Props) {
           >
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1 min-w-0">
-                {/* Action + module badge */}
+                {/* Action + module badge + source + branch */}
                 <div className="flex items-center gap-2 flex-wrap mb-1">
                   <span
                     className={`inline-block px-2 py-0.5 rounded-md text-xs font-medium ${
@@ -45,12 +45,26 @@ export default function AuditCardStack({ items, onSelect }: Props) {
                     {actionLabelOrRaw(it.action)}
                   </span>
                   <span className="text-xs text-slate-500">{moduleLabel(it.module)}</span>
+                  {/* PR-7B: source badge */}
                   <span
-                    className="inline-block px-1.5 py-0.5 rounded text-xs font-medium text-white"
-                    style={{ backgroundColor: branch?.color ?? '#64748b' }}
+                    className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium ${
+                      it.source === 'salesAuditLogs'
+                        ? 'bg-sky-50 text-sky-700 border border-sky-200'
+                        : 'bg-violet-50 text-violet-700 border border-violet-200'
+                    }`}
                   >
-                    {branch?.id ?? it.branchId}
+                    {it.source === 'salesAuditLogs' ? 'Sales' : 'Generic'}
                   </span>
+                  {it.branchId ? (
+                    <span
+                      className="inline-block px-1.5 py-0.5 rounded text-xs font-medium text-white"
+                      style={{ backgroundColor: branch?.color ?? '#64748b' }}
+                    >
+                      {branch?.id ?? it.branchId}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-slate-400 italic">Không rõ cơ sở</span>
+                  )}
                 </div>
 
                 {/* Person + role */}

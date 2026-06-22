@@ -42,7 +42,7 @@ export default function AuditDetailDrawer({ entry, onClose }: Props) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const branch = BRANCH_BY_ID[entry.branchId];
+  const branch = entry.branchId ? BRANCH_BY_ID[entry.branchId] : undefined;
   const known = isKnownAction(entry.action);
 
   return (
@@ -142,22 +142,26 @@ export default function AuditDetailDrawer({ entry, onClose }: Props) {
             </section>
           )}
 
-          {/* Diff */}
+          {/* Diff — PR-7B: switch shape theo source */}
+          {/* salesAuditLogs dùng oldValue/newValue (per-field). auditLogs dùng before/after (whole object). */}
           <section>
             <h3 className="text-sm font-bold text-slate-700 border-b border-slate-100 pb-1 mb-2">
               Thay đổi
+              <span className="ml-2 text-xs font-normal text-slate-400">
+                ({entry.source === 'salesAuditLogs' ? 'oldValue / newValue per-field' : 'before / after whole object'})
+              </span>
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <div className="text-xs font-semibold text-rose-600 mb-1">TRƯỚC</div>
                 <pre className="text-xs bg-rose-50 border border-rose-100 rounded p-2 overflow-x-auto whitespace-pre-wrap break-all max-h-64">
-                  {fmtValue(entry.oldValue)}
+                  {fmtValue(entry.source === 'salesAuditLogs' ? entry.oldValue : entry.before)}
                 </pre>
               </div>
               <div>
                 <div className="text-xs font-semibold text-emerald-700 mb-1">SAU</div>
                 <pre className="text-xs bg-emerald-50 border border-emerald-100 rounded p-2 overflow-x-auto whitespace-pre-wrap break-all max-h-64">
-                  {fmtValue(entry.newValue)}
+                  {fmtValue(entry.source === 'salesAuditLogs' ? entry.newValue : entry.after)}
                 </pre>
               </div>
             </div>

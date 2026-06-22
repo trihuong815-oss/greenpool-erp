@@ -30,6 +30,7 @@ function currentMonthVN(): string {
 const INITIAL_FILTERS: AuditFiltersState = {
   month: currentMonthVN(),
   branchId: 'all',
+  source: 'all',           // PR-7B
   action: '',
   module: 'all',
   changedBy: '',
@@ -45,6 +46,7 @@ export default function AuditHistoryClient({ roleCode }: Props) {
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);  // PR-7B: API warnings (vd thiếu index)
   const [selected, setSelected] = useState<AuditHistoryEntry | null>(null);
 
   // Fetch page — useCallback để không re-create mỗi render
@@ -58,6 +60,7 @@ export default function AuditHistoryClient({ roleCode }: Props) {
         const qs = new URLSearchParams();
         if (filters.month && filters.month !== 'all') qs.set('month', filters.month);
         if (filters.branchId && filters.branchId !== 'all') qs.set('branchId', filters.branchId);
+        if (filters.source && filters.source !== 'all') qs.set('source', filters.source);  // PR-7B
         if (opts.cursorParam) qs.set('cursor', opts.cursorParam);
         qs.set('pageSize', '50');
 
@@ -71,6 +74,7 @@ export default function AuditHistoryClient({ roleCode }: Props) {
         setItems((prev) => (opts.append ? [...prev, ...json.items] : json.items));
         setCursor(json.nextCursor);
         setHasMore(Boolean(json.nextCursor));
+        setWarnings(json.warnings ?? []);  // PR-7B
       } catch (e: any) {
         setError(e?.message ?? 'Lỗi tải dữ liệu');
       } finally {
@@ -78,7 +82,7 @@ export default function AuditHistoryClient({ roleCode }: Props) {
         setLoadingMore(false);
       }
     },
-    [filters.month, filters.branchId],
+    [filters.month, filters.branchId, filters.source],   // PR-7B: source trigger refetch
   );
 
   // Reload khi filter server-side đổi (month/branchId)
@@ -121,22 +125,34 @@ export default function AuditHistoryClient({ roleCode }: Props) {
   return (
     <div className="flex-1 p-3 md:p-5 bg-slate-50 overflow-y-auto">
       <div className="mx-auto max-w-[1400px] space-y-4">
-        {/* Header note */}
+        {/* Header note — PR-7B: cập nhật cho union 2 collection */}
         <div className="card">
           <div className="text-sm text-slate-600">
-            <span className="font-semibold text-slate-800">Lịch sử thao tác Sales V2 (PR-7A)</span>
+            <span className="font-semibold text-slate-800">Lịch sử thao tác Sales V2 (PR-7B union)</span>
             {' — '}
-            Read-only audit log từ collection <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded">salesAuditLogs</code>.
+            Read-only audit từ <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded">salesAuditLogs</code> + <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded">auditLogs (module=sales)</code>.
             Vai trò: <span className="font-mono text-xs">{roleCode}</span>.
           </div>
           <div className="text-xs text-slate-500 mt-1.5">
-            ⚠ PR-7A chỉ hiển thị audit từ <code>salesAuditLogs</code> (tx, batch submit, lock kỳ, export, reception pricing).
-            Program lifecycle / batch approve-return / target update đang ghi ở <code>auditLogs</code> generic → defer PR-7B.
+            ℹ Filter Tháng/Cơ sở/Nguồn chạy server-side. Filter Action/Module/Người/Khoảng ngày chỉ áp dụng trên trang hiện tại (≤100 record).
           </div>
-          <div className="text-xs text-slate-500 mt-1">
-            ℹ Filter Tháng/Cơ sở chạy server-side. Filter Action/Module/Người/Khoảng ngày chỉ áp dụng trên trang hiện tại (≤100 record).
+          <div className="text-xs text-amber-700 mt-1">
+            ⚠ Một số audit cũ (batch approve/return legacy) thiếu metadata cơ sở/tháng nên có thể không xuất hiện khi lọc theo cơ sở hoặc tháng cụ thể. Chọn "Tất cả" để xem nhiều hơn.
+          </div>
+          <div className="text-xs text-slate-400 mt-1 italic">
+            Audit được merge từ nhiều nguồn; phân trang dựa theo thời gian phát sinh. Với dữ liệu cùng timestamp có thể có sai lệch nhỏ về thứ tự — không ảnh hưởng dữ liệu gốc.
           </div>
         </div>
+
+        {/* PR-7B: warnings từ API (vd 1 source thiếu index) */}
+        {warnings.length > 0 && (
+          <div className="card bg-amber-50 border border-amber-200">
+            <div className="text-sm font-semibold text-amber-800 mb-1">⚠ Cảnh báo từ server</div>
+            <ul className="text-xs text-amber-700 space-y-0.5 list-disc list-inside">
+              {warnings.map((w, i) => <li key={i}>{w}</li>)}
+            </ul>
+          </div>
+        )}
 
         {/* Filters */}
         <AuditFilters

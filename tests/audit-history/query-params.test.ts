@@ -11,12 +11,29 @@ function sp(params: Record<string, string>): URLSearchParams {
 }
 
 describe('parseAuditHistoryQuery — defaults', () => {
-  it('empty params → all null, pageSize default 50', () => {
+  it('empty params → all null, pageSize default 50, source default "all"', () => {
     const q = parseAuditHistoryQuery(sp({}));
     expect(q.month).toBeNull();
     expect(q.branchId).toBeNull();
     expect(q.cursor).toBeNull();
     expect(q.pageSize).toBe(50);
+    expect(q.source).toBe('all');   // PR-7B
+  });
+});
+
+// PR-7B: source param
+describe('parseAuditHistoryQuery — source (PR-7B)', () => {
+  it.each(['all', 'salesAuditLogs', 'auditLogs'] as const)('source=%s OK', (src) => {
+    expect(parseAuditHistoryQuery(sp({ source: src })).source).toBe(src);
+  });
+
+  it('source empty → default all', () => {
+    expect(parseAuditHistoryQuery(sp({ source: '' })).source).toBe('all');
+  });
+
+  it('source invalid → throw', () => {
+    expect(() => parseAuditHistoryQuery(sp({ source: 'foo' }))).toThrow(/source/);
+    expect(() => parseAuditHistoryQuery(sp({ source: 'AUDITLOGS' }))).toThrow(/source/);   // case-sensitive
   });
 });
 
@@ -119,7 +136,17 @@ describe('parseAuditHistoryQuery — combined', () => {
       branchId: 'HM',
       cursor: '1719000000000',
       pageSize: 25,
+      source: 'all',    // PR-7B default
     });
+  });
+
+  it('full params with source=auditLogs', () => {
+    const q = parseAuditHistoryQuery(sp({
+      month: '2026-06', branchId: 'HM',
+      source: 'auditLogs', pageSize: '50',
+    }));
+    expect(q.source).toBe('auditLogs');
+    expect(q.month).toBe('2026-06');
   });
 });
 
