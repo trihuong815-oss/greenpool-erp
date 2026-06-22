@@ -458,16 +458,25 @@ service cloud.firestore {
     //   - QLCS, NV_KE: programs của branch mình
     //   - Sale (NV_SALE, NV_SALE_PT): programs branch mình + status='active' (qua API /available)
     match /salesPrograms/{programId} {
+      // PR-RULES-FIX (2026-06-23): tách Sale role ra block riêng, bắt buộc thêm
+      //   status == 'active'. Trước đây Sale (NV_SALE/NV_SALE_PT) đọc được mọi
+      //   status (draft/pending/rejected/paused/expired) → info leak nếu dùng
+      //   client SDK direct read (xem APP_AUDIT_EVIDENCE.md §3.4 MED risk).
+      // QLCS + NV_KE GIỮ NGUYÊN — workflow review cần thấy tất cả status.
+      // Top role (Admin/CEO/CHU_TICH/TP_KE) không đụng.
       allow read: if isSignedIn() && (
         isAdmin() ||
         userRole() == 'CHU_TICH' ||
         userRole() == 'TP_KE' ||
+        // QLCS + NV_KE: workflow review — thấy mọi status trong branch của mình
         (resource.data.branchId == userFacility() && (
           isQLCS() ||
-          userRole() == 'NV_KE' ||
-          userRole() == 'NV_SALE' ||
-          userRole() == 'NV_SALE_PT'
-        ))
+          userRole() == 'NV_KE'
+        )) ||
+        // Sale + Sale PT: CHỈ status='active' branch của mình (info leak fix)
+        (resource.data.branchId == userFacility()
+          && resource.data.status == 'active'
+          && (userRole() == 'NV_SALE' || userRole() == 'NV_SALE_PT'))
       );
       allow write: if false; // Admin SDK only
     }
