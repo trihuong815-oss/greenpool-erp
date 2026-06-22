@@ -5,24 +5,24 @@
 // PR-TK2 (2026-06-21): wire BusinessAlerts, MonthLockBadge, MonthlyKpiCards extend, CTA.
 // PR-TK3A (2026-06-21): wire TargetProgressCard read-only.
 // PR-TK3B (2026-06-21): wire tabs (Tổng kết / Chỉ tiêu) + TargetEditTab.
+// PR-TK4A (2026-06-22): role-based view layout — pickView() chọn 1 trong 5 view
+//   component (TopExecutive / Accountant / Qlcs / Sale / ReadOnlyAudit) thay vì
+//   render đồng nhất cho mọi role. Section order khác nhau theo persona.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ComponentType } from 'react';
 import { BarChart3, Target } from 'lucide-react';
 import type { BranchId } from '@/lib/branches';
 import type { ScopeRole } from '@/lib/sales-v2/scope';
 
 import TongKetHeader from './_components/TongKetHeader';
 import { LoadingState, ErrorState, EmptyState } from './_components/TongKetStates';
-import MonthlyKpiCards from './_components/MonthlyKpiCards';
 import BusinessAlerts from './_components/BusinessAlerts';
-import TargetProgressCard from './_components/TargetProgressCard';
-import SourceBreakdownCard from './_components/SourceBreakdownCard';
-import TopPackagesCard from './_components/TopPackagesCard';
-import PromoSummaryCard from './_components/PromoSummaryCard';
-import TopSalesTable from './_components/TopSalesTable';
-import BranchSummaryTable from './_components/BranchSummaryTable';
-import SalesCustomerDrilldown from './_components/SalesCustomerDrilldown';
 import TargetEditTab from './_components/TargetEditTab';
+import TopExecutiveView from './_components/views/TopExecutiveView';
+import AccountantView from './_components/views/AccountantView';
+import QlcsView from './_components/views/QlcsView';
+import SaleView from './_components/views/SaleView';
+import ReadOnlyAuditView from './_components/views/ReadOnlyAuditView';
 import { currentMonthVN } from './_components/utils';
 import type { Summary } from './_components/types';
 
@@ -35,6 +35,30 @@ interface Props {
 }
 
 type MainTab = 'summary' | 'target';
+
+// ─── Role-based view selection (PR-TK4A) ───────────────────────────────────
+
+/** Chọn view component theo roleCode + scope. Order check QUAN TRỌNG:
+ *  TP_GS check TRƯỚC scope='top' vì TP_GS scope cũng = 'top' (theo getScopeRole)
+ *  nhưng cần ReadOnlyAuditView không phải TopExecutiveView. */
+function pickView(scope: ScopeRole, roleCode: string): ComponentType<any> {
+  if (roleCode === 'TP_GS') return ReadOnlyAuditView;
+  if (roleCode === 'TP_KE' || roleCode === 'NV_KE') return AccountantView;
+  if (scope === 'sale') return SaleView;
+  if (scope === 'qlcs') return QlcsView;
+  // Fallback: scope='top' hoặc 'accountant' (đã handle TP_KE/NV_KE ở trên)
+  return TopExecutiveView;
+}
+
+/** CTA "Sang đối chiếu" hiện khi user có quyền vào /doi-chieu.
+ *  Sale + TP_GS KHÔNG có quyền → ẩn CTA tránh dead link. */
+function shouldShowReconcileCta(scope: ScopeRole, roleCode: string): boolean {
+  if (scope === 'sale') return false;
+  if (roleCode === 'TP_GS') return false;
+  return true;
+}
+
+// ─── Main orchestrator ─────────────────────────────────────────────────────
 
 export default function TongKetClient({ scope, myRoleCode, myUid, myBranchId }: Props) {
   const [tab, setTab] = useState<MainTab>('summary');
@@ -64,22 +88,15 @@ export default function TongKetClient({ scope, myRoleCode, myUid, myBranchId }: 
   }, [month, branchId, showBranchFilter]);
 
   useEffect(() => {
-    // Chỉ fetch summary khi đang ở tab Tổng kết — tránh fetch thừa khi user qua tab Chỉ tiêu
     if (tab === 'summary') void fetchSummary();
   }, [tab, fetchSummary]);
 
-  const hasPromoData = (data?.promoTotals?.transactions ?? 0) > 0;
-  const showSaleTable = (scope === 'top' || scope === 'accountant' || scope === 'qlcs')
-    && data != null
-    && Object.keys(data.bySale).length > 0;
-  const showBranchTable = scope === 'top'
-    && data != null
-    && Object.keys(data.byBranch).length > 0;
+  // PR-TK4A: chọn view component theo role/scope
+  const ViewComponent = pickView(scope, myRoleCode);
 
   return (
     <div className="flex-1 p-3 md:p-5 bg-slate-50 overflow-y-auto">
       <div className="mx-auto max-w-[1400px] space-y-4">
-        {/* PR-TK3B: tab switcher Tổng kết / Chỉ tiêu */}
         <TabSwitcher tab={tab} setTab={setTab} />
 
         {tab === 'summary' ? (
@@ -92,7 +109,7 @@ export default function TongKetClient({ scope, myRoleCode, myUid, myBranchId }: 
               onMonthChange={setMonth}
               onBranchChange={setBranchId}
               monthLock={data?.monthLock}
-              showReconcileCta={scope !== 'sale'}
+              showReconcileCta={shouldShowReconcileCta(scope, myRoleCode)}
             />
 
             {loading ? (
@@ -105,51 +122,17 @@ export default function TongKetClient({ scope, myRoleCode, myUid, myBranchId }: 
                 <EmptyState month={month} />
               </>
             ) : (
-              <>
-                <BusinessAlerts data={data} />
-
-                <MonthlyKpiCards
-                  totals={data.totals}
-                  customerCount={data.customerCount}
-                  pendingReviewCount={(data.txStatusStats?.pending ?? 0) + (data.batchStats?.pendingReview ?? 0)}
-                />
-
-                {/* PR-TK3A: hiển thị target progress card. Sale → null target = "Chưa đặt".
-                    Top all branches: target = tổng monthTargets các cơ sở có target. */}
-                <TargetProgressCard targetSummary={data.targetSummary} />
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <SourceBreakdownCard bySource={data.bySource} />
-                  <TopPackagesCard byPackage={data.byPackage} />
-                </div>
-
-                {/* V8.X: Khách hàng theo Sale (replace PT card) */}
-                {data.salesCustomers && Object.keys(data.salesCustomers).length > 0 && (
-                  <SalesCustomerDrilldown salesCustomers={data.salesCustomers} />
-                )}
-
-                {/* V7 Promo */}
-                {hasPromoData && data.promoTotals && (
-                  <PromoSummaryCard
-                    month={month}
-                    promoTotals={data.promoTotals}
-                    promoByCode={data.promoByCode}
-                  />
-                )}
-
-                {showSaleTable && (
-                  <TopSalesTable
-                    bySale={data.bySale}
-                    saleTargetsThisMonth={data.saleTargetsThisMonth}
-                  />
-                )}
-
-                {showBranchTable && <BranchSummaryTable byBranch={data.byBranch} />}
-              </>
+              // PR-TK4A: render view component theo role/scope.
+              // Mỗi view tự handle section order + filter section nào hiển thị.
+              <ViewComponent
+                data={data}
+                month={month}
+                roleCode={myRoleCode}
+              />
             )}
           </>
         ) : (
-          // Tab "Chỉ tiêu" — TargetEditTab tự fetch riêng (không phụ thuộc monthly-summary)
+          // Tab "Chỉ tiêu" — TargetEditTab tự fetch riêng
           <TargetEditTab
             scope={scope}
             roleCode={myRoleCode}
