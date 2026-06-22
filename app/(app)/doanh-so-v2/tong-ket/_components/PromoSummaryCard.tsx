@@ -1,5 +1,11 @@
 // PR-TK1 (2026-06-21) — V7 Promo summary card (khuyến mãi tháng).
 // Tách từ TongKetClient.tsx — 4 KPI compact + bảng top promo theo lợi ích.
+//
+// ⚠️ DEPRECATED — PR-TK4C (2026-06-22):
+// File này đã được THAY bằng PromoEffectivenessCard (nâng cấp từ "summary"
+// sang "đánh giá hiệu quả tương đối" với classification + recommendation).
+// KHÔNG còn dùng trong 4 view (TopExecutive/Accountant/Qlcs/ReadOnlyAudit).
+// Giữ file để rollback nếu cần. Có thể xoá sau 2 tuần verify production stable.
 
 import { useMemo } from 'react';
 import { Tag, Wallet, Dumbbell } from 'lucide-react';

@@ -68,12 +68,13 @@ export interface Summary {
     collected: number;
     unitName: string;
   }>;
-  // V7 Promo (2026-06-18)
+  // V7 Promo (2026-06-18) — PR-TK4C: + totalPromoSales + sales per code cho cost ratio
   promoTotals?: {
     transactions: number;
     totalDiscount: number;
     totalBonusSessions: number;
     totalBonusDays: number;
+    totalPromoSales?: number;       // PR-TK4C (optional cho backward compat)
   };
   promoByCode?: Record<string, {
     code: string;
@@ -83,6 +84,7 @@ export interface Summary {
     discount: number;
     bonusSessions: number;
     bonusDays: number;
+    sales?: number;                 // PR-TK4C (optional cho backward compat)
   }>;
   // V8.X (2026-06-18) — danh sách KH chi tiết theo Sale (replace PT card)
   salesCustomers?: Record<string, SaleCustomers>;

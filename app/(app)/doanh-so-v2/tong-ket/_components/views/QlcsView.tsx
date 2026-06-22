@@ -21,7 +21,7 @@ import TargetProgressCard from '../TargetProgressCard';
 import SaleRankingTable from '../SaleRankingTable';
 import SourceBreakdownCard from '../SourceBreakdownCard';
 import TopPackagesCard from '../TopPackagesCard';
-import PromoSummaryCard from '../PromoSummaryCard';
+import PromoEffectivenessCard from '../PromoEffectivenessCard';
 import type { Summary } from '../types';
 
 interface Props {
@@ -62,10 +62,11 @@ export default function QlcsView({ data, month }: Props) {
       </div>
 
       {hasPromoData && data.promoTotals && (
-        <PromoSummaryCard
+        <PromoEffectivenessCard
           month={month}
           promoTotals={data.promoTotals}
           promoByCode={data.promoByCode}
+          totalSystemSales={data.totals.sales}
         />
       )}
     </>

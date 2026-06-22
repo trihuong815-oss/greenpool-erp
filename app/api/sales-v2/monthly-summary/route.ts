@@ -114,15 +114,20 @@ export async function GET(req: NextRequest) {
     const ptTotals = { transactions: 0, sessions: 0, sales: 0 };
     const ptByPackage: Record<string, NamedBucket & { sessions: number; unitName: string }> = {};
     // V7 Promo (2026-06-18): aggregate riêng theo promo. Snapshot ở tx → lịch sử bất biến.
+    // PR-TK4C (2026-06-22): + totalPromoSales + sales per promo cho cost ratio compute.
+    //   totalPromoSales: chỉ +pv 1 lần per tx (avoid double-count khi tx có 2 promo).
+    //   promoByCode[code].sales: +pv mỗi promo trong snaps (per-promo attribution — overlap OK).
     const promoTotals = {
       transactions: 0,           // tx có ÍT NHẤT 1 promo
       totalDiscount: 0,
       totalBonusSessions: 0,
       totalBonusDays: 0,
+      totalPromoSales: 0,        // PR-TK4C: tổng doanh số (pv) của tx có promo
     };
     const promoByCode: Record<string, {
       code: string; name: string; type: string;
       count: number; discount: number; bonusSessions: number; bonusDays: number;
+      sales: number;             // PR-TK4C: per-promo attribution
     }> = {};
     // V8.X (2026-06-18): danh sách khách hàng chi tiết theo Sale (cho tab /tong-ket).
     // Mỗi Sale có list tx + totals. Scope đã apply ở filter trên (saleId/branchId).
@@ -286,13 +291,16 @@ export async function GET(req: NextRequest) {
           promoTotals.totalDiscount += txDiscount;
           promoTotals.totalBonusSessions += txBonusSessions;
           promoTotals.totalBonusDays += txBonusDays;
+          promoTotals.totalPromoSales += pv;   // PR-TK4C: tổng doanh số tx có promo (count 1 lần/tx)
           for (const s of snaps) {
             const code = String(s?.code ?? '').trim() || '(no-code)';
             if (!promoByCode[code]) promoByCode[code] = {
               code, name: String(s?.name ?? ''), type: String(s?.type ?? ''),
               count: 0, discount: 0, bonusSessions: 0, bonusDays: 0,
+              sales: 0,                          // PR-TK4C: per-promo attribution
             };
             promoByCode[code].count += 1;
+            promoByCode[code].sales += pv;       // PR-TK4C: attribute pv cho mỗi promo trong snaps
             // Attribute toàn bộ discount/bonus của tx cho TỪNG promo trong snapshots — vì
             // tx max 1 discount + 1 bonus, mỗi promo chỉ thuộc 1 group → attribute đúng group.
             if (s?.type === 'percent' || s?.type === 'fixed_amount') promoByCode[code].discount += txDiscount;

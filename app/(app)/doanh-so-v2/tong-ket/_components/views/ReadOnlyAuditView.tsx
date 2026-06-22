@@ -37,7 +37,7 @@ import BranchSummaryTable from '../BranchSummaryTable';
 import SaleRankingTable from '../SaleRankingTable';
 import SourceBreakdownCard from '../SourceBreakdownCard';
 import TopPackagesCard from '../TopPackagesCard';
-import PromoSummaryCard from '../PromoSummaryCard';
+import PromoEffectivenessCard from '../PromoEffectivenessCard';
 import ReadOnlyBanner from '../ReadOnlyBanner';
 import type { Summary } from '../types';
 
@@ -86,10 +86,11 @@ export default function ReadOnlyAuditView({ data, month, scopeBranchId }: Props)
       </div>
 
       {hasPromoData && data.promoTotals && (
-        <PromoSummaryCard
+        <PromoEffectivenessCard
           month={month}
           promoTotals={data.promoTotals}
           promoByCode={data.promoByCode}
+          totalSystemSales={data.totals.sales}
         />
       )}
     </>
