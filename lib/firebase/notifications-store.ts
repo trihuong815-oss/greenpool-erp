@@ -48,6 +48,8 @@ export const ACTION_REQUIRED_TYPES = new Set<NotiType>([
   // V7 Promo (2026-06-18): chương trình khuyến mãi
   'sales_program_pending_approval',  // → GD_KD/GD_VP cần duyệt
   'sales_program_pending_configure', // → NV_KE cần set promoCode
+  // PR-CASH1E (2026-06-23): Daily Cashflow Thu-Chi
+  'daily_cashflow_returned',         // → NV_KE nộp lại
 ]);
 
 export type NotiType =
@@ -97,9 +99,13 @@ export type NotiType =
   | 'sales_program_approval_overdue'   // pending_approval > 24h — escalate
   | 'sales_program_auto_expired'       // cron set status='expired' — noti creator
   | 'sales_month_locked'               // TP_KE khoá tháng → noti Sale + NV_KE branch
-  | 'sales_month_unlocked';            // unlock → noti CEO + CHU_TICH (audit transparency)
+  | 'sales_month_unlocked'              // unlock → noti CEO + CHU_TICH (audit transparency)
+  // PR-CASH1E (2026-06-23): Daily Cashflow Thu-Chi notifications
+  | 'daily_cashflow_submitted'   // → Thủ quỹ / TP_KE / Giám sát / Lãnh đạo (informational)
+  | 'daily_cashflow_checked'      // → người nộp + NV_KE branch (informational)
+  | 'daily_cashflow_returned';    // → người nộp + NV_KE branch (action_required, cần nộp lại)
 
-export type NotiModule = 'proposal' | 'dispatch' | 'chat' | 'kt' | 'sales';
+export type NotiModule = 'proposal' | 'dispatch' | 'chat' | 'kt' | 'sales' | 'finance';
 export type NotiPriority = 'low' | 'normal' | 'high' | 'urgent';
 export type NotiActionStatus = 'pending' | 'done' | 'dismissed';
 

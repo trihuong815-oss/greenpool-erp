@@ -41,6 +41,8 @@ import {
   type CashflowReportRevision,
 } from '@/lib/finance/cashflow-report-types';
 import type { BranchDailyExpenseDoc } from '@/lib/finance/expense-types';
+// PR-CASH1E (2026-06-23): noti tới recipients sau submit.
+import { notifyDailyCashflowSubmitted } from '@/lib/firebase/finance-notifications';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -249,6 +251,21 @@ export async function POST(req: NextRequest) {
       },
       actorName: caller.actorName, actorRole: role, source: 'api',
     }).catch(() => {});
+
+    // PR-CASH1E (2026-06-23): noti tới Thủ quỹ/TP_KE/TP_GS/Lãnh đạo (sentTo snapshot).
+    // Fire-and-forget — noti fail KHÔNG fail nghiệp vụ submit.
+    void notifyDailyCashflowSubmitted({
+      reportId,
+      reportVersion,
+      date,
+      branchId,
+      branchName: doc.branchName,
+      status: 'sent',
+      revenueTotal: revenueSource.total,
+      expenseTotal: expense.totalByMethod.total,
+      netTotal: net.total,
+      sentTo,
+    }).catch((e) => console.warn('[finance/submit] daily_cashflow_submitted notification failed:', e?.message));
 
     return NextResponse.json({
       ok: true,

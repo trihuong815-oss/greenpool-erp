@@ -15,13 +15,19 @@ import { getFirebaseAdminDb } from '@/lib/firebase/admin';
 import { COLLECTIONS } from '@/lib/firebase/collections';
 import { getCurrentProfile } from '@/lib/firebase/current-profile';
 
-const VALID_MODULES = ['proposal', 'dispatch', 'sales', 'system'] as const;
+// PR-CASH1E (2026-06-23): + 'finance' (Daily Cashflow Thu-Chi). Cùng đợt fix gap audit:
+// 'kt' + 'chat' đã có trong NotiModule engine từ V6.5 nhưng thiếu trong settings whitelist
+// → user không tắt push/email được. Bổ sung để bảng channel matrix đồng bộ với engine.
+const VALID_MODULES = ['proposal', 'dispatch', 'sales', 'kt', 'chat', 'finance', 'system'] as const;
 type ModuleKey = typeof VALID_MODULES[number];
 
-const DEFAULT_CHANNELS = {
+const DEFAULT_CHANNELS: Record<ModuleKey, { inApp: boolean; push: boolean; email: boolean }> = {
   proposal: { inApp: true, push: true, email: true },
   dispatch: { inApp: true, push: true, email: true },
   sales:    { inApp: true, push: true, email: false }, // 2026-06-17: noti sales daily — không email
+  kt:       { inApp: true, push: true, email: false }, // 2026-06-23: KT events nhiều → opt-in email
+  chat:     { inApp: true, push: true, email: false }, // 2026-06-23: chat real-time → spam nếu email
+  finance:  { inApp: true, push: true, email: true },  // 2026-06-23: Thu-Chi báo cáo tài chính → email default ON
   system:   { inApp: true, push: true, email: false },
 };
 

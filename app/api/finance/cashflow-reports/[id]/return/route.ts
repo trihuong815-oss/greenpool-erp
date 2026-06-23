@@ -11,6 +11,8 @@ import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-aut
 import { writeAuditLog } from '@/lib/firebase/audit-log';
 import { canReturnDailyCashflowReport } from '@/lib/finance/cashflow-report-permissions';
 import type { DailyCashflowReportDoc } from '@/lib/finance/cashflow-report-types';
+// PR-CASH1E (2026-06-23): noti người nộp + NV_KE branch sau khi return (ACTION_REQUIRED).
+import { notifyDailyCashflowReturned } from '@/lib/firebase/finance-notifications';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -54,6 +56,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       after: { status: 'returned', reason: reason.slice(0, 500) },
       actorName: caller.actorName, actorRole: role, source: 'api',
     }).catch(() => {});
+
+    // PR-CASH1E: noti người nộp + NV_KE branch — ACTION_REQUIRED (NV_KE cần nộp lại).
+    void notifyDailyCashflowReturned({
+      reportId: id,
+      reportVersion: data.reportVersion,
+      date: data.date,
+      branchId: data.branchId,
+      branchName: data.branchName,
+      submittedByUid: data.submittedBy ?? null,
+      returnedByName: caller.actorName,
+      returnReason: reason.slice(0, 500),
+    }).catch((e) => console.warn('[finance/return] daily_cashflow_returned notification failed:', e?.message));
 
     return NextResponse.json({ ok: true, status: 'returned' });
   } catch (err: any) {

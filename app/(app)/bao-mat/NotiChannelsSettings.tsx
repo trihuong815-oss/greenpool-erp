@@ -15,10 +15,14 @@
 import { useEffect, useState } from 'react';
 import { Loader2, Bell, Smartphone, Mail, Check, AlertCircle } from 'lucide-react';
 
+// PR-CASH1E (2026-06-23): + finance + kt + chat (fix gap audit cũ; finance là module mới Thu-Chi).
 type Channels = {
   proposal: { inApp: boolean; push: boolean; email: boolean };
   dispatch: { inApp: boolean; push: boolean; email: boolean };
   sales:    { inApp: boolean; push: boolean; email: boolean };
+  kt:       { inApp: boolean; push: boolean; email: boolean };
+  chat:     { inApp: boolean; push: boolean; email: boolean };
+  finance:  { inApp: boolean; push: boolean; email: boolean };
   system:   { inApp: boolean; push: boolean; email: boolean };
 };
 
@@ -26,21 +30,30 @@ const DEFAULT: Channels = {
   proposal: { inApp: true, push: true, email: true },
   dispatch: { inApp: true, push: true, email: true },
   sales:    { inApp: true, push: true, email: false },
+  kt:       { inApp: true, push: true, email: false },
+  chat:     { inApp: true, push: true, email: false },
+  finance:  { inApp: true, push: true, email: true },
   system:   { inApp: true, push: true, email: false },
 };
 
 const MODULE_LABELS: Record<keyof Channels, string> = {
   proposal: 'Đề xuất',
   dispatch: 'Điều phối',
-  sales: 'Doanh số v2',
-  system: 'Hệ thống',
+  sales:    'Doanh số v2',
+  kt:       'Kỹ thuật',
+  chat:     'Tin nhắn',
+  finance:  'Tài chính / Thu-Chi',
+  system:   'Hệ thống',
 };
 
 const MODULE_DESC: Record<keyof Channels, string> = {
   proposal: 'Thông báo đề xuất chờ duyệt, được duyệt, bị từ chối, quá SLA…',
   dispatch: 'Thông báo công việc được giao, phối hợp, hoàn thành, quá hạn…',
-  sales: 'Sale gửi batch chờ đối chiếu, kế toán duyệt/trả lại bảng doanh số daily…',
-  system: 'Cảnh báo lỗi hệ thống, bảo trì, cập nhật phiên bản…',
+  sales:    'Sale gửi batch chờ đối chiếu, kế toán duyệt/trả lại bảng doanh số daily…',
+  kt:       'Kỹ thuật giao việc, đề xuất KT chờ duyệt/đã duyệt, báo cáo KT…',
+  chat:     'Tin nhắn mới trong cuộc trò chuyện 1-1, nhóm, kênh…',
+  finance:  'Báo cáo thu-chi mới được nộp, đã kiểm tra, bị trả lại bổ sung…',
+  system:   'Cảnh báo lỗi hệ thống, bảo trì, cập nhật phiên bản…',
 };
 
 export function NotiChannelsSettings() {
