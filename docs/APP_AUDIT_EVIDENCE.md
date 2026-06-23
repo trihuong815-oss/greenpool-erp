@@ -11,6 +11,7 @@
 - **2026-06-22**: bản gốc (NEEDS REVIEW: `originalDebt` + `promoSnapshots` field-level immutability).
 - **2026-06-23**: manual review `app/api/sales-v2/transactions/*` xác nhận `EDITABLE_FIELDS` whitelist L28-33 chặn `originalDebt`/`promoSnapshots`/`promoIds`/`matchedTransactionId`/`reviewStatus`/`batchId`/`saleId`/`branchId`/`createdAt`. Verdict 2 row hạ về **PASS**. Risk Register: 0 HIGH · 3 MED (giảm từ 5) · 4 LOW. Thêm hardening LOW (audit silent tamper attempt + Sale self-edit). Deploy rule fix `salesPrograms` (commit `64aa0b9`) — info leak Sale → ĐÃ FIX, production active.
 - **2026-06-23 (PR-7B)**: union `salesAuditLogs` + `auditLogs (module=sales)` vào `/audit-history` (commit `7fec39a`). Deploy 2 composite index `auditLogs` (module+createdAt, module+branchId+createdAt) — Activated. Runtime verification OK trên production: TP_GS vào Giám sát → Lịch sử thao tác, drawer chi tiết oldValue/newValue + before/after hoạt động đúng theo source. **Audit log row hạ MED → PASS** (còn LOW legacy limitation). Risk Register: 0 HIGH · 2 MED (giảm từ 3, gỡ "Audit chia 2 collection") · 7 LOW (thêm 1 LOW legacy limitation).
+- **2026-06-23 (PR-PROMO2-B)**: read-only báo cáo "Ưu đãi ngoài chương trình cần kiểm tra" (commit `f157f94`). Helper `detectAdHocDiscount` + `buildAdHocSummary` compute on-read theo baseline `package.defaultPrice`/`defaultUnitPrice`. Classification 4 mức (NORMAL≤3% / LOW>3-10% / REVIEW>10-20% / HIGH_RISK>20%) + UNKNOWN_BASELINE. Card UI wire 4 view (Top/Accountant/Qlcs/ReadOnlyAudit), SaleView không wire. Runtime OK trên production: TP_KE/NV_KE/QLCS thấy card scope đúng, TP_GS read-only, NV_SALE không thấy card. **Discount observability** = PASS/improved nhưng "Discount approval threshold chưa có" GIỮ MED (cần PR-9 cho workflow duyệt). Risk Register: 0 HIGH · 2 MED giữ · 7 LOW giữ.
 
 ---
 
@@ -36,6 +37,7 @@ Các kết luận trong `APP_AUDIT_SUMMARY.md` về security/permission/audit lo
 | "Refund/Discount approval chưa có" | ✅ ĐÚNG (chưa có code) |
 | **"originalDebt immutable"** (SUMMARY §7) | ✅ **PASS** (update 2026-06-23) — manual review xác nhận: POST set 1 lần L268 (`transactionType === 'dat_coc' ? debtAmount : 0`); PATCH `EDITABLE_FIELDS` whitelist L28-33 KHÔNG có field này → silent skip; không có route nào update sau POST. **Field-level immutability đảm bảo qua whitelist + server compute layer, không phải chỉ "app logic".** |
 | **"promoSnapshots immutable"** (SUMMARY §7) | ✅ **PASS** (update 2026-06-23) — manual review xác nhận: POST resolve qua `getProgramsByIds` + `toSnapshot` L222 lưu `{id, code, name, type, value}`; PATCH whitelist KHÔNG có `promoSnapshots`/`promoIds` → user gửi body sẽ silent skip; server chỉ READ snapshots L189 để recompute discount, KHÔNG WRITE. **Sửa chương trình KM gốc KHÔNG phá tx cũ.** |
+| **Discount observability** (mới — PR-PROMO2-B) | ✅ **PASS / improved** (2026-06-23) — Hệ thống đã có khả năng phát hiện, thống kê và hiển thị giao dịch bán thấp hơn giá chuẩn ngoài chương trình. Card "Ưu đãi ngoài chương trình cần kiểm tra" trong `/doanh-so-v2/tong-ket` cho TP_KE/QLCS/TP_GS/top role. **CHỈ read-only report** — chưa có workflow duyệt/chặn (defer PR-9 Discount approval threshold). Runtime OK production. |
 
 ### HIGH risks: KHÔNG có
 
@@ -56,6 +58,7 @@ Em rà soát tất cả nhóm — không phát hiện rủi ro HIGH/CRITICAL tro
 | 7 | Khuyến mãi workflow | "PR-PROMO1A UI harden, server đầy đủ" + tx.promoSnapshots immutable | [lib/sales-v2/promo-permissions.ts](lib/sales-v2/promo-permissions.ts), 7 API programs, [app/api/sales-v2/transactions/[id]/route.ts L28-33](app/api/sales-v2/transactions/[id]/route.ts#L28-L33) | **PASS** | LOW | UI helper + server enforce. **2026-06-23 update**: promoSnapshots immutability CONFIRMED qua PATCH whitelist |
 | 8 | Công nợ — originalDebt + debtAmount + matchedTransactionId immutability | "originalDebt immutable" | [app/api/sales-v2/transactions/route.ts L268](app/api/sales-v2/transactions/route.ts#L268), [app/api/sales-v2/transactions/[id]/route.ts L28-33](app/api/sales-v2/transactions/[id]/route.ts#L28-L33) | **PASS** | LOW | **2026-06-23 update**: PATCH `EDITABLE_FIELDS` whitelist L28-33 chặn `originalDebt`/`debtAmount`/`matchedTransactionId`. Server compute `debtAmount` mỗi PATCH (L228). Field-level immutability OK |
 | 9 | Module WIP | "dashboard-ceo/phe-duyet/thong-bao/du-an WIP" | 4 page.tsx kiểm tra | PASS | LOW | Đều có PlaceholderPage status="wip", route gate vẫn enforce |
+| 11 | Discount/Promotion observability (PR-PROMO2-B) | "Ưu đãi ngoài CT cần kiểm tra" — read-only report | [lib/sales-v2/ad-hoc-discount.ts](lib/sales-v2/ad-hoc-discount.ts), [lib/sales-v2/ad-hoc-thresholds.ts](lib/sales-v2/ad-hoc-thresholds.ts), [app/(app)/doanh-so-v2/tong-ket/_components/AdHocDiscountCard.tsx](app/(app)/doanh-so-v2/tong-ket/_components/AdHocDiscountCard.tsx), [app/api/sales-v2/monthly-summary/route.ts](app/api/sales-v2/monthly-summary/route.ts) | **PASS** (read-only) | LOW | adHocSummary trong monthly-summary; card wire 4 view (Top/Accountant/Qlcs/ReadOnlyAudit), SaleView KHÔNG wire. Runtime OK |
 | 10 | Risks thật | (mục 13 SUMMARY) | xem [§4 Risk Register](#4-risk-register) | PASS | — | 5 MED + 4 LOW, 0 HIGH |
 
 ---
@@ -659,7 +662,7 @@ Xem [§4 Risk Register](#4-risk-register).
 | Sev | Module | Vấn đề | File / Code | Vì sao là rủi ro | Ảnh hưởng vận hành | Xử lý đề xuất | PR đề xuất |
 |:---:|---|---|---|---|---|---|---|
 | **MED** | Sales V2 | Refund / hoàn tiền chưa có workflow | (chưa có code) | Sale yêu cầu hoàn tiền sau approved → workaround edit tx tay → mất audit trail rõ | Nếu nghiệp vụ refund thường → control yếu | Tạo collection `salesRefunds` + workflow approve | **PR-8** |
-| **MED** | Sales V2 | Discount approval threshold chưa có | (chưa có code) | Sale có thể nhập tx với `discountAmount` lớn không cần duyệt | Rủi ro tài chính nếu Sale lạm dụng | Config thresholds + workflow approval tx vượt | **PR-9** |
+| **MED** | Sales V2 | Discount approval threshold chưa có (workflow duyệt) | PR-PROMO2-B đã có observability (read-only report). Workflow duyệt chặn chưa có | Sale vẫn có thể giảm giá tay không cần ai duyệt — chỉ phát hiện được SAU khi đã bán | **Update 2026-06-23**: Observability đã tăng (TP_KE/QLCS thấy báo cáo `/tong-ket`). Rủi ro còn lại = chưa chặn được lúc bán + chưa có workflow approve/reject tx vượt ngưỡng | Config thresholds + workflow approval khi POST tx | **PR-9** |
 | LOW | Audit (legacy) | Legacy salesAuditLogs (writeSalesAudit Phase 2) thiếu branchId/month/changedByRole + auditLogs generic không có month | [lib/sales-v2/audit.ts:24-41](lib/sales-v2/audit.ts#L24-L41), normalize handle null | Filter strict cơ sở/tháng → silent skip docs cũ. User chọn "Tất cả" để xem hết | LOW (intentional, UI banner cảnh báo) | Không backfill / migrate. Future PR audit writer chuẩn hoá khi tiện | Defer |
 | LOW | Audit | 12 action ngoài enum `SalesAuditAction` | [lib/types/sales-audit.ts:25-40](lib/types/sales-audit.ts#L25-L40) vs code thực ghi | Action mapper tolerant string (PR-7A) + label mới (PR-7B) đã cover. Type-safe enum chưa update | LOW (UI handle, không break) | Future PR chuẩn hoá enum union 2 source | Defer |
 | LOW | Audit | PATCH `/transactions/[id]` silently ignore field ngoài `EDITABLE_FIELDS` (không audit attempt tamper) | [transactions/[id]/route.ts:76-79](app/api/sales-v2/transactions/[id]/route.ts#L76-L79) | User/attacker thử PATCH `originalDebt`/`promoSnapshots`/`debtAmount` → bị block (whitelist) NHƯNG KHÔNG ghi log attempt. Khó forensic | Không impact data integrity (vẫn block) — chỉ thiếu evidence | Add `console.warn` hoặc audit attempt khi body chứa field ngoài whitelist (tiny PR ~5-10 LOC) | Defer (LOW) |
@@ -681,41 +684,60 @@ Xem [§4 Risk Register](#4-risk-register).
 
 ---
 
-## 5. Recommended Next PRs (xếp ưu tiên — update 2026-06-23 PR-7B)
+## 5. Recommended Next PRs (xếp ưu tiên — update 2026-06-23 PR-PROMO2-B)
 
 ### ✅ Đã hoàn thành
 - **Rule fix `salesPrograms` Sale info leak** — commit `64aa0b9`, DEPLOYED 2026-06-23
 - **Manual review `originalDebt` + `promoSnapshots` field whitelist** — PASS dứt điểm, không cần PR fix
 - **PR-PROMO1B mở TP_GS read-only `/chuong-trinh`** — commit `68a4f91`
 - **PR-7B Union audit collections** — commit `7fec39a`, indexes Activated, runtime OK
+- **PR-PROMO2-B Read-only báo cáo "Ưu đãi ngoài CT"** — commit `f157f94`, runtime OK 4 view
 
-### Priority 1 — PR-PROMO2 (Ưu đãi ngoài CT)
-- Tx có `discountAmount > 0` nhưng `promoSnapshots = []` → flag "ưu đãi ngoài KM"
-- Section/page review cho NV_KE/TP_KE/GD_VP xác nhận hợp lệ
-- Audit log "manual_discount"
-- **Chờ anh chốt threshold** (vd > 5% tổng giá trị → flag review)
-- LOC ~500-700
+### 🆕 Workstream mới — PR-CASH1A
+
+### Priority 1 — PR-CASH1A: Audit/Design Chi phí cơ sở & Báo cáo thu chi ngày
+**Mục tiêu nghiệp vụ**: kế toán cơ sở nhập chi hằng ngày, đối chiếu với thu đã duyệt theo phương thức thanh toán, ra báo cáo thu - chi - tồn tiền mặt / chuyển khoản / thẻ.
+
+**Scope PR-CASH1A (Audit/Design only — KHÔNG code)**:
+- Audit hiện trạng: có collection nào về chi phí chưa? cashflow/cashEntries/expenseEntries?
+- Audit hiện có: doanh thu theo phương thức thanh toán (paymentMethod tien_mat/chuyen_khoan/pos) — đã có trong salesTransactions?
+- Design data model: `cashEntries` (hoặc tương đương) — fields cần thiết
+- Design workflow: kế toán cơ sở (NV_KE) nhập chi → review → approve?
+- Design report shape: "Báo cáo thu - chi - tồn ngày" per branch per payment method
+- Design quyền: NV_KE nhập, TP_KE/QLCS xem, GD/CEO/TP_GS xem toàn hệ thống
+- Đề xuất 2-3 phương án scope trước khi code PR-CASH1B/C/D
+- LOC PR-CASH1A: ~0 (chỉ design doc)
+- Risk: LOW (design only)
+
+### Priority 2 — PR-CASH1B/C/D (nếu anh ưu tiên kiểm soát dòng tiền)
+- Code theo design chốt ở PR-CASH1A
+- Có thể chia 3 sub-PR: schema/API/UI
+
+### Priority 3 — PR-9 Discount approval threshold
+- **Chờ policy lãnh đạo** về % giảm cần duyệt
+- Sau PR-PROMO2-B đã có observability → PR-9 thêm workflow chặn khi POST tx
+- LOC ~400-500
 - Risk MED
 
-### Priority 2 — PR-8 Refund workflow
+### Priority 4 — PR-8 Refund workflow
 - **Chờ spec nghiệp vụ** rõ (kích bằng dấu / điều kiện hoàn / role duyệt)
 - Collection mới `salesRefunds` + workflow approve
 - LOC ~600-800
 - Risk HIGH (đụng financial workflow)
 
-### Priority 3 — PR-9 Discount approval threshold
-- **Chờ policy lãnh đạo** về % giảm cần duyệt
-- Config thresholds + workflow approval tx vượt
-- LOC ~400-500
+### Priority 5 — PR-PROMO2-C Workflow review ad-hoc discount
+- Sau khi có data 1-2 tháng từ PR-PROMO2-B → quyết định có cần workflow review không
+- Status review/approve/reject + collection `salesAdHocReviews`
+- LOC ~600-800
 - Risk MED
 
-### Priority 4 — PR-7C: mở NV_KE/QLCS audit branch-scope
+### Priority 6 — PR-7C: mở NV_KE/QLCS audit branch-scope
 - Mở `/audit-history` cho NV_KE + QLCS với branch-scope filter chặt
 - Server force `branchId = caller.facility_id` cho 2 role này
 - LOC ~100-200
-- Risk LOW (UI đã sẵn sàng, chỉ thêm permission + scope helper)
+- Risk LOW
 
-### Priority 5 — PR-NAV1B: cleanup V1 deprecated routes
+### Priority 7 — PR-NAV1B: cleanup V1 deprecated routes
 - `/doanh-so/*` (V1) còn permission, Cmd+K access được
 - Redirect V1 → V2 hoặc xóa permission
 - LOC tiny
@@ -725,6 +747,7 @@ Xem [§4 Risk Register](#4-risk-register).
 - PATCH audit silent tamper attempt (~5-10 LOC) — log khi user gửi field ngoài whitelist
 - Sale self-edit batch draft audit (quyết định nghiệp vụ noise vs completeness)
 - Audit writer chuẩn hoá enum union 2 source (label tolerant đã đủ trong PR-7B)
+- Snapshot `defaultPrice` vào tx khi POST (tránh flag retrospective sai khi admin đổi giá) — PR-PROMO2-D
 
 ### KHÔNG nên làm ngay
 - ❌ Mở CEO override workflow KM khi server-side chưa có explicit role guard
@@ -774,6 +797,25 @@ UI callers identified (KHÔNG deep-read — chỉ verify tồn tại + grep tên
 - Tests: 393/393 PASS local
 - **Runtime verification trên production OK**: TP_GS vào Giám sát → Lịch sử thao tác, drawer chi tiết oldValue/newValue + before/after hoạt động đúng theo source. KHÔNG cần hotfix
 
+**PR-PROMO2-B 2026-06-23** (read-only báo cáo "Ưu đãi ngoài chương trình"):
+- Commit: `f157f94` (push origin/main, App Hosting rollout OK)
+- Files chính:
+  - `lib/sales-v2/ad-hoc-thresholds.ts` (52 LOC) — const AD_HOC_THRESHOLDS + classifyAdHoc + labels/tone/priority
+  - `lib/sales-v2/ad-hoc-discount.ts` (342 LOC) — detectAdHocDiscount + buildAdHocSummary + 6-state discriminated union (AD_HOC/NORMAL_PRICE/OFFICIAL_PROMO/SKIP_PAYMENT/SKIP_MANUAL/UNKNOWN_BASELINE)
+  - `app/(app)/doanh-so-v2/tong-ket/_components/AdHocDiscountCard.tsx` (436 LOC) — KPI strip + breakdown + top branches/sales + filter chips + table desktop + mobile card stack
+  - `app/api/sales-v2/monthly-summary/route.ts` (+76) — collect raw txs, fetch packages map, build adHocSummary fail-soft
+  - 4 view files wired (TopExecutiveView/AccountantView/QlcsView/ReadOnlyAuditView)
+- Tests: **441/441 PASS local** (+48 mới: thresholds 17 edge + ad-hoc-discount 31 cover 13 case)
+- Threshold (Phương án A chốt): NORMAL ≤3% / LOW >3-10% / REVIEW >10-20% / HIGH_RISK >20% + UNKNOWN_BASELINE
+- NORMAL VẪN counted vào thống kê tổng (chỉ ẩn khỏi default list)
+- Cap top 200 items, sort HIGH_RISK first → amount DESC → date DESC
+- **Runtime verification trên production OK** (2026-06-23):
+  - TP_KE/NV_KE thấy card "Ưu đãi ngoài chương trình"
+  - QLCS thấy card scope cơ sở mình (không lẫn cơ sở khác)
+  - TP_GS thấy card read-only
+  - NV_SALE/NV_SALE_PT KHÔNG thấy card (đúng intentional — SaleView không wire)
+  - KHÔNG cần hotfix
+
 ### API đã kiểm tra (qua Explore agent)
 
 1. `app/api/sales-v2/transactions/route.ts` (POST + GET)
@@ -812,8 +854,8 @@ UI callers identified (KHÔNG deep-read — chỉ verify tồn tại + grep tên
 - `lib/sales-v2/promo-permissions.ts`: 10 helper PR-PROMO1A
 
 ### Tests confirmed
-- **2026-06-23 (PR-7B latest)**: 23 test file, **393/393 test PASS**
-- Cover: permissions, audit-history (normalize/action-labels/query-params/can-read), promo-permissions/deadline/query-params, sales-v2 scope/target/programs/promo-effectiveness, feature-flags, notifications, rate-limit, types/branches, audit WORM contract
+- **2026-06-23 (PR-PROMO2-B latest)**: 25 test file, **441/441 test PASS**
+- Cover: permissions, audit-history (normalize/action-labels/query-params/can-read), promo-permissions/deadline/query-params, **ad-hoc-discount/thresholds** (PR-PROMO2-B), sales-v2 scope/target/programs/promo-effectiveness, feature-flags, notifications, rate-limit, types/branches, audit WORM contract
 
 ---
 
@@ -821,14 +863,17 @@ UI callers identified (KHÔNG deep-read — chỉ verify tồn tại + grep tên
 
 > **App ở trạng thái strong defense-in-depth.** Auth/Session/Route/API/Rules/Audit 4-5 layer enforce thật, không phải UI-only. 16/16 API Sales V2 audit PASS 100% server-side enforcement. Firestore Rules có catch-all deny + WORM cho audit. **0 HIGH risks**.
 >
-> **3 item HIGH-priority đã xử lý xong**:
-> 1. ✅ **Rule fix `salesPrograms` Sale info leak** — commit `64aa0b9` DEPLOYED 2026-06-23
-> 2. ✅ **Manual review `originalDebt` + `promoSnapshots` field immutability** — PASS dứt điểm 2026-06-23
-> 3. ✅ **PR-7B union audit collections** — commit `7fec39a` + indexes Activated + runtime OK 2026-06-23
+> **4 item HIGH-priority đã xử lý xong (2026-06-23)**:
+> 1. ✅ **Rule fix `salesPrograms` Sale info leak** — commit `64aa0b9` DEPLOYED
+> 2. ✅ **Manual review `originalDebt` + `promoSnapshots` field immutability** — PASS dứt điểm
+> 3. ✅ **PR-7B union audit collections** — commit `7fec39a` + indexes Activated + runtime OK
+> 4. ✅ **PR-PROMO2-B Read-only báo cáo "Ưu đãi ngoài CT"** — commit `f157f94` + runtime OK 4 view (TP_KE/QLCS/TP_GS thấy; SaleView không)
 >
-> **Update 2026-06-23 (PR-7B)**: chỉ còn **2 MED risks** (Refund + Discount threshold — đều chờ spec/policy ngoài kỹ thuật). Có thể mở PR tài chính an toàn:
-> - **PR-PROMO2** Ưu đãi ngoài CT — Priority 1 mới (cần threshold)
-> - PR-8 Refund — cần spec nghiệp vụ
-> - PR-9 Discount threshold — cần policy lãnh đạo
-> - PR-7C mở NV_KE/QLCS audit branch-scope — Priority thấp hơn
-> - PR-NAV1B cleanup V1 deprecated — Tiny
+> **Update 2026-06-23 (PR-PROMO2-B)**: Discount observability đã PASS/improved. Vẫn còn **2 MED risks** (Refund + Discount approval threshold workflow — đều chờ spec/policy ngoài kỹ thuật). Priority list mới:
+> - **PR-CASH1A** — Audit/Design Chi phí cơ sở & Báo cáo thu chi ngày (workstream mới)
+> - PR-CASH1B/C/D — code theo design PR-CASH1A
+> - PR-9 Discount approval threshold — cần policy
+> - PR-8 Refund — cần spec
+> - PR-PROMO2-C workflow review ad-hoc discount — chờ data 1-2 tháng
+> - PR-7C mở NV_KE/QLCS audit branch-scope — LOW
+> - PR-NAV1B cleanup V1 — Tiny
