@@ -128,12 +128,12 @@ export function CashflowReportDetailDrawer({ reportId, canCheckReturn, canLock, 
   return (
     <div className="fixed inset-0 z-50 flex items-stretch justify-end bg-slate-900/40">
       <div className="w-full max-w-2xl bg-slate-50 overflow-y-auto shadow-xl">
-        <div className="sticky top-0 z-10 bg-white border-b border-slate-200 px-5 py-3 flex items-center gap-3">
+        <div className="sticky top-0 z-10 bg-white border-b-2 border-slate-200 px-5 py-3.5 flex items-center gap-3 shadow-sm">
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-bold text-slate-800 truncate">Báo cáo thu-chi {r?.date ?? ''} — {r?.branchId ?? ''}</div>
+            <div className="text-sm font-bold text-slate-800 truncate">Báo cáo thu-chi <span className="font-mono text-emerald-700">{r?.date ?? ''}</span> — {r?.branchId ?? ''}</div>
             <div className="text-xs text-slate-500 truncate">{r?.branchName ?? ''}</div>
           </div>
-          <button type="button" onClick={onClose} className="text-slate-500 hover:text-slate-800 p-1.5 rounded hover:bg-slate-100" aria-label="Đóng"><X size={18} /></button>
+          <button type="button" onClick={onClose} className="text-slate-500 hover:text-slate-800 p-1.5 rounded-md hover:bg-slate-100 transition-colors" aria-label="Đóng"><X size={18} /></button>
         </div>
 
         {loading && !r ? (
@@ -142,12 +142,12 @@ export function CashflowReportDetailDrawer({ reportId, canCheckReturn, canLock, 
           <div className="p-10 text-center text-slate-500">Không tải được báo cáo.</div>
         ) : (
           <div className="p-5 space-y-4">
-            {/* Action bar */}
+            {/* Action bar — polished */}
             {(canCheckReturn || canLock) && !isLocked && (
-              <div className="card flex flex-wrap items-center justify-between gap-3 border-2 border-emerald-100">
+              <div className="card flex flex-wrap items-center justify-between gap-3 border-2 border-emerald-200 bg-gradient-to-r from-emerald-50/50 to-white shadow-sm">
                 <div className="text-sm text-slate-700">
-                  Bạn có quyền <strong>kiểm tra</strong>, <strong>trả lại</strong>
-                  {canLock ? <>, hoặc <strong>khóa</strong></> : null} báo cáo này.
+                  Bạn có quyền <strong className="text-slate-900">kiểm tra</strong>, <strong className="text-slate-900">trả lại</strong>
+                  {canLock ? <>, hoặc <strong className="text-slate-900">khóa</strong></> : null} báo cáo này.
                 </div>
                 <div className="flex gap-2 flex-wrap">
                   {showCheck && (
@@ -169,16 +169,18 @@ export function CashflowReportDetailDrawer({ reportId, canCheckReturn, canLock, 
               </div>
             )}
 
-            {/* Locked banner */}
+            {/* Locked banner — polished gradient + icon box */}
             {isLocked && (
-              <div className="rounded-lg bg-violet-50 ring-1 ring-violet-200 px-4 py-3 flex items-start gap-3 text-sm">
-                <Lock size={16} className="text-violet-700 shrink-0 mt-0.5" />
+              <div className="rounded-xl bg-gradient-to-r from-violet-50 to-purple-50/60 ring-1 ring-violet-300 px-4 py-3 flex items-start gap-3 text-sm shadow-sm">
+                <div className="rounded-lg p-1.5 bg-violet-100 text-violet-700 shrink-0">
+                  <Lock size={16} />
+                </div>
                 <div className="text-violet-900 flex-1">
-                  <div className="font-semibold mb-0.5">Báo cáo đã khóa.</div>
-                  <div className="text-xs text-violet-800">
+                  <div className="font-semibold mb-1">Báo cáo đã khóa.</div>
+                  <div className="text-xs text-violet-800 leading-relaxed">
                     Kế toán cơ sở không thể chỉnh sửa chi phí hoặc nộp lại báo cáo ngày này.
-                    {r.lockedByName ? <> Người khóa: <strong>{r.lockedByName}</strong>.</> : null}
-                    {r.lockedAt ? <> Thời gian: {tsLabel(r.lockedAt)}.</> : null}
+                    {r.lockedByName ? <> Người khóa: <strong className="text-violet-900">{r.lockedByName}</strong>.</> : null}
+                    {r.lockedAt ? <> Thời gian: <span className="font-mono text-violet-900">{tsLabel(r.lockedAt)}</span>.</> : null}
                   </div>
                 </div>
                 {showUnlock && (
@@ -189,15 +191,17 @@ export function CashflowReportDetailDrawer({ reportId, canCheckReturn, canLock, 
               </div>
             )}
 
-            {/* Unlock history (PR-CASH1F-UNLOCK): hiển thị nếu báo cáo từng được unlock */}
+            {/* Unlock history — polished */}
             {!isLocked && r.unlockedByName && r.unlockedAt && (
-              <div className="rounded-lg bg-amber-50 ring-1 ring-amber-200 px-4 py-3 flex items-start gap-3 text-sm">
-                <Unlock size={16} className="text-amber-700 shrink-0 mt-0.5" />
-                <div className="text-amber-900">
-                  <div className="font-semibold mb-0.5">Báo cáo đã được mở khóa.</div>
-                  <div className="text-xs text-amber-800">
-                    Người mở khóa: <strong>{r.unlockedByName}</strong> · {tsLabel(r.unlockedAt)}
-                    {r.unlockReason ? <> · Lý do: <em>{r.unlockReason}</em></> : null}
+              <div className="rounded-xl bg-gradient-to-r from-amber-50 to-orange-50/60 ring-1 ring-amber-300 px-4 py-3 flex items-start gap-3 text-sm shadow-sm">
+                <div className="rounded-lg p-1.5 bg-amber-100 text-amber-700 shrink-0">
+                  <Unlock size={16} />
+                </div>
+                <div className="text-amber-900 flex-1">
+                  <div className="font-semibold mb-1">Báo cáo đã được mở khóa.</div>
+                  <div className="text-xs text-amber-800 leading-relaxed">
+                    Người mở khóa: <strong className="text-amber-900">{r.unlockedByName}</strong> · <span className="font-mono">{tsLabel(r.unlockedAt)}</span>
+                    {r.unlockReason ? <> · Lý do: <em className="text-amber-900">{r.unlockReason}</em></> : null}
                   </div>
                 </div>
               </div>

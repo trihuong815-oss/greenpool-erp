@@ -86,57 +86,59 @@ export default function ChiPhiCoSoClient({ myRoleCode, myBranchId, canEdit, canS
 
   return (
     <div className="flex-1 p-3 md:p-6 bg-slate-50 space-y-4 overflow-y-auto">
-      {/* Header filter */}
-      <div className="card">
+      {/* Header filter — polished */}
+      <div className="card shadow-sm">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-            <Filter size={14} /> Bộ lọc
+            <Filter size={14} className="text-emerald-600" /> Bộ lọc
           </div>
           <div>
-            <label className="block text-xs text-slate-500 mb-0.5">Ngày</label>
+            <label className="block text-xs font-medium text-slate-500 mb-1">Ngày</label>
             <input
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="h-9 px-3 text-sm rounded-lg ring-1 ring-slate-200 focus:ring-2 focus:ring-emerald-400 focus:outline-none"
+              className="h-9 px-3 text-sm rounded-lg bg-white ring-1 ring-slate-300 hover:ring-slate-400 focus:ring-2 focus:ring-emerald-500 focus:outline-none transition-colors duration-150"
             />
           </div>
           <div>
-            <label className="block text-xs text-slate-500 mb-0.5">Cơ sở</label>
+            <label className="block text-xs font-medium text-slate-500 mb-1">Cơ sở</label>
             {canSelectBranch ? (
               <select
                 value={branchId ?? ''}
                 onChange={(e) => { const v = e.target.value; if (isBranchId(v)) setBranchId(v); }}
-                className="h-9 px-3 text-sm rounded-lg ring-1 ring-slate-200 focus:ring-2 focus:ring-emerald-400 focus:outline-none"
+                className="h-9 px-3 text-sm rounded-lg bg-white ring-1 ring-slate-300 hover:ring-slate-400 focus:ring-2 focus:ring-emerald-500 focus:outline-none transition-colors duration-150"
               >
                 {BRANCHES.map((b) => <option key={b.id} value={b.id}>{b.id} — {b.name}</option>)}
               </select>
             ) : (
-              <div className="h-9 px-3 text-sm rounded-lg ring-1 ring-slate-200 bg-slate-50 inline-flex items-center min-w-[12rem]">
+              <div className="h-9 px-3 text-sm rounded-lg ring-1 ring-slate-200 bg-slate-50 inline-flex items-center min-w-[12rem] font-medium text-slate-700">
                 {branchId ? `${branchId} — ${branchName}` : '(Không xác định)'}
               </div>
             )}
           </div>
           <div className="ml-auto text-xs text-slate-500">
-            Vai trò: <span className="font-mono text-slate-700">{myRoleCode}</span>
-            {!canEdit && <span className="ml-2 text-amber-700">• View-only</span>}
+            Vai trò: <span className="font-mono font-semibold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">{myRoleCode}</span>
+            {!canEdit && <span className="ml-2 text-amber-700 font-medium bg-amber-50 px-2 py-0.5 rounded-md ring-1 ring-amber-200">• View-only</span>}
           </div>
         </div>
       </div>
 
-      {/* Hướng dẫn nghiệp vụ */}
-      <div className="rounded-lg bg-sky-50 ring-1 ring-sky-200 px-4 py-3 flex items-start gap-3 text-sm">
-        <Info size={16} className="text-sky-600 shrink-0 mt-0.5" />
-        <div className="text-sky-900">
-          <div className="font-semibold mb-0.5">
+      {/* Hướng dẫn nghiệp vụ — polished gradient + clearer hierarchy */}
+      <div className="rounded-xl bg-gradient-to-r from-sky-50 to-blue-50/60 ring-1 ring-sky-200 px-4 py-3 flex items-start gap-3 text-sm shadow-sm">
+        <div className="rounded-lg p-1.5 bg-sky-100 text-sky-700 shrink-0">
+          <Info size={16} />
+        </div>
+        <div className="text-sky-900 flex-1">
+          <div className="font-semibold mb-1">
             Đây là Sổ chi tiết các khoản CHI của cơ sở — mỗi dòng = một phiếu chi.
           </div>
-          <div className="text-xs text-sky-800">
+          <div className="text-xs text-sky-800 leading-relaxed">
             Phần doanh thu và báo cáo thu-chi tổng hợp được xem tại{' '}
-            <Link href="/bao-cao-thu-chi" className="font-semibold underline-offset-2 hover:underline inline-flex items-center gap-1">
+            <Link href="/bao-cao-thu-chi" className="font-semibold underline-offset-2 hover:underline inline-flex items-center gap-1 text-sky-700 hover:text-sky-900 transition-colors">
               <FileBarChart size={12} /> Báo cáo thu-chi
             </Link>
-            . Nhập xong một dòng và bấm <strong>Lưu nháp</strong> / <strong>Ghi nhận chi</strong>,
+            . Nhập xong một dòng và bấm <strong className="text-sky-900">Lưu nháp</strong> / <strong className="text-sky-900">Ghi nhận chi</strong>,
             hệ thống tự thêm dòng mới bên dưới để nhập tiếp.
           </div>
         </div>
@@ -148,16 +150,18 @@ export default function ChiPhiCoSoClient({ myRoleCode, myBranchId, canEdit, canS
         </div>
       ) : (
         <>
-          {/* PR-CASH1F (2026-06-23): banner ngày đã khóa */}
+          {/* PR-CASH1F (2026-06-23): banner ngày đã khóa — polished */}
           {isLocked && (
-            <div className="rounded-lg bg-violet-50 ring-1 ring-violet-200 px-4 py-3 flex items-start gap-3 text-sm">
-              <Lock size={16} className="text-violet-700 shrink-0 mt-0.5" />
-              <div className="text-violet-900">
-                <div className="font-semibold mb-0.5">Ngày này đã khóa báo cáo thu-chi.</div>
-                <div className="text-xs text-violet-800">
+            <div className="rounded-xl bg-gradient-to-r from-violet-50 to-purple-50/60 ring-1 ring-violet-300 px-4 py-3 flex items-start gap-3 text-sm shadow-sm">
+              <div className="rounded-lg p-1.5 bg-violet-100 text-violet-700 shrink-0">
+                <Lock size={16} />
+              </div>
+              <div className="text-violet-900 flex-1">
+                <div className="font-semibold mb-1">Ngày này đã khóa báo cáo thu-chi.</div>
+                <div className="text-xs text-violet-800 leading-relaxed">
                   Bạn chỉ có thể xem, không thể thêm/sửa/ghi nhận chi phí.
-                  {lockedByName ? <> Người khóa: <strong>{lockedByName}</strong>.</> : null}
-                  {lockedAt ? <> Thời gian: {lockedAt}.</> : null}
+                  {lockedByName ? <> Người khóa: <strong className="text-violet-900">{lockedByName}</strong>.</> : null}
+                  {lockedAt ? <> Thời gian: <span className="font-mono text-violet-900">{lockedAt}</span>.</> : null}
                 </div>
               </div>
             </div>

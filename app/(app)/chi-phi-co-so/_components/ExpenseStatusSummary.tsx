@@ -68,13 +68,16 @@ export function ExpenseStatusSummary({ expenses }: Props) {
 function MethodCell({ icon, label, value, highlight, dim }: { icon: React.ReactNode; label: string; value: number; highlight?: boolean; dim?: boolean }) {
   return (
     <div className={[
-      'rounded-lg px-3 py-2 ring-1',
-      highlight ? 'bg-emerald-50 ring-emerald-200' : 'bg-slate-50 ring-slate-200',
+      'rounded-lg px-3 py-2.5 ring-1 transition-all duration-200',
+      'hover:-translate-y-0.5 hover:shadow-md',
+      highlight
+        ? 'bg-gradient-to-br from-emerald-50 to-emerald-100/50 ring-emerald-300 shadow-sm'
+        : 'bg-white ring-slate-200 hover:ring-slate-300',
       dim ? 'opacity-60' : '',
     ].join(' ')}>
-      <div className="flex items-center gap-1.5 text-xs text-slate-500">{icon}{label}</div>
+      <div className={`flex items-center gap-1.5 text-xs font-medium ${highlight ? 'text-emerald-700' : 'text-slate-500'}`}>{icon}{label}</div>
       <div className={[
-        'text-base md:text-lg font-bold tabular-nums',
+        'text-base md:text-lg font-bold tabular-nums mt-0.5',
         highlight ? 'text-emerald-700' : 'text-slate-800',
       ].join(' ')}>
         {fmt(value)} ₫

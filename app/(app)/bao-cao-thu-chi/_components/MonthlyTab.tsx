@@ -185,9 +185,9 @@ const TONE_CLS: Record<string, string> = {
 
 function KpiCard({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone: keyof typeof TONE_CLS }) {
   return (
-    <div className={`rounded-lg px-3 py-2 ring-1 ${TONE_CLS[tone]}`}>
-      <div className="flex items-center gap-1.5 text-xs opacity-80">{icon}{label}</div>
-      <div className="text-lg font-bold tabular-nums">{value}</div>
+    <div className={`rounded-xl px-3 py-2.5 ring-1 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${TONE_CLS[tone]}`}>
+      <div className="flex items-center gap-1.5 text-xs font-medium opacity-90">{icon}{label}</div>
+      <div className="text-lg font-bold tabular-nums mt-0.5">{value}</div>
     </div>
   );
 }

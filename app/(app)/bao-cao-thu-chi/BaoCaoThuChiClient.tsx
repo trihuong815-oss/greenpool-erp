@@ -107,13 +107,13 @@ export default function BaoCaoThuChiClient({ myRoleCode, myBranchId, canCheckRet
 
   return (
     <div className="flex-1 p-3 md:p-6 bg-slate-50 space-y-4 overflow-y-auto">
-      {/* TAB SWITCHER */}
-      <div className="flex items-center gap-2 flex-wrap bg-white rounded-lg p-1 ring-1 ring-slate-200 shadow-sm w-fit">
+      {/* TAB SWITCHER — polished */}
+      <div className="flex items-center gap-1 flex-wrap bg-white rounded-xl p-1.5 ring-1 ring-slate-200 shadow-sm w-fit">
         <TabBtn active={tab === 'daily'} onClick={() => setTab('daily')} icon={<Calendar size={14} />} label="Theo ngày" />
         <TabBtn active={tab === 'monthly'} onClick={() => setTab('monthly')} icon={<CalendarRange size={14} />} label="Theo tháng" />
         <TabBtn active={tab === 'yearly'} onClick={() => setTab('yearly')} icon={<CalendarDays size={14} />} label="Theo năm" />
-        <div className="ml-2 text-xs text-slate-500 pr-2">
-          Vai trò: <span className="font-mono text-slate-700">{myRoleCode}</span>
+        <div className="ml-3 mr-2 text-xs text-slate-500 flex items-center gap-1.5">
+          Vai trò: <span className="font-mono font-semibold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">{myRoleCode}</span>
         </div>
       </div>
 
@@ -207,8 +207,10 @@ export default function BaoCaoThuChiClient({ myRoleCode, myBranchId, canCheckRet
 function TabBtn({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
   return (
     <button type="button" onClick={onClick} className={[
-      'inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition',
-      active ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'text-slate-600 hover:bg-slate-50',
+      'inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold rounded-md transition-all duration-150 active:scale-[0.97]',
+      active
+        ? 'bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-700/50'
+        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
     ].join(' ')}>
       {icon}{label}
     </button>

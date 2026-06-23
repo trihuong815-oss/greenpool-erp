@@ -121,11 +121,12 @@ function isEditable(row: RowState): boolean {
 function fmt(n: number): string { return n.toLocaleString('vi-VN'); }
 
 const STATUS_PILL: Record<ExpenseStatus, string> = {
-  draft:    'bg-slate-100 text-slate-700 ring-slate-200',
+  draft:    'bg-amber-50 text-amber-700 ring-amber-200',
   recorded: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
   returned: 'bg-rose-50 text-rose-700 ring-rose-200',
   voided:   'bg-slate-100 text-slate-500 ring-slate-200 line-through',
 };
+const LOCAL_NEW_PILL = 'bg-sky-50 text-sky-700 ring-sky-200';   // dòng local "Mới" — phân biệt với draft (amber)
 
 let localIdSeq = 0;
 function nextLocalId(): string { localIdSeq += 1; return `local-${localIdSeq}`; }
@@ -305,11 +306,13 @@ export function ExpenseLedgerGrid({
         <span>Bảng chi phí cơ sở — Sổ chi ngày {date} · {branchId} ({branchName})</span>
         <div className="ml-auto flex items-center gap-2">
           {canEdit && (
-            <button type="button" onClick={addEmptyRowAndFocus} className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50 px-2 py-1 rounded">
+            <button type="button" onClick={addEmptyRowAndFocus}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 ring-1 ring-emerald-200 hover:ring-emerald-300 px-2.5 py-1.5 rounded-md transition-all duration-150 active:scale-[0.97]">
               <Plus size={12} /> Thêm dòng
             </button>
           )}
-          <button type="button" onClick={onRefresh} disabled={loading} className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-800 disabled:opacity-50 px-2 py-1 rounded">
+          <button type="button" onClick={onRefresh} disabled={loading}
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 bg-white hover:bg-slate-100 ring-1 ring-slate-200 hover:ring-slate-300 disabled:opacity-50 px-2.5 py-1.5 rounded-md transition-all duration-150">
             <RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> Làm mới
           </button>
         </div>
@@ -319,33 +322,33 @@ export function ExpenseLedgerGrid({
         <div className="text-sm text-rose-600 bg-rose-50 rounded-lg px-3 py-2 ring-1 ring-rose-200 mb-3">{error}</div>
       )}
 
-      <div className="overflow-x-auto -mx-5 border-t border-slate-200">
-        <table className="w-full text-xs min-w-[1500px]">
+      <div className="overflow-x-auto -mx-5 border-t-2 border-slate-300 rounded-b-xl">
+        <table className="w-full text-xs min-w-[1500px] border-collapse">
           {/* Header 2-tier */}
-          <thead className="sticky top-0 bg-slate-50 z-10 text-slate-600 border-b-2 border-slate-200">
-            <tr>
-              <Th rowSpan={2} className="w-10 text-center">#</Th>
-              <Th colSpan={2} className="text-center bg-slate-100">Chứng từ</Th>
-              <Th colSpan={2} className="text-center bg-slate-50">Nội dung & Số tiền</Th>
-              <Th colSpan={3} className="text-center bg-slate-100">Người giao dịch</Th>
-              <Th colSpan={2} className="text-center bg-slate-50">Chứng từ kèm theo</Th>
-              <Th colSpan={4} className="text-center bg-slate-100">Quản lý</Th>
-              {canEdit && <Th rowSpan={2} className="text-right pr-5 w-44">Thao tác</Th>}
+          <thead className="sticky top-0 z-10 text-slate-700">
+            <tr className="border-b border-slate-300">
+              <Th rowSpan={2} className="w-10 text-center bg-slate-100 border-r border-slate-200">#</Th>
+              <Th colSpan={2} className="text-center bg-emerald-50/70 border-r border-slate-200 text-emerald-800">Chứng từ</Th>
+              <Th colSpan={2} className="text-center bg-slate-100 border-r border-slate-200">Nội dung & Số tiền</Th>
+              <Th colSpan={3} className="text-center bg-sky-50/70 border-r border-slate-200 text-sky-800">Người giao dịch</Th>
+              <Th colSpan={2} className="text-center bg-slate-100 border-r border-slate-200">Chứng từ kèm theo</Th>
+              <Th colSpan={4} className="text-center bg-amber-50/70 text-amber-800">Quản lý</Th>
+              {canEdit && <Th rowSpan={2} className="text-right pr-5 w-44 bg-slate-100">Thao tác</Th>}
             </tr>
-            <tr className="text-xs uppercase tracking-wide">
-              <Th className="w-32 bg-slate-100">Số CT</Th>
-              <Th className="w-28 bg-slate-100">Ngày</Th>
-              <Th className="w-64 bg-slate-50">Diễn giải</Th>
-              <Th className="w-28 text-right bg-slate-50">Số tiền</Th>
-              <Th className="w-40 bg-slate-100">Họ và tên</Th>
-              <Th className="w-32 bg-slate-100">Đơn vị</Th>
-              <Th className="w-40 bg-slate-100">Địa chỉ</Th>
-              <Th className="w-32 bg-slate-50">Kèm theo</Th>
-              <Th className="w-44 bg-slate-50">Loại căn cứ</Th>
-              <Th className="w-28 bg-slate-100">PT chi</Th>
-              <Th className="w-32 bg-slate-100">Nhóm chi</Th>
-              <Th className="w-28 bg-slate-100">Trạng thái</Th>
-              <Th className="w-0 bg-slate-100"></Th>
+            <tr className="text-xs uppercase tracking-wide border-b-2 border-slate-300 bg-slate-50/90">
+              <Th className="w-32 border-r border-slate-200">Số CT</Th>
+              <Th className="w-28 border-r border-slate-200">Ngày</Th>
+              <Th className="w-64 border-r border-slate-200">Diễn giải</Th>
+              <Th className="w-28 text-right border-r border-slate-200">Số tiền</Th>
+              <Th className="w-40 border-r border-slate-200">Họ và tên</Th>
+              <Th className="w-32 border-r border-slate-200">Đơn vị</Th>
+              <Th className="w-40 border-r border-slate-200">Địa chỉ</Th>
+              <Th className="w-32 border-r border-slate-200">Kèm theo</Th>
+              <Th className="w-44 border-r border-slate-200">Loại căn cứ</Th>
+              <Th className="w-28 border-r border-slate-200">PT chi</Th>
+              <Th className="w-32 border-r border-slate-200">Nhóm chi</Th>
+              <Th className="w-28">Trạng thái</Th>
+              <Th className="w-0"></Th>
             </tr>
           </thead>
 
@@ -359,14 +362,26 @@ export function ExpenseLedgerGrid({
                   newRowFocusRef.current = el;
                 }
               };
+              // PR-CASH-UI-POLISH-SAFE: phân biệt rõ nền + viền trái theo trạng thái dòng.
+              const rowBg = row.error
+                ? 'bg-rose-50/60 border-l-4 border-l-rose-400'
+                : row.kind === 'local'
+                  ? 'bg-sky-50/30 border-l-4 border-l-sky-400'
+                  : status === 'draft'
+                    ? 'bg-amber-50/30 border-l-4 border-l-amber-300'
+                    : status === 'returned'
+                      ? 'bg-rose-50/30 border-l-4 border-l-rose-300'
+                      : status === 'voided'
+                        ? 'bg-slate-50 border-l-4 border-l-slate-300 opacity-70'
+                        : 'bg-white border-l-4 border-l-transparent';
               return (
                 <tr key={row.id} className={[
-                  'border-b border-slate-100 align-top',
-                  row.kind === 'local' ? 'bg-emerald-50/30' : '',
-                  row.error ? 'bg-rose-50/40' : '',
+                  'border-b border-slate-100 align-top transition-colors duration-150',
+                  rowBg,
+                  'hover:bg-slate-50/80',
                   row.busy ? 'opacity-70' : '',
                 ].join(' ')}>
-                  <Td className="text-center text-slate-500 pl-3 pt-3">{idx + 1}</Td>
+                  <Td className="text-center text-slate-500 pl-3 pt-3 border-r border-slate-100">{idx + 1}</Td>
 
                   {/* Số CT */}
                   <Td className="pt-1">
@@ -484,7 +499,7 @@ export function ExpenseLedgerGrid({
 
                   {/* Trạng thái */}
                   <Td className="pt-2">
-                    <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ring-1 ${STATUS_PILL[status]}`}>
+                    <span className={`inline-flex px-2 py-0.5 rounded-md text-xs font-semibold ring-1 ${row.kind === 'local' ? LOCAL_NEW_PILL : STATUS_PILL[status]}`}>
                       {row.kind === 'local' ? 'Mới' : EXPENSE_STATUS_LABEL[status]}
                     </span>
                   </Td>
@@ -518,18 +533,18 @@ export function ExpenseLedgerGrid({
               );
             })}
 
-            {/* Footer totals row */}
-            <tr className="border-t-2 border-slate-300 bg-slate-50 font-semibold text-slate-700 sticky bottom-0">
-              <Td className="text-right pr-2" colSpan={2}>TỔNG (chỉ tính đã ghi nhận):</Td>
-              <Td className="text-xs">{totals.byStatus.recorded} phiếu</Td>
-              <Td className="text-xs">{date}</Td>
-              <Td className="text-right tabular-nums text-emerald-700">{fmt(totals.byMethod.total)} ₫</Td>
-              <Td colSpan={5} className="text-xs text-slate-500">
-                Tiền mặt {fmt(totals.byMethod.cash)} · CK {fmt(totals.byMethod.transfer)} · Thẻ {fmt(totals.byMethod.card)}
-                {totals.byMethod.other > 0 && ` · Khác ${fmt(totals.byMethod.other)}`}
+            {/* Footer totals row — sticky bottom, nổi bật amber */}
+            <tr className="border-t-[3px] border-amber-400 bg-amber-50/80 font-bold text-slate-800 sticky bottom-0 shadow-[0_-2px_8px_-4px_rgba(0,0,0,0.06)]">
+              <Td className="text-right pr-2 pl-3 py-2" colSpan={2}>TỔNG (chỉ tính đã ghi nhận):</Td>
+              <Td className="text-xs text-slate-700 py-2">{totals.byStatus.recorded} phiếu</Td>
+              <Td className="text-xs text-slate-700 py-2">{date}</Td>
+              <Td className="text-right tabular-nums text-emerald-700 text-sm py-2">{fmt(totals.byMethod.total)} ₫</Td>
+              <Td colSpan={5} className="text-xs text-slate-600 py-2 font-medium">
+                Tiền mặt <span className="tabular-nums text-slate-800">{fmt(totals.byMethod.cash)}</span> · CK <span className="tabular-nums text-slate-800">{fmt(totals.byMethod.transfer)}</span> · Thẻ <span className="tabular-nums text-slate-800">{fmt(totals.byMethod.card)}</span>
+                {totals.byMethod.other > 0 && <> · Khác <span className="tabular-nums text-slate-800">{fmt(totals.byMethod.other)}</span></>}
               </Td>
-              <Td colSpan={canEdit ? 4 : 3} className="text-xs text-slate-500">
-                Nháp {totals.byStatus.draft} · Trả lại {totals.byStatus.returned} · Huỷ {totals.byStatus.voided}
+              <Td colSpan={canEdit ? 4 : 3} className="text-xs text-slate-600 py-2 font-medium">
+                Nháp <span className="text-amber-700">{totals.byStatus.draft}</span> · Trả lại <span className="text-rose-700">{totals.byStatus.returned}</span> · Huỷ <span className="text-slate-500">{totals.byStatus.voided}</span>
               </Td>
             </tr>
           </tbody>
@@ -566,7 +581,7 @@ function Input({ value, onChange, disabled, placeholder, type = 'text', classNam
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}
       placeholder={placeholder}
-      className={`w-full h-8 px-2 text-xs rounded ring-1 ring-slate-200 focus:ring-2 focus:ring-emerald-400 focus:outline-none disabled:bg-transparent disabled:ring-0 disabled:cursor-default ${className}`}
+      className={`w-full h-8 px-2 text-xs rounded-md bg-white ring-1 ring-slate-300 hover:ring-slate-400 focus:ring-2 focus:ring-emerald-500 focus:ring-offset-0 focus:outline-none placeholder:text-slate-400 disabled:bg-transparent disabled:ring-0 disabled:text-slate-700 disabled:cursor-default transition-colors duration-150 ${className}`}
     />
   );
 }
@@ -582,7 +597,7 @@ function Select({ value, onChange, disabled, options }: {
       value={value}
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}
-      className="w-full h-8 px-2 text-xs rounded ring-1 ring-slate-200 focus:ring-2 focus:ring-emerald-400 focus:outline-none disabled:bg-transparent disabled:ring-0 disabled:cursor-default"
+      className="w-full h-8 px-2 text-xs rounded-md bg-white ring-1 ring-slate-300 hover:ring-slate-400 focus:ring-2 focus:ring-emerald-500 focus:outline-none disabled:bg-transparent disabled:ring-0 disabled:text-slate-700 disabled:cursor-default transition-colors duration-150"
     >
       {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
     </select>
@@ -591,12 +606,13 @@ function Select({ value, onChange, disabled, options }: {
 
 function ActionBtn({ icon, label, onClick, tone = 'ghost' }: { icon: React.ReactNode; label: string; onClick: () => void; tone?: 'ghost' | 'primary' | 'danger' }) {
   const cls = tone === 'primary'
-    ? 'text-emerald-700 hover:bg-emerald-100 ring-emerald-200'
+    ? 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-800 ring-emerald-200 hover:ring-emerald-300'
     : tone === 'danger'
-    ? 'text-rose-600 hover:bg-rose-100 ring-rose-200'
-    : 'text-slate-600 hover:bg-slate-100 ring-slate-200';
+    ? 'text-rose-700 bg-white hover:bg-rose-50 hover:text-rose-800 ring-rose-200 hover:ring-rose-300'
+    : 'text-slate-700 bg-white hover:bg-slate-100 hover:text-slate-900 ring-slate-300';
   return (
-    <button type="button" onClick={onClick} className={`inline-flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded ring-1 transition ${cls}`}>
+    <button type="button" onClick={onClick}
+      className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-md ring-1 transition-all duration-150 active:scale-[0.96] ${cls}`}>
       {icon}{label}
     </button>
   );
