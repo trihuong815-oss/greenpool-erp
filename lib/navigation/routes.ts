@@ -137,6 +137,10 @@ export const NAV_ROUTES: NavRoute[] = [
   { route: 'doanh-so-v2/quay-le-tan/cau-hinh',   section: 'Tài chính kế toán', label: 'Quầy lễ tân — Cấu hình', icon: 'settings',
     keywords: ['quay le tan cau hinh', 'le tan price', 'reception config', 'don gia le tan'] },
 
+  // PR-CASH1C (2026-06-23): Editor Thu-Chi cơ sở (NV_KE nhập + nộp báo cáo; TP_KE/QLCS view-only).
+  { route: 'chi-phi-co-so',                      section: 'Tài chính kế toán', label: 'Chi phí cơ sở', icon: 'dollar',
+    keywords: ['chi phi co so', 'chi co so', 'phieu chi', 'thu chi', 'cashflow', 'expense', 'bao cao thu chi', 'ghi nhan chi', 'nop bao cao'] },
+
   // PR-7A (2026-06-22): Audit History UI cho Sales V2 (salesAuditLogs).
   // Permission: ADMIN/CEO/CHU_TICH/GD_KD/GD_VP/TP_KE/TP_GS — sidebar tự filter qua allowed set.
   { route: 'audit-history', section: 'Giám sát', label: 'Lịch sử thao tác', icon: 'shield',

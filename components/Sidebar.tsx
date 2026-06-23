@@ -9,7 +9,7 @@ import {
   Users, FileBarChart, GraduationCap, Megaphone, Settings, LogOut, UserCog, Wrench, KeyRound, X, Briefcase, ShieldCheck, Search,
   Sliders, Bell, Building2, Factory, Briefcase as BriefcaseBusiness, Rocket, ChevronDown,
   PencilLine, ClipboardCheck, CreditCard, TrendingUp, Tag, Calculator, BarChart3,
-  History,
+  History, Receipt,
   type LucideIcon,
 } from 'lucide-react';
 import { DispatchBadge } from './DispatchBadge';
@@ -162,6 +162,12 @@ const MENU_SECTIONS: MenuSection[] = [
             showOnlyForRoles: ['ADMIN', 'CEO', 'CHU_TICH'] },
           { route: 'doanh-so-v2/quay-le-tan/nhap',      label: 'Quầy lễ tân — Nhập',     icon: Calculator },
           { route: 'doanh-so-v2/quay-le-tan/cau-hinh',  label: 'Quầy lễ tân — Cấu hình', icon: Sliders },
+          // PR-CASH1C (2026-06-23): Editor Thu-Chi cơ sở.
+          //   - NV_KE = primary editor (form nhập chi + nộp báo cáo).
+          //   - TP_KE / QLCS_* / top role = view-only (server-enforced; UI ẩn form theo canEdit).
+          //   - NV_SALE / TP_GS / THU_QUY: KHÔNG có permission → KHÔNG render entry.
+          //     THU_QUY view màn Báo cáo thu-chi sẽ làm ở PR-CASH1D (route khác).
+          { route: 'chi-phi-co-so',                     label: 'Chi phí cơ sở',          icon: Receipt },
           // PR-7A (2026-06-22): TCKT thấy "Lịch sử thao tác" — TP_KE + top role (đã có permission).
           // GD_VP có entry này (cùng cấp với GD_KD). Sale/QLCS/TP_GS bị hideForRoles ở parent → KHÔNG thấy.
           { route: 'audit-history', label: 'Lịch sử thao tác', icon: History,
