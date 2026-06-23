@@ -136,6 +136,39 @@ export async function lockCashflowReport(id: string): Promise<{ ok: true; status
   return jsonOrError(r);
 }
 
+// PR-CASH1G (2026-06-23): monthly/yearly summary + export Excel.
+import type { MonthlySummary, YearlySummary } from '@/lib/finance/cashflow-summary-types';
+
+export async function fetchMonthlyCashflowSummary(month: string, branchId?: BranchId | null): Promise<{ ok: true; summary: MonthlySummary }> {
+  const qs = new URLSearchParams({ month });
+  if (branchId) qs.set('branchId', branchId);
+  const r = await fetch(`/api/finance/cashflow-reports/monthly-summary?${qs.toString()}`);
+  return jsonOrError(r);
+}
+
+export async function fetchYearlyCashflowSummary(year: number, branchId?: BranchId | null): Promise<{ ok: true; summary: YearlySummary }> {
+  const qs = new URLSearchParams({ year: String(year) });
+  if (branchId) qs.set('branchId', branchId);
+  const r = await fetch(`/api/finance/cashflow-reports/yearly-summary?${qs.toString()}`);
+  return jsonOrError(r);
+}
+
+/** Trigger download Excel — mở URL trong tab mới hoặc force download. Return URL string để caller assign window.location/anchor. */
+export function buildCashflowExportUrl(params: {
+  mode: 'daily' | 'monthly' | 'yearly';
+  date?: string;
+  month?: string;
+  year?: number;
+  branchId?: BranchId | null;
+}): string {
+  const qs = new URLSearchParams({ mode: params.mode });
+  if (params.date) qs.set('date', params.date);
+  if (params.month) qs.set('month', params.month);
+  if (params.year) qs.set('year', String(params.year));
+  if (params.branchId) qs.set('branchId', params.branchId);
+  return `/api/finance/cashflow-reports/export?${qs.toString()}`;
+}
+
 export async function submitDailyCashflowReport(date: string, branchId: BranchId): Promise<SubmitReportResponse> {
   const r = await fetch('/api/finance/cashflow-reports/submit', {
     method: 'POST',
