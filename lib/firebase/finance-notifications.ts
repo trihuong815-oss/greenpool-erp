@@ -109,6 +109,9 @@ export async function notifyDailyCashflowSubmitted(input: NotifySubmittedInput):
     linkUrl: `/bao-cao-thu-chi?date=${encodeURIComponent(input.date)}&branchId=${encodeURIComponent(input.branchId)}`,
     recipients,
     priority: 'normal',
+    // PR-CASH1E-FIX (2026-06-23): finance event mặc định bật email (báo cáo tài chính
+    // ít event/ngày, thư mục tổng hợp, không spam). User vẫn opt-out qua /bao-mat nếu muốn.
+    channels: { inApp: true, push: true, email: true },
     pushTag: `finance-cashflow-${input.reportId}`,
     pushData: {
       kind: 'daily_cashflow_submitted',
@@ -155,6 +158,7 @@ export async function notifyDailyCashflowChecked(input: NotifyCheckedInput): Pro
     linkUrl: `/chi-phi-co-so?date=${encodeURIComponent(input.date)}&branchId=${encodeURIComponent(input.branchId)}`,
     recipients,
     priority: 'low',  // informational
+    channels: { inApp: true, push: true, email: true },
     pushTag: `finance-cashflow-${input.reportId}`,
     pushData: {
       kind: 'daily_cashflow_checked',
@@ -202,6 +206,7 @@ export async function notifyDailyCashflowReturned(input: NotifyReturnedInput): P
     linkUrl: `/chi-phi-co-so?date=${encodeURIComponent(input.date)}&branchId=${encodeURIComponent(input.branchId)}`,
     recipients,
     priority: 'high',  // cần xử lý gấp
+    channels: { inApp: true, push: true, email: true },
     pushTag: `finance-cashflow-${input.reportId}`,
     pushData: {
       kind: 'daily_cashflow_returned',

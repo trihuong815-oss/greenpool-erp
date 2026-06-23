@@ -18,9 +18,12 @@ import { COLLECTIONS } from './collections';
 import {
   persistNotification,
   updateNotiPushStatus,
+  updateNotiEmailStatus,
   type NotiType,
   type NotiModule,
   type NotiPriority,
+  type EmailStatus,
+  type EmailSkipReason,
 } from './notifications-store';
 import { pushToUsers } from './push-notifications';
 // V6.5 Phase A (2026-06-14): swap Resend → Gmail SMTP — Resend free chưa verify
@@ -175,36 +178,85 @@ export async function sendNotificationEvent(input: SendNotificationEventInput): 
     );
   }
 
+  // PR-CASH1E-FIX (2026-06-23): pre-fill 'skipped' cho uids bị engine loại trước
+  // (caller không bật email cho event này, hoặc user opt-out email module).
+  const emailStatusByUid = new Map<string, { status: Exclude<EmailStatus, null>; reason?: EmailSkipReason; errorMessage?: string }>();
+  if (enableInApp) {
+    const emailUidsSet = new Set(emailUids);
+    for (const uid of uids) {
+      if (!emailUidsSet.has(uid)) {
+        emailStatusByUid.set(uid, {
+          status: 'skipped',
+          reason: callerEmailDefault ? 'email_disabled' : 'caller_default_off',
+        });
+      }
+    }
+  }
+
   if (emailUids.length > 0) {
     tasks.push(
       emailBackupForEvent(emailUids, input).then((r) => {
         result.emailOk = r.ok;
         result.emailFailed = r.failed;
         result.emailSkipped = r.skipped;
+        // Merge per-uid email result vào map (override entries cho emailUids).
+        for (const [uid, st] of r.perUid.entries()) emailStatusByUid.set(uid, st);
       }).catch((e) => { console.warn('[noti-engine] email exception:', e?.message); }),
     );
   }
 
   await Promise.allSettled(tasks);
+
+  // PR-CASH1E-FIX: persist emailStatus per noti doc.
+  if (enableInApp && docIdByUid.size > 0 && emailStatusByUid.size > 0) {
+    try { await updateNotiEmailStatus(docIdByUid, emailStatusByUid); }
+    catch (e: any) { console.warn('[noti-engine] updateNotiEmailStatus fail:', e?.message); }
+  }
+
   return result;
 }
 
-/** Build email payload cho 1 event + gửi batch tới N uid. */
+/** Build email payload cho 1 event + gửi batch tới N uid.
+ *  PR-CASH1E-FIX (2026-06-23): trả thêm perUid Map để engine update emailStatus per noti doc. */
 async function emailBackupForEvent(
   uids: string[],
   input: SendNotificationEventInput,
-): Promise<{ ok: number; failed: number; skipped: number }> {
+): Promise<{
+  ok: number;
+  failed: number;
+  skipped: number;
+  perUid: Map<string, { status: Exclude<EmailStatus, null>; reason?: EmailSkipReason; errorMessage?: string }>;
+}> {
+  const perUid = new Map<string, { status: Exclude<EmailStatus, null>; reason?: EmailSkipReason; errorMessage?: string }>();
   try {
     const db = getFirebaseAdminDb();
     const snaps = await db.getAll(...uids.map((u) => db.collection(COLLECTIONS.USERS).doc(u)));
+    // Track uid theo thứ tự items để map perItem result về uid sau khi batch xong.
+    const sendableUids: string[] = [];
     const items: { to: string; subject: string; title: string; body: string; ctaLabel: string; ctaUrl: string; footerNote: string }[] = [];
-    for (const s of snaps) {
-      if (!s.exists) continue;
+    for (let i = 0; i < snaps.length; i++) {
+      const s = snaps[i];
+      const uid = uids[i];
+      if (!s.exists) {
+        perUid.set(uid, { status: 'skipped', reason: 'missing_email' });
+        continue;
+      }
       const x = s.data() as any;
-      if (x?.excludeFromBusinessNoti === true) continue;
+      if (x?.excludeFromBusinessNoti === true) {
+        perUid.set(uid, { status: 'skipped', reason: 'excluded_user' });
+        continue;
+      }
       const email = typeof x?.email === 'string' ? x.email : '';
-      if (!email || !email.includes('@')) continue;
+      if (!email) {
+        perUid.set(uid, { status: 'skipped', reason: 'missing_email' });
+        continue;
+      }
+      if (!email.includes('@')) {
+        perUid.set(uid, { status: 'failed', reason: 'invalid_email', errorMessage: 'email format invalid' });
+        continue;
+      }
       const ctaUrl = input.linkUrl.startsWith('http') ? input.linkUrl : APP_BASE_URL + input.linkUrl;
+      sendableUids.push(uid);
       items.push({
         to: email,
         subject: `[Green Pool]${input.entityCode ? ' ' + input.entityCode : ''} — ${input.title}`,
@@ -215,9 +267,39 @@ async function emailBackupForEvent(
         footerNote: 'Email backup vì thông báo đẩy có thể không tới được. Bạn nhận được vì là người liên quan trong hệ thống.',
       });
     }
-    return sendEmailNotiBatch(items);
+    const batch = await sendEmailNotiBatch(items);
+    // perItem[i] tương ứng items[i] = sendableUids[i]
+    for (let i = 0; i < batch.perItem.length; i++) {
+      const uid = sendableUids[i];
+      const r = batch.perItem[i];
+      perUid.set(uid, {
+        status: r.status,
+        reason: r.reason,
+        errorMessage: r.errorMessage,
+      });
+    }
+    // Counters cộng dồn pre-batch skips
+    let ok = batch.ok;
+    let failed = batch.failed;
+    let skipped = batch.skipped;
+    for (const [, v] of perUid) {
+      if (v.status === 'sent') { /* counted */ }
+      else if (v.status === 'failed' && v.reason === 'invalid_email') failed++;
+      else if (v.status === 'skipped' && (v.reason === 'missing_email' || v.reason === 'excluded_user')) skipped++;
+    }
+    // Re-derive counters từ perUid để khỏi double-count.
+    ok = 0; failed = 0; skipped = 0;
+    for (const [, v] of perUid) {
+      if (v.status === 'sent') ok++;
+      else if (v.status === 'failed') failed++;
+      else skipped++;
+    }
+    return { ok, failed, skipped, perUid };
   } catch (e: any) {
     console.warn('[noti-engine] emailBackupForEvent fail:', e?.message);
-    return { ok: 0, failed: uids.length, skipped: 0 };
+    for (const uid of uids) {
+      if (!perUid.has(uid)) perUid.set(uid, { status: 'failed', reason: 'send_error', errorMessage: String(e?.message ?? 'unknown').slice(0, 200) });
+    }
+    return { ok: 0, failed: uids.length, skipped: 0, perUid };
   }
 }

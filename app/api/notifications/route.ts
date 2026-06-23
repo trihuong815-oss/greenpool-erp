@@ -1,9 +1,14 @@
 // V6.4 P2 (2026-06-13): GET /api/notifications
-// Query: ?tab=all|action|read  &module=proposal|dispatch  &limit=20
+// Query: ?tab=all|action|read  &module=<NotiModule>  &limit=20
 //   tab=all     → tất cả noti của user (default)
 //   tab=action  → chỉ action_required + actionStatus='pending'
 //   tab=read    → chỉ isRead=true
-// Filter module optional — undefined = both.
+// Filter module optional — undefined = tất cả module.
+//
+// PR-CASH1E-FIX (2026-06-23): mở whitelist module đầy đủ NotiModule
+// (proposal/dispatch/chat/kt/sales/finance/system). Trước đây chỉ accept
+// proposal|dispatch → các module khác bị silent ignore. Composite index
+// `userId+module+createdAt DESC` mới cũng add cùng PR.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getFirebaseAdminDb } from '@/lib/firebase/admin';
@@ -12,6 +17,11 @@ import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-aut
 
 const LIMIT_DEFAULT = 20;
 const LIMIT_MAX = 50;
+
+// 7 module hợp lệ (đồng bộ NotiModule + VALID_MODULES settings).
+const VALID_MODULE_FILTERS = new Set([
+  'proposal', 'dispatch', 'chat', 'kt', 'sales', 'finance', 'system',
+]);
 
 export async function GET(req: NextRequest) {
   try {
@@ -25,9 +35,10 @@ export async function GET(req: NextRequest) {
     let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.NOTIFICATIONS)
       .where('userId', '==', caller.profile.uid);
 
-    if (moduleParam === 'proposal' || moduleParam === 'dispatch') {
+    if (moduleParam && VALID_MODULE_FILTERS.has(moduleParam)) {
       q = q.where('module', '==', moduleParam);
     }
+    // module không hợp lệ → silent ignore (giữ behavior cũ, tránh phá UI cũ)
     if (tab === 'action') {
       q = q.where('actionStatus', '==', 'pending').where('isActionRequired', '==', true);
     } else if (tab === 'read') {

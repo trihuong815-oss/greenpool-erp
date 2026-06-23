@@ -442,6 +442,16 @@
         { "fieldPath": "branchId", "order": "ASCENDING" },
         { "fieldPath": "date", "order": "DESCENDING" }
       ]
+    },
+    {
+      "_comment": "PR-CASH1E-FIX (2026-06-23): GET /api/notifications?module=X — where(userId) where(module) orderBy(createdAt DESC). Cover module filter cho cả 7 module sau khi mở whitelist (proposal/dispatch/chat/kt/sales/finance/system).",
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "module", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

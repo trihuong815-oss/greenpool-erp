@@ -129,6 +129,21 @@ export interface PersistNotificationInput {
  *  - excluded : user có excludeFromBusinessNoti (đã skip ngay từ đầu) */
 export type PushStatus = 'pending' | 'sent' | 'failed' | 'no_device' | 'excluded';
 
+/** PR-CASH1E-FIX (2026-06-23): trạng thái email per notification doc — observability.
+ *  - null     : chưa thử (caller không bật email channel hoặc engine chưa update)
+ *  - sent     : Gmail SMTP accept
+ *  - failed   : send error (invalid email, SMTP throw, ...)
+ *  - skipped  : chủ ý bỏ qua (user opt-out, env chưa cấu hình, không có email) */
+export type EmailStatus = 'sent' | 'failed' | 'skipped' | null;
+export type EmailSkipReason =
+  | 'email_disabled'         // user setting tắt email cho module
+  | 'caller_default_off'     // caller không request email cho event này
+  | 'smtp_not_configured'    // GMAIL_SMTP_USER/PASS env chưa set
+  | 'missing_email'          // user không có email
+  | 'invalid_email'          // email sai định dạng
+  | 'excluded_user'          // user.excludeFromBusinessNoti=true
+  | 'send_error';            // SMTP trả error
+
 /** Tạo N notification doc (1 doc / user). Fire-and-forget — không throw nếu fail.
  *  V6.5 Phase A: trả về Map<uid, docId> để upstream cập nhật pushStatus sau khi gửi FCM. */
 export async function persistNotification(input: PersistNotificationInput): Promise<Map<string, string>> {
@@ -178,6 +193,10 @@ export async function persistNotification(input: PersistNotificationInput): Prom
       sentAt: null,
       retryCount: 0,
       nextRetryAt: null,
+      // PR-CASH1E-FIX (2026-06-23): email tracking — observability cho Gmail SMTP.
+      emailStatus: null as EmailStatus,
+      emailError: null,
+      emailSentAt: null,
       // Snapshot payload để retry không cần re-resolve user info.
       // V6.5 Noti Audit Phase C.2 (2026-06-15) — Issue 1.2: thêm entityCode để email
       // retry có mã tham chiếu (DX-2026-0042 / DP-2026-XXXX) dễ trace.
@@ -238,6 +257,47 @@ export async function updateNotiPushStatus(
   }
   try { await batch.commit(); } catch (e: any) {
     console.warn('[updateNotiPushStatus] commit fail:', e?.message);
+  }
+}
+
+/** PR-CASH1E-FIX (2026-06-23): cập nhật emailStatus + emailError + emailSentAt
+ *  cho từng notification doc sau khi engine xử lý email.
+ *  Pattern khớp updateNotiPushStatus — fire-and-forget, không throw.
+ *  results: Map<uid, { status, reason?, errorMessage? }> */
+export async function updateNotiEmailStatus(
+  docIdByUid: Map<string, string>,
+  results: Map<string, { status: Exclude<EmailStatus, null>; reason?: EmailSkipReason; errorMessage?: string }>,
+): Promise<void> {
+  if (docIdByUid.size === 0 || results.size === 0) return;
+  const db = getFirebaseAdminDb();
+  const col = db.collection(COLLECTIONS.NOTIFICATIONS);
+  const now = new Date();
+  let batch = db.batch();
+  let count = 0;
+  for (const [uid, docId] of docIdByUid.entries()) {
+    const r = results.get(uid);
+    if (!r) continue;
+    const update: Record<string, any> = {
+      emailStatus: r.status,
+      emailError: r.errorMessage ? r.errorMessage.slice(0, 200)
+                : r.reason ? r.reason
+                : null,
+      emailSentAt: r.status === 'sent' ? now : null,
+    };
+    batch.update(col.doc(docId), update);
+    count++;
+    if (count >= 500) {
+      try { await batch.commit(); } catch (e: any) {
+        console.warn('[updateNotiEmailStatus] partial commit fail:', e?.message);
+      }
+      batch = db.batch();
+      count = 0;
+    }
+  }
+  if (count > 0) {
+    try { await batch.commit(); } catch (e: any) {
+      console.warn('[updateNotiEmailStatus] commit fail:', e?.message);
+    }
   }
 }
 

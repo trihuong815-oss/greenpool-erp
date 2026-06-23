@@ -75,43 +75,77 @@ function renderHtml(input: EmailNotiInput): string {
 </body></html>`;
 }
 
+/** PR-CASH1E-FIX (2026-06-23): structured per-item result để engine track emailStatus per noti doc. */
+export type EmailSendStatus = 'sent' | 'failed' | 'skipped';
+
+export interface EmailSendResult {
+  status: EmailSendStatus;
+  /** Reason code khi failed/skipped (safe, không log secret): */
+  reason?: 'smtp_not_configured' | 'missing_email' | 'invalid_email' | 'send_error';
+  /** Error message rút gọn (max 200 ký tự, KHÔNG có secret). Chỉ khi failed. */
+  errorMessage?: string;
+}
+
+function shortErr(e: any): string {
+  const m = String(e?.message ?? e ?? 'unknown');
+  return m.slice(0, 200);
+}
+
 /** Fire-and-forget. KHÔNG throw, log warning. */
-export async function sendEmailNoti(input: EmailNotiInput): Promise<{ ok: boolean; skipped?: boolean; err?: string }> {
+export async function sendEmailNoti(input: EmailNotiInput): Promise<EmailSendResult> {
   const transporter = getTransporter();
-  if (!transporter) return { ok: false, skipped: true, err: 'GMAIL_SMTP_USER/PASS chưa set' };
-  if (!input.to || !input.to.includes('@')) return { ok: false, err: 'email rỗng/sai định dạng' };
+  if (!transporter) return { status: 'skipped', reason: 'smtp_not_configured' };
+  if (!input.to) return { status: 'skipped', reason: 'missing_email' };
+  if (!input.to.includes('@')) return { status: 'failed', reason: 'invalid_email', errorMessage: 'email format invalid' };
 
   const from = process.env.GMAIL_SMTP_FROM
     || `Green Pool ERP <${process.env.GMAIL_SMTP_USER!}>`;
 
   try {
-    const info = await transporter.sendMail({
+    await transporter.sendMail({
       from,
       to: input.to,
       subject: input.subject,
       html: renderHtml(input),
     });
-    return { ok: true };
+    return { status: 'sent' };
   } catch (e: any) {
     console.warn('[gmail-smtp] send fail:', e?.message);
-    return { ok: false, err: e?.message };
+    return { status: 'failed', reason: 'send_error', errorMessage: shortErr(e) };
   }
 }
 
-/** Gửi N email parallel với Promise.allSettled. */
-export async function sendEmailNotiBatch(items: EmailNotiInput[]): Promise<{ ok: number; failed: number; skipped: number }> {
-  if (!items.length) return { ok: 0, failed: 0, skipped: 0 };
+/** Gửi N email parallel với Promise.allSettled.
+ *  PR-CASH1E-FIX: trả thêm `perItem` array (cùng thứ tự `items`) để caller map về uid → noti doc. */
+export interface EmailBatchResult {
+  ok: number;
+  failed: number;
+  skipped: number;
+  perItem: EmailSendResult[];
+}
+export async function sendEmailNotiBatch(items: EmailNotiInput[]): Promise<EmailBatchResult> {
+  if (!items.length) return { ok: 0, failed: 0, skipped: 0, perItem: [] };
   const transporter = getTransporter();
-  if (!transporter) return { ok: 0, failed: 0, skipped: items.length };
+  if (!transporter) {
+    return {
+      ok: 0, failed: 0, skipped: items.length,
+      perItem: items.map(() => ({ status: 'skipped', reason: 'smtp_not_configured' })),
+    };
+  }
 
   const results = await Promise.allSettled(items.map((i) => sendEmailNoti(i)));
+  const perItem: EmailSendResult[] = [];
   let ok = 0, failed = 0, skipped = 0;
   for (const r of results) {
     if (r.status === 'fulfilled') {
-      if (r.value.ok) ok++;
-      else if (r.value.skipped) skipped++;
+      perItem.push(r.value);
+      if (r.value.status === 'sent') ok++;
+      else if (r.value.status === 'skipped') skipped++;
       else failed++;
-    } else failed++;
+    } else {
+      perItem.push({ status: 'failed', reason: 'send_error', errorMessage: shortErr(r.reason) });
+      failed++;
+    }
   }
-  return { ok, failed, skipped };
+  return { ok, failed, skipped, perItem };
 }
