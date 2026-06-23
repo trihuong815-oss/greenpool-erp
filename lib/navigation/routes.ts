@@ -141,6 +141,10 @@ export const NAV_ROUTES: NavRoute[] = [
   { route: 'chi-phi-co-so',                      section: 'Tài chính kế toán', label: 'Chi phí cơ sở', icon: 'dollar',
     keywords: ['chi phi co so', 'chi co so', 'phieu chi', 'thu chi', 'cashflow', 'expense', 'bao cao thu chi', 'ghi nhan chi', 'nop bao cao'] },
 
+  // PR-CASH1D (2026-06-23): View Báo cáo thu-chi ngày (THU_QUY/TP_KE/TP_GS/Lãnh đạo; TP_KE có check/return).
+  { route: 'bao-cao-thu-chi',                    section: 'Tài chính kế toán', label: 'Báo cáo thu-chi', icon: 'file-bar',
+    keywords: ['bao cao thu chi', 'bao cao thu chi ngay', 'cashflow report', 'thu quy', 'kiem tra bao cao', 'tra lai bao cao'] },
+
   // PR-7A (2026-06-22): Audit History UI cho Sales V2 (salesAuditLogs).
   // Permission: ADMIN/CEO/CHU_TICH/GD_KD/GD_VP/TP_KE/TP_GS — sidebar tự filter qua allowed set.
   { route: 'audit-history', section: 'Giám sát', label: 'Lịch sử thao tác', icon: 'shield',

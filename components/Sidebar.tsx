@@ -168,6 +168,11 @@ const MENU_SECTIONS: MenuSection[] = [
           //   - NV_SALE / TP_GS / THU_QUY: KHÔNG có permission → KHÔNG render entry.
           //     THU_QUY view màn Báo cáo thu-chi sẽ làm ở PR-CASH1D (route khác).
           { route: 'chi-phi-co-so',                     label: 'Chi phí cơ sở',          icon: Receipt },
+          // PR-CASH1D (2026-06-23): View báo cáo thu-chi đã nộp.
+          //   - THU_QUY/TP_KE/lãnh đạo (ADMIN/CEO/CHU_TICH/GD_KD/GD_VP) = view + TP_KE check/return.
+          //   - TP_GS: parent hideForRoles=TP_GS → KHÔNG hiện ở đây; entry riêng dưới "Giám sát" bên dưới.
+          //   - QLCS: parent hideForRoles=QLCS_* → KHÔNG hiện ở sidebar; URL trực tiếp vẫn vào (view own).
+          { route: 'bao-cao-thu-chi',                   label: 'Báo cáo thu-chi',        icon: FileBarChart },
           // PR-7A (2026-06-22): TCKT thấy "Lịch sử thao tác" — TP_KE + top role (đã có permission).
           // GD_VP có entry này (cùng cấp với GD_KD). Sale/QLCS/TP_GS bị hideForRoles ở parent → KHÔNG thấy.
           { route: 'audit-history', label: 'Lịch sử thao tác', icon: History,
@@ -189,6 +194,8 @@ const MENU_SECTIONS: MenuSection[] = [
           // queryParams=?filter=active auto-focus tab "Đang áp dụng" (PR-PROMO1A).
           { route: 'doanh-so-v2/chuong-trinh', label: 'Khuyến mãi đang áp dụng', icon: Tag,
             queryParams: '?filter=active' },
+          // PR-CASH1D (2026-06-23): TP_GS giám sát báo cáo thu-chi — read-only (server enforce).
+          { route: 'bao-cao-thu-chi',      label: 'Báo cáo thu-chi',         icon: FileBarChart },
         ],
       },
       // Nhân sự → /sodo (sơ đồ tổ chức)

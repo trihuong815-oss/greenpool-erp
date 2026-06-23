@@ -94,9 +94,51 @@ export async function deleteDraftExpense(id: string): Promise<{ ok: true }> {
   return jsonOrError(r);
 }
 
-export async function listCashflowReports(date: string, branchId: BranchId): Promise<{ ok: true; count: number; reports: Array<DailyCashflowReportDoc & { id: string }> }> {
-  const qs = new URLSearchParams({ date, branchId });
+export interface ListReportsParams {
+  date?: string;
+  month?: string;
+  branchId?: BranchId | null;
+  status?: string;
+}
+
+export async function listCashflowReports(
+  paramsOrDate: ListReportsParams | string,
+  branchId?: BranchId,
+): Promise<{ ok: true; count: number; reports: Array<DailyCashflowReportDoc & { id: string }> }> {
+  const qs = new URLSearchParams();
+  if (typeof paramsOrDate === 'string') {
+    qs.set('date', paramsOrDate);
+    if (branchId) qs.set('branchId', branchId);
+  } else {
+    if (paramsOrDate.date) qs.set('date', paramsOrDate.date);
+    if (paramsOrDate.month) qs.set('month', paramsOrDate.month);
+    if (paramsOrDate.branchId) qs.set('branchId', paramsOrDate.branchId);
+    if (paramsOrDate.status) qs.set('status', paramsOrDate.status);
+  }
   const r = await fetch(`/api/finance/cashflow-reports?${qs.toString()}`);
+  return jsonOrError(r);
+}
+
+export async function getCashflowReport(id: string): Promise<{ ok: true; report: DailyCashflowReportDoc & { id: string } }> {
+  const r = await fetch(`/api/finance/cashflow-reports/${encodeURIComponent(id)}`);
+  return jsonOrError(r);
+}
+
+export async function checkCashflowReport(id: string, note?: string): Promise<{ ok: true; status: string }> {
+  const r = await fetch(`/api/finance/cashflow-reports/${encodeURIComponent(id)}/check`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ note: note ?? '' }),
+  });
+  return jsonOrError(r);
+}
+
+export async function returnCashflowReport(id: string, reason: string): Promise<{ ok: true; status: string }> {
+  const r = await fetch(`/api/finance/cashflow-reports/${encodeURIComponent(id)}/return`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ reason }),
+  });
   return jsonOrError(r);
 }
 
