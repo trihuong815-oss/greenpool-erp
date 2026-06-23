@@ -3,6 +3,7 @@
 // Mapping 1:1 với API response của GET /api/sales-v2/monthly-summary.
 
 import type { SalesV2Source } from '@/lib/types/sales-v2';
+import type { AdHocSummary } from '@/lib/sales-v2/ad-hoc-discount';
 
 export interface SaleCustomerTx {
   id: string;
@@ -124,6 +125,10 @@ export interface Summary {
    *  - Empty {} nếu chưa đặt target Sale nào.
    */
   saleTargetsThisMonth?: Record<string, number>;
+  /** PR-PROMO2-B (2026-06-23): báo cáo read-only ưu đãi ngoài chương trình.
+   *  - undefined nếu role='sale' (SaleView không hiện card) hoặc không có raw tx
+   *  - undefined nếu compute fail (fail-soft) */
+  adHocSummary?: AdHocSummary;
 }
 
 // ─── PR-TK3A (2026-06-21) — Target types ───

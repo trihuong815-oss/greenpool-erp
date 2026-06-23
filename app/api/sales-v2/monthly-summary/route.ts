@@ -24,6 +24,7 @@ import { getAuthedCaller, UnauthorizedError } from '@/lib/firebase/checklist-aut
 import { getScopeRole } from '@/lib/sales-v2/scope';
 import { isBranchId, BRANCHES, type BranchId } from '@/lib/branches';
 import { fetchFreshPackageMap, applyFreshPackageName, collectPackageIds } from '@/lib/sales-v2/resolve-package-names';
+import { buildAdHocSummary, type AdHocTxInput, type AdHocPackageInput } from '@/lib/sales-v2/ad-hoc-discount';
 import { getMonthLockState } from '@/lib/sales-v2/month-lock';
 import { buildTargetSummary, parseMonth, type TargetScope } from '@/lib/sales-v2/target-progress';
 import type { SalesV2Source } from '@/lib/types/sales-v2';
@@ -159,6 +160,11 @@ export async function GET(req: NextRequest) {
     }
     const salesCustomers: Record<string, SaleCustomers> = {};
 
+    // PR-PROMO2-B (2026-06-23): collect raw tx data cho ad-hoc discount detection.
+    // Skip role='sale' (SaleView không hiện card). Compute sau loop với packages map.
+    const adHocRawTxs: AdHocTxInput[] = [];
+    const adHocPkgIds = new Set<string>();
+
     for (const d of snap.docs) {
       const x = d.data() as Record<string, any>;
       // BUG-2: filter branchId client-side
@@ -237,6 +243,35 @@ export async function GET(req: NextRequest) {
       if (txType === 'dat_coc') {
         totals.debtGenerated += originalDebt;
         totals.debtRemaining += debt;
+      }
+
+      // PR-PROMO2-B: collect raw tx cho ad-hoc detect (sau loop). Skip role='sale'
+      // (SaleView không hiện card). Helper skip thanh_toan_not + manual mode tự động.
+      if (role !== 'sale') {
+        const pkgIdRaw = String(x.packageId ?? '');
+        if (pkgIdRaw) adHocPkgIds.add(pkgIdRaw);
+        adHocRawTxs.push({
+          id: d.id,
+          date: String(x.date ?? ''),
+          branchId: x.branchId,
+          saleId: String(x.saleId ?? ''),
+          saleName: String(x.saleName ?? ''),
+          customerName: String(x.customerName ?? ''),
+          phone: String(x.phone ?? ''),
+          packageId: pkgIdRaw,
+          packageName: String(x.packageName ?? ''),
+          transactionType: txType,
+          packageValue: pv,
+          basePackageValue: Number(x.basePackageValue ?? pv),
+          quantity: x.quantity != null ? Number(x.quantity) : null,
+          unitPrice: x.unitPrice != null ? Number(x.unitPrice) : null,
+          promoSnapshots: Array.isArray(x.promoSnapshots) ? x.promoSnapshots : [],
+          packageIsCustomQuantity: x.packageIsCustomQuantity === true,
+          packageManualPriceWithQty: x.packageManualPriceWithQty === true,
+          packageUnitName: String(x.packageUnitName ?? ''),
+          reviewStatus: String(x.reviewStatus ?? ''),
+          note: x.note ?? null,
+        });
       }
 
       // BUG-4 audit fix: thanh_toan_not = trả nốt, KHÔNG tính vào bySource/byPackage
@@ -514,6 +549,45 @@ export async function GET(req: NextRequest) {
 
     const targetSummary = buildTargetSummary(targetScope, targetRevenue, totals.sales, month);
 
+    // ─── PR-PROMO2-B (2026-06-23) — Ad-hoc discount summary ─────────────────
+    // Compute on-read theo defaultPrice/defaultUnitPrice của package hiện tại.
+    // Trade-off: admin đổi giá gói SAU khi tx tạo → flag retrospective có thể đổi
+    // (note rõ trong response.adHocSummary.tradeOffNote).
+    // Build batchStatusMap từ batchSnap (đã fetch ở phần batchStats trên).
+    // Sale role không cần ad-hoc summary (collect skip ở loop) → undefined response.
+    let adHocSummary: ReturnType<typeof buildAdHocSummary> | undefined;
+    if (role !== 'sale' && adHocRawTxs.length > 0) {
+      try {
+        // Fetch packages map với full schema (defaultPrice, defaultUnitPrice, isCustomQuantity, manualPriceWithQuantity)
+        const pkgMap = new Map<string, AdHocPackageInput>();
+        const ids = Array.from(adHocPkgIds);
+        const CHUNK = 500;
+        for (let i = 0; i < ids.length; i += CHUNK) {
+          const chunk = ids.slice(i, i + CHUNK);
+          const refs = chunk.map((id) => db.collection(COLLECTIONS.PACKAGES).doc(id));
+          const snaps = await db.getAll(...refs);
+          for (const s of snaps) {
+            if (!s.exists) continue;
+            const data = s.data() ?? {};
+            pkgMap.set(s.id, {
+              id: s.id,
+              defaultPrice: data.defaultPrice != null ? Number(data.defaultPrice) : undefined,
+              defaultUnitPrice: data.defaultUnitPrice != null ? Number(data.defaultUnitPrice) : undefined,
+              isCustomQuantity: data.isCustomQuantity === true,
+              manualPriceWithQuantity: data.manualPriceWithQuantity === true,
+            });
+          }
+        }
+        // Build batchStatusMap: txId → batchStatus. Cần re-fetch batches theo txId
+        // KHÔNG có sẵn. Skip cho PR đầu — UI fallback empty string. PR-PROMO2-C có thể wire.
+        const batchStatusMap = new Map<string, string>();
+        adHocSummary = buildAdHocSummary(adHocRawTxs, pkgMap, batchStatusMap);
+      } catch (e) {
+        console.warn('[monthly-summary] adHocSummary fail (swallowed):', (e as Error)?.message);
+        adHocSummary = undefined;
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       month,
@@ -542,6 +616,8 @@ export async function GET(req: NextRequest) {
       // ─── PR-TK3A (2026-06-21) — Chỉ tiêu (read-only) ───
       targetSummary,
       saleTargetsThisMonth,
+      // ─── PR-PROMO2-B (2026-06-23) — Ad-hoc discount report (read-only) ───
+      adHocSummary,
     });
   } catch (err: any) {
     if (err instanceof UnauthorizedError) {

@@ -23,6 +23,7 @@ import SaleRankingTable from '../SaleRankingTable';
 import SourceBreakdownCard from '../SourceBreakdownCard';
 import TopPackagesCard from '../TopPackagesCard';
 import PromoEffectivenessCard from '../PromoEffectivenessCard';
+import AdHocDiscountCard from '../AdHocDiscountCard';
 import type { Summary } from '../types';
 
 interface Props {
@@ -78,6 +79,9 @@ export default function TopExecutiveView({ data, month, scopeBranchId }: Props) 
           totalSystemSales={data.totals.sales}
         />
       )}
+
+      {/* PR-PROMO2-B (2026-06-23): Ưu đãi ngoài CT cần kiểm tra (read-only) */}
+      {data.adHocSummary && <AdHocDiscountCard data={data.adHocSummary} />}
     </>
   );
 }

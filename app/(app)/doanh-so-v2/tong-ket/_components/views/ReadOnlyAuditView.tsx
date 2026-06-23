@@ -38,6 +38,7 @@ import SaleRankingTable from '../SaleRankingTable';
 import SourceBreakdownCard from '../SourceBreakdownCard';
 import TopPackagesCard from '../TopPackagesCard';
 import PromoEffectivenessCard from '../PromoEffectivenessCard';
+import AdHocDiscountCard from '../AdHocDiscountCard';
 import ReadOnlyBanner from '../ReadOnlyBanner';
 import type { Summary } from '../types';
 
@@ -93,6 +94,9 @@ export default function ReadOnlyAuditView({ data, month, scopeBranchId }: Props)
           totalSystemSales={data.totals.sales}
         />
       )}
+
+      {/* PR-PROMO2-B (2026-06-23): Ưu đãi ngoài CT cần kiểm tra (TP_GS read-only) */}
+      {data.adHocSummary && <AdHocDiscountCard data={data.adHocSummary} />}
     </>
   );
 }
