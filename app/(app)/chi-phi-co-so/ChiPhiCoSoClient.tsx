@@ -1,14 +1,14 @@
 'use client';
 
-// PR-CASH1C-REFINE: Orchestrator UI Chi phí cơ sở — CHỈ NGHIỆP VỤ CHI.
+// PR-CASH1C-GRID (2026-06-23) — Orchestrator UI Chi phí cơ sở dạng SỔ CHI BẢNG DÒNG.
 //
-// THAY ĐỔI vs PR-CASH1C gốc:
-//  - BỎ DailyRevenueSummaryCard (số thu thuộc Đối chiếu doanh số / Tổng hợp doanh thu ngày)
-//  - BỎ CashflowPreviewCard (Thu-Chi-Net thuộc /bao-cao-thu-chi)
-//  - BỎ SubmitCashflowReportCard (nút Nộp báo cáo chuyển sang /bao-cao-thu-chi)
-//  - BỎ CashflowReportResultCard (kết quả báo cáo thuộc /bao-cao-thu-chi)
-//  + THÊM ExpenseStatusSummary (chỉ tổng chi 4 method + count theo status)
-//  + THÊM khối hướng dẫn nghiệp vụ phân tách rõ Chi phí cơ sở ↔ Báo cáo thu-chi
+// /chi-phi-co-so chỉ nghiệp vụ CHI:
+//  - Filter ngày + cơ sở
+//  - Hướng dẫn nghiệp vụ (link sang /bao-cao-thu-chi cho THU + Net + Báo cáo)
+//  - ExpenseLedgerGrid: bảng inline-editable, nhập liên tục, auto-add row sau lưu/ghi nhận
+//  - ExpenseStatusSummary: tổng chi 4 method + count theo status (CHỈ CHI)
+//
+// KHÔNG có: Tổng thu, Thu-Chi-Net, Nộp báo cáo thu-chi, Duyệt chi.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -21,15 +21,14 @@ import {
   type ExpenseDoc,
 } from '@/lib/services/finance/api-client';
 
-import { ExpenseForm } from './_components/ExpenseForm';
-import { ExpenseList } from './_components/ExpenseList';
+import { ExpenseLedgerGrid } from './_components/ExpenseLedgerGrid';
 import { ExpenseStatusSummary } from './_components/ExpenseStatusSummary';
 
 interface Props {
   myRoleCode: string;
   myBranchId: BranchId | null;
-  canEdit: boolean;            // NV_KE + ADMIN
-  canSelectBranch: boolean;    // top role
+  canEdit: boolean;
+  canSelectBranch: boolean;
 }
 
 function todayVN(): string {
@@ -46,23 +45,22 @@ export default function ChiPhiCoSoClient({ myRoleCode, myBranchId, canEdit, canS
 
   const [date, setDate] = useState<string>(todayVN());
   const [branchId, setBranchId] = useState<BranchId | null>(initialBranch);
-  const [editing, setEditing] = useState<ExpenseDoc | null>(null);
 
   const [expenses, setExpenses] = useState<ExpenseDoc[]>([]);
-  const [expLoading, setExpLoading] = useState(false);
-  const [expError, setExpError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const loadExpenses = useCallback(async () => {
+  const load = useCallback(async () => {
     if (!branchId) return;
-    setExpLoading(true); setExpError(null);
+    setLoading(true); setError(null);
     try {
       const r = await listExpenses(date, branchId);
       setExpenses(r.expenses ?? []);
-    } catch (e: any) { setExpError(e?.message ?? 'Lỗi tải phiếu chi'); setExpenses([]); }
-    finally { setExpLoading(false); }
+    } catch (e: any) { setError(e?.message ?? 'Lỗi tải phiếu chi'); setExpenses([]); }
+    finally { setLoading(false); }
   }, [date, branchId]);
 
-  useEffect(() => { loadExpenses(); }, [loadExpenses]);
+  useEffect(() => { load(); }, [load]);
 
   const branchName = useMemo(() => branchId ? (BRANCH_BY_ID[branchId]?.name ?? branchId) : '', [branchId]);
 
@@ -79,7 +77,7 @@ export default function ChiPhiCoSoClient({ myRoleCode, myBranchId, canEdit, canS
             <input
               type="date"
               value={date}
-              onChange={(e) => { setDate(e.target.value); setEditing(null); }}
+              onChange={(e) => setDate(e.target.value)}
               className="h-9 px-3 text-sm rounded-lg ring-1 ring-slate-200 focus:ring-2 focus:ring-emerald-400 focus:outline-none"
             />
           </div>
@@ -100,7 +98,7 @@ export default function ChiPhiCoSoClient({ myRoleCode, myBranchId, canEdit, canS
             )}
           </div>
           <div className="ml-auto text-xs text-slate-500">
-            Bạn đang đăng nhập với vai trò: <span className="font-mono text-slate-700">{myRoleCode}</span>
+            Vai trò: <span className="font-mono text-slate-700">{myRoleCode}</span>
             {!canEdit && <span className="ml-2 text-amber-700">• View-only</span>}
           </div>
         </div>
@@ -110,12 +108,16 @@ export default function ChiPhiCoSoClient({ myRoleCode, myBranchId, canEdit, canS
       <div className="rounded-lg bg-sky-50 ring-1 ring-sky-200 px-4 py-3 flex items-start gap-3 text-sm">
         <Info size={16} className="text-sky-600 shrink-0 mt-0.5" />
         <div className="text-sky-900">
-          <div className="font-semibold mb-0.5">Đây là màn ghi nhận các khoản chi thực tế của cơ sở.</div>
+          <div className="font-semibold mb-0.5">
+            Đây là Sổ chi tiết các khoản CHI của cơ sở — mỗi dòng = một phiếu chi.
+          </div>
           <div className="text-xs text-sky-800">
             Phần doanh thu và báo cáo thu-chi tổng hợp được xem tại{' '}
             <Link href="/bao-cao-thu-chi" className="font-semibold underline-offset-2 hover:underline inline-flex items-center gap-1">
               <FileBarChart size={12} /> Báo cáo thu-chi
-            </Link>.
+            </Link>
+            . Nhập xong một dòng và bấm <strong>Lưu nháp</strong> / <strong>Ghi nhận chi</strong>,
+            hệ thống tự thêm dòng mới bên dưới để nhập tiếp.
           </div>
         </div>
       </div>
@@ -126,27 +128,18 @@ export default function ChiPhiCoSoClient({ myRoleCode, myBranchId, canEdit, canS
         </div>
       ) : (
         <>
-          {canEdit && (
-            <ExpenseForm
-              date={date}
-              branchId={branchId}
-              branchName={branchName}
-              editing={editing}
-              onCancelEdit={() => setEditing(null)}
-              onSaved={() => { toast.success(editing ? 'Đã cập nhật phiếu chi' : 'Đã lưu phiếu chi'); loadExpenses(); setEditing(null); }}
-              onError={(msg) => toast.error(msg)}
-            />
-          )}
-
-          <ExpenseList
+          <ExpenseLedgerGrid
+            date={date}
+            branchId={branchId}
+            branchName={branchName}
             expenses={expenses}
-            loading={expLoading}
-            error={expError}
-            canMutate={canEdit}
-            onRefresh={loadExpenses}
-            onEdit={(e) => { setEditing(e); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-            onChanged={() => { toast.success('Cập nhật xong'); loadExpenses(); }}
+            loading={loading}
+            error={error}
+            canEdit={canEdit}
+            onRefresh={load}
+            onChanged={load}
             onError={(msg) => toast.error(msg)}
+            onSuccess={(msg) => toast.success(msg)}
           />
 
           <ExpenseStatusSummary expenses={expenses} />
