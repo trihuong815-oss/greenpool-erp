@@ -124,11 +124,14 @@ describe('canReturnDailyCashflowReport', () => {
 
 // ─── canLockDailyCashflowReport ────────────────────────────────────────
 
-describe('canLockDailyCashflowReport (defer detail PR-CASH1E)', () => {
-  it('ADMIN → true', () => expect(canLockDailyCashflowReport('ADMIN')).toBe(true));
-  it('TP_KE → true', () => expect(canLockDailyCashflowReport('TP_KE')).toBe(true));
+describe('canLockDailyCashflowReport (PR-CASH1F)', () => {
+  it('ADMIN + checked → true', () => expect(canLockDailyCashflowReport('ADMIN', report('checked'))).toBe(true));
+  it('TP_KE + checked → true', () => expect(canLockDailyCashflowReport('TP_KE', report('checked'))).toBe(true));
+  it('TP_KE + submitted → false (status không hợp lệ)', () =>
+    expect(canLockDailyCashflowReport('TP_KE', report('submitted'))).toBe(false));
   it.each(['NV_KE', 'TP_GS', 'THU_QUY', 'QLCS_HM', 'CEO', 'CHU_TICH', 'GD_KD'])(
-    '%s → false', (role) => expect(canLockDailyCashflowReport(role)).toBe(false),
+    '%s + checked → false (role không hợp lệ)', (role) =>
+      expect(canLockDailyCashflowReport(role, report('checked'))).toBe(false),
   );
 });
 

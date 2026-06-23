@@ -127,6 +127,15 @@ export async function returnCashflowReport(id: string, reason: string): Promise<
   return jsonOrError(r);
 }
 
+// PR-CASH1F (2026-06-23): khóa báo cáo thu-chi (TP_KE/ADMIN, status=checked).
+export async function lockCashflowReport(id: string): Promise<{ ok: true; status: 'locked'; lockedAt: string; lockedByName: string }> {
+  const r = await fetch(`/api/finance/cashflow-reports/${encodeURIComponent(id)}/lock`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+  });
+  return jsonOrError(r);
+}
+
 export async function submitDailyCashflowReport(date: string, branchId: BranchId): Promise<SubmitReportResponse> {
   const r = await fetch('/api/finance/cashflow-reports/submit', {
     method: 'POST',

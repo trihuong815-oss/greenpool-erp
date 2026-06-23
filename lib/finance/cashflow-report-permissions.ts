@@ -63,12 +63,15 @@ export function canReturnDailyCashflowReport(
   return ['submitted', 'sent', 'checked'].includes(report.status);
 }
 
-/** Lock báo cáo: defer PR-CASH1E. PR-CASH1B chỉ ADMIN allowed stub. */
+/** PR-CASH1F (2026-06-23): Lock báo cáo — chỉ TP_KE/ADMIN, và chỉ khi report đã 'checked'.
+ *  Sau lock: dailyCashflowReports.status='locked' → chặn mọi mutation expense ngày đó. */
 export function canLockDailyCashflowReport(
   roleCode: string | null | undefined,
+  report: Pick<DailyCashflowReportDoc, 'status'>,
 ): boolean {
   if (!roleCode) return false;
-  return roleCode === 'ADMIN' || roleCode === 'TP_KE';
+  if (roleCode !== 'ADMIN' && roleCode !== 'TP_KE') return false;
+  return report.status === 'checked';
 }
 
 /** Branch filter cho list query. */

@@ -19,6 +19,7 @@ interface Props {
   myRoleCode: string;
   myBranchId: BranchId | null;
   canCheckReturn: boolean;     // TP_KE / ADMIN
+  canLock: boolean;            // PR-CASH1F: TP_KE / ADMIN
   canSubmit: boolean;          // NV_KE / ADMIN — PR-CASH1C-REFINE
   canSelectBranch: boolean;    // top role + THU_QUY + TP_KE + TP_GS
   showSummaryCards: boolean;   // multi-branch viewers (top + THU_QUY + TP_KE + TP_GS)
@@ -29,7 +30,7 @@ function todayVN(): string {
   return new Date(ms).toISOString().slice(0, 10);
 }
 
-export default function BaoCaoThuChiClient({ myRoleCode, myBranchId, canCheckReturn, canSubmit, canSelectBranch, showSummaryCards }: Props) {
+export default function BaoCaoThuChiClient({ myRoleCode, myBranchId, canCheckReturn, canLock, canSubmit, canSelectBranch, showSummaryCards }: Props) {
   const toast = useToast();
   type Doc = DailyCashflowReportDoc & { id: string };
 
@@ -133,6 +134,7 @@ export default function BaoCaoThuChiClient({ myRoleCode, myBranchId, canCheckRet
         <CashflowReportDetailDrawer
           reportId={openId}
           canCheckReturn={canCheckReturn}
+          canLock={canLock}
           onClose={() => setOpenId(null)}
           onChanged={() => { toast.success('Cập nhật thành công'); load(); }}
           onError={(msg) => toast.error(msg)}

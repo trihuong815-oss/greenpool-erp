@@ -3,17 +3,18 @@
 // PR-CASH1D: Detail drawer hiển thị 1 báo cáo thu-chi + 2 action TP_KE (Kiểm tra / Trả lại).
 
 import { useEffect, useState } from 'react';
-import { X, CheckCircle, RotateCcw, Loader2, AlertTriangle } from 'lucide-react';
+import { X, CheckCircle, RotateCcw, Loader2, AlertTriangle, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import type { DailyCashflowReportDoc, DailyCashflowReportStatus } from '@/lib/finance/cashflow-report-types';
 import { DAILY_CASHFLOW_REPORT_STATUS_LABEL, CASHFLOW_ALERT_LABEL } from '@/lib/finance/cashflow-report-types';
-import { getCashflowReport, checkCashflowReport, returnCashflowReport } from '@/lib/services/finance/api-client';
+import { getCashflowReport, checkCashflowReport, returnCashflowReport, lockCashflowReport } from '@/lib/services/finance/api-client';
 
 interface Props {
   reportId: string;
   canCheckReturn: boolean;   // TP_KE only (server cũng enforce)
+  canLock: boolean;          // PR-CASH1F (2026-06-23): TP_KE/ADMIN
   onClose: () => void;
-  onChanged: () => void;     // sau khi check/return → refresh list ngoài
+  onChanged: () => void;     // sau khi check/return/lock → refresh list ngoài
   onError: (msg: string) => void;
 }
 
@@ -28,6 +29,8 @@ const STATUS_PILL: Record<DailyCashflowReportStatus, string> = {
 
 const CHECKABLE_STATUSES: ReadonlyArray<DailyCashflowReportStatus> = ['submitted', 'sent'];
 const RETURNABLE_STATUSES: ReadonlyArray<DailyCashflowReportStatus> = ['submitted', 'sent', 'checked'];
+// PR-CASH1F (2026-06-23): lock chỉ khi status='checked'.
+const LOCKABLE_STATUSES: ReadonlyArray<DailyCashflowReportStatus> = ['checked'];
 
 function fmt(n: number): string { return n.toLocaleString('vi-VN'); }
 function tsLabel(v: any): string {
@@ -38,9 +41,9 @@ function tsLabel(v: any): string {
   try { return new Date(v).toLocaleString('vi-VN'); } catch { return ''; }
 }
 
-type ActionModal = null | 'check' | 'return';
+type ActionModal = null | 'check' | 'return' | 'lock';
 
-export function CashflowReportDetailDrawer({ reportId, canCheckReturn, onClose, onChanged, onError }: Props) {
+export function CashflowReportDetailDrawer({ reportId, canCheckReturn, canLock, onClose, onChanged, onError }: Props) {
   const [data, setData] = useState<(DailyCashflowReportDoc & { id: string }) | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionModal, setActionModal] = useState<ActionModal>(null);
@@ -88,9 +91,22 @@ export function CashflowReportDetailDrawer({ reportId, canCheckReturn, onClose, 
     finally { setActionBusy(false); }
   }
 
+  // PR-CASH1F (2026-06-23): khóa báo cáo (TP_KE/ADMIN, status=checked).
+  async function doLock() {
+    setActionBusy(true);
+    try {
+      await lockCashflowReport(reportId);
+      setActionModal(null);
+      onChanged(); await reload();
+    } catch (e: any) { onError(e?.message ?? 'Lỗi khóa báo cáo'); }
+    finally { setActionBusy(false); }
+  }
+
   const r = data;
   const showCheck = canCheckReturn && r && CHECKABLE_STATUSES.includes(r.status);
   const showReturn = canCheckReturn && r && RETURNABLE_STATUSES.includes(r.status);
+  const showLock   = canLock        && r && LOCKABLE_STATUSES.includes(r.status);
+  const isLocked   = r?.status === 'locked';
 
   return (
     <div className="fixed inset-0 z-50 flex items-stretch justify-end bg-slate-900/40">
@@ -110,12 +126,13 @@ export function CashflowReportDetailDrawer({ reportId, canCheckReturn, onClose, 
         ) : (
           <div className="p-5 space-y-4">
             {/* Action bar */}
-            {canCheckReturn && (
+            {(canCheckReturn || canLock) && !isLocked && (
               <div className="card flex flex-wrap items-center justify-between gap-3 border-2 border-emerald-100">
                 <div className="text-sm text-slate-700">
-                  Bạn có quyền <strong>kiểm tra</strong> hoặc <strong>trả lại</strong> báo cáo này.
+                  Bạn có quyền <strong>kiểm tra</strong>, <strong>trả lại</strong>
+                  {canLock ? <>, hoặc <strong>khóa</strong></> : null} báo cáo này.
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   {showCheck && (
                     <Button variant="primary" size="sm" leftIcon={<CheckCircle size={14} />} onClick={() => setActionModal('check')}>
                       Đánh dấu đã kiểm tra
@@ -126,6 +143,26 @@ export function CashflowReportDetailDrawer({ reportId, canCheckReturn, onClose, 
                       Trả lại để bổ sung
                     </Button>
                   )}
+                  {showLock && (
+                    <Button variant="secondary" size="sm" leftIcon={<Lock size={14} />} onClick={() => setActionModal('lock')}>
+                      Khóa báo cáo
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Locked banner */}
+            {isLocked && (
+              <div className="rounded-lg bg-violet-50 ring-1 ring-violet-200 px-4 py-3 flex items-start gap-3 text-sm">
+                <Lock size={16} className="text-violet-700 shrink-0 mt-0.5" />
+                <div className="text-violet-900">
+                  <div className="font-semibold mb-0.5">Báo cáo đã khóa.</div>
+                  <div className="text-xs text-violet-800">
+                    Kế toán cơ sở không thể chỉnh sửa chi phí hoặc nộp lại báo cáo ngày này.
+                    {r.lockedByName ? <> Người khóa: <strong>{r.lockedByName}</strong>.</> : null}
+                    {r.lockedAt ? <> Thời gian: {tsLabel(r.lockedAt)}.</> : null}
+                  </div>
                 </div>
               </div>
             )}
@@ -260,6 +297,19 @@ export function CashflowReportDetailDrawer({ reportId, canCheckReturn, onClose, 
           </p>
           <label className="block text-xs font-medium text-slate-600 mb-1">Lý do trả lại <span className="text-rose-600">*</span></label>
           <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} placeholder="VD: thiếu phiếu chi vật tư đã thanh toán; số liệu doanh thu chưa khớp..." maxLength={500} className="w-full text-sm px-3 py-2 rounded-lg ring-1 ring-rose-200 focus:ring-2 focus:ring-rose-400 focus:outline-none" />
+        </ActionModal>
+      )}
+
+      {/* PR-CASH1F (2026-06-23): Khóa báo cáo modal */}
+      {actionModal === 'lock' && (
+        <ActionModal title="Khóa báo cáo" tone="primary" busy={actionBusy} onClose={() => setActionModal(null)} onConfirm={doLock} confirmLabel="Khóa báo cáo">
+          <p className="text-sm text-slate-600 mb-3">
+            Sau khi khóa, <strong>kế toán cơ sở không thể sửa chi phí</strong> hoặc <strong>nộp lại báo cáo</strong> ngày này.
+            Bạn chắc chắn muốn khóa?
+          </p>
+          <p className="text-xs text-slate-500">
+            Hành động này được ghi audit log. Mở khóa cần thao tác riêng từ Admin.
+          </p>
         </ActionModal>
       )}
     </div>

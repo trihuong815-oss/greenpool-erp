@@ -138,7 +138,7 @@ export function ExpenseLedgerGrid({
   const newRowFocusRef = useRef<HTMLInputElement | null>(null);
   const pendingFocusLocalIdRef = useRef<string | null>(null);
 
-  // Sync server data → state rows. Preserve local rows chưa save.
+  // Sync server data → state rows. Preserve local rows chưa save (chỉ khi canEdit).
   useEffect(() => {
     setRows((prev) => {
       const serverRows: RowState[] = expenses.map((d) => ({
@@ -149,7 +149,8 @@ export function ExpenseLedgerGrid({
         busy: null,
         error: null,
       }));
-      const keptLocal = prev.filter((r) => r.kind === 'local');
+      // PR-CASH1F: khi canEdit=false (view-only hoặc locked) → KHÔNG giữ local rows.
+      const keptLocal = canEdit ? prev.filter((r) => r.kind === 'local') : [];
       // Đảm bảo luôn có ít nhất 1 dòng local trống ở cuối (nếu canEdit).
       const trailing: RowState[] = (canEdit && (keptLocal.length === 0 || keptLocal.some((r) => r.busy !== null || r.error !== null)))
         ? [{ kind: 'local', id: nextLocalId(), draft: emptyDraft(date), busy: null, error: null }]

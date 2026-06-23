@@ -12,12 +12,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Filter, FileBarChart, Info } from 'lucide-react';
+import { Filter, FileBarChart, Info, Lock } from 'lucide-react';
 import type { BranchId } from '@/lib/branches';
 import { BRANCHES, BRANCH_BY_ID, isBranchId } from '@/lib/branches';
 import { useToast } from '@/components/ui/Toast';
 import {
   listExpenses,
+  listCashflowReports,
   type ExpenseDoc,
 } from '@/lib/services/finance/api-client';
 
@@ -50,13 +51,32 @@ export default function ChiPhiCoSoClient({ myRoleCode, myBranchId, canEdit, canS
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // PR-CASH1F (2026-06-23): biết trạng thái khóa của ngày/cơ sở để khóa UI.
+  const [isLocked, setIsLocked] = useState(false);
+  const [lockedByName, setLockedByName] = useState<string | null>(null);
+  const [lockedAt, setLockedAt] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     if (!branchId) return;
     setLoading(true); setError(null);
     try {
-      const r = await listExpenses(date, branchId);
+      const [r, reportR] = await Promise.all([
+        listExpenses(date, branchId),
+        listCashflowReports({ date, branchId }).catch(() => ({ reports: [] as any[] })),
+      ]);
       setExpenses(r.expenses ?? []);
-    } catch (e: any) { setError(e?.message ?? 'Lỗi tải phiếu chi'); setExpenses([]); }
+      const match = (reportR.reports ?? []).find((x: any) => x.date === date && x.branchId === branchId);
+      const locked = match?.status === 'locked';
+      setIsLocked(locked);
+      setLockedByName(locked ? (match?.lockedByName ?? null) : null);
+      setLockedAt(locked ? (match?.lockedAt?._seconds
+        ? new Date(match.lockedAt._seconds * 1000).toLocaleString('vi-VN')
+        : (match?.lockedAt ? String(match.lockedAt).slice(0, 16).replace('T', ' ') : null)) : null);
+    } catch (e: any) {
+      setError(e?.message ?? 'Lỗi tải phiếu chi');
+      setExpenses([]);
+      setIsLocked(false);
+    }
     finally { setLoading(false); }
   }, [date, branchId]);
 
@@ -128,6 +148,21 @@ export default function ChiPhiCoSoClient({ myRoleCode, myBranchId, canEdit, canS
         </div>
       ) : (
         <>
+          {/* PR-CASH1F (2026-06-23): banner ngày đã khóa */}
+          {isLocked && (
+            <div className="rounded-lg bg-violet-50 ring-1 ring-violet-200 px-4 py-3 flex items-start gap-3 text-sm">
+              <Lock size={16} className="text-violet-700 shrink-0 mt-0.5" />
+              <div className="text-violet-900">
+                <div className="font-semibold mb-0.5">Ngày này đã khóa báo cáo thu-chi.</div>
+                <div className="text-xs text-violet-800">
+                  Bạn chỉ có thể xem, không thể thêm/sửa/ghi nhận chi phí.
+                  {lockedByName ? <> Người khóa: <strong>{lockedByName}</strong>.</> : null}
+                  {lockedAt ? <> Thời gian: {lockedAt}.</> : null}
+                </div>
+              </div>
+            </div>
+          )}
+
           <ExpenseLedgerGrid
             date={date}
             branchId={branchId}
@@ -135,7 +170,7 @@ export default function ChiPhiCoSoClient({ myRoleCode, myBranchId, canEdit, canS
             expenses={expenses}
             loading={loading}
             error={error}
-            canEdit={canEdit}
+            canEdit={canEdit && !isLocked}
             onRefresh={load}
             onChanged={load}
             onError={(msg) => toast.error(msg)}

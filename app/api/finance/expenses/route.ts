@@ -13,6 +13,8 @@ import {
   canCreateExpense,
   getExpenseBranchScope,
 } from '@/lib/finance/expense-permissions';
+// PR-CASH1F (2026-06-23): chặn create expense khi ngày/cơ sở đã khóa báo cáo.
+import { assertDailyCashflowDateNotLocked, CashflowLockedError } from '@/lib/finance/cashflow-lock';
 import {
   VALID_EXPENSE_PAYMENT_METHODS,
   VALID_EXPENSE_CATEGORIES,
@@ -74,9 +76,20 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Validate voucherNo uniqueness within (branchId, month) — chốt #11
     const month = date.slice(0, 7);
     const db = getFirebaseAdminDb();
+
+    // PR-CASH1F (2026-06-23): chặn create khi ngày/cơ sở đã khóa báo cáo thu-chi.
+    try {
+      await assertDailyCashflowDateNotLocked(db, branchId as any, date);
+    } catch (e) {
+      if (e instanceof CashflowLockedError) {
+        return NextResponse.json({ error: e.message }, { status: e.status });
+      }
+      throw e;
+    }
+
+    // Validate voucherNo uniqueness within (branchId, month) — chốt #11
     const dupSnap = await db.collection(COLLECTIONS.BRANCH_DAILY_EXPENSES)
       .where('branchId', '==', branchId)
       .where('month', '==', month)

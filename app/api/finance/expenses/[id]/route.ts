@@ -20,6 +20,8 @@ import {
   canDeleteExpense,
   canReadExpense,
 } from '@/lib/finance/expense-permissions';
+// PR-CASH1F (2026-06-23): chặn mutation expense khi ngày/cơ sở đã khóa báo cáo thu-chi.
+import { assertDailyCashflowDateNotLocked, CashflowLockedError } from '@/lib/finance/cashflow-lock';
 import {
   VALID_EXPENSE_PAYMENT_METHODS,
   VALID_EXPENSE_CATEGORIES,
@@ -84,6 +86,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const loaded = await loadExpense(id);
     if (!loaded) return NextResponse.json({ error: 'Không tìm thấy phiếu chi' }, { status: 404 });
     const { ref, data: tx } = loaded;
+
+    // PR-CASH1F (2026-06-23): chặn mọi PATCH action (update/record/return/void)
+    // nếu ngày/cơ sở đã khóa báo cáo thu-chi.
+    try {
+      const db = getFirebaseAdminDb();
+      await assertDailyCashflowDateNotLocked(db, tx.branchId as any, tx.date);
+    } catch (e) {
+      if (e instanceof CashflowLockedError) {
+        return NextResponse.json({ error: e.message }, { status: e.status });
+      }
+      throw e;
+    }
 
     const now = Timestamp.now();
 
@@ -234,6 +248,17 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
 
     if (!canDeleteExpense(role, caller.profile.uid, callerBranchId, loaded.data)) {
       return NextResponse.json({ error: 'Chỉ xóa được draft của chính mình; phiếu recorded phải void' }, { status: 403 });
+    }
+
+    // PR-CASH1F (2026-06-23): chặn delete draft nếu ngày/cơ sở đã khóa báo cáo.
+    try {
+      const db = getFirebaseAdminDb();
+      await assertDailyCashflowDateNotLocked(db, loaded.data.branchId as any, loaded.data.date);
+    } catch (e) {
+      if (e instanceof CashflowLockedError) {
+        return NextResponse.json({ error: e.message }, { status: e.status });
+      }
+      throw e;
     }
 
     await loaded.ref.delete();
