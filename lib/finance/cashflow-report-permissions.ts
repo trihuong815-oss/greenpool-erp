@@ -74,6 +74,18 @@ export function canLockDailyCashflowReport(
   return report.status === 'checked';
 }
 
+/** PR-CASH1F-UNLOCK (2026-06-23): Mở khóa báo cáo — chỉ TP_KE/ADMIN, và chỉ khi
+ *  report đang 'locked'. Sau unlock: status revert về 'checked' để TP_KE có thể
+ *  lock lại nếu cần. Bắt buộc nhập reason ở endpoint (không enforce ở helper). */
+export function canUnlockDailyCashflowReport(
+  roleCode: string | null | undefined,
+  report: Pick<DailyCashflowReportDoc, 'status'>,
+): boolean {
+  if (!roleCode) return false;
+  if (roleCode !== 'ADMIN' && roleCode !== 'TP_KE') return false;
+  return report.status === 'locked';
+}
+
 /** Branch filter cho list query. */
 export function getReportBranchScope(
   roleCode: string | null | undefined,

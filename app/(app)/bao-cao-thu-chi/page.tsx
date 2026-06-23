@@ -21,6 +21,8 @@ const CHECK_RETURN_ROLES = new Set(['TP_KE', 'ADMIN']);
 const SUBMIT_ROLES = new Set(['NV_KE', 'ADMIN']);
 // PR-CASH1F (2026-06-23): khóa báo cáo — KHỚP với canLockDailyCashflowReport.
 const LOCK_ROLES = new Set(['TP_KE', 'ADMIN']);
+// PR-CASH1F-UNLOCK (2026-06-23): mở khóa báo cáo — TP_KE/ADMIN.
+const UNLOCK_ROLES = new Set(['TP_KE', 'ADMIN']);
 
 export default async function BaoCaoThuChiPage() {
   const { profile } = await requireAuthedProfile();
@@ -44,6 +46,7 @@ export default async function BaoCaoThuChiPage() {
   const canCheckReturn = CHECK_RETURN_ROLES.has(profile.roleCode);
   const canSubmit = SUBMIT_ROLES.has(profile.roleCode);
   const canLock = LOCK_ROLES.has(profile.roleCode);
+  const canUnlock = UNLOCK_ROLES.has(profile.roleCode);
   const isMultiBranch = MULTI_BRANCH_ROLES.has(profile.roleCode);
 
   return (
@@ -58,6 +61,7 @@ export default async function BaoCaoThuChiPage() {
         myBranchId={branchId}
         canCheckReturn={canCheckReturn}
         canLock={canLock}
+        canUnlock={canUnlock}
         canSubmit={canSubmit}
         canSelectBranch={isMultiBranch}
         showSummaryCards={isMultiBranch}

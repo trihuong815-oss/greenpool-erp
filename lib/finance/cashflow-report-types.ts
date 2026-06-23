@@ -174,10 +174,17 @@ export interface DailyCashflowReportDoc {
   returnedAt: Timestamp | null;
   returnReason: string | null;
 
-  // ─── Lock (defer PR-CASH1E) ───
+  // ─── Lock (PR-CASH1F) ───
   lockedBy: string | null;
   lockedByName: string | null;
   lockedAt: Timestamp | null;
+
+  // ─── Unlock (PR-CASH1F-UNLOCK 2026-06-23): nullable, set khi TP_KE/ADMIN mở khóa.
+  // Trạng thái sau unlock revert về 'checked'. Trace history qua audit log + 4 field này. */
+  unlockedBy?: string | null;
+  unlockedByName?: string | null;
+  unlockedAt?: Timestamp | null;
+  unlockReason?: string | null;
 
   // ─── Generate metadata ───
   generatedBy: string;                // = submittedBy hoặc 'system' nếu auto

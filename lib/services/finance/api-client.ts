@@ -136,6 +136,17 @@ export async function lockCashflowReport(id: string): Promise<{ ok: true; status
   return jsonOrError(r);
 }
 
+// PR-CASH1F-UNLOCK (2026-06-23): mở khóa báo cáo (TP_KE/ADMIN, status=locked).
+// Reason bắt buộc — không cho mở khóa âm thầm.
+export async function unlockCashflowReport(id: string, reason: string): Promise<{ ok: true; status: 'checked'; unlockedAt: string; unlockedByName: string; unlockReason: string }> {
+  const r = await fetch(`/api/finance/cashflow-reports/${encodeURIComponent(id)}/unlock`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ reason }),
+  });
+  return jsonOrError(r);
+}
+
 // PR-CASH1G (2026-06-23): monthly/yearly summary + export Excel.
 import type { MonthlySummary, YearlySummary } from '@/lib/finance/cashflow-summary-types';
 
