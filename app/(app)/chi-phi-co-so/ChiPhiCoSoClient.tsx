@@ -85,7 +85,7 @@ export default function ChiPhiCoSoClient({ myRoleCode, myBranchId, canEdit, canS
   const branchName = useMemo(() => branchId ? (BRANCH_BY_ID[branchId]?.name ?? branchId) : '', [branchId]);
 
   return (
-    <div className="flex-1 p-3 md:p-6 bg-slate-50 space-y-4">
+    <div className="flex-1 p-3 md:p-6 bg-slate-50 space-y-4 overflow-y-auto">
       {/* Header filter */}
       <div className="card">
         <div className="flex flex-wrap items-center gap-3">

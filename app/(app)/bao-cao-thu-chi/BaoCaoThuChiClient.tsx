@@ -106,7 +106,7 @@ export default function BaoCaoThuChiClient({ myRoleCode, myBranchId, canCheckRet
   }
 
   return (
-    <div className="flex-1 p-3 md:p-6 bg-slate-50 space-y-4">
+    <div className="flex-1 p-3 md:p-6 bg-slate-50 space-y-4 overflow-y-auto">
       {/* TAB SWITCHER */}
       <div className="flex items-center gap-2 flex-wrap bg-white rounded-lg p-1 ring-1 ring-slate-200 shadow-sm w-fit">
         <TabBtn active={tab === 'daily'} onClick={() => setTab('daily')} icon={<Calendar size={14} />} label="Theo ngày" />
