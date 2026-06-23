@@ -423,6 +423,25 @@
         { "fieldPath": "branchId", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "_comment": "PR-CASH1B-FIX (2026-06-23): GET /api/finance/expenses list — where(branchId) where(date) orderBy(createdAt DESC). Production smoke test phát hiện 500 missing index.",
+      "collectionGroup": "branchDailyExpenses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "branchId", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "_comment": "PR-CASH1B-FIX (2026-06-23): GET /api/finance/cashflow-reports list — where(branchId) orderBy(date DESC). Production smoke test phát hiện 500 missing index.",
+      "collectionGroup": "dailyCashflowReports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "branchId", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
