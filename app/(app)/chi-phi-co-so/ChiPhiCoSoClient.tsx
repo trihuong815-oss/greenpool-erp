@@ -188,7 +188,7 @@ export default function ChiPhiCoSoClient({ myRoleCode, myBranchId, canEdit, canS
             />
           )}
 
-          <CashflowReportResultCard report={report} loading={repLoading} onRefresh={loadReport} />
+          <CashflowReportResultCard report={report} loading={repLoading} canSubmit={canEdit} onRefresh={loadReport} />
         </>
       )}
     </div>

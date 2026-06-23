@@ -9,6 +9,7 @@ import { DAILY_CASHFLOW_REPORT_STATUS_LABEL, CASHFLOW_ALERT_LABEL } from '@/lib/
 interface Props {
   report: (DailyCashflowReportDoc & { id: string }) | null;
   loading: boolean;
+  canSubmit: boolean;
   onRefresh: () => void;
 }
 
@@ -31,7 +32,7 @@ function tsLabel(v: any): string {
   try { return new Date(v).toLocaleString('vi-VN'); } catch { return ''; }
 }
 
-export function CashflowReportResultCard({ report, loading, onRefresh }: Props) {
+export function CashflowReportResultCard({ report, loading, canSubmit, onRefresh }: Props) {
   return (
     <div className="card">
       <div className="card-title">
@@ -50,7 +51,9 @@ export function CashflowReportResultCard({ report, loading, onRefresh }: Props) 
 
       {!report ? (
         <div className="text-sm text-slate-500 py-6 text-center">
-          Chưa có báo cáo cho ngày + cơ sở này. Bấm <strong className="text-slate-700">Nộp báo cáo thu-chi</strong> bên trên để tạo.
+          {canSubmit
+            ? <>Chưa có báo cáo cho ngày + cơ sở này. Bấm <strong className="text-slate-700">Nộp báo cáo</strong> bên trên để tạo.</>
+            : <>Chưa có báo cáo cho ngày + cơ sở này. Kế toán cơ sở cần lập và nộp báo cáo.</>}
         </div>
       ) : (
         <div className="space-y-4">
