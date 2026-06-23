@@ -13,16 +13,6 @@ import type {
   CashflowAlertCode,
 } from '@/lib/finance/cashflow-report-types';
 
-export interface DailySummaryResponse {
-  ok: true;
-  date: string;
-  branchId: BranchId;
-  branchName: string;
-  reception: { totals: { cash: number; transfer: number; card: number; total: number } };
-  sales: { totals: { cash: number; transfer: number; card: number; total: number } };
-  grandTotals: { cash: number; transfer: number; card: number; total: number };
-}
-
 export type ExpenseDoc = BranchDailyExpenseDoc & { id: string };
 
 export interface SubmitReportSummary {
@@ -50,11 +40,6 @@ async function jsonOrError(r: Response): Promise<any> {
     throw Object.assign(new Error(msg), { status: r.status, body });
   }
   return body;
-}
-
-export async function fetchDailyRevenueSummary(date: string, branchId: BranchId): Promise<DailySummaryResponse> {
-  const r = await fetch(`/api/sales-v2/daily-summary?date=${encodeURIComponent(date)}&branchId=${encodeURIComponent(branchId)}`);
-  return jsonOrError(r);
 }
 
 export async function listExpenses(date: string, branchId: BranchId): Promise<{ ok: true; count: number; expenses: ExpenseDoc[] }> {

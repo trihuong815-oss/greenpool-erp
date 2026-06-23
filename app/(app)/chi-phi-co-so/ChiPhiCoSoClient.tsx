@@ -1,34 +1,35 @@
 'use client';
 
-// PR-CASH1C: Orchestrator UI Chi phí cơ sở — Editor cho NV_KE, View-only cho TP_KE/QLCS.
+// PR-CASH1C-REFINE: Orchestrator UI Chi phí cơ sở — CHỈ NGHIỆP VỤ CHI.
+//
+// THAY ĐỔI vs PR-CASH1C gốc:
+//  - BỎ DailyRevenueSummaryCard (số thu thuộc Đối chiếu doanh số / Tổng hợp doanh thu ngày)
+//  - BỎ CashflowPreviewCard (Thu-Chi-Net thuộc /bao-cao-thu-chi)
+//  - BỎ SubmitCashflowReportCard (nút Nộp báo cáo chuyển sang /bao-cao-thu-chi)
+//  - BỎ CashflowReportResultCard (kết quả báo cáo thuộc /bao-cao-thu-chi)
+//  + THÊM ExpenseStatusSummary (chỉ tổng chi 4 method + count theo status)
+//  + THÊM khối hướng dẫn nghiệp vụ phân tách rõ Chi phí cơ sở ↔ Báo cáo thu-chi
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Filter } from 'lucide-react';
+import Link from 'next/link';
+import { Filter, FileBarChart, Info } from 'lucide-react';
 import type { BranchId } from '@/lib/branches';
 import { BRANCHES, BRANCH_BY_ID, isBranchId } from '@/lib/branches';
 import { useToast } from '@/components/ui/Toast';
 import {
-  fetchDailyRevenueSummary,
   listExpenses,
-  listCashflowReports,
-  type DailySummaryResponse,
   type ExpenseDoc,
-  type SubmitReportResponse,
 } from '@/lib/services/finance/api-client';
-import type { DailyCashflowReportDoc } from '@/lib/finance/cashflow-report-types';
 
-import { DailyRevenueSummaryCard } from './_components/DailyRevenueSummaryCard';
 import { ExpenseForm } from './_components/ExpenseForm';
 import { ExpenseList } from './_components/ExpenseList';
-import { CashflowPreviewCard } from './_components/CashflowPreviewCard';
-import { SubmitCashflowReportCard } from './_components/SubmitCashflowReportCard';
-import { CashflowReportResultCard } from './_components/CashflowReportResultCard';
+import { ExpenseStatusSummary } from './_components/ExpenseStatusSummary';
 
 interface Props {
   myRoleCode: string;
   myBranchId: BranchId | null;
-  canEdit: boolean;        // NV_KE + ADMIN  → form + submit visible
-  canSelectBranch: boolean; // top role: chọn cơ sở; NV_KE/QLCS: branch fixed
+  canEdit: boolean;            // NV_KE + ADMIN
+  canSelectBranch: boolean;    // top role
 }
 
 function todayVN(): string {
@@ -47,27 +48,9 @@ export default function ChiPhiCoSoClient({ myRoleCode, myBranchId, canEdit, canS
   const [branchId, setBranchId] = useState<BranchId | null>(initialBranch);
   const [editing, setEditing] = useState<ExpenseDoc | null>(null);
 
-  // Data
-  const [revenue, setRevenue] = useState<DailySummaryResponse | null>(null);
-  const [revLoading, setRevLoading] = useState(false);
-  const [revError, setRevError] = useState<string | null>(null);
-
   const [expenses, setExpenses] = useState<ExpenseDoc[]>([]);
   const [expLoading, setExpLoading] = useState(false);
   const [expError, setExpError] = useState<string | null>(null);
-
-  const [report, setReport] = useState<(DailyCashflowReportDoc & { id: string }) | null>(null);
-  const [repLoading, setRepLoading] = useState(false);
-
-  const loadRevenue = useCallback(async () => {
-    if (!branchId) return;
-    setRevLoading(true); setRevError(null);
-    try {
-      const r = await fetchDailyRevenueSummary(date, branchId);
-      setRevenue(r);
-    } catch (e: any) { setRevError(e?.message ?? 'Lỗi tải tổng thu'); setRevenue(null); }
-    finally { setRevLoading(false); }
-  }, [date, branchId]);
 
   const loadExpenses = useCallback(async () => {
     if (!branchId) return;
@@ -79,27 +62,9 @@ export default function ChiPhiCoSoClient({ myRoleCode, myBranchId, canEdit, canS
     finally { setExpLoading(false); }
   }, [date, branchId]);
 
-  const loadReport = useCallback(async () => {
-    if (!branchId) return;
-    setRepLoading(true);
-    try {
-      const r = await listCashflowReports(date, branchId);
-      const list = r.reports ?? [];
-      // server already orders by date desc; pick by exact date+branch match.
-      const match = list.find((x) => x.date === date && x.branchId === branchId) ?? null;
-      setReport(match);
-    } catch { setReport(null); }
-    finally { setRepLoading(false); }
-  }, [date, branchId]);
-
-  useEffect(() => { loadRevenue(); loadExpenses(); loadReport(); }, [loadRevenue, loadExpenses, loadReport]);
+  useEffect(() => { loadExpenses(); }, [loadExpenses]);
 
   const branchName = useMemo(() => branchId ? (BRANCH_BY_ID[branchId]?.name ?? branchId) : '', [branchId]);
-
-  function handleSubmitted(resp: SubmitReportResponse) {
-    toast.success(`Đã nộp báo cáo thu-chi (v${resp.reportVersion}). ${resp.summary.sentToCount} người nhận.`);
-    loadReport();
-  }
 
   return (
     <div className="flex-1 p-3 md:p-6 bg-slate-50 space-y-4">
@@ -141,19 +106,26 @@ export default function ChiPhiCoSoClient({ myRoleCode, myBranchId, canEdit, canS
         </div>
       </div>
 
+      {/* Hướng dẫn nghiệp vụ */}
+      <div className="rounded-lg bg-sky-50 ring-1 ring-sky-200 px-4 py-3 flex items-start gap-3 text-sm">
+        <Info size={16} className="text-sky-600 shrink-0 mt-0.5" />
+        <div className="text-sky-900">
+          <div className="font-semibold mb-0.5">Đây là màn ghi nhận các khoản chi thực tế của cơ sở.</div>
+          <div className="text-xs text-sky-800">
+            Phần doanh thu và báo cáo thu-chi tổng hợp được xem tại{' '}
+            <Link href="/bao-cao-thu-chi" className="font-semibold underline-offset-2 hover:underline inline-flex items-center gap-1">
+              <FileBarChart size={12} /> Báo cáo thu-chi
+            </Link>.
+          </div>
+        </div>
+      </div>
+
       {!branchId ? (
         <div className="card text-center py-12 text-sm text-slate-500">
           Tài khoản chưa được gán cơ sở. Vui lòng liên hệ Admin.
         </div>
       ) : (
         <>
-          <DailyRevenueSummaryCard
-            summary={revenue}
-            loading={revLoading}
-            error={revError}
-            onRefresh={loadRevenue}
-          />
-
           {canEdit && (
             <ExpenseForm
               date={date}
@@ -177,18 +149,7 @@ export default function ChiPhiCoSoClient({ myRoleCode, myBranchId, canEdit, canS
             onError={(msg) => toast.error(msg)}
           />
 
-          <CashflowPreviewCard revenue={revenue} expenses={expenses} />
-
-          {canEdit && (
-            <SubmitCashflowReportCard
-              date={date}
-              branchId={branchId}
-              onSubmitted={handleSubmitted}
-              onError={(msg) => toast.error(msg)}
-            />
-          )}
-
-          <CashflowReportResultCard report={report} loading={repLoading} canSubmit={canEdit} onRefresh={loadReport} />
+          <ExpenseStatusSummary expenses={expenses} />
         </>
       )}
     </div>

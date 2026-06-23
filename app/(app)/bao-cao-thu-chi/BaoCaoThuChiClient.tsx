@@ -13,11 +13,13 @@ import { CashflowReportFilters, type StatusFilter } from './_components/Cashflow
 import { CashflowReportSummaryCards } from './_components/CashflowReportSummaryCards';
 import { CashflowReportTable } from './_components/CashflowReportTable';
 import { CashflowReportDetailDrawer } from './_components/CashflowReportDetailDrawer';
+import { SubmitReportInline } from './_components/SubmitReportInline';
 
 interface Props {
   myRoleCode: string;
   myBranchId: BranchId | null;
   canCheckReturn: boolean;     // TP_KE / ADMIN
+  canSubmit: boolean;          // NV_KE / ADMIN — PR-CASH1C-REFINE
   canSelectBranch: boolean;    // top role + THU_QUY + TP_KE + TP_GS
   showSummaryCards: boolean;   // multi-branch viewers (top + THU_QUY + TP_KE + TP_GS)
 }
@@ -27,7 +29,7 @@ function todayVN(): string {
   return new Date(ms).toISOString().slice(0, 10);
 }
 
-export default function BaoCaoThuChiClient({ myRoleCode, myBranchId, canCheckReturn, canSelectBranch, showSummaryCards }: Props) {
+export default function BaoCaoThuChiClient({ myRoleCode, myBranchId, canCheckReturn, canSubmit, canSelectBranch, showSummaryCards }: Props) {
   const toast = useToast();
   type Doc = DailyCashflowReportDoc & { id: string };
 
@@ -73,7 +75,18 @@ export default function BaoCaoThuChiClient({ myRoleCode, myBranchId, canCheckRet
 
   const emptyText = canCheckReturn || showSummaryCards
     ? 'Chưa có báo cáo thu-chi nào cho bộ lọc này.'
+    : canSubmit
+    ? 'Cơ sở chưa nộp báo cáo thu-chi cho ngày này. Bạn có thể nộp bằng nút bên trên.'
     : 'Cơ sở chưa nộp báo cáo thu-chi cho ngày này.';
+
+  // Submit chỉ áp khi cùng branch — nếu top role chọn 'all', SubmitReportInline tự ẩn (branchId=null).
+  // Tìm report của exact (date, branchId) để biết NV_KE cần submit hay đã có rồi.
+  const submitBranch: BranchId | null = canSubmit
+    ? (branchId === 'all' ? null : branchId)
+    : null;
+  const currentReport = submitBranch
+    ? reports.find((r) => r.date === date && r.branchId === submitBranch)
+    : undefined;
 
   return (
     <div className="flex-1 p-3 md:p-6 bg-slate-50 space-y-4">
@@ -89,6 +102,16 @@ export default function BaoCaoThuChiClient({ myRoleCode, myBranchId, canCheckRet
         onStatus={setStatusFilter}
         onAlertsOnly={setAlertsOnly}
       />
+
+      {submitBranch && (
+        <SubmitReportInline
+          date={date}
+          branchId={submitBranch}
+          currentReport={currentReport}
+          onSubmitted={(resp) => { toast.success(`Đã nộp báo cáo (v${resp.reportVersion}). ${resp.summary.sentToCount} người nhận.`); load(); }}
+          onError={(msg) => toast.error(msg)}
+        />
+      )}
 
       {showSummaryCards && <CashflowReportSummaryCards reports={filtered} />}
 

@@ -15,6 +15,10 @@ const MULTI_BRANCH_ROLES = new Set([
 ]);
 // Roles được kiểm tra/trả lại — KHỚP với canCheckDailyCashflowReport server-side.
 const CHECK_RETURN_ROLES = new Set(['TP_KE', 'ADMIN']);
+// PR-CASH1C-REFINE: NV_KE/ADMIN nộp báo cáo trực tiếp ở /bao-cao-thu-chi
+// (thay vì /chi-phi-co-so cũ). Server-side canSubmitDailyCashflowReport vẫn enforce
+// (xem lib/finance/cashflow-report-permissions.ts).
+const SUBMIT_ROLES = new Set(['NV_KE', 'ADMIN']);
 
 export default async function BaoCaoThuChiPage() {
   const { profile } = await requireAuthedProfile();
@@ -36,6 +40,7 @@ export default async function BaoCaoThuChiPage() {
 
   const branchId: BranchId | null = isBranchId(profile.branchId) ? profile.branchId : null;
   const canCheckReturn = CHECK_RETURN_ROLES.has(profile.roleCode);
+  const canSubmit = SUBMIT_ROLES.has(profile.roleCode);
   const isMultiBranch = MULTI_BRANCH_ROLES.has(profile.roleCode);
 
   return (
@@ -49,6 +54,7 @@ export default async function BaoCaoThuChiPage() {
         myRoleCode={profile.roleCode}
         myBranchId={branchId}
         canCheckReturn={canCheckReturn}
+        canSubmit={canSubmit}
         canSelectBranch={isMultiBranch}
         showSummaryCards={isMultiBranch}
       />
