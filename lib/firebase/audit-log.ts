@@ -18,7 +18,7 @@ import 'server-only';
 import { getFirebaseAdminDb } from './admin';
 import { COLLECTIONS } from './collections';
 
-export type AuditModule = 'checklist' | 'sales' | 'users' | 'templates' | 'dashboard' | 'giaoviec' | 'ky-thuat';
+export type AuditModule = 'checklist' | 'sales' | 'users' | 'templates' | 'dashboard' | 'giaoviec' | 'ky-thuat' | 'finance';
 
 export interface AuditLogEntry {
   action: string;

@@ -62,6 +62,10 @@ export const COLLECTIONS = {
   // 1 doc/cơ sở — đơn giá mặc định các mục quầy lễ tân (vé lẻ, thuê tủ, làm thẻ...).
   // Admin (ADMIN/CEO/TP_KE) set 1 lần, kế toán nhập daily chỉ cần qty + thực thu.
   SALES_RECEPTION_PRICING: 'salesReceptionPricing',
+  // PR-CASH1B (2026-06-23) — Chi phí cơ sở (kế toán cơ sở nhập daily)
+  BRANCH_DAILY_EXPENSES: 'branchDailyExpenses',
+  // PR-CASH1B (2026-06-23) — Báo cáo thu-chi ngày (auto-aggregate khi NV_KE nộp)
+  DAILY_CASHFLOW_REPORTS: 'dailyCashflowReports',
 } as const;
 
 // Subcollection names — đứng trong context của doc cha.

@@ -85,6 +85,10 @@ export const MENU_PERMISSIONS: Record<string, string[]> = {
   // NV_KE — Nhân viên kế toán cơ sở. Đối chiếu doanh số daily của Sale, xem công nợ cơ sở.
   NV_KE:     ['dashboard','tin-nhan','doanh-so-v2/doi-chieu','doanh-so-v2/cong-no','doanh-so-v2/tong-ket','doanh-so-v2/chuong-trinh','doanh-so-v2/quay-le-tan/nhap','cong-viec-ca-nhan','bao-mat','thong-bao','co-so'],
   TP_NS:     ['dashboard','tin-nhan','quy-trinh','giao-viec','dieu-phoi','de-xuat','quan-ly-cong-viec','bao-cao','luong','sodo','cong-viec-ca-nhan','bao-mat','phe-duyet','thong-bao'],
+  // PR-CASH1B (2026-06-23): role THU_QUY — view-only báo cáo thu-chi ngày toàn hệ thống.
+  // KHÔNG có quyền: tạo chi / sửa chi / submit report / check report / export.
+  // PR-CASH1C/D sẽ wire route 'bao-cao-thu-chi-ngay' khi UI có.
+  THU_QUY:   ['dashboard','tin-nhan','cong-viec-ca-nhan','bao-mat','thong-bao'],
 
   // Phase 12.8 (2026-06-04): /giao-viec chỉ dành cho TP/QLCS/GD/CEO/Chủ tịch (theo tài liệu anh chốt).
   // NV/GV/TT_DT bị ẩn menu này. Họ vẫn dùng tin-nhan + bao-mat + module nghiệp vụ riêng.
@@ -126,6 +130,8 @@ export const ROLE_BLOCK: Record<string, 'KD' | 'VP' | 'all'> = {
   // VP — phòng Giám sát + Kế toán
   TP_GS: 'VP', TP_KE: 'VP',
   NV_GS: 'VP', NV_KE: 'VP', NV_NS: 'VP',
+  // PR-CASH1B (2026-06-23): Thủ quỹ thuộc khối VP, view-only báo cáo thu-chi
+  THU_QUY: 'VP',
 };
 
 // Role → phòng mapping

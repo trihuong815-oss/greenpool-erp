@@ -171,7 +171,7 @@ service cloud.firestore {
         && request.resource.data.action.size() > 0
         && request.resource.data.action.size() <= 100
         && request.resource.data.module is string
-        && request.resource.data.module in ['checklist','sales','users','templates','dashboard','giaoviec','ky-thuat']
+        && request.resource.data.module in ['checklist','sales','users','templates','dashboard','giaoviec','ky-thuat','finance']
         && request.resource.data.createdAt is timestamp
         && (
           request.resource.data.module != 'checklist'
@@ -510,6 +510,38 @@ service cloud.firestore {
           isQLCS() ||
           userRole() == 'NV_KE'
         ))
+      );
+      allow write: if false;
+    }
+
+    // ---- PR-CASH1B (2026-06-23) — Chi phí cơ sở + Báo cáo thu-chi ngày ----
+    // WRITE: 100% server-side qua /api/finance/* (Admin SDK) — client write deny.
+    // READ scope:
+    //   - top role + THU_QUY + TP_GS: all
+    //   - NV_KE + QLCS_*: branch của mình
+    //   - Sale: deny
+    match /branchDailyExpenses/{expenseId} {
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        userRole() == 'CHU_TICH' ||
+        userRole() == 'TP_KE' ||
+        userRole() == 'TP_GS' ||
+        userRole() == 'THU_QUY' ||
+        ((userRole() == 'NV_KE' || isQLCS()) &&
+         resource.data.branchId == userFacility())
+      );
+      allow write: if false;   // Admin SDK only
+    }
+
+    match /dailyCashflowReports/{reportId} {
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        userRole() == 'CHU_TICH' ||
+        userRole() == 'TP_KE' ||
+        userRole() == 'TP_GS' ||
+        userRole() == 'THU_QUY' ||
+        ((userRole() == 'NV_KE' || isQLCS()) &&
+         resource.data.branchId == userFacility())
       );
       allow write: if false;
     }
