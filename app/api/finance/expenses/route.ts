@@ -232,8 +232,13 @@ export async function GET(req: NextRequest) {
     let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.BRANCH_DAILY_EXPENSES);
     if (effectiveBranch) q = q.where('branchId', '==', effectiveBranch);
     // Precedence: dateFrom/dateTo > date > month (BC: nếu chỉ có date → range 1 ngày).
+    // FIX 2026-06-24 smoke: chain orderBy(date asc + createdAt desc) khớp EXACT
+    // index sẵn có `branchId ASC + date ASC + createdAt DESC` — Firestore yêu cầu
+    // composite index match exact cho range query. UI client tự sort lại nếu cần
+    // newest-first.
     if (dateFrom && dateTo) {
-      q = q.where('date', '>=', dateFrom).where('date', '<=', dateTo).orderBy('date', 'desc');
+      q = q.where('date', '>=', dateFrom).where('date', '<=', dateTo)
+           .orderBy('date', 'asc').orderBy('createdAt', 'desc');
     } else if (date) {
       q = q.where('date', '==', date).orderBy('createdAt', 'desc');
     } else if (month) {
