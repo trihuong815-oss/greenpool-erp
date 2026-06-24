@@ -42,8 +42,34 @@ async function jsonOrError(r: Response): Promise<any> {
   return body;
 }
 
-export async function listExpenses(date: string, branchId: BranchId): Promise<{ ok: true; count: number; expenses: ExpenseDoc[] }> {
-  const r = await fetch(`/api/finance/expenses?date=${encodeURIComponent(date)}&branchId=${encodeURIComponent(branchId)}`);
+export interface ListExpensesParams {
+  /** PR-CASH-DATE-RANGE-UX (2026-06-24): range thật. */
+  dateFrom?: string;
+  dateTo?: string;
+  /** BC: single-day query — server tự map về date==. */
+  date?: string;
+  month?: string;
+  branchId?: BranchId | null;
+  status?: string;
+}
+
+export async function listExpenses(
+  paramsOrDate: ListExpensesParams | string,
+  branchId?: BranchId,
+): Promise<{ ok: true; count: number; expenses: ExpenseDoc[] }> {
+  const qs = new URLSearchParams();
+  if (typeof paramsOrDate === 'string') {
+    qs.set('date', paramsOrDate);
+    if (branchId) qs.set('branchId', branchId);
+  } else {
+    if (paramsOrDate.dateFrom) qs.set('dateFrom', paramsOrDate.dateFrom);
+    if (paramsOrDate.dateTo) qs.set('dateTo', paramsOrDate.dateTo);
+    if (paramsOrDate.date) qs.set('date', paramsOrDate.date);
+    if (paramsOrDate.month) qs.set('month', paramsOrDate.month);
+    if (paramsOrDate.branchId) qs.set('branchId', paramsOrDate.branchId);
+    if (paramsOrDate.status) qs.set('status', paramsOrDate.status);
+  }
+  const r = await fetch(`/api/finance/expenses?${qs.toString()}`);
   return jsonOrError(r);
 }
 
@@ -80,6 +106,9 @@ export async function deleteDraftExpense(id: string): Promise<{ ok: true }> {
 }
 
 export interface ListReportsParams {
+  /** PR-CASH-DATE-RANGE-UX (2026-06-24): range thật. */
+  dateFrom?: string;
+  dateTo?: string;
   date?: string;
   month?: string;
   branchId?: BranchId | null;
@@ -95,6 +124,8 @@ export async function listCashflowReports(
     qs.set('date', paramsOrDate);
     if (branchId) qs.set('branchId', branchId);
   } else {
+    if (paramsOrDate.dateFrom) qs.set('dateFrom', paramsOrDate.dateFrom);
+    if (paramsOrDate.dateTo) qs.set('dateTo', paramsOrDate.dateTo);
     if (paramsOrDate.date) qs.set('date', paramsOrDate.date);
     if (paramsOrDate.month) qs.set('month', paramsOrDate.month);
     if (paramsOrDate.branchId) qs.set('branchId', paramsOrDate.branchId);

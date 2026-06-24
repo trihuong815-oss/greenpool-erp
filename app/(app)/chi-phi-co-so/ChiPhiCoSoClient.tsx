@@ -1,22 +1,17 @@
 'use client';
 
 // PR-CASH1C-GRID (2026-06-23) — Orchestrator UI Chi phí cơ sở dạng SỔ CHI BẢNG DÒNG.
-// PR-CASH-FILTERS (2026-06-24) — Thêm bộ lọc nâng cao + URL query state.
+// PR-CASH-FILTERS (2026-06-24) — Bộ lọc nâng cao + URL query state.
+// PR-CASH-DATE-RANGE-UX (2026-06-24) — Bố cục lọc chuyên nghiệp + date range thật
+// (calendar picker native) + presets (Hôm nay/Hôm qua/7 ngày/30 ngày/Tháng này/...).
 //
-// /chi-phi-co-so chỉ nghiệp vụ CHI:
-//  - Quick filter: ngày + cơ sở (header)
-//  - Advanced filter: ExpenseFilterPanel (voucherNo / keyword / counterparty / method
-//    / category / basis / status / amount range) — CLIENT-SIDE.
-//  - URL query state đầy đủ: date / branchId / + tất cả filter nâng cao.
-//  - ExpenseLedgerGrid: bảng inline-editable, nhập liên tục (local rows giữ nguyên khi filter).
-//  - ExpenseStatusSummary: tổng chi 4 method + count theo status (CHỈ CHI).
-//
-// API /api/finance/expenses chỉ hỗ trợ 1 ngày → KHÔNG có dateFrom/dateTo, KHÔNG fake range.
+// API /api/finance/expenses hỗ trợ dateFrom/dateTo thật (cap 31 ngày).
+// Filter nâng cao client-side; range = server-side (Firestore composite index sẵn có).
 
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Filter, FileBarChart, Info, Lock, RotateCcw } from 'lucide-react';
+import { Filter, FileBarChart, Info, Lock, RotateCcw, Check } from 'lucide-react';
 import type { BranchId } from '@/lib/branches';
 import { BRANCHES, BRANCH_BY_ID, isBranchId } from '@/lib/branches';
 import { useToast } from '@/components/ui/Toast';
@@ -36,7 +31,14 @@ import {
 import {
   readExpenseFiltersFromQuery,
   writeExpenseFiltersToParams,
+  readDateRangeFromQuery,
+  writeDateRangeToParams,
 } from '@/lib/finance/filter-url';
+import {
+  rangeDays,
+  type DateRange,
+} from '@/lib/finance/date-presets';
+import { DateRangeBar } from '@/components/finance/DateRangeBar';
 
 import { ExpenseLedgerGrid } from './_components/ExpenseLedgerGrid';
 import { ExpenseStatusSummary } from './_components/ExpenseStatusSummary';
@@ -54,8 +56,6 @@ function todayVN(): string {
   return new Date(ms).toISOString().slice(0, 10);
 }
 
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
 export default function ChiPhiCoSoClient({ myRoleCode, myBranchId, canEdit, canSelectBranch }: Props) {
   const toast = useToast();
   const router = useRouter();
@@ -68,14 +68,14 @@ export default function ChiPhiCoSoClient({ myRoleCode, myBranchId, canEdit, canS
       if (isBranchId(fromUrl)) return fromUrl;
       return myBranchId ?? (BRANCHES[0].id as BranchId);
     }
-    // Restricted role: KHÔNG cho URL override branch — luôn dùng branch của user.
     return myBranchId;
   }, [searchParams, canSelectBranch, myBranchId]);
 
-  const initialDate = useMemo(() => {
-    const d = searchParams?.get('date') ?? '';
-    return DATE_RE.test(d) ? d : todayVN();
-  }, [searchParams]);
+  const initialRange: DateRange = useMemo(
+    () => readDateRangeFromQuery((k) => searchParams?.get(k) ?? null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
 
   const initialFilters = useMemo<ExpenseFilters>(
     () => readExpenseFiltersFromQuery((k) => searchParams?.get(k) ?? null),
@@ -83,7 +83,7 @@ export default function ChiPhiCoSoClient({ myRoleCode, myBranchId, canEdit, canS
     [],
   );
 
-  const [date, setDate] = useState<string>(initialDate);
+  const [range, setRange] = useState<DateRange>(initialRange);
   const [branchId, setBranchId] = useState<BranchId | null>(initialBranch);
   const [filters, setFilters] = useState<ExpenseFilters>(initialFilters);
 
@@ -91,33 +91,44 @@ export default function ChiPhiCoSoClient({ myRoleCode, myBranchId, canEdit, canS
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Lock detection — chỉ check khi range = 1 ngày để giữ behavior cũ.
   const [isLocked, setIsLocked] = useState(false);
   const [lockedByName, setLockedByName] = useState<string | null>(null);
   const [lockedAt, setLockedAt] = useState<string | null>(null);
 
-  // Sync URL query mỗi khi state đổi (replace, không tạo entry history mới).
+  const isSingleDay = range.dateFrom === range.dateTo;
+  const days = rangeDays(range);
+
+  // Sync URL query → state thay đổi.
   const syncedOnceRef = useRef(false);
   useEffect(() => {
     if (!syncedOnceRef.current) { syncedOnceRef.current = true; return; }
     const params = new URLSearchParams();
-    if (date && date !== todayVN()) params.set('date', date);
+    writeDateRangeToParams(range, params);
     if (branchId && canSelectBranch) params.set('branchId', branchId);
     writeExpenseFiltersToParams(filters, params);
     const qs = params.toString();
     router.replace(`/chi-phi-co-so${qs ? `?${qs}` : ''}`, { scroll: false });
-  }, [date, branchId, filters, router, canSelectBranch]);
+  }, [range, branchId, filters, router, canSelectBranch]);
 
   const load = useCallback(async () => {
     if (!branchId) return;
     setLoading(true); setError(null);
     try {
-      const [r, reportR] = await Promise.all([
-        listExpenses(date, branchId),
-        listCashflowReports({ date, branchId }).catch(() => ({ reports: [] as any[] })),
-      ]);
+      // Range fetch (server-side dateFrom/dateTo thật).
+      const expensesP = listExpenses({
+        dateFrom: range.dateFrom,
+        dateTo: range.dateTo,
+        branchId,
+      });
+      // Lock check chỉ khi single day — multi-day lock state phức tạp, defer.
+      const reportP = isSingleDay
+        ? listCashflowReports({ date: range.dateFrom, branchId }).catch(() => ({ reports: [] as any[] }))
+        : Promise.resolve({ reports: [] as any[] });
+      const [r, reportR] = await Promise.all([expensesP, reportP]);
       setExpenses(r.expenses ?? []);
-      const match = (reportR.reports ?? []).find((x: any) => x.date === date && x.branchId === branchId);
-      const locked = match?.status === 'locked';
+      const match = (reportR.reports ?? []).find((x: any) => x.date === range.dateFrom && x.branchId === branchId);
+      const locked = isSingleDay && match?.status === 'locked';
       setIsLocked(locked);
       setLockedByName(locked ? (match?.lockedByName ?? null) : null);
       setLockedAt(locked ? (match?.lockedAt?._seconds
@@ -129,43 +140,57 @@ export default function ChiPhiCoSoClient({ myRoleCode, myBranchId, canEdit, canS
       setIsLocked(false);
     }
     finally { setLoading(false); }
-  }, [date, branchId]);
+  }, [range.dateFrom, range.dateTo, branchId, isSingleDay]);
 
   useEffect(() => { load(); }, [load]);
 
   const branchName = useMemo(() => branchId ? (BRANCH_BY_ID[branchId]?.name ?? branchId) : '', [branchId]);
 
-  // Filter applied — totals + grid use filtered; ExpenseStatusSummary now receives filtered.
   const filteredExpenses = useMemo(() => filterExpenses(expenses, filters), [expenses, filters]);
   const active = hasActiveExpenseFilters(filters);
-  const totalAll = useMemo(() => sumRecordedExpenseAmount(expenses), [expenses]);
-  const totalFiltered = useMemo(() => sumRecordedExpenseAmount(filteredExpenses), [filteredExpenses]);
-  const totalFilteredAll = useMemo(() => sumExpenseAmount(filteredExpenses), [filteredExpenses]);
+  const totalRecordedAll = useMemo(() => sumRecordedExpenseAmount(expenses), [expenses]);
+  const totalRecordedFiltered = useMemo(() => sumRecordedExpenseAmount(filteredExpenses), [filteredExpenses]);
+  const totalAllFiltered = useMemo(() => sumExpenseAmount(filteredExpenses), [filteredExpenses]);
+
+  // Totals label theo state: filter-on > range-on > single-day default.
+  const totalLabel = active
+    ? 'Tổng theo bộ lọc'
+    : (days > 1 ? 'Tổng chi trong khoảng' : 'Tổng chi trong ngày');
 
   return (
     <div className="flex-1 p-3 md:p-6 bg-slate-50 space-y-4 overflow-y-auto">
-      {/* Header filter — quick */}
+      {/* Helper strip — gọn, KHÔNG dùng banner lớn rối mắt */}
+      <div className="flex items-center gap-2 text-xs text-slate-500 px-1">
+        <Info size={12} className="text-sky-500 shrink-0" />
+        <span>Mỗi dòng = một phiếu chi.</span>
+        <Link href="/bao-cao-thu-chi" className="inline-flex items-center gap-0.5 text-sky-600 hover:text-sky-800 font-medium">
+          <FileBarChart size={11} /> Báo cáo thu-chi tổng hợp
+        </Link>
+      </div>
+
+      {/* CARD BỘ LỌC LỚN — bố cục theo ảnh tham chiếu */}
       <div className="card shadow-sm space-y-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+        {/* Header */}
+        <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-slate-100">
+          <div className="flex items-center gap-2 text-sm font-bold text-slate-800">
             <Filter size={14} className="text-emerald-600" /> Bộ lọc
           </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1">Ngày</label>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="h-9 px-3 text-sm rounded-lg bg-white ring-1 ring-slate-300 hover:ring-slate-400 focus:ring-2 focus:ring-emerald-500 focus:outline-none transition-colors duration-150"
-            />
+          <div className="text-xs text-slate-500">
+            Vai trò: <span className="font-mono font-semibold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">{myRoleCode}</span>
+            {!canEdit && <span className="ml-2 text-amber-700 font-medium bg-amber-50 px-2 py-0.5 rounded-md ring-1 ring-amber-200">• View-only</span>}
           </div>
-          <div>
-            <label className="block text-xs font-medium text-slate-500 mb-1">Cơ sở</label>
+        </div>
+
+        {/* Hàng lọc chính: time range + branch */}
+        <div className="flex flex-wrap items-end gap-2">
+          <DateRangeBar value={range} onChange={(r) => setRange(r)} />
+          <div className="flex flex-col">
+            <label className="text-xs font-medium text-slate-600 mb-1">Cơ sở</label>
             {canSelectBranch ? (
               <select
                 value={branchId ?? ''}
                 onChange={(e) => { const v = e.target.value; if (isBranchId(v)) setBranchId(v); }}
-                className="h-9 px-3 text-sm rounded-lg bg-white ring-1 ring-slate-300 hover:ring-slate-400 focus:ring-2 focus:ring-emerald-500 focus:outline-none transition-colors duration-150"
+                className="h-9 px-3 text-sm rounded-lg bg-white ring-1 ring-slate-300 hover:ring-slate-400 focus:ring-2 focus:ring-emerald-500 focus:outline-none transition-colors"
               >
                 {BRANCHES.map((b) => <option key={b.id} value={b.id}>{b.id} — {b.name}</option>)}
               </select>
@@ -175,38 +200,14 @@ export default function ChiPhiCoSoClient({ myRoleCode, myBranchId, canEdit, canS
               </div>
             )}
           </div>
-          <div className="ml-auto text-xs text-slate-500">
-            Vai trò: <span className="font-mono font-semibold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">{myRoleCode}</span>
-            {!canEdit && <span className="ml-2 text-amber-700 font-medium bg-amber-50 px-2 py-0.5 rounded-md ring-1 ring-amber-200">• View-only</span>}
-          </div>
         </div>
 
-        {/* Advanced filter panel */}
+        {/* Hàng thao tác: lọc nâng cao + chips */}
         <ExpenseFilterPanel
           value={filters}
           onApply={setFilters}
           onClear={() => setFilters(EMPTY_EXPENSE_FILTERS)}
         />
-      </div>
-
-      {/* Hướng dẫn nghiệp vụ */}
-      <div className="rounded-xl bg-gradient-to-r from-sky-50 to-blue-50/60 ring-1 ring-sky-200 px-4 py-3 flex items-start gap-3 text-sm shadow-sm">
-        <div className="rounded-lg p-1.5 bg-sky-100 text-sky-700 shrink-0">
-          <Info size={16} />
-        </div>
-        <div className="text-sky-900 flex-1">
-          <div className="font-semibold mb-1">
-            Đây là Sổ chi tiết các khoản CHI của cơ sở — mỗi dòng = một phiếu chi.
-          </div>
-          <div className="text-xs text-sky-800 leading-relaxed">
-            Phần doanh thu và báo cáo thu-chi tổng hợp được xem tại{' '}
-            <Link href="/bao-cao-thu-chi" className="font-semibold underline-offset-2 hover:underline inline-flex items-center gap-1 text-sky-700 hover:text-sky-900 transition-colors">
-              <FileBarChart size={12} /> Báo cáo thu-chi
-            </Link>
-            . Nhập xong một dòng và bấm <strong className="text-sky-900">Lưu nháp</strong> / <strong className="text-sky-900">Ghi nhận chi</strong>,
-            hệ thống tự thêm dòng mới bên dưới để nhập tiếp.
-          </div>
-        </div>
       </div>
 
       {!branchId ? (
@@ -231,14 +232,19 @@ export default function ChiPhiCoSoClient({ myRoleCode, myBranchId, canEdit, canS
             </div>
           )}
 
-          {/* Empty state khi filter không match — vẫn render grid để giữ local row,
-              nhưng kèm banner gợi ý xóa filter. */}
+          {!isSingleDay && canEdit && (
+            <div className="rounded-lg bg-amber-50 ring-1 ring-amber-200 px-3 py-2 text-xs text-amber-800">
+              <Check size={12} className="inline mr-1" />
+              Đang xem nhiều ngày — chế độ chỉ đọc. Để THÊM phiếu chi mới, chọn preset "Hôm nay" hoặc range 1 ngày cụ thể.
+            </div>
+          )}
+
           {active && filteredExpenses.length === 0 && expenses.length > 0 && (
             <div className="rounded-xl bg-amber-50 ring-1 ring-amber-200 px-4 py-3 flex items-start gap-3 text-sm">
               <div className="text-amber-900 flex-1">
                 <div className="font-semibold mb-1">Không có dữ liệu phù hợp với bộ lọc.</div>
                 <div className="text-xs text-amber-800">
-                  Có {expenses.length} dòng trong ngày — bộ lọc đang ẩn tất cả. Hãy nới lỏng hoặc xóa bộ lọc để xem.
+                  Có {expenses.length} dòng trong khoảng — bộ lọc đang ẩn tất cả. Hãy nới lỏng hoặc xóa bộ lọc để xem.
                 </div>
               </div>
               <button
@@ -252,38 +258,38 @@ export default function ChiPhiCoSoClient({ myRoleCode, myBranchId, canEdit, canS
           )}
 
           <ExpenseLedgerGrid
-            date={date}
+            date={range.dateFrom}
             branchId={branchId}
             branchName={branchName}
             expenses={filteredExpenses}
             loading={loading}
             error={error}
-            canEdit={canEdit && !isLocked}
+            canEdit={canEdit && !isLocked && isSingleDay}
             onRefresh={load}
             onChanged={load}
             onError={(msg) => toast.error(msg)}
             onSuccess={(msg) => toast.success(msg)}
           />
 
-          {/* Tổng — label tự đổi theo filter active. */}
+          {/* Tổng — label tự đổi theo filter/range */}
           <div className="card shadow-sm">
             <div className="flex items-center justify-between text-sm flex-wrap gap-2">
               <span className="font-semibold text-slate-700">
-                {active ? 'Tổng theo bộ lọc' : 'Tổng chi trong ngày'}
+                {totalLabel}
                 <span className="ml-2 text-xs font-normal text-slate-500">(chỉ tính đã ghi nhận)</span>
               </span>
-              <span className="text-base font-bold text-slate-800 tabular-nums">{totalFiltered.toLocaleString()} ₫</span>
+              <span className="text-base font-bold text-slate-800 tabular-nums">{totalRecordedFiltered.toLocaleString()} ₫</span>
             </div>
             {active && (
               <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 flex-wrap gap-2">
                 <span>Tổng theo bộ lọc (bao gồm cả nháp/trả lại/hủy)</span>
-                <span className="tabular-nums">{totalFilteredAll.toLocaleString()} ₫</span>
+                <span className="tabular-nums">{totalAllFiltered.toLocaleString()} ₫</span>
               </div>
             )}
-            {active && totalAll !== totalFiltered && (
+            {active && totalRecordedAll !== totalRecordedFiltered && (
               <div className="mt-1 flex items-center justify-between text-xs text-slate-500 flex-wrap gap-2">
-                <span>Tổng toàn ngày (đã ghi nhận, không filter)</span>
-                <span className="tabular-nums">{totalAll.toLocaleString()} ₫</span>
+                <span>{days > 1 ? 'Tổng toàn khoảng' : 'Tổng toàn ngày'} (đã ghi nhận, không filter)</span>
+                <span className="tabular-nums">{totalRecordedAll.toLocaleString()} ₫</span>
               </div>
             )}
           </div>

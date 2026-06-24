@@ -182,6 +182,10 @@ export async function GET(req: NextRequest) {
     const qs = req.nextUrl.searchParams;
     const date = qs.get('date');
     const month = qs.get('month');
+    // PR-CASH-DATE-RANGE-UX (2026-06-24): hỗ trợ dateFrom/dateTo (range thật,
+    // KHÔNG fake). Cap 31 ngày Phase 1 để giới hạn read cost + index scan.
+    const dateFrom = qs.get('dateFrom');
+    const dateTo = qs.get('dateTo');
     const branchIdParam = qs.get('branchId');
     const statusParam = qs.get('status');
 
@@ -190,6 +194,24 @@ export async function GET(req: NextRequest) {
     }
     if (month && !MONTH_RE.test(month)) {
       return NextResponse.json({ error: 'month sai format' }, { status: 400 });
+    }
+    if (dateFrom && !DATE_RE.test(dateFrom)) {
+      return NextResponse.json({ error: 'dateFrom sai format' }, { status: 400 });
+    }
+    if (dateTo && !DATE_RE.test(dateTo)) {
+      return NextResponse.json({ error: 'dateTo sai format' }, { status: 400 });
+    }
+    if (dateFrom && dateTo) {
+      if (dateFrom > dateTo) {
+        return NextResponse.json({ error: 'dateFrom phải <= dateTo' }, { status: 400 });
+      }
+      // Cap 31 ngày inclusive — đủ cho "30 ngày gần nhất".
+      const a = new Date(`${dateFrom}T12:00:00Z`).getTime();
+      const b = new Date(`${dateTo}T12:00:00Z`).getTime();
+      const days = Math.floor((b - a) / 86_400_000) + 1;
+      if (days > 31) {
+        return NextResponse.json({ error: 'Khoảng ngày tối đa là 31 ngày.' }, { status: 400 });
+      }
     }
     if (statusParam && !VALID_EXPENSE_STATUSES.has(statusParam)) {
       return NextResponse.json({ error: 'status không hợp lệ' }, { status: 400 });
@@ -209,10 +231,18 @@ export async function GET(req: NextRequest) {
     const db = getFirebaseAdminDb();
     let q: FirebaseFirestore.Query = db.collection(COLLECTIONS.BRANCH_DAILY_EXPENSES);
     if (effectiveBranch) q = q.where('branchId', '==', effectiveBranch);
-    if (date) q = q.where('date', '==', date);
-    else if (month) q = q.where('month', '==', month);
+    // Precedence: dateFrom/dateTo > date > month (BC: nếu chỉ có date → range 1 ngày).
+    if (dateFrom && dateTo) {
+      q = q.where('date', '>=', dateFrom).where('date', '<=', dateTo).orderBy('date', 'desc');
+    } else if (date) {
+      q = q.where('date', '==', date).orderBy('createdAt', 'desc');
+    } else if (month) {
+      q = q.where('month', '==', month).orderBy('createdAt', 'desc');
+    } else {
+      q = q.orderBy('createdAt', 'desc');
+    }
     if (statusParam) q = q.where('status', '==', statusParam);
-    q = q.orderBy('createdAt', 'desc').limit(500);
+    q = q.limit(500);
 
     const snap = await q.get();
     const expenses = snap.docs.map((d) => ({ id: d.id, ...d.data() }));

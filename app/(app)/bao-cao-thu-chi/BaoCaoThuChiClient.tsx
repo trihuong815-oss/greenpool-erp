@@ -26,7 +26,10 @@ import {
 import {
   readCashflowReportFiltersFromQuery,
   writeCashflowReportFiltersToParams,
+  readDateRangeFromQuery,
+  writeDateRangeToParams,
 } from '@/lib/finance/filter-url';
+import { rangeDays, type DateRange } from '@/lib/finance/date-presets';
 
 import { CashflowReportFilters, type StatusFilter } from './_components/CashflowReportFilters';
 import { CashflowReportAdvancedFilter } from './_components/CashflowReportAdvancedFilter';
@@ -77,10 +80,11 @@ export default function BaoCaoThuChiClient({ myRoleCode, myBranchId, canCheckRet
     return 'all';
   }, [canSelectBranch, myBranchId, initialBranchUrl]);
 
-  const initialDate = useMemo(() => {
-    const d = searchParams?.get('date') ?? '';
-    return DATE_RE.test(d) ? d : todayVN();
-  }, [searchParams]);
+  const initialRange: DateRange = useMemo(
+    () => readDateRangeFromQuery((k) => searchParams?.get(k) ?? null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
 
   const initialAdvFilters = useMemo<AdvFilters>(
     () => readCashflowReportFiltersFromQuery((k) => searchParams?.get(k) ?? null),
@@ -89,8 +93,10 @@ export default function BaoCaoThuChiClient({ myRoleCode, myBranchId, canCheckRet
   );
 
   const [tab, setTab] = useState<TabKey>(initialTab);
-  const [date, setDate] = useState<string>(initialDate);
+  const [range, setRange] = useState<DateRange>(initialRange);
   const [branchId, setBranchId] = useState<BranchId | 'all'>(initialBranch);
+  const days = rangeDays(range);
+  const isSingleDay = range.dateFrom === range.dateTo;
   const [monthlyJumpTo, setMonthlyJumpTo] = useState<string | undefined>(undefined);
   const [advFilters, setAdvFilters] = useState<AdvFilters>(initialAdvFilters);
 
@@ -117,24 +123,29 @@ export default function BaoCaoThuChiClient({ myRoleCode, myBranchId, canCheckRet
     if (!syncedOnceRef.current) { syncedOnceRef.current = true; return; }
     const params = new URLSearchParams();
     if (tab !== 'daily') params.set('tab', tab);
-    if (date && date !== todayVN()) params.set('date', date);
+    writeDateRangeToParams(range, params);
     if (canSelectBranch && branchId !== 'all') params.set('branchId', branchId);
     writeCashflowReportFiltersToParams(advFilters, params);
     const qs = params.toString();
     router.replace(`/bao-cao-thu-chi${qs ? `?${qs}` : ''}`, { scroll: false });
-  }, [tab, date, branchId, advFilters, router, canSelectBranch]);
+  }, [tab, range, branchId, advFilters, router, canSelectBranch]);
 
   const load = useCallback(async () => {
     if (tab !== 'daily') return;
     setLoading(true); setError(null);
     try {
-      const r = await listCashflowReports({ date, branchId: branchId === 'all' ? null : branchId });
+      // PR-CASH-DATE-RANGE-UX: dùng range thật (dateFrom/dateTo) — server-side query.
+      const r = await listCashflowReports({
+        dateFrom: range.dateFrom,
+        dateTo: range.dateTo,
+        branchId: branchId === 'all' ? null : branchId,
+      });
       setReports(r.reports ?? []);
     } catch (e: any) {
       setError(e?.message ?? 'Lỗi tải báo cáo');
       setReports([]);
     } finally { setLoading(false); }
-  }, [date, branchId, tab]);
+  }, [range.dateFrom, range.dateTo, branchId, tab]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -155,15 +166,19 @@ export default function BaoCaoThuChiClient({ myRoleCode, myBranchId, canCheckRet
       ? 'Cơ sở chưa nộp báo cáo thu-chi cho ngày này. Bạn có thể nộp bằng nút bên trên.'
       : 'Cơ sở chưa nộp báo cáo thu-chi cho ngày này.');
 
-  const submitBranch: BranchId | null = canSubmit ? (branchId === 'all' ? null : branchId) : null;
-  const currentReport = submitBranch ? reports.find((r) => r.date === date && r.branchId === submitBranch) : undefined;
+  const submitBranch: BranchId | null = canSubmit && isSingleDay ? (branchId === 'all' ? null : branchId) : null;
+  const currentReport = submitBranch ? reports.find((r) => r.date === range.dateFrom && r.branchId === submitBranch) : undefined;
 
   function handleExportDaily() {
     if (branchId === 'all') {
       toast.error('Vui lòng chọn 1 cơ sở để xuất Excel ngày');
       return;
     }
-    const url = buildCashflowExportUrl({ mode: 'daily', date, branchId });
+    if (!isSingleDay) {
+      toast.error('Vui lòng chọn 1 ngày cụ thể để xuất Excel (Phase 1).');
+      return;
+    }
+    const url = buildCashflowExportUrl({ mode: 'daily', date: range.dateFrom, branchId });
     window.location.href = url;
   }
 
@@ -182,13 +197,13 @@ export default function BaoCaoThuChiClient({ myRoleCode, myBranchId, canCheckRet
       {tab === 'daily' && (
         <>
           <CashflowReportFilters
-            date={date}
+            range={range}
             branchId={branchId}
             statusFilter={statusFilter}
             alertsOnly={alertsOnly}
             canSelectBranch={canSelectBranch}
             myBranchLabel={myBranchLabel}
-            onDate={setDate}
+            onRange={setRange}
             onBranch={setBranchId}
             onStatus={setStatusFilter}
             onAlertsOnly={setAlertsOnly}
@@ -214,7 +229,7 @@ export default function BaoCaoThuChiClient({ myRoleCode, myBranchId, canCheckRet
 
           {submitBranch && (
             <SubmitReportInline
-              date={date}
+              date={range.dateFrom}
               branchId={submitBranch}
               currentReport={currentReport}
               onSubmitted={(resp) => { toast.success(`Đã nộp báo cáo (v${resp.reportVersion}). ${resp.summary.sentToCount} người nhận.`); load(); }}

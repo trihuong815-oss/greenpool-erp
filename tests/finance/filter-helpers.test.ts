@@ -305,6 +305,121 @@ describe('readExpenseFiltersFromQuery — invalid query không crash', () => {
   });
 });
 
+// ─── PR-CASH-DATE-RANGE-UX URL helpers ────────────────────────────────
+
+import {
+  readDateRangeFromQuery,
+  writeDateRangeToParams,
+  readMonthRangeFromQuery,
+  writeMonthRangeToParams,
+  readYearRangeFromQuery,
+  writeYearRangeToParams,
+} from '@/lib/finance/filter-url';
+
+describe('readDateRangeFromQuery + write — date range URL state', () => {
+  const T = '2026-06-24';
+
+  it('rỗng query → today/today', () => {
+    const r = readDateRangeFromQuery(() => null, T);
+    expect(r).toEqual({ dateFrom: T, dateTo: T });
+  });
+
+  it('Legacy date=YYYY-MM-DD → from=to=date', () => {
+    const p = new URLSearchParams('date=2026-06-20');
+    const r = readDateRangeFromQuery((k) => p.get(k), T);
+    expect(r).toEqual({ dateFrom: '2026-06-20', dateTo: '2026-06-20' });
+  });
+
+  it('dateFrom + dateTo hợp lệ', () => {
+    const p = new URLSearchParams('dateFrom=2026-06-10&dateTo=2026-06-20');
+    const r = readDateRangeFromQuery((k) => p.get(k), T);
+    expect(r).toEqual({ dateFrom: '2026-06-10', dateTo: '2026-06-20' });
+  });
+
+  it('Invalid dateFrom → fallback today', () => {
+    const p = new URLSearchParams('dateFrom=abc&dateTo=2026-06-24');
+    const r = readDateRangeFromQuery((k) => p.get(k), T);
+    expect(r.dateFrom).toBe(T);
+  });
+
+  it('From > To → swap', () => {
+    const p = new URLSearchParams('dateFrom=2026-06-25&dateTo=2026-06-10');
+    const r = readDateRangeFromQuery((k) => p.get(k), T);
+    expect(r.dateFrom).toBe('2026-06-10');
+    expect(r.dateTo).toBe('2026-06-25');
+  });
+
+  it('Write today/today → params rỗng (compact)', () => {
+    const p = new URLSearchParams();
+    writeDateRangeToParams({ dateFrom: T, dateTo: T }, p, T);
+    expect(p.toString()).toBe('');
+  });
+
+  it('Write from===to khác today → date= compact form', () => {
+    const p = new URLSearchParams();
+    writeDateRangeToParams({ dateFrom: '2026-06-20', dateTo: '2026-06-20' }, p, T);
+    expect(p.get('date')).toBe('2026-06-20');
+    expect(p.get('dateFrom')).toBeNull();
+    expect(p.get('dateTo')).toBeNull();
+  });
+
+  it('Write range → dateFrom + dateTo', () => {
+    const p = new URLSearchParams();
+    writeDateRangeToParams({ dateFrom: '2026-06-10', dateTo: '2026-06-20' }, p, T);
+    expect(p.get('dateFrom')).toBe('2026-06-10');
+    expect(p.get('dateTo')).toBe('2026-06-20');
+    expect(p.get('date')).toBeNull();
+  });
+
+  it('Round-trip range', () => {
+    const range = { dateFrom: '2026-06-10', dateTo: '2026-06-20' };
+    const p = new URLSearchParams();
+    writeDateRangeToParams(range, p, T);
+    const back = readDateRangeFromQuery((k) => p.get(k), T);
+    expect(back).toEqual(range);
+  });
+});
+
+describe('readMonthRangeFromQuery + write', () => {
+  const T = '2026-06-24';
+  it('Legacy month= → from=to=month', () => {
+    const p = new URLSearchParams('month=2026-05');
+    const r = readMonthRangeFromQuery((k) => p.get(k), T);
+    expect(r).toEqual({ monthFrom: '2026-05', monthTo: '2026-05' });
+  });
+  it('Range round-trip', () => {
+    const range = { monthFrom: '2026-04', monthTo: '2026-06' };
+    const p = new URLSearchParams();
+    writeMonthRangeToParams(range, p, T);
+    expect(readMonthRangeFromQuery((k) => p.get(k), T)).toEqual(range);
+  });
+  it('From > to → swap', () => {
+    const p = new URLSearchParams('monthFrom=2026-08&monthTo=2026-06');
+    const r = readMonthRangeFromQuery((k) => p.get(k), T);
+    expect(r).toEqual({ monthFrom: '2026-06', monthTo: '2026-08' });
+  });
+});
+
+describe('readYearRangeFromQuery + write', () => {
+  const T = '2026-06-24';
+  it('Legacy year=YYYY → from=to=year', () => {
+    const p = new URLSearchParams('year=2024');
+    const r = readYearRangeFromQuery((k) => p.get(k), T);
+    expect(r).toEqual({ yearFrom: 2024, yearTo: 2024 });
+  });
+  it('Round-trip', () => {
+    const range = { yearFrom: 2024, yearTo: 2026 };
+    const p = new URLSearchParams();
+    writeYearRangeToParams(range, p, T);
+    expect(readYearRangeFromQuery((k) => p.get(k), T)).toEqual(range);
+  });
+  it('Invalid year → fallback today', () => {
+    const p = new URLSearchParams('yearFrom=abc');
+    const r = readYearRangeFromQuery((k) => p.get(k), T);
+    expect(r.yearFrom).toBe(2026);
+  });
+});
+
 describe('writeCashflowReportFiltersToParams + read', () => {
   it('round-trip', () => {
     const f: CashflowReportFilters = {
