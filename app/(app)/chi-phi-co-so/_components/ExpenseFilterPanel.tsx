@@ -155,9 +155,9 @@ export function ExpenseFilterPanel({ value, onApply, onClear }: Props) {
           </div>
 
           <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-            <button type="button" onClick={() => setDraft(EMPTY_EXPENSE_FILTERS)}
+            <button type="button" onClick={() => { setDraft(value); setOpen(false); }}
               className="px-3 py-1.5 rounded-lg text-xs font-medium ring-1 ring-slate-200 bg-white text-slate-600 hover:bg-slate-50">
-              Đặt lại form
+              Huỷ
             </button>
             <button type="button" onClick={apply}
               className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors">
