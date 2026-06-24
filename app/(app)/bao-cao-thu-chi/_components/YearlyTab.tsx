@@ -107,8 +107,8 @@ export function YearlyTab({ myBranchId, canSelectBranch, myBranchLabel, onSelect
         ) : (
           <div className="overflow-x-auto -mx-5">
             <table className="w-full text-sm">
-              <thead className="text-xs text-slate-500 border-b border-slate-200">
-                <tr>
+              <thead className="text-xs text-slate-500 border-b-2 border-slate-300 bg-slate-50/60">
+                <tr className="divide-x divide-slate-200">
                   <Th className="pl-5">Tháng</Th>
                   <Th className="text-right">Tổng thu</Th>
                   <Th className="text-right">Tổng chi</Th>
@@ -125,7 +125,7 @@ export function YearlyTab({ myBranchId, canSelectBranch, myBranchLabel, onSelect
               <tbody>
                 {summary.monthlyRows.map((m) => (
                   <tr key={m.month} onClick={() => onSelectMonth(m.month)}
-                    className="border-b border-slate-100 hover:bg-emerald-50/40 cursor-pointer">
+                    className="border-b border-slate-100 hover:bg-emerald-50/40 cursor-pointer transition-colors duration-150 divide-x divide-slate-100">
                     <Td className="pl-5 font-semibold">{m.month}</Td>
                     <Td className="text-right tabular-nums text-emerald-700">{fmt(m.totalRevenue)} ₫</Td>
                     <Td className="text-right tabular-nums text-rose-700">{fmt(m.totalExpense)} ₫</Td>
@@ -139,7 +139,7 @@ export function YearlyTab({ myBranchId, canSelectBranch, myBranchLabel, onSelect
                     <Td className="pr-5 text-right"><ChevronRight size={14} className="inline text-slate-400" /></Td>
                   </tr>
                 ))}
-                <tr className="border-t-2 border-slate-300 bg-slate-50 font-bold">
+                <tr className="border-t-2 border-amber-300 bg-amber-50/70 font-bold divide-x divide-amber-100">
                   <Td className="pl-5">TỔNG</Td>
                   <Td className="text-right tabular-nums text-emerald-700">{fmt(summary.totals.revenue.total)} ₫</Td>
                   <Td className="text-right tabular-nums text-rose-700">{fmt(summary.totals.expense.total)} ₫</Td>
@@ -164,8 +164,8 @@ export function YearlyTab({ myBranchId, canSelectBranch, myBranchLabel, onSelect
           <div className="card-title"><span>Theo cơ sở</span></div>
           <div className="overflow-x-auto -mx-5">
             <table className="w-full text-sm">
-              <thead className="text-xs text-slate-500 border-b border-slate-200">
-                <tr>
+              <thead className="text-xs text-slate-500 border-b-2 border-slate-300 bg-slate-50/60">
+                <tr className="divide-x divide-slate-200">
                   <Th className="pl-5">Cơ sở</Th>
                   <Th>Tên</Th>
                   <Th className="text-right">Tổng thu</Th>
@@ -178,7 +178,7 @@ export function YearlyTab({ myBranchId, canSelectBranch, myBranchLabel, onSelect
               </thead>
               <tbody>
                 {summary.branchRows.map((b) => (
-                  <tr key={b.branchId} className="border-b border-slate-100">
+                  <tr key={b.branchId} className="border-b border-slate-100 hover:bg-emerald-50/30 transition-colors duration-150 divide-x divide-slate-100">
                     <Td className="pl-5 font-semibold">{b.branchId}</Td>
                     <Td className="text-xs text-slate-500">{b.branchName}</Td>
                     <Td className="text-right tabular-nums text-emerald-700">{fmt(b.totalRevenue)} ₫</Td>

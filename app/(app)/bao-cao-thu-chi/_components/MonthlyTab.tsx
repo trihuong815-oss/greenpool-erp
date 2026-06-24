@@ -132,8 +132,8 @@ export function MonthlyTab({ myBranchId, canSelectBranch, myBranchLabel, initial
         ) : (
           <div className="overflow-x-auto -mx-5">
             <table className="w-full text-sm">
-              <thead className="text-xs text-slate-500 border-b border-slate-200">
-                <tr>
+              <thead className="text-xs text-slate-500 border-b-2 border-slate-300 bg-slate-50/60">
+                <tr className="divide-x divide-slate-200">
                   <Th className="pl-5">Ngày</Th>
                   <Th>Cơ sở</Th>
                   <Th className="text-right">Tổng thu</Th>
@@ -147,7 +147,7 @@ export function MonthlyTab({ myBranchId, canSelectBranch, myBranchLabel, initial
               <tbody>
                 {summary.days.map((d) => (
                   <tr key={`${d.date}-${d.branchId}`} onClick={() => onOpenReport(d.reportId)}
-                    className="border-b border-slate-100 hover:bg-emerald-50/40 cursor-pointer">
+                    className="border-b border-slate-100 hover:bg-emerald-50/40 cursor-pointer transition-colors duration-150 divide-x divide-slate-100">
                     <Td className="pl-5 font-semibold">{d.date}</Td>
                     <Td>{d.branchId} — <span className="text-xs text-slate-500">{d.branchName}</span></Td>
                     <Td className="text-right tabular-nums text-emerald-700">{fmt(d.revenueTotal)} ₫</Td>
@@ -158,9 +158,9 @@ export function MonthlyTab({ myBranchId, canSelectBranch, myBranchLabel, initial
                     <Td className="pr-5 text-right"><ChevronRight size={14} className="inline text-slate-400" /></Td>
                   </tr>
                 ))}
-                <tr className="border-t-2 border-slate-300 bg-slate-50 font-bold">
+                <tr className="border-t-2 border-amber-300 bg-amber-50/70 font-bold divide-x divide-amber-100">
                   <Td className="pl-5">TỔNG</Td>
-                  <Td className="text-xs text-slate-500">{summary.scope === 'system' ? 'Toàn hệ thống' : (summary.branchId ?? '')}</Td>
+                  <Td className="text-xs text-slate-600">{summary.scope === 'system' ? 'Toàn hệ thống' : (summary.branchId ?? '')}</Td>
                   <Td className="text-right tabular-nums text-emerald-700">{fmt(summary.totals.revenue.total)} ₫</Td>
                   <Td className="text-right tabular-nums text-rose-700">{fmt(summary.totals.expense.total)} ₫</Td>
                   <Td className={`text-right tabular-nums ${summary.totals.net.total < 0 ? 'text-rose-700' : 'text-emerald-700'}`}>{fmt(summary.totals.net.total)} ₫</Td>

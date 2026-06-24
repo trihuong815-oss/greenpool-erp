@@ -50,8 +50,8 @@ export function CashflowReportTable({ reports, loading, error, emptyText, onOpen
       ) : (
         <div className="overflow-x-auto -mx-5">
           <table className="w-full text-sm">
-            <thead className="text-xs text-slate-500 border-b border-slate-200">
-              <tr>
+            <thead className="text-xs text-slate-500 border-b-2 border-slate-300 bg-slate-50/60">
+              <tr className="divide-x divide-slate-200">
                 <Th className="pl-5">Ngày</Th>
                 <Th>Cơ sở</Th>
                 <Th>Trạng thái</Th>
@@ -70,7 +70,7 @@ export function CashflowReportTable({ reports, loading, error, emptyText, onOpen
                 const alertCount = Array.isArray(r.alerts) ? r.alerts.length : 0;
                 const net = r.net?.total ?? 0;
                 return (
-                  <tr key={r.id} onClick={() => onOpen(r)} className="border-b border-slate-100 hover:bg-emerald-50/40 cursor-pointer transition">
+                  <tr key={r.id} onClick={() => onOpen(r)} className="border-b border-slate-100 hover:bg-emerald-50/40 cursor-pointer transition-colors duration-150 divide-x divide-slate-100">
                     <Td className="pl-5 font-semibold text-slate-800">{r.date}</Td>
                     <Td>
                       <div className="text-sm font-medium text-slate-700">{r.branchId}</div>

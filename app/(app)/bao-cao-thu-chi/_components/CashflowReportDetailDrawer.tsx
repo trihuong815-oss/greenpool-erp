@@ -240,8 +240,8 @@ export function CashflowReportDetailDrawer({ reportId, canCheckReturn, canLock, 
               <div className="card-title"><span>Tổng hợp Thu - Chi - Net</span></div>
               <div className="overflow-x-auto -mx-5">
                 <table className="w-full text-sm">
-                  <thead className="text-xs text-slate-500 border-b border-slate-200">
-                    <tr>
+                  <thead className="text-xs text-slate-500 border-b-2 border-slate-300 bg-slate-50/60">
+                    <tr className="divide-x divide-slate-200">
                       <th className="text-left py-2 px-2 pl-5 font-medium">Phương thức</th>
                       <th className="text-right py-2 px-2 font-medium">Thu</th>
                       <th className="text-right py-2 px-2 font-medium">Chi</th>
@@ -253,7 +253,7 @@ export function CashflowReportDetailDrawer({ reportId, canCheckReturn, canLock, 
                     <CashRow label="Chuyển khoản" rev={r.revenueSource?.totalByMethod?.transfer ?? 0} exp={r.expense?.totalByMethod?.transfer ?? 0} net={r.net?.transfer ?? 0} />
                     <CashRow label="Quẹt thẻ"     rev={r.revenueSource?.totalByMethod?.card ?? 0}     exp={r.expense?.totalByMethod?.card ?? 0}     net={r.net?.card ?? 0} />
                     <CashRow label="Khác"         rev={0}                                              exp={r.expense?.totalByMethod?.other ?? 0}    net={r.net?.other ?? 0} dim={(r.expense?.totalByMethod?.other ?? 0) === 0} />
-                    <tr className="border-t-2 border-slate-200 bg-slate-50/60 font-bold">
+                    <tr className="border-t-2 border-amber-300 bg-amber-50/70 font-bold divide-x divide-amber-100">
                       <td className="py-2 px-2 pl-5">Tổng</td>
                       <td className="py-2 px-2 text-right tabular-nums text-emerald-700">{fmt(r.revenueSource?.total ?? 0)} ₫</td>
                       <td className="py-2 px-2 text-right tabular-nums text-rose-700">{fmt(r.expense?.totalByMethod?.total ?? 0)} ₫</td>
@@ -382,7 +382,7 @@ function Info({ label, value, className }: { label: string; value: React.ReactNo
 
 function CashRow({ label, rev, exp, net, dim }: { label: string; rev: number; exp: number; net: number; dim?: boolean }) {
   return (
-    <tr className={`border-b border-slate-100 ${dim ? 'text-slate-400' : ''}`}>
+    <tr className={`border-b border-slate-100 divide-x divide-slate-100 ${dim ? 'text-slate-400' : ''}`}>
       <td className="py-2 px-2 pl-5">{label}</td>
       <td className="py-2 px-2 text-right tabular-nums">{fmt(rev)} ₫</td>
       <td className="py-2 px-2 text-right tabular-nums">{fmt(exp)} ₫</td>
