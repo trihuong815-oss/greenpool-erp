@@ -16,7 +16,7 @@ import { SOURCE_LABEL, TRANSACTION_TYPE_LABEL, PAYMENT_METHOD_LABEL } from '@/li
 import type { SalesV2Package } from '@/lib/sales-v2/packages';
 import PackagePicker from './PackagePicker';
 import { showConfirm } from '@/components/ui/imperative-modal';
-import { type LocalRow, isRowEmpty, validateRow, isValidPhone, effectivePackageValue } from './SalesGrid';
+import { type LocalRow, isRowEmpty, validateRow, isValidPhone, effectivePackageValue, buildPaymentMethodChangePatch } from './SalesGrid';
 
 interface Props {
   packages: SalesV2Package[];
@@ -453,7 +453,7 @@ function CardEditor({
           <select
             value={(row.paymentMethod ?? '') as string}
             disabled={!canEdit}
-            onChange={(e) => onUpdate({ paymentMethod: e.target.value as PaymentMethod } as any)}
+            onChange={(e) => onUpdate(buildPaymentMethodChangePatch(row.paymentMethod, (e.target.value || null) as PaymentMethod | null) as any)}
             className="w-full px-3 py-2 rounded-lg ring-1 ring-slate-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
           >
             <option value="">— Chọn —</option>

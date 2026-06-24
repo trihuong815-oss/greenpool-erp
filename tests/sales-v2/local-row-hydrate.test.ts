@@ -6,7 +6,7 @@
 // coerceLocalRow chuẩn hoá tại entry boundary; isRowEmpty/validateRow defensive cuối cùng.
 
 import { describe, it, expect } from 'vitest';
-import { coerceLocalRow, isRowEmpty, validateRow, makeEmptyRow } from '@/app/(app)/doanh-so-v2/nhap/_components/SalesGrid';
+import { coerceLocalRow, isRowEmpty, validateRow, makeEmptyRow, buildPaymentMethodChangePatch } from '@/app/(app)/doanh-so-v2/nhap/_components/SalesGrid';
 
 describe('coerceLocalRow — schema-cũ hydrate an toàn', () => {
   it('input rỗng → LocalRow đầy đủ field', () => {
@@ -113,6 +113,110 @@ describe('isRowEmpty — defensive cuối cùng (Layer 3)', () => {
   it('isRowEmpty(row có customerName) = false', () => {
     const r = { ...makeEmptyRow(), customerName: 'A' };
     expect(isRowEmpty(r)).toBe(false);
+  });
+});
+
+describe('validateRow — split method source of truth = sumSplitCells (FIX 2026-06-24)', () => {
+  it('Stale r.collectedToday từ method single cũ KHÔNG gây false mismatch', () => {
+    // Scenario: Sale chọn "Tiền mặt" 1.000.000 → đổi sang "Tiền mặt + Chuyển khoản"
+    // (sau khi đổi, collectedToday cũ vẫn còn 1tr) → Sale gõ TM 300k + CK 400k = 700k.
+    // Trước FIX: validateRow dùng r.collectedToday=1tr → mismatch với sum 700k → lỗi.
+    // Sau FIX: validateRow dùng sumSplitCells=700k → check 2 active >0 OK + sum=ct → pass.
+    const row = {
+      ...makeEmptyRow(),
+      customerName: 'A', phone: '0901234567',
+      source: 'walkin' as any,
+      packageId: 'p1', packageCode: 'TT12', packageName: 'Thẻ 12', serviceGroup: 'TT12',
+      transactionType: 'thanh_toan_full' as any,
+      paymentMethod: 'tien_mat_chuyen_khoan' as any,
+      packageValue: '700000',  // gói 700k
+      collectedToday: '1000000', // STALE từ method cũ
+      paymentCash: '300000',
+      paymentTransfer: '400000',
+      paymentCard: '',
+      contractNo: 'HD1',
+    };
+    const v = validateRow(row);
+    // Sau FIX: ct = sum split = 700k = packageValue → PASS.
+    expect(v.ok).toBe(true);
+  });
+
+  it('Combo TM+CK với 2 active > 0 + sum đúng → PASS', () => {
+    const row = {
+      ...makeEmptyRow(),
+      customerName: 'A', phone: '0901234567',
+      source: 'walkin' as any,
+      packageId: 'p1', packageCode: 'TT', packageName: 'Pkg', serviceGroup: 'TT',
+      transactionType: 'thanh_toan_full' as any,
+      paymentMethod: 'tien_mat_chuyen_khoan' as any,
+      packageValue: '1000000',
+      collectedToday: '', // empty, source of truth = sum split
+      paymentCash: '300000',
+      paymentTransfer: '700000',
+      paymentCard: '',
+      contractNo: 'HD1',
+    };
+    const v = validateRow(row);
+    expect(v.ok).toBe(true);
+  });
+
+  it('Combo thiếu 1 ô active → invalid', () => {
+    const row = {
+      ...makeEmptyRow(),
+      customerName: 'A', phone: '0901234567',
+      source: 'walkin' as any,
+      packageId: 'p1', packageCode: 'TT', packageName: 'Pkg', serviceGroup: 'TT',
+      transactionType: 'thanh_toan_full' as any,
+      paymentMethod: 'tien_mat_chuyen_khoan' as any,
+      packageValue: '1000000',
+      collectedToday: '',
+      paymentCash: '1000000',  // chỉ 1 ô có, ô CK trống
+      paymentTransfer: '',
+      paymentCard: '',
+      contractNo: 'HD1',
+    };
+    const v = validateRow(row);
+    expect(v.ok).toBe(false);
+    if (!v.ok) expect(v.error).toContain('Vui lòng nhập đủ');
+  });
+});
+
+describe('buildPaymentMethodChangePatch — clear stale state khi đổi method', () => {
+  it('single → combo: clear collectedToday + 3 cell', () => {
+    const p = buildPaymentMethodChangePatch('tien_mat', 'tien_mat_chuyen_khoan');
+    expect(p.paymentMethod).toBe('tien_mat_chuyen_khoan');
+    expect(p.collectedToday).toBe('');
+    expect(p.paymentCash).toBe('');
+    expect(p.paymentTransfer).toBe('');
+    expect(p.paymentCard).toBe('');
+  });
+  it('combo → single: clear 3 cell, GIỮ collectedToday', () => {
+    const p = buildPaymentMethodChangePatch('tien_mat_chuyen_khoan', 'tien_mat');
+    expect(p.paymentMethod).toBe('tien_mat');
+    expect(p.collectedToday).toBeUndefined(); // không đụng
+    expect(p.paymentCash).toBe('');
+    expect(p.paymentTransfer).toBe('');
+    expect(p.paymentCard).toBe('');
+  });
+  it('combo → combo khác: clear 3 cell (active bucket khác nhau)', () => {
+    const p = buildPaymentMethodChangePatch('tien_mat_chuyen_khoan', 'chuyen_khoan_pos');
+    expect(p.paymentMethod).toBe('chuyen_khoan_pos');
+    expect(p.paymentCash).toBe('');
+    expect(p.paymentTransfer).toBe('');
+    expect(p.paymentCard).toBe('');
+  });
+  it('same method → chỉ patch paymentMethod (no-op)', () => {
+    const p = buildPaymentMethodChangePatch('tien_mat', 'tien_mat');
+    expect(p.paymentMethod).toBe('tien_mat');
+    expect(p.paymentCash).toBeUndefined();
+    expect(p.collectedToday).toBeUndefined();
+  });
+  it('null → combo: clear 3 cell + collectedToday', () => {
+    const p = buildPaymentMethodChangePatch(null, 'tien_mat_pos');
+    expect(p.paymentMethod).toBe('tien_mat_pos');
+    expect(p.collectedToday).toBe('');
+    expect(p.paymentCash).toBe('');
+    expect(p.paymentCard).toBe('');
   });
 });
 

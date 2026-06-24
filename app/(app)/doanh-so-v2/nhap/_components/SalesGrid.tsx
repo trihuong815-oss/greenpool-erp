@@ -165,6 +165,38 @@ export function isValidPhone(phone: string): boolean {
   return /^0\d{9}$/.test(t);
 }
 
+/** FIX 2026-06-24: khi user đổi paymentMethod → tự reset field cũ để tránh stale state.
+ *  Stale state cũ → false "Tổng tiền theo phương thức không khớp Thu hôm nay".
+ *
+ *  Rule:
+ *  - single → combo: clear collectedToday + 3 cell (user phải nhập lại qua 2 ô split, sum tự tính)
+ *  - combo → single: clear 3 cell (collectedToday giữ — user gõ trực tiếp)
+ *  - combo → combo khác: clear 3 cell (active bucket khác nhau, tránh dirty inactive)
+ *  - same method hoặc unset: chỉ patch paymentMethod
+ */
+export function buildPaymentMethodChangePatch(
+  oldMethod: PaymentMethod | null,
+  newMethod: PaymentMethod | null,
+): Partial<LocalRow> {
+  const patch: Partial<LocalRow> = { paymentMethod: newMethod };
+  if (!newMethod || oldMethod === newMethod) return patch;
+  const oldSplit = oldMethod ? isSplitPayment(oldMethod) : false;
+  const newSplit = isSplitPayment(newMethod);
+  if (newSplit) {
+    // single → combo: clear cả collectedToday và 3 cell
+    if (!oldSplit) patch.collectedToday = '';
+    patch.paymentCash = '';
+    patch.paymentTransfer = '';
+    patch.paymentCard = '';
+  } else if (oldSplit) {
+    // combo → single: clear 3 cell, giữ collectedToday
+    patch.paymentCash = '';
+    patch.paymentTransfer = '';
+    patch.paymentCard = '';
+  }
+  return patch;
+}
+
 /** Row hoàn toàn rỗng — Sale chưa nhập gì (vd row auto-add trailing). KHÔNG validate + KHÔNG báo lỗi.
  *
  *  Defensive coerce (HOTFIX 2026-06-24): tất cả `r.X.trim()` đều `?? ''` để không crash
@@ -255,11 +287,16 @@ export function validateRow(r: LocalRow): { ok: true } | { ok: false; error: str
   if (!r.packageId) return { ok: false, error: 'Thiếu gói' };
   if (!r.transactionType) return { ok: false, error: 'Thiếu loại giao dịch' };
   if (!r.paymentMethod) return { ok: false, error: 'Thiếu hình thức thu' };
-  const ct = Number(r.collectedToday);
+  // PR-SALES-PAYMENT-SPLIT-SAFE (2026-06-24): split method bắt buộc 2 ô active > 0.
+  // FIX 2026-06-24: SOURCE OF TRUTH cho combo = tổng 2 ô split, KHÔNG phải field
+  // r.collectedToday (có thể stale khi user đổi method từ single → combo). Trước
+  // đây dùng r.collectedToday gây false "Tổng tiền theo phương thức không khớp
+  // Thu hôm nay" khi user mới đổi method. Match với NhapClient POST + display logic.
+  const ct: number = isSplitPayment(r.paymentMethod)
+    ? sumSplitCells(r)
+    : Number(r.collectedToday);
   if (!Number.isFinite(ct) || ct < 0) return { ok: false, error: 'Thu hôm nay không hợp lệ' };
 
-  // PR-SALES-PAYMENT-SPLIT-SAFE (2026-06-24): split method bắt buộc 2 ô active > 0
-  // và tổng = collectedToday. Đối với single method, server tự derive — không cần check.
   if (isSplitPayment(r.paymentMethod)) {
     const bd = computeBreakdownFromRow(r);
     const bdCheck = validatePaymentBreakdown(r.paymentMethod, ct, bd);
@@ -617,7 +654,7 @@ function SavedRow({ idx, row, packages, canEdit, batchStatus, branchId, onUpdate
         />
       </Td>
       <Td>
-        <PayMethodSelect value={row.paymentMethod} disabled={!canEdit} onChange={(v) => onUpdate({ paymentMethod: v })} />
+        <PayMethodSelect value={row.paymentMethod} disabled={!canEdit} onChange={(v) => onUpdate(buildPaymentMethodChangePatch(row.paymentMethod, v) as any)} />
       </Td>
       {/* PR-SALES-PAYMENT-SPLIT-SAFE: 3 cell read-only cho saved tx, đặt ngay sau HT thu.
           User 2026-06-24: position theo HT thu để Sale đọc breakdown nhanh. */}
@@ -871,7 +908,7 @@ function LocalRowItem({ idx, row, packages, canEdit, branchId, batchMonth, onUpd
         />
       </Td>
       <Td>
-        <PayMethodSelect value={row.paymentMethod} disabled={!canEdit} onChange={(v) => onUpdate({ paymentMethod: v })} />
+        <PayMethodSelect value={row.paymentMethod} disabled={!canEdit} onChange={(v) => onUpdate(buildPaymentMethodChangePatch(row.paymentMethod, v) as any)} />
       </Td>
       {/* PR-SALES-PAYMENT-SPLIT-SAFE: 3 cell tiền theo method, đặt ngay sau HT thu.
           User 2026-06-24: re-order để Sale nhập tiền liền mạch sau khi chọn HT thu.
