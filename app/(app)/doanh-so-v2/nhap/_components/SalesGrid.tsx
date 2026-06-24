@@ -324,6 +324,9 @@ interface Props {
   onRemoveLocal: (tempId: string) => void;
   onUpdateSaved: (id: string, patch: Partial<SalesTransaction>) => void;
   onRemoveSaved: (id: string) => void;
+  /** HOTFIX UX 2026-06-24: callback khi user click chấm than lỗi → cha hiển thị toast/modal.
+   *  Trước đây chỉ có `title` HTML tooltip → mobile + Sale dễ bỏ sót. */
+  onShowError?: (msg: string) => void;
 }
 
 const SOURCE_TONE: Record<SalesV2Source, string> = {
@@ -353,7 +356,7 @@ function canSaleEditRow(batchStatus: string, reviewStatus?: string): boolean {
 
 export default function SalesGrid({
   packages, rows, localRows, canEdit, batchStatus, branchId, batchMonth,
-  onUpdateLocal, onRemoveLocal, onUpdateSaved, onRemoveSaved,
+  onUpdateLocal, onRemoveLocal, onUpdateSaved, onRemoveSaved, onShowError,
 }: Props) {
   const totalRows = rows.length + localRows.length;
 
@@ -441,6 +444,7 @@ export default function SalesGrid({
                   batchMonth={batchMonth}
                   onUpdate={(patch) => onUpdateLocal(r.tempId, patch)}
                   onRemove={() => onRemoveLocal(r.tempId)}
+                  onShowError={onShowError}
                   autoFocusFirstCell={shouldFocus}
                 />
               );
@@ -691,7 +695,7 @@ function SavedRow({ idx, row, packages, canEdit, batchStatus, branchId, onUpdate
 }
 
 /** Row local (chưa save). Edit cập nhật state cha. */
-function LocalRowItem({ idx, row, packages, canEdit, branchId, batchMonth, onUpdate, onRemove, autoFocusFirstCell }: {
+function LocalRowItem({ idx, row, packages, canEdit, branchId, batchMonth, onUpdate, onRemove, onShowError, autoFocusFirstCell }: {
   idx: number;
   row: LocalRow;
   packages: SalesV2Package[];
@@ -700,6 +704,7 @@ function LocalRowItem({ idx, row, packages, canEdit, branchId, batchMonth, onUpd
   batchMonth: string;
   onUpdate: (patch: Partial<LocalRow>) => void;
   onRemove: () => void;
+  onShowError?: (msg: string) => void;
   autoFocusFirstCell?: boolean;
 }) {
   // 'thanh_toan_not' = trả nốt → KHÔNG tính doanh số mới + debt = 0 (sẽ link gd cũ)
@@ -975,11 +980,27 @@ function LocalRowItem({ idx, row, packages, canEdit, branchId, batchMonth, onUpd
             <Trash2 size={14} />
           </button>
         )}
-        {(row.errorMessage || !validation.ok) && (
-          <div title={row.errorMessage ?? (validation.ok ? '' : validation.error)}>
-            <AlertCircle size={12} className="mx-auto mt-1 text-amber-600" />
-          </div>
-        )}
+        {(row.errorMessage || !validation.ok) && (() => {
+          const msg = row.errorMessage ?? (validation.ok ? '' : validation.error);
+          // HOTFIX UX 2026-06-24: chấm than click hiện rõ lỗi qua toast (parent),
+          // fallback alert nếu không có callback. Trước đây chỉ HTML title → mobile/Sale
+          // dễ bỏ sót lý do dòng có lỗi.
+          return (
+            <button
+              type="button"
+              onClick={() => {
+                if (!msg) return;
+                if (onShowError) onShowError(`Dòng ${idx}: ${msg}`);
+                else if (typeof window !== 'undefined') window.alert(`Dòng ${idx}: ${msg}`);
+              }}
+              title={msg ? `Bấm để xem lỗi · ${msg}` : 'Có lỗi'}
+              aria-label={msg ? `Lỗi: ${msg}` : 'Lỗi dòng'}
+              className="mx-auto mt-1 p-0.5 rounded hover:bg-amber-100 text-amber-600 hover:text-amber-700 transition-colors block"
+            >
+              <AlertCircle size={14} />
+            </button>
+          );
+        })()}
       </Td>
     </tr>
   );
@@ -1003,18 +1024,22 @@ function TextCell({
   inputRef?: React.MutableRefObject<HTMLInputElement | null>;
   required?: boolean;
 }) {
+  // HOTFIX Layer 4 (2026-06-24): defensive coerce — atomic cell phải an toàn
+  // dù caller pass undefined/null. Last line of defense sau coerceLocalRow/
+  // ?? '' trong validateRow/isRowEmpty.
+  const v = value ?? '';
   return (
     <input
       ref={(el) => { if (inputRef) inputRef.current = el; }}
       type="text"
-      defaultValue={value}
+      defaultValue={v}
       disabled={disabled}
       placeholder={placeholder}
       onBlur={(e) => {
-        const v = e.target.value;
-        if (v !== value) onCommit(v);
+        const next = e.target.value;
+        if (next !== v) onCommit(next);
       }}
-      title={required && !value.trim() ? 'Bắt buộc nhập' : undefined}
+      title={required && !v.trim() ? 'Bắt buộc nhập' : undefined}
       className={`w-full px-2 py-1 rounded text-sm ${INPUT_BASE}`}
     />
   );
@@ -1030,9 +1055,11 @@ function PhoneCell({
   placeholder?: string;
   required?: boolean;
 }) {
-  const [local, setLocal] = useState(value);
-  useEffect(() => { setLocal(value); }, [value]);
-  const trimmed = local.trim();
+  // HOTFIX Layer 4 (2026-06-24): defensive coerce value at boundary.
+  const safeValue = value ?? '';
+  const [local, setLocal] = useState(safeValue);
+  useEffect(() => { setLocal(safeValue); }, [safeValue]);
+  const trimmed = (local ?? '').trim();
   const isEmpty = trimmed.length === 0;
   const invalid = !isEmpty && !isValidPhone(trimmed);
   return (

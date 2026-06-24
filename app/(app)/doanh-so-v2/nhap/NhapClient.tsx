@@ -595,6 +595,7 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
             onRemoveLocal={handleRemoveLocal}
             onUpdateSaved={handleUpdateSaved}
             onRemoveSaved={handleRemoveSaved}
+            onShowError={(msg) => showToast('err', msg)}
           />
         </div>
 

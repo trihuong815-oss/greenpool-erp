@@ -127,4 +127,21 @@ describe('validateRow — defensive với row schema cũ', () => {
     const v = validateRow(broken);
     expect(v.ok).toBe(false);
   });
+  it('row có guardianName + receiptNo + contractNo = undefined KHÔNG throw', () => {
+    const broken = {
+      ...makeEmptyRow(),
+      customerName: 'A', phone: '0901234567',
+      source: 'walkin' as any, packageId: 'p1',
+      transactionType: 'dat_coc' as any, paymentMethod: 'tien_mat' as any,
+      packageValue: '1000000', collectedToday: '1000000',
+      guardianName: undefined as any,
+      receiptNo: undefined as any,
+      contractNo: undefined as any,
+      isChildPackage: true,
+    };
+    expect(() => validateRow(broken)).not.toThrow();
+    // Phải trả error vì gói trẻ em + thiếu guardian
+    const v = validateRow(broken);
+    expect(v.ok).toBe(false);
+  });
 });
