@@ -3,13 +3,16 @@
 // Excel import — Sale paste TSV/CSV từ Excel/Google Sheets vào textarea.
 // Parser tách dòng, validate per cell, hiển thị preview, push valid rows vào localRows.
 // Phase 6 (2026-06-17).
+// PR-SALES-EXCEL-IMPORT-SPLIT (2026-06-24): hỗ trợ 6 HT thu + 3 cột breakdown
+// (Tiền mặt / Chuyển khoản / POS). Parser tách ra lib/sales-v2/excel-import-parser.ts.
 
 import { useMemo, useState } from 'react';
 import { X, Upload, AlertCircle, Check, FileSpreadsheet } from 'lucide-react';
-import type { SalesV2Source, TransactionType, PaymentMethod } from '@/lib/types/sales-v2';
-import { SOURCE_LABEL, TRANSACTION_TYPE_LABEL, PAYMENT_METHOD_LABEL } from '@/lib/types/sales-v2';
+import { TRANSACTION_TYPE_LABEL, PAYMENT_METHOD_LABEL } from '@/lib/types/sales-v2';
 import type { SalesV2Package } from '@/lib/sales-v2/packages';
 import { type LocalRow, makeEmptyRow } from './SalesGrid';
+import { parseExcelRows, type ParsedExcelRow } from '@/lib/sales-v2/excel-import-parser';
+import { getActivePaymentFields, isSplitPayment } from '@/lib/sales-v2/payment-split';
 
 interface Props {
   packages: SalesV2Package[];
@@ -17,140 +20,12 @@ interface Props {
   onImport: (rows: LocalRow[]) => void;
 }
 
-interface ParsedRow {
-  rowIdx: number; // dòng trong file gốc (cho debug)
-  customerName: string;
-  phone: string;
-  guardianName: string;
-  source: string;
-  packageName: string;
-  transactionType: string;
-  paymentMethod: string;
-  receiptNo: string;
-  contractNo: string;
-  packageValue: number;
-  collectedToday: number;
-  note: string;
-  // Resolved enums
-  resolvedSource?: SalesV2Source;
-  resolvedTxnType?: TransactionType;
-  resolvedPayMethod?: PaymentMethod;
-  resolvedPackage?: SalesV2Package;
-  errors: string[];
-}
-
-// Reverse-lookup label → enum (case + diacritics insensitive)
-function norm(s: string): string {
-  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
-}
-const SOURCE_MAP = new Map(Object.entries(SOURCE_LABEL).map(([k, v]) => [norm(v), k as SalesV2Source]));
-const TXN_MAP = new Map(Object.entries(TRANSACTION_TYPE_LABEL).map(([k, v]) => [norm(v), k as TransactionType]));
-const PAY_MAP = new Map(Object.entries(PAYMENT_METHOD_LABEL).map(([k, v]) => [norm(v), k as PaymentMethod]));
-
-const HEADER_KEYWORDS = ['ten kh', 'ten khach', 'sdt', 'phone', 'tên kh', 'tên khách'];
-
-// Expected columns in order: Tên KH | SĐT | Người giám hộ | Nguồn | Gói | Loại GD | HT thu |
-//                           Số PT | Số HĐ | Giá trị gói | Thu hôm nay | Ghi chú
-const COLUMN_HINT = 'Tên KH | SĐT | Người giám hộ | Nguồn | Gói | Loại GD | HT thu | Số PT | Số HĐ | Giá trị | Thu | Ghi chú';
-
-function parseRows(text: string, packages: SalesV2Package[]): ParsedRow[] {
-  const lines = text.replace(/\r/g, '').split('\n').filter((l) => l.trim().length > 0);
-  if (lines.length === 0) return [];
-
-  // Auto-detect TSV vs CSV (TSV from Excel paste, CSV from file)
-  const firstLine = lines[0];
-  const sep = firstLine.includes('\t') ? '\t' : ',';
-
-  // Skip header row nếu dòng đầu chứa keyword
-  let startIdx = 0;
-  if (HEADER_KEYWORDS.some((k) => norm(firstLine).includes(norm(k)))) startIdx = 1;
-
-  const result: ParsedRow[] = [];
-  for (let i = startIdx; i < lines.length; i++) {
-    const cells = lines[i].split(sep).map((c) => c.trim().replace(/^"|"$/g, ''));
-    const row: ParsedRow = {
-      rowIdx: i + 1,
-      customerName: cells[0] ?? '',
-      phone: cells[1]?.replace(/\s/g, '') ?? '',
-      guardianName: cells[2] ?? '',
-      source: cells[3] ?? '',
-      packageName: cells[4] ?? '',
-      transactionType: cells[5] ?? '',
-      paymentMethod: cells[6] ?? '',
-      receiptNo: cells[7] ?? '',
-      contractNo: cells[8] ?? '',
-      packageValue: Number(cells[9]?.replace(/[.,\s]/g, '') ?? 0) || 0,
-      collectedToday: Number(cells[10]?.replace(/[.,\s]/g, '') ?? 0) || 0,
-      note: cells[11] ?? '',
-      errors: [],
-    };
-
-    // Required base
-    if (!row.customerName) row.errors.push('Thiếu tên KH');
-    if (!row.phone) row.errors.push('Thiếu SĐT');
-    else if (!/^0\d{9}$/.test(row.phone)) row.errors.push('SĐT phải 10 số bắt đầu 0');
-
-    // Resolve enums
-    row.resolvedSource = SOURCE_MAP.get(norm(row.source));
-    if (!row.resolvedSource && row.source) row.errors.push(`Nguồn "${row.source}" không hợp lệ`);
-    else if (!row.source) row.errors.push('Thiếu nguồn');
-
-    row.resolvedTxnType = TXN_MAP.get(norm(row.transactionType));
-    if (!row.resolvedTxnType && row.transactionType) row.errors.push(`Loại GD "${row.transactionType}" không hợp lệ`);
-    else if (!row.transactionType) row.errors.push('Thiếu loại GD');
-
-    row.resolvedPayMethod = PAY_MAP.get(norm(row.paymentMethod));
-    if (!row.resolvedPayMethod && row.paymentMethod) row.errors.push(`HT thu "${row.paymentMethod}" không hợp lệ`);
-    else if (!row.paymentMethod) row.errors.push('Thiếu HT thu');
-
-    // Resolve package: match by full name or "code name"
-    if (row.packageName) {
-      const target = norm(row.packageName);
-      row.resolvedPackage = packages.find((p) =>
-        norm(p.name) === target ||
-        norm(`${p.code} ${p.name}`) === target ||
-        norm(p.code + p.name) === target,
-      );
-      if (!row.resolvedPackage) row.errors.push(`Gói "${row.packageName}" không tìm thấy`);
-    } else {
-      row.errors.push('Thiếu gói');
-    }
-
-    // Validate chứng từ theo loại GD
-    if (row.resolvedTxnType === 'dat_coc' && !row.receiptNo) {
-      row.errors.push('Đặt cọc bắt buộc Số phiếu thu');
-    }
-    if ((row.resolvedTxnType === 'thanh_toan_full' || row.resolvedTxnType === 'thanh_toan_not') && !row.contractNo) {
-      row.errors.push('Thanh toán bắt buộc Số HĐ');
-    }
-
-    // Guardian required nếu gói trẻ em
-    if (row.resolvedPackage?.isChildPackage && !row.guardianName) {
-      row.errors.push('Gói trẻ em bắt buộc Người giám hộ');
-    }
-
-    // Tiền
-    if (row.resolvedTxnType !== 'thanh_toan_not') {
-      if (!row.packageValue || row.packageValue <= 0) row.errors.push('Thiếu giá trị gói');
-    }
-    if (!row.collectedToday || row.collectedToday < 0) {
-      // Cho phép thu = 0 cho dat_coc nếu Sale chưa thu
-      if (row.resolvedTxnType === 'thanh_toan_not' && row.collectedToday <= 0) {
-        row.errors.push('Thanh toán nốt phải có số tiền thu');
-      }
-    }
-    if (row.resolvedTxnType === 'thanh_toan_full' && row.collectedToday < row.packageValue) {
-      row.errors.push('Thanh toán full phải thu đủ giá trị gói');
-    }
-
-    result.push(row);
-  }
-  return result;
-}
+// Column hint cho Sale — phản ánh đầy đủ 15 cột (3 cuối optional cho combo).
+const COLUMN_HINT = 'Tên KH | SĐT | Người giám hộ | Nguồn | Gói | Loại GD | HT thu | Số PT | Số HĐ | Giá trị | Thu | Ghi chú | Tiền mặt | Chuyển khoản | POS';
 
 export default function ExcelImportModal({ packages, onClose, onImport }: Props) {
   const [text, setText] = useState('');
-  const parsed = useMemo(() => parseRows(text, packages), [text, packages]);
+  const parsed = useMemo<ParsedExcelRow[]>(() => parseExcelRows(text, packages), [text, packages]);
 
   const stats = useMemo(() => {
     let valid = 0, invalid = 0;
@@ -181,24 +56,23 @@ export default function ExcelImportModal({ packages, onClose, onImport }: Props)
       lr.packageName = r.resolvedPackage!.name;
       lr.serviceGroup = r.resolvedPackage!.serviceGroup;
       lr.isChildPackage = r.resolvedPackage!.isChildPackage;
-      // V6 PT: import từ Excel mà gói là PT → set flag, nhưng quantity/unitPrice
-      // không có trong file Excel cũ → giữ rỗng để validateRow chặn POST (Sale phải
-      // mở row sửa, nhập số buổi). Tránh import nhầm = mất doanh số.
       lr.packageIsCustomQuantity = r.resolvedPackage!.isCustomQuantity === true;
-      // V8.Y (2026-06-19): manual mode flag (HB CLB Kid/Aqua) — qty từ Excel cần Sale review
       lr.packageManualPriceWithQty = r.resolvedPackage!.manualPriceWithQuantity === true;
       lr.transactionType = r.resolvedTxnType!;
       lr.paymentMethod = r.resolvedPayMethod!;
-      // V6 PT giữ rỗng packageValue (auto). V8.Y manual KHÔNG giữ rỗng — Sale tự nhập:
-      // dùng giá Excel (nếu có >0) làm seed, else rỗng để chặn POST + Sale nhập tay.
       lr.packageValue = r.resolvedTxnType === 'thanh_toan_not' || r.resolvedPackage!.isCustomQuantity
         ? ''
         : String(r.packageValue);
-      lr.collectedToday = String(r.collectedToday);
+      // PR-SALES-EXCEL-IMPORT-SPLIT: dùng resolvedCollected (đã tự tính cho combo nếu Thu hôm nay trống).
+      lr.collectedToday = String(r.resolvedCollected);
+      // PR-SALES-EXCEL-IMPORT-SPLIT: gán breakdown đã resolve. NhapClient.POST đọc paymentCash/Transfer/Card.
+      const bd = r.resolvedBreakdown ?? { cash: 0, transfer: 0, card: 0 };
+      lr.paymentCash = bd.cash > 0 ? String(bd.cash) : '';
+      lr.paymentTransfer = bd.transfer > 0 ? String(bd.transfer) : '';
+      lr.paymentCard = bd.card > 0 ? String(bd.card) : '';
       lr.receiptNo = r.receiptNo;
       lr.contractNo = r.contractNo;
       lr.note = r.note;
-      // V7 Promo: Excel import không hỗ trợ chọn KM — Sale tự thêm sau ở grid.
       lr.promoSnapshots = [];
       validRows.push(lr);
     }
@@ -230,9 +104,11 @@ export default function ExcelImportModal({ packages, onClose, onImport }: Props)
           {/* Column hint */}
           <div className="rounded-lg bg-emerald-50 ring-1 ring-emerald-200 px-3 py-2 text-xs text-emerald-800">
             <div className="font-semibold mb-1">Thứ tự cột (theo header Excel):</div>
-            <div className="font-mono text-[11px] leading-relaxed">{COLUMN_HINT}</div>
-            <div className="mt-1.5 text-emerald-700">
-              💡 Cột "Số PT" required cho Đặt cọc. Cột "Số HĐ" required cho Thanh toán full/nốt.
+            <div className="font-mono text-xs leading-relaxed">{COLUMN_HINT}</div>
+            <div className="mt-1.5 text-emerald-700 space-y-0.5">
+              <div>💡 Cột "Số PT" required cho Đặt cọc. Cột "Số HĐ" required cho Thanh toán full/nốt.</div>
+              <div>💡 HT thu 1 hình thức (Tiền mặt / Chuyển khoản / POS): chỉ cần cột "Thu hôm nay", 3 cột cuối có thể để trống.</div>
+              <div>💡 HT thu 2 hình thức (vd "Tiền mặt + Chuyển khoản"): bắt buộc nhập đủ 2 cột tiền tương ứng, cột còn lại để trống.</div>
             </div>
           </div>
 
@@ -252,7 +128,7 @@ export default function ExcelImportModal({ packages, onClose, onImport }: Props)
             value={text}
             onChange={(e) => setText(e.target.value)}
             rows={6}
-            placeholder={'Bé Minh\t0901234567\tNguyễn Văn A\tNguồn cá nhân\tHọc bơi cơ bản trẻ em\tĐặt cọc\tTiền mặt\tPT001\t\t5000000\t2000000\t\nAnh Nam\t0907777777\t\tWalkin\t...'}
+            placeholder={'Bé Minh\t0901234567\tNguyễn Văn A\tNguồn cá nhân\tHọc bơi cơ bản trẻ em\tĐặt cọc\tTiền mặt\tPT001\t\t5000000\t2000000\t\nAnh Nam\t0907777777\t\tWalkin\tThẻ năm\tThanh toán full\tTiền mặt + Chuyển khoản\t\tHD001\t6000000\t6000000\t\t2000000\t4000000\t'}
             className="w-full px-3 py-2 rounded-lg ring-1 ring-slate-200 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-y"
           />
 
@@ -274,22 +150,36 @@ export default function ExcelImportModal({ packages, onClose, onImport }: Props)
           {parsed.length > 0 && (
             <div className="rounded-lg ring-1 ring-slate-200 overflow-hidden">
               <div className="overflow-x-auto max-h-[40vh]">
-                <table className="w-full min-w-[1100px] text-xs">
-                  <thead className="bg-slate-50 sticky top-0 text-[10px] uppercase text-slate-500 font-semibold">
+                <table className="w-full min-w-[1300px] text-xs">
+                  <thead className="bg-slate-50 sticky top-0 text-xs uppercase text-slate-500 font-semibold">
                     <tr>
                       <th className="px-2 py-2 text-left w-8">#</th>
                       <th className="px-2 py-2 text-left">Tên KH</th>
                       <th className="px-2 py-2 text-left">SĐT</th>
                       <th className="px-2 py-2 text-left">Gói</th>
                       <th className="px-2 py-2 text-left">Loại GD</th>
+                      <th className="px-2 py-2 text-left">HT thu</th>
                       <th className="px-2 py-2 text-right">Giá trị</th>
                       <th className="px-2 py-2 text-right">Thu</th>
+                      <th className="px-2 py-2 text-right">Tiền mặt</th>
+                      <th className="px-2 py-2 text-right">Chuyển khoản</th>
+                      <th className="px-2 py-2 text-right">POS</th>
                       <th className="px-2 py-2 text-left">Lỗi</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {parsed.map((r, i) => {
                       const ok = r.errors.length === 0;
+                      const m = r.resolvedPayMethod;
+                      const active = m ? new Set(getActivePaymentFields(m)) : new Set<string>();
+                      const split = m ? isSplitPayment(m) : false;
+                      const bd = r.resolvedBreakdown ?? { cash: 0, transfer: 0, card: 0 };
+                      const renderAmount = (key: 'cash' | 'transfer' | 'card', value: number) => {
+                        if (!m) return <span className="text-slate-300">—</span>;
+                        if (!active.has(key)) return <span className="text-slate-300">—</span>;
+                        const cls = split ? 'text-violet-700 font-semibold' : 'text-slate-700';
+                        return <span className={`tabular-nums ${cls}`}>{value.toLocaleString()}</span>;
+                      };
                       return (
                         <tr key={i} className={ok ? 'bg-emerald-50/30' : 'bg-rose-50/30'}>
                           <td className="px-2 py-1.5 text-slate-400 tabular-nums">{r.rowIdx}</td>
@@ -297,15 +187,21 @@ export default function ExcelImportModal({ packages, onClose, onImport }: Props)
                           <td className="px-2 py-1.5 tabular-nums">{r.phone}</td>
                           <td className="px-2 py-1.5 text-slate-600 truncate max-w-[140px]">{r.resolvedPackage?.name ?? r.packageName}</td>
                           <td className="px-2 py-1.5 text-slate-600">{r.resolvedTxnType ? TRANSACTION_TYPE_LABEL[r.resolvedTxnType] : r.transactionType}</td>
+                          <td className="px-2 py-1.5 text-slate-600">
+                            {m ? PAYMENT_METHOD_LABEL[m] : <span className="text-rose-500">{r.paymentMethod || '∅'}</span>}
+                          </td>
                           <td className="px-2 py-1.5 text-right tabular-nums">{r.packageValue.toLocaleString()}</td>
-                          <td className="px-2 py-1.5 text-right tabular-nums">{r.collectedToday.toLocaleString()}</td>
+                          <td className="px-2 py-1.5 text-right tabular-nums">{r.resolvedCollected.toLocaleString()}</td>
+                          <td className="px-2 py-1.5 text-right">{renderAmount('cash', bd.cash)}</td>
+                          <td className="px-2 py-1.5 text-right">{renderAmount('transfer', bd.transfer)}</td>
+                          <td className="px-2 py-1.5 text-right">{renderAmount('card', bd.card)}</td>
                           <td className="px-2 py-1.5">
                             {ok ? (
                               <span className="inline-flex items-center gap-1 text-emerald-700 font-semibold">
                                 <Check size={11} /> OK
                               </span>
                             ) : (
-                              <span className="text-rose-700 text-[11px]">{r.errors.join('; ')}</span>
+                              <span className="text-rose-700 text-xs">Dòng {r.rowIdx}: {r.errors.join('; ')}</span>
                             )}
                           </td>
                         </tr>
