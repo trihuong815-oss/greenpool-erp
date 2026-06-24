@@ -108,30 +108,85 @@ export function makeEmptyRow(): LocalRow {
   };
 }
 
+/** Defensive string coerce — undefined/null/number → '' / String(x).
+ *  Dùng cho mọi nơi hydrate dữ liệu từ ngoài (localStorage draft cũ, JSON parse, v.v.). */
+function s(x: unknown): string {
+  if (x === null || x === undefined) return '';
+  return typeof x === 'string' ? x : String(x);
+}
+
+/** HOTFIX 2026-06-24: chuẩn hoá 1 object bất kỳ thành LocalRow đầy đủ field.
+ *  Nguồn gây bug: draft cũ trong localStorage được lưu TRƯỚC khi schema thêm field
+ *  (vd 3 field paymentCash/Transfer/Card của PR-SALES-PAYMENT-SPLIT-SAFE) → khi
+ *  JSON.parse, các field này = undefined → `r.X.trim()` crash trang.
+ *
+ *  Mọi entry point đưa data ngoài → LocalRow PHẢI đi qua hàm này:
+ *  - localStorage hydrate (NhapClient)
+ *  - Server-restored draft
+ *  - Bất kỳ tương lai migration nào
+ *
+ *  Hàm idempotent: gọi 2 lần cho kết quả như nhau. */
+export function coerceLocalRow(input: unknown): LocalRow {
+  const r = (input ?? {}) as Partial<LocalRow> & Record<string, unknown>;
+  _tempIdCounter += 1;
+  return {
+    tempId: typeof r.tempId === 'string' && r.tempId ? r.tempId : `local-${Date.now()}-${_tempIdCounter}`,
+    customerName: s(r.customerName),
+    phone: s(r.phone),
+    guardianName: s(r.guardianName),
+    source: (r.source as SalesV2Source | null | undefined) ?? null,
+    packageId: typeof r.packageId === 'string' && r.packageId ? r.packageId : null,
+    packageCode: s(r.packageCode),
+    packageName: s(r.packageName),
+    serviceGroup: s(r.serviceGroup),
+    isChildPackage: r.isChildPackage === true,
+    packageIsCustomQuantity: r.packageIsCustomQuantity === true,
+    packageManualPriceWithQty: r.packageManualPriceWithQty === true,
+    transactionType: (r.transactionType as TransactionType | null | undefined) ?? null,
+    paymentMethod: (r.paymentMethod as PaymentMethod | null | undefined) ?? null,
+    packageValue: s(r.packageValue),
+    collectedToday: s(r.collectedToday),
+    paymentCash: s(r.paymentCash),
+    paymentTransfer: s(r.paymentTransfer),
+    paymentCard: s(r.paymentCard),
+    quantity: s(r.quantity),
+    unitPrice: s(r.unitPrice),
+    promoSnapshots: Array.isArray(r.promoSnapshots) ? (r.promoSnapshots as PromoSnapshot[]) : [],
+    receiptNo: s(r.receiptNo),
+    contractNo: s(r.contractNo),
+    note: s(r.note),
+    errorMessage: typeof r.errorMessage === 'string' ? r.errorMessage : undefined,
+  };
+}
+
 /** Validate SĐT VN: 10 số, bắt đầu 0. Empty → false (trống = chưa nhập, không phải sai). */
 export function isValidPhone(phone: string): boolean {
   const t = phone.trim();
   return /^0\d{9}$/.test(t);
 }
 
-/** Row hoàn toàn rỗng — Sale chưa nhập gì (vd row auto-add trailing). KHÔNG validate + KHÔNG báo lỗi. */
+/** Row hoàn toàn rỗng — Sale chưa nhập gì (vd row auto-add trailing). KHÔNG validate + KHÔNG báo lỗi.
+ *
+ *  Defensive coerce (HOTFIX 2026-06-24): tất cả `r.X.trim()` đều `?? ''` để không crash
+ *  nếu LocalRow hydrate từ schema cũ thiếu field. Layer 1 (coerceLocalRow tại hydrate)
+ *  là chính; layer này là an toàn cuối cùng. */
 export function isRowEmpty(r: LocalRow): boolean {
-  return !r.customerName.trim()
-    && !r.phone.trim()
-    && !r.guardianName.trim()
+  return !(r.customerName ?? '').trim()
+    && !(r.phone ?? '').trim()
+    && !(r.guardianName ?? '').trim()
     && !r.source
     && !r.packageId
     && !r.transactionType
     && !r.paymentMethod
-    && !r.packageValue.trim()
-    && !r.collectedToday.trim()
-    && !r.paymentCash.trim() && !r.paymentTransfer.trim() && !r.paymentCard.trim()
-    && !r.quantity.trim()
-    && !r.unitPrice.trim()
+    && !(r.packageValue ?? '').trim()
+    && !(r.collectedToday ?? '').trim()
+    && !(r.paymentCash ?? '').trim() && !(r.paymentTransfer ?? '').trim() && !(r.paymentCard ?? '').trim()
+    && !(r.quantity ?? '').trim()
+    && !(r.unitPrice ?? '').trim()
     && (r.promoSnapshots?.length ?? 0) === 0
-    && !r.receiptNo.trim()
-    && !r.contractNo.trim()
-    && !r.note.trim();
+    && !(r.receiptNo ?? '').trim()
+    && !(r.contractNo ?? '').trim()
+    && !(r.note ?? '').trim();
 }
 
 /** BASE packageValue cho 1 row (TRƯỚC khi áp discount).
@@ -193,8 +248,8 @@ export function sumSplitCells(r: LocalRow): number {
 
 /** Validate 1 local row đủ điều kiện POST chưa. */
 export function validateRow(r: LocalRow): { ok: true } | { ok: false; error: string } {
-  if (!r.customerName.trim()) return { ok: false, error: 'Thiếu tên khách hàng' };
-  if (!r.phone.trim()) return { ok: false, error: 'Thiếu SĐT' };
+  if (!(r.customerName ?? '').trim()) return { ok: false, error: 'Thiếu tên khách hàng' };
+  if (!(r.phone ?? '').trim()) return { ok: false, error: 'Thiếu SĐT' };
   if (!isValidPhone(r.phone)) return { ok: false, error: 'SĐT phải 10 số bắt đầu bằng 0' };
   if (!r.source) return { ok: false, error: 'Thiếu nguồn' };
   if (!r.packageId) return { ok: false, error: 'Thiếu gói' };
@@ -210,12 +265,12 @@ export function validateRow(r: LocalRow): { ok: true } | { ok: false; error: str
     const bdCheck = validatePaymentBreakdown(r.paymentMethod, ct, bd);
     if (!bdCheck.ok) return { ok: false, error: bdCheck.error };
   }
-  if (r.isChildPackage && !r.guardianName.trim()) return { ok: false, error: 'Gói trẻ em bắt buộc Người giám hộ' };
+  if (r.isChildPackage && !(r.guardianName ?? '').trim()) return { ok: false, error: 'Gói trẻ em bắt buộc Người giám hộ' };
   // Validate chứng từ
-  if (r.transactionType === 'dat_coc' && !r.receiptNo.trim()) {
+  if (r.transactionType === 'dat_coc' && !(r.receiptNo ?? '').trim()) {
     return { ok: false, error: 'Đặt cọc bắt buộc Số phiếu thu' };
   }
-  if ((r.transactionType === 'thanh_toan_full' || r.transactionType === 'thanh_toan_not') && !r.contractNo.trim()) {
+  if ((r.transactionType === 'thanh_toan_full' || r.transactionType === 'thanh_toan_not') && !(r.contractNo ?? '').trim()) {
     return { ok: false, error: 'Thanh toán bắt buộc Số hợp đồng' };
   }
   // 'thanh_toan_not' = trả nốt nợ cũ → chỉ cần collectedToday > 0, packageValue ignore

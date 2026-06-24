@@ -11,7 +11,7 @@ import { Plus, Save, Send, AlertCircle, Loader2, FileSpreadsheet } from 'lucide-
 import type { SalesDailyBatch, SalesTransaction, SalesTransactionInput, BatchStatus } from '@/lib/types/sales-v2';
 import type { SalesV2Package } from '@/lib/sales-v2/packages';
 import type { BranchId } from '@/lib/branches';
-import SalesGrid, { type LocalRow, makeEmptyRow, validateRow, isRowEmpty, isValidPhone, effectivePackageValue } from './_components/SalesGrid';
+import SalesGrid, { type LocalRow, makeEmptyRow, coerceLocalRow, validateRow, isRowEmpty, isValidPhone, effectivePackageValue } from './_components/SalesGrid';
 import MobileNhapView from './_components/MobileNhapView';
 import ExcelImportModal from './_components/ExcelImportModal';
 import { showConfirm } from '@/components/ui/imperative-modal';
@@ -127,8 +127,14 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
     try {
       const raw = localStorage.getItem(storageKey(batch.id));
       if (raw) {
-        const parsed = JSON.parse(raw) as LocalRow[];
-        if (Array.isArray(parsed)) setLocalRows(parsed);
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          // HOTFIX 2026-06-24: draft cũ trong localStorage có thể THIẾU field schema mới
+          // (vd 3 field paymentCash/Transfer/Card thêm bởi PR-SALES-PAYMENT-SPLIT-SAFE).
+          // coerceLocalRow chuẩn hoá mọi entry external → LocalRow đầy đủ → `.trim()` an toàn.
+          // Idempotent: an toàn cho cả draft schema cũ lẫn mới.
+          setLocalRows(parsed.map(coerceLocalRow));
+        }
       }
       // Cleanup key của ngày cũ cho cùng Sale (sang ngày mới: key mới khác, key cũ xoá)
       const prefix = `${STORAGE_PREFIX}${batch.saleId}_`;
