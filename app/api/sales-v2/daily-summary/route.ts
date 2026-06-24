@@ -18,6 +18,8 @@ import { isBranchId } from '@/lib/branches';
 import { mapPackageToReport, type ReportGroup } from '@/lib/sales-v2/auto-map-package';
 import { serializeBatch as serializeReceptionBatch, buildBatchId, buildEmptyEntries, getPricing } from '@/lib/sales-v2/reception';
 import type { BranchId } from '@/lib/branches';
+// PR-SALES-PAYMENT-SPLIT-SAFE (2026-06-24): resolve breakdown từ doc với fallback legacy.
+import { resolveBreakdown } from '@/lib/sales-v2/payment-split';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -159,19 +161,24 @@ export async function GET(req: NextRequest) {
       // - thanh_toan_not (trả nốt nợ cũ) vẫn là tiền thực thu chảy vào quỹ → PHẢI tính.
       // - tx đặt cọc collected=0 (khách nợ 100%) → counted nhưng cash/transfer/card = 0.
       if (collected <= 0) continue; // skip vì không có tiền vào ngày này (vẫn count vào batch khác)
-      // S4 audit fix: đảm bảo invariant total = cash + transfer + card.
-      // Nếu paymentMethod không thuộc 3 enum → gộp vào 'cash' default + log warn.
-      const method = String(x.paymentMethod ?? '');
-      let cash = 0, transfer = 0, card = 0;
-      if (method === 'tien_mat') cash = collected;
-      else if (method === 'chuyen_khoan') transfer = collected;
-      else if (method === 'pos') card = collected;
-      else {
-        // Defensive: gộp vào cash để không mất tiền + log để admin biết data dirty
-        console.warn('[daily-summary] tx có paymentMethod không xác định:', x.id ?? '(no-id)', method);
-        cash = collected;
+      // PR-SALES-PAYMENT-SPLIT-SAFE (2026-06-24): dùng resolveBreakdown — record
+      // mới có paymentBreakdown (kể cả combo method) → đọc thẳng; record cũ chưa
+      // có → fallback derive từ paymentMethod + collectedToday (3 method legacy).
+      // Defensive: nếu combo method mà thiếu breakdown (data dirty cũ) → derive
+      // trả về all 0 → log warn + bù vào cash để không mất tiền.
+      const method = String(x.paymentMethod ?? '') as any;
+      const bd = resolveBreakdown({
+        paymentMethod: method,
+        collectedToday: collected,
+        paymentBreakdown: x.paymentBreakdown,
+      });
+      let cash = bd.cash, transfer = bd.transfer, card = bd.card;
+      const sum = cash + transfer + card;
+      if (sum === 0 && collected > 0) {
+        console.warn('[daily-summary] tx breakdown missing for combo method:', x.id ?? '(no-id)', method);
+        cash = collected; // defensive — không mất tiền
       }
-      const totalAttribution = cash + transfer + card; // === collected do logic trên
+      const totalAttribution = cash + transfer + card; // invariant: = collected (theo logic resolveBreakdown)
       // Group bucket
       const grp = groupTotals[mapping.group];
       grp.cash += cash; grp.transfer += transfer; grp.card += card;

@@ -22,14 +22,20 @@ import {
   computeDiscount, isDiscountType, isBonusType, validatePromoCombo,
   type PromoSnapshot,
 } from '@/lib/types/sales-program';
-import type { SalesV2Source, TransactionType, PaymentMethod, MatchStatus } from '@/lib/types/sales-v2';
+import type { SalesV2Source, TransactionType, PaymentMethod, MatchStatus, PaymentBreakdown } from '@/lib/types/sales-v2';
+// PR-SALES-PAYMENT-SPLIT-SAFE (2026-06-24): normalize + validate breakdown.
+import { normalizePaymentBreakdown, validatePaymentBreakdown } from '@/lib/sales-v2/payment-split';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const VALID_SOURCES = new Set<SalesV2Source>(['ca_nhan', 'walkin', 'mkt', 'renew', 'ref']);
 const VALID_TXN_TYPES = new Set<TransactionType>(['dat_coc', 'thanh_toan_full', 'thanh_toan_not']);
-const VALID_PAY = new Set<PaymentMethod>(['tien_mat', 'chuyen_khoan', 'pos']);
+// PR-SALES-PAYMENT-SPLIT-SAFE (2026-06-24): 6 method (3 single + 3 combo).
+const VALID_PAY = new Set<PaymentMethod>([
+  'tien_mat', 'chuyen_khoan', 'pos',
+  'tien_mat_chuyen_khoan', 'tien_mat_pos', 'chuyen_khoan_pos',
+]);
 
 export async function GET(req: NextRequest) {
   try {
@@ -106,6 +112,13 @@ export async function POST(req: NextRequest) {
     if (!VALID_PAY.has(paymentMethod)) return NextResponse.json({ error: 'Sai hình thức thu' }, { status: 400 });
     if (!Number.isFinite(inputPackageValue) || inputPackageValue < 0) return NextResponse.json({ error: 'Giá trị gói không hợp lệ' }, { status: 400 });
     if (!Number.isFinite(collectedToday) || collectedToday < 0) return NextResponse.json({ error: 'Thu hôm nay không hợp lệ' }, { status: 400 });
+
+    // PR-SALES-PAYMENT-SPLIT-SAFE (2026-06-24): normalize + validate breakdown.
+    // Single method → tự derive; split method → caller phải gửi paymentBreakdown.
+    const breakdownInput = body.paymentBreakdown as Partial<PaymentBreakdown> | null | undefined;
+    const paymentBreakdown = normalizePaymentBreakdown(paymentMethod, collectedToday, breakdownInput);
+    const bdCheck = validatePaymentBreakdown(paymentMethod, collectedToday, paymentBreakdown);
+    if (!bdCheck.ok) return NextResponse.json({ error: bdCheck.error }, { status: 400 });
     // V6 2026-06-17: validate chứng từ theo transactionType
     if (transactionType === 'dat_coc' && !receiptNo) {
       return NextResponse.json({ error: 'Đặt cọc bắt buộc nhập Số phiếu thu' }, { status: 400 });
@@ -261,6 +274,8 @@ export async function POST(req: NextRequest) {
       isChildPackage: pkg.isChildPackage,
       transactionType,
       paymentMethod,
+      // PR-SALES-PAYMENT-SPLIT-SAFE (2026-06-24): persist breakdown đã normalize.
+      paymentBreakdown,
       packageValue: effectivePackageValue,
       collectedToday,
       debtAmount,

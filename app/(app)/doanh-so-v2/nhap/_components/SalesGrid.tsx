@@ -12,6 +12,14 @@ import type {
   PaymentMethod,
 } from '@/lib/types/sales-v2';
 import { SOURCE_LABEL, TRANSACTION_TYPE_LABEL, PAYMENT_METHOD_LABEL } from '@/lib/types/sales-v2';
+// PR-SALES-PAYMENT-SPLIT-SAFE (2026-06-24): split payment helpers.
+import {
+  isSplitPayment,
+  getActivePaymentFields,
+  normalizePaymentBreakdown,
+  validatePaymentBreakdown,
+  type PaymentBucket,
+} from '@/lib/sales-v2/payment-split';
 import type { SalesV2Package } from '@/lib/sales-v2/packages';
 import {
   computeDiscount, isDiscountType, isBonusType,
@@ -48,6 +56,14 @@ export interface LocalRow {
   paymentMethod: PaymentMethod | null;
   packageValue: string;     // dạng string để input hiển thị OK
   collectedToday: string;
+  // PR-SALES-PAYMENT-SPLIT-SAFE (2026-06-24): split payment.
+  // - Method single (tien_mat/chuyen_khoan/pos): server tự derive 3 field từ collectedToday.
+  // - Method combo (tien_mat_chuyen_khoan/tien_mat_pos/chuyen_khoan_pos):
+  //   Sale nhập 2 ô active; collectedToday tự tính = tổng 2 ô active.
+  // 3 field optional (string) — chỉ valid khi method combo. Empty = 0.
+  paymentCash: string;
+  paymentTransfer: string;
+  paymentCard: string;
   // V6 PT: số buổi + đơn giá / buổi. Chỉ dùng khi packageIsCustomQuantity=true.
   quantity: string;
   unitPrice: string;
@@ -80,6 +96,9 @@ export function makeEmptyRow(): LocalRow {
     paymentMethod: null,
     packageValue: '',
     collectedToday: '',
+    paymentCash: '',
+    paymentTransfer: '',
+    paymentCard: '',
     quantity: '',
     unitPrice: '',
     promoSnapshots: [],
@@ -106,6 +125,7 @@ export function isRowEmpty(r: LocalRow): boolean {
     && !r.paymentMethod
     && !r.packageValue.trim()
     && !r.collectedToday.trim()
+    && !r.paymentCash.trim() && !r.paymentTransfer.trim() && !r.paymentCard.trim()
     && !r.quantity.trim()
     && !r.unitPrice.trim()
     && (r.promoSnapshots?.length ?? 0) === 0
@@ -145,6 +165,32 @@ export function effectivePackageValue(r: LocalRow): number {
   return Math.max(0, basePackageValueOf(r) - discountSumOf(r));
 }
 
+/** PR-SALES-PAYMENT-SPLIT-SAFE (2026-06-24): tính breakdown từ LocalRow.
+ *  - Single method → derive từ collectedToday (server cũng tự derive nếu wrapper gửi up).
+ *  - Combo method → parse 3 field paymentCash/Transfer/Card; chỉ giữ 2 ô active. */
+export function computeBreakdownFromRow(r: LocalRow): { cash: number; transfer: number; card: number } {
+  if (!r.paymentMethod) return { cash: 0, transfer: 0, card: 0 };
+  const ct = Number(r.collectedToday) || 0;
+  return normalizePaymentBreakdown(r.paymentMethod, ct, {
+    cash: Number(r.paymentCash) || 0,
+    transfer: Number(r.paymentTransfer) || 0,
+    card: Number(r.paymentCard) || 0,
+  });
+}
+
+/** PR-SALES-PAYMENT-SPLIT-SAFE: tổng split cells khi method combo (dùng để compute collectedToday). */
+export function sumSplitCells(r: LocalRow): number {
+  if (!r.paymentMethod || !isSplitPayment(r.paymentMethod)) return Number(r.collectedToday) || 0;
+  const active = getActivePaymentFields(r.paymentMethod);
+  let sum = 0;
+  for (const k of active) {
+    if (k === 'cash') sum += Number(r.paymentCash) || 0;
+    if (k === 'transfer') sum += Number(r.paymentTransfer) || 0;
+    if (k === 'card') sum += Number(r.paymentCard) || 0;
+  }
+  return sum;
+}
+
 /** Validate 1 local row đủ điều kiện POST chưa. */
 export function validateRow(r: LocalRow): { ok: true } | { ok: false; error: string } {
   if (!r.customerName.trim()) return { ok: false, error: 'Thiếu tên khách hàng' };
@@ -156,6 +202,14 @@ export function validateRow(r: LocalRow): { ok: true } | { ok: false; error: str
   if (!r.paymentMethod) return { ok: false, error: 'Thiếu hình thức thu' };
   const ct = Number(r.collectedToday);
   if (!Number.isFinite(ct) || ct < 0) return { ok: false, error: 'Thu hôm nay không hợp lệ' };
+
+  // PR-SALES-PAYMENT-SPLIT-SAFE (2026-06-24): split method bắt buộc 2 ô active > 0
+  // và tổng = collectedToday. Đối với single method, server tự derive — không cần check.
+  if (isSplitPayment(r.paymentMethod)) {
+    const bd = computeBreakdownFromRow(r);
+    const bdCheck = validatePaymentBreakdown(r.paymentMethod, ct, bd);
+    if (!bdCheck.ok) return { ok: false, error: bdCheck.error };
+  }
   if (r.isChildPackage && !r.guardianName.trim()) return { ok: false, error: 'Gói trẻ em bắt buộc Người giám hộ' };
   // Validate chứng từ
   if (r.transactionType === 'dat_coc' && !r.receiptNo.trim()) {
@@ -226,9 +280,13 @@ const SOURCE_TONE: Record<SalesV2Source, string> = {
 };
 
 const PAY_TONE: Record<PaymentMethod, string> = {
-  tien_mat:      'bg-emerald-50 text-emerald-700 ring-emerald-200',
-  chuyen_khoan:  'bg-sky-50 text-sky-700 ring-sky-200',
-  pos:           'bg-amber-50 text-amber-700 ring-amber-200',
+  tien_mat:                'bg-emerald-50 text-emerald-700 ring-emerald-200',
+  chuyen_khoan:            'bg-sky-50 text-sky-700 ring-sky-200',
+  pos:                     'bg-amber-50 text-amber-700 ring-amber-200',
+  // PR-SALES-PAYMENT-SPLIT-SAFE (2026-06-24): combo methods — violet tone.
+  tien_mat_chuyen_khoan:   'bg-violet-50 text-violet-700 ring-violet-200',
+  tien_mat_pos:            'bg-violet-50 text-violet-700 ring-violet-200',
+  chuyen_khoan_pos:        'bg-violet-50 text-violet-700 ring-violet-200',
 };
 
 /** Sale có sửa được tx này không? (theo workflow per-tx review) */
@@ -281,6 +339,12 @@ export default function SalesGrid({
               {/* V7 Promo (2026-06-18): KM chips + Giá trị sau KM (= base − discount) */}
               <Th width={200}>Khuyến mãi</Th>
               <Th width={130} align="right">Giá trị sau KM</Th>
+              {/* PR-SALES-PAYMENT-SPLIT-SAFE (2026-06-24): 3 cột tiền theo phương thức.
+                  - Method single (vd tien_mat) → cell tương ứng = collectedToday, 2 cell khác "—"
+                  - Method combo (vd tien_mat_chuyen_khoan) → 2 cell active cho nhập, cell thứ 3 "—" */}
+              <Th width={110} align="right">Tiền mặt</Th>
+              <Th width={110} align="right">Chuyển khoản</Th>
+              <Th width={100} align="right">POS</Th>
               <Th width={120} align="right">Thu hôm nay *</Th>
               <Th width={120} align="right">Công nợ</Th>
               <Th width={140}>Ghi chú</Th>
@@ -547,6 +611,9 @@ function SavedRow({ idx, row, packages, canEdit, batchStatus, branchId, onUpdate
           <span className="text-slate-600">{row.packageValue.toLocaleString()}</span>
         )}
       </Td>
+      {/* PR-SALES-PAYMENT-SPLIT-SAFE (2026-06-24): 3 cell read-only cho saved tx,
+          resolve từ paymentBreakdown (record mới) hoặc derive legacy (record cũ). */}
+      <SavedTxBreakdownCells tx={row} />
       <Td align="right">
         <NumberCell value={row.collectedToday} disabled={!canEdit} required onCommit={(v) => onUpdate({ collectedToday: v })} />
       </Td>
@@ -821,11 +888,26 @@ function LocalRowItem({ idx, row, packages, canEdit, branchId, batchMonth, onUpd
           <span className="text-slate-600">{pv.toLocaleString()}</span>
         )}
       </Td>
+      {/* PR-SALES-PAYMENT-SPLIT-SAFE (2026-06-24): 3 cell tiền theo method.
+          - Single method: cell active hiển thị = collectedToday (read-only); 2 cell khác "—"
+          - Combo method: 2 cell active editable; cell thứ 3 "—" */}
+      <SplitPaymentCells row={row} canEdit={canEdit} onUpdate={onUpdate} />
       <Td align="right">
-        <NumberCell value={ct} disabled={!canEdit} required onCommit={(v) => onUpdate({ collectedToday: String(v) })} />
+        {/* Combo method: collectedToday tự tính = tổng 2 cell active; read-only */}
+        {row.paymentMethod && isSplitPayment(row.paymentMethod) ? (
+          <span className="block px-2 py-1 text-xs tabular-nums font-semibold text-violet-700 bg-violet-50/40 rounded ring-1 ring-violet-200">
+            {sumSplitCells(row).toLocaleString()}
+          </span>
+        ) : (
+          <NumberCell value={ct} disabled={!canEdit} required onCommit={(v) => onUpdate({ collectedToday: String(v) })} />
+        )}
       </Td>
       <Td align="right" className="tabular-nums text-slate-600 font-medium">
-        {debt > 0 ? <span className="text-rose-600">{debt.toLocaleString()}</span> : <span className="text-slate-300">0</span>}
+        {(() => {
+          const realCt = row.paymentMethod && isSplitPayment(row.paymentMethod) ? sumSplitCells(row) : ct;
+          const realDebt = isThanhToanNot ? 0 : Math.max(0, pv - realCt);
+          return realDebt > 0 ? <span className="text-rose-600">{realDebt.toLocaleString()}</span> : <span className="text-slate-300">0</span>;
+        })()}
       </Td>
       <Td>
         <TextCell value={row.note} disabled={!canEdit} onCommit={(v) => onUpdate({ note: v })} placeholder="—" />
@@ -1063,6 +1145,88 @@ function TxnTypeSelect({ value, disabled, onChange }: {
         <option key={k} value={k}>{TRANSACTION_TYPE_LABEL[k]}</option>
       ))}
     </select>
+  );
+}
+
+/** PR-SALES-PAYMENT-SPLIT-SAFE (2026-06-24): saved tx breakdown — read-only 3 cell. */
+function SavedTxBreakdownCells({ tx }: { tx: SalesTransaction }) {
+  const bd = (tx.paymentBreakdown && typeof tx.paymentBreakdown.cash === 'number')
+    ? tx.paymentBreakdown
+    : (() => {
+        // Legacy fallback: derive từ paymentMethod + collectedToday cho 3 single method.
+        const out = { cash: 0, transfer: 0, card: 0 };
+        const amt = Number(tx.collectedToday) || 0;
+        if (tx.paymentMethod === 'tien_mat') out.cash = amt;
+        else if (tx.paymentMethod === 'chuyen_khoan') out.transfer = amt;
+        else if (tx.paymentMethod === 'pos') out.card = amt;
+        return out;
+      })();
+  function cell(v: number) {
+    return (
+      <Td align="right">
+        {v > 0 ? (
+          <span className="block px-2 py-1 text-xs tabular-nums font-medium text-slate-700">{v.toLocaleString()}</span>
+        ) : (
+          <span className="block px-2 py-1 text-xs text-slate-300 text-center">—</span>
+        )}
+      </Td>
+    );
+  }
+  return <>{cell(bd.cash)}{cell(bd.transfer)}{cell(bd.card)}</>;
+}
+
+/** PR-SALES-PAYMENT-SPLIT-SAFE (2026-06-24): 3 cell tiền theo phương thức.
+ *  - Cell active (theo method) — viền tím nhẹ, input editable (combo) hoặc display collectedToday (single).
+ *  - Cell inactive — hiện "—", disabled, không nhập được. */
+function SplitPaymentCells({ row, canEdit, onUpdate }: {
+  row: LocalRow;
+  canEdit: boolean;
+  onUpdate: (patch: Partial<LocalRow>) => void;
+}) {
+  const method = row.paymentMethod;
+  const active = method ? new Set<PaymentBucket>(getActivePaymentFields(method)) : new Set<PaymentBucket>();
+  const split = method ? isSplitPayment(method) : false;
+  const ct = Number(row.collectedToday) || 0;
+
+  // Single method: cell active hiển thị collectedToday (read-only mirror). Combo: cell active editable, lưu vào paymentCash/Transfer/Card.
+  function renderCell(bucket: PaymentBucket, rowField: 'paymentCash' | 'paymentTransfer' | 'paymentCard') {
+    if (!method || !active.has(bucket)) {
+      return (
+        <Td align="right">
+          <span className="block px-2 py-1 text-xs text-slate-300 text-center font-medium">—</span>
+        </Td>
+      );
+    }
+    if (!split) {
+      // Single method: cell active mirror collectedToday (read-only nhưng nền tím nhẹ).
+      return (
+        <Td align="right">
+          <span className="block px-2 py-1 text-xs tabular-nums font-semibold text-violet-700 bg-violet-50/40 rounded ring-1 ring-violet-200">
+            {ct.toLocaleString()}
+          </span>
+        </Td>
+      );
+    }
+    // Combo: editable input, viền tím rõ.
+    const v = Number(row[rowField]) || 0;
+    return (
+      <Td align="right">
+        <NumberCell
+          value={v}
+          disabled={!canEdit}
+          required
+          onCommit={(val) => onUpdate({ [rowField]: String(val) } as Partial<LocalRow>)}
+        />
+      </Td>
+    );
+  }
+
+  return (
+    <>
+      {renderCell('cash', 'paymentCash')}
+      {renderCell('transfer', 'paymentTransfer')}
+      {renderCell('card', 'paymentCard')}
+    </>
   );
 }
 

@@ -306,7 +306,21 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
           //  Client gửi 0 cho packageValue (server sẽ override). Non-PT/Manual: gửi field.
           // V8.Y Manual: Sale TỰ NHẬP packageValue + quantity (note >0); KHÔNG có unitPrice.
           packageValue: lr.packageIsCustomQuantity ? 0 : (Number(lr.packageValue) || 0),
-          collectedToday: Number(lr.collectedToday) || 0,
+          // PR-SALES-PAYMENT-SPLIT-SAFE (2026-06-24): collectedToday tự tính từ split cells
+          // nếu method combo; single method = field collectedToday.
+          collectedToday: lr.paymentMethod && (
+            lr.paymentMethod === 'tien_mat_chuyen_khoan'
+              || lr.paymentMethod === 'tien_mat_pos'
+              || lr.paymentMethod === 'chuyen_khoan_pos'
+          )
+            ? ((Number(lr.paymentCash) || 0) + (Number(lr.paymentTransfer) || 0) + (Number(lr.paymentCard) || 0))
+            : (Number(lr.collectedToday) || 0),
+          // PR-SALES-PAYMENT-SPLIT-SAFE: gửi breakdown để server persist + validate.
+          paymentBreakdown: {
+            cash: Number(lr.paymentCash) || 0,
+            transfer: Number(lr.paymentTransfer) || 0,
+            card: Number(lr.paymentCard) || 0,
+          },
           quantity: (lr.packageIsCustomQuantity || lr.packageManualPriceWithQty)
             ? (Number(lr.quantity) || null)
             : null,

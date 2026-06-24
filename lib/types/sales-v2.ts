@@ -26,14 +26,35 @@ export const TRANSACTION_TYPE_LABEL: Record<TransactionType, string> = {
   thanh_toan_not: 'Thanh toán nốt',
 };
 
-// 2026-06-17 anh chốt: bỏ QR (Sale tại Green Pool không dùng riêng).
-export type PaymentMethod = 'tien_mat' | 'chuyen_khoan' | 'pos';
+// 2026-06-17: bỏ QR (Sale tại Green Pool không dùng riêng).
+// PR-SALES-PAYMENT-SPLIT-SAFE (2026-06-24): extend từ 3 → 6 methods.
+// Khách có thể thanh toán bằng 2 hình thức cùng lúc → 3 combo methods.
+// LEGACY keys (tien_mat/chuyen_khoan/pos) giữ nguyên — backward-compat.
+export type PaymentMethod =
+  | 'tien_mat'
+  | 'chuyen_khoan'
+  | 'pos'
+  | 'tien_mat_chuyen_khoan'
+  | 'tien_mat_pos'
+  | 'chuyen_khoan_pos';
 
 export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
   tien_mat: 'Tiền mặt',
   chuyen_khoan: 'Chuyển khoản',
   pos: 'POS',
+  tien_mat_chuyen_khoan: 'Tiền mặt + Chuyển khoản',
+  tien_mat_pos: 'Tiền mặt + POS',
+  chuyen_khoan_pos: 'Chuyển khoản + POS',
 };
+
+/** PR-SALES-PAYMENT-SPLIT-SAFE (2026-06-24): chi tiết phân bổ tiền
+ *  theo phương thức. Optional — record cũ chưa có sẽ được derive từ
+ *  paymentMethod + collectedToday (xem deriveBreakdownFromLegacy). */
+export interface PaymentBreakdown {
+  cash: number;       // = bucket 'tien_mat'
+  transfer: number;   // = bucket 'chuyen_khoan'
+  card: number;       // = bucket 'pos'
+}
 
 export type BatchStatus =
   | 'draft'           // Sale đang nhập (lưu tạm)
@@ -114,6 +135,9 @@ export interface SalesTransaction {
   // Transaction
   transactionType: TransactionType;
   paymentMethod: PaymentMethod;
+  /** PR-SALES-PAYMENT-SPLIT-SAFE (2026-06-24): phân bổ tiền theo phương thức.
+   *  Optional vì record cũ chưa có. Đọc qua resolveBreakdown() để fallback legacy. */
+  paymentBreakdown?: PaymentBreakdown | null;
   packageValue: number;          // giá trị gói (doanh số)
   collectedToday: number;        // thực thu hôm nay
   debtAmount: number;            // packageValue - collectedToday (HIỆN TẠI — giảm khi auto-link)
@@ -214,6 +238,10 @@ export interface SalesTransactionInput {
   paymentMethod: PaymentMethod;
   packageValue: number;
   collectedToday: number;
+  /** PR-SALES-PAYMENT-SPLIT-SAFE (2026-06-24): phân bổ tiền theo phương thức.
+   *  Optional — nếu không gửi, server sẽ derive từ paymentMethod + collectedToday
+   *  (chỉ valid cho 3 method legacy). Bắt buộc gửi nếu paymentMethod là combo. */
+  paymentBreakdown?: PaymentBreakdown | null;
   receiptNo?: string | null;
   contractNo?: string | null;
   note?: string | null;

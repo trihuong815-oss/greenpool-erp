@@ -16,18 +16,25 @@ import { writeSalesAuditBatch } from '@/lib/sales-v2/audit';
 import { recordSalesAuditIfEnabled } from '@/lib/sales-v2/audit-log';
 import { assertMonthNotLockedIfEnabled, MonthLockedError } from '@/lib/sales-v2/month-lock';
 import { computeDiscount, isDiscountType, type PromoSnapshot } from '@/lib/types/sales-program';
-import type { SalesV2Source, TransactionType, PaymentMethod } from '@/lib/types/sales-v2';
+import type { SalesV2Source, TransactionType, PaymentMethod, PaymentBreakdown } from '@/lib/types/sales-v2';
+// PR-SALES-PAYMENT-SPLIT-SAFE (2026-06-24): re-validate breakdown khi update.
+import { normalizePaymentBreakdown, validatePaymentBreakdown } from '@/lib/sales-v2/payment-split';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const VALID_SOURCES = new Set<SalesV2Source>(['ca_nhan', 'walkin', 'mkt', 'renew', 'ref']);
 const VALID_TXN_TYPES = new Set<TransactionType>(['dat_coc', 'thanh_toan_full', 'thanh_toan_not']);
-const VALID_PAY = new Set<PaymentMethod>(['tien_mat', 'chuyen_khoan', 'pos']);
+// PR-SALES-PAYMENT-SPLIT-SAFE (2026-06-24): 6 method.
+const VALID_PAY = new Set<PaymentMethod>([
+  'tien_mat', 'chuyen_khoan', 'pos',
+  'tien_mat_chuyen_khoan', 'tien_mat_pos', 'chuyen_khoan_pos',
+]);
 
 const EDITABLE_FIELDS = new Set([
   'customerName', 'phone', 'guardianName', 'source', 'packageId',
   'transactionType', 'paymentMethod', 'packageValue', 'collectedToday',
+  'paymentBreakdown',   // PR-SALES-PAYMENT-SPLIT-SAFE
   'quantity', 'unitPrice',
   'receiptNo', 'contractNo', 'note',
 ]);
@@ -97,6 +104,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       const v = Number(updates.collectedToday);
       if (!Number.isFinite(v) || v < 0) return NextResponse.json({ error: 'Thu hôm nay không hợp lệ' }, { status: 400 });
       updates.collectedToday = v;
+    }
+    // PR-SALES-PAYMENT-SPLIT-SAFE (2026-06-24): nếu update paymentMethod / collectedToday /
+    // paymentBreakdown → re-validate composite. Dùng merged value (existing tx ⊕ updates).
+    if ('paymentMethod' in updates || 'collectedToday' in updates || 'paymentBreakdown' in updates) {
+      const txSnap = await db.collection(COLLECTIONS.SALES_TRANSACTIONS).doc(id).get();
+      const cur = (txSnap.data() ?? {}) as any;
+      const mergedMethod = (updates.paymentMethod ?? cur.paymentMethod) as PaymentMethod;
+      const mergedCollected = Number(updates.collectedToday ?? cur.collectedToday ?? 0);
+      const inputBreakdown = ('paymentBreakdown' in updates ? updates.paymentBreakdown : cur.paymentBreakdown) as Partial<PaymentBreakdown> | null | undefined;
+      const normalized = normalizePaymentBreakdown(mergedMethod, mergedCollected, inputBreakdown);
+      const bdCheck = validatePaymentBreakdown(mergedMethod, mergedCollected, normalized);
+      if (!bdCheck.ok) return NextResponse.json({ error: bdCheck.error }, { status: 400 });
+      // Persist normalized breakdown để đảm bảo doc luôn đúng schema sau update.
+      updates.paymentBreakdown = normalized;
     }
     if ('customerName' in updates) updates.customerName = String(updates.customerName ?? '').trim();
     if ('phone' in updates) {
