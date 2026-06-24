@@ -159,11 +159,11 @@ export default function ExcelImportModal({ packages, onClose, onImport }: Props)
                       <th className="px-2 py-2 text-left">Gói</th>
                       <th className="px-2 py-2 text-left">Loại GD</th>
                       <th className="px-2 py-2 text-left">HT thu</th>
-                      <th className="px-2 py-2 text-right">Giá trị</th>
-                      <th className="px-2 py-2 text-right">Thu</th>
                       <th className="px-2 py-2 text-right">Tiền mặt</th>
                       <th className="px-2 py-2 text-right">Chuyển khoản</th>
                       <th className="px-2 py-2 text-right">POS</th>
+                      <th className="px-2 py-2 text-right">Giá trị</th>
+                      <th className="px-2 py-2 text-right">Thu</th>
                       <th className="px-2 py-2 text-left">Lỗi</th>
                     </tr>
                   </thead>
@@ -190,11 +190,11 @@ export default function ExcelImportModal({ packages, onClose, onImport }: Props)
                           <td className="px-2 py-1.5 text-slate-600">
                             {m ? PAYMENT_METHOD_LABEL[m] : <span className="text-rose-500">{r.paymentMethod || '∅'}</span>}
                           </td>
-                          <td className="px-2 py-1.5 text-right tabular-nums">{r.packageValue.toLocaleString()}</td>
-                          <td className="px-2 py-1.5 text-right tabular-nums">{r.resolvedCollected.toLocaleString()}</td>
                           <td className="px-2 py-1.5 text-right">{renderAmount('cash', bd.cash)}</td>
                           <td className="px-2 py-1.5 text-right">{renderAmount('transfer', bd.transfer)}</td>
                           <td className="px-2 py-1.5 text-right">{renderAmount('card', bd.card)}</td>
+                          <td className="px-2 py-1.5 text-right tabular-nums">{r.packageValue.toLocaleString()}</td>
+                          <td className="px-2 py-1.5 text-right tabular-nums">{r.resolvedCollected.toLocaleString()}</td>
                           <td className="px-2 py-1.5">
                             {ok ? (
                               <span className="inline-flex items-center gap-1 text-emerald-700 font-semibold">

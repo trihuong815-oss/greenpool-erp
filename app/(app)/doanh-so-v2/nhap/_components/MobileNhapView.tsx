@@ -464,6 +464,28 @@ function CardEditor({
         </FieldLabel>
       </div>
 
+      {/* PR-SALES-PAYMENT-SPLIT-SAFE (2026-06-24): 3 ô tiền split chỉ render khi method combo.
+          User 2026-06-24: đặt ngay sau HT thu để Sale nhập tiền liền mạch. */}
+      {!row.savedRow && row.paymentMethod && (row.paymentMethod === 'tien_mat_chuyen_khoan' || row.paymentMethod === 'tien_mat_pos' || row.paymentMethod === 'chuyen_khoan_pos') && (
+        <div className="grid grid-cols-2 gap-3">
+          {(row.paymentMethod === 'tien_mat_chuyen_khoan' || row.paymentMethod === 'tien_mat_pos') && (
+            <FieldLabel label="Tiền mặt *">
+              <MoneyInput value={Number((row as any).paymentCash) || 0} disabled={!canEdit} onCommit={(n) => onUpdate({ paymentCash: String(n) } as any)} />
+            </FieldLabel>
+          )}
+          {(row.paymentMethod === 'tien_mat_chuyen_khoan' || row.paymentMethod === 'chuyen_khoan_pos') && (
+            <FieldLabel label="Chuyển khoản *">
+              <MoneyInput value={Number((row as any).paymentTransfer) || 0} disabled={!canEdit} onCommit={(n) => onUpdate({ paymentTransfer: String(n) } as any)} />
+            </FieldLabel>
+          )}
+          {(row.paymentMethod === 'tien_mat_pos' || row.paymentMethod === 'chuyen_khoan_pos') && (
+            <FieldLabel label="POS *">
+              <MoneyInput value={Number((row as any).paymentCard) || 0} disabled={!canEdit} onCommit={(n) => onUpdate({ paymentCard: String(n) } as any)} />
+            </FieldLabel>
+          )}
+        </div>
+      )}
+
       {/* V6 PT (2026-06-17) + V8.Y Manual (2026-06-19): Số buổi cho cả PT và Manual; Đơn giá CHỈ PT */}
       {(isPT || isManual) && !isThanhToanNot && (
         <div className={`grid ${isPT ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
@@ -520,27 +542,6 @@ function CardEditor({
           )}
         </FieldLabel>
       </div>
-
-      {/* PR-SALES-PAYMENT-SPLIT-SAFE (2026-06-24): 3 ô tiền split chỉ render khi method combo */}
-      {!row.savedRow && row.paymentMethod && (row.paymentMethod === 'tien_mat_chuyen_khoan' || row.paymentMethod === 'tien_mat_pos' || row.paymentMethod === 'chuyen_khoan_pos') && (
-        <div className="grid grid-cols-2 gap-3">
-          {(row.paymentMethod === 'tien_mat_chuyen_khoan' || row.paymentMethod === 'tien_mat_pos') && (
-            <FieldLabel label="Tiền mặt *">
-              <MoneyInput value={Number((row as any).paymentCash) || 0} disabled={!canEdit} onCommit={(n) => onUpdate({ paymentCash: String(n) } as any)} />
-            </FieldLabel>
-          )}
-          {(row.paymentMethod === 'tien_mat_chuyen_khoan' || row.paymentMethod === 'chuyen_khoan_pos') && (
-            <FieldLabel label="Chuyển khoản *">
-              <MoneyInput value={Number((row as any).paymentTransfer) || 0} disabled={!canEdit} onCommit={(n) => onUpdate({ paymentTransfer: String(n) } as any)} />
-            </FieldLabel>
-          )}
-          {(row.paymentMethod === 'tien_mat_pos' || row.paymentMethod === 'chuyen_khoan_pos') && (
-            <FieldLabel label="POS *">
-              <MoneyInput value={Number((row as any).paymentCard) || 0} disabled={!canEdit} onCommit={(n) => onUpdate({ paymentCard: String(n) } as any)} />
-            </FieldLabel>
-          )}
-        </div>
-      )}
 
       <div className="text-xs text-slate-500 flex items-center justify-between">
         <span>Công nợ phát sinh:</span>

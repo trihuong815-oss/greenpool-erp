@@ -388,18 +388,19 @@ export default function SalesGrid({
               <Th width={130} align="right">Đơn giá / buổi</Th>
               <Th width={140}>Loại GD *</Th>
               <Th width={130}>HT thu *</Th>
+              {/* PR-SALES-PAYMENT-SPLIT-SAFE (2026-06-24): 3 cột tiền theo phương thức,
+                  đặt ngay sau HT thu để Sale thao tác liền mạch (User 2026-06-24).
+                  - Method single (vd tien_mat) → cell tương ứng = collectedToday, 2 cell khác "—"
+                  - Method combo (vd tien_mat_chuyen_khoan) → 2 cell active cho nhập, cell thứ 3 "—" */}
+              <Th width={110} align="right">Tiền mặt</Th>
+              <Th width={110} align="right">Chuyển khoản</Th>
+              <Th width={100} align="right">POS</Th>
               <Th width={120}>Số phiếu thu</Th>
               <Th width={120}>Số HĐ</Th>
               <Th width={120} align="right">Giá trị gói *</Th>
               {/* V7 Promo (2026-06-18): KM chips + Giá trị sau KM (= base − discount) */}
               <Th width={200}>Khuyến mãi</Th>
               <Th width={130} align="right">Giá trị sau KM</Th>
-              {/* PR-SALES-PAYMENT-SPLIT-SAFE (2026-06-24): 3 cột tiền theo phương thức.
-                  - Method single (vd tien_mat) → cell tương ứng = collectedToday, 2 cell khác "—"
-                  - Method combo (vd tien_mat_chuyen_khoan) → 2 cell active cho nhập, cell thứ 3 "—" */}
-              <Th width={110} align="right">Tiền mặt</Th>
-              <Th width={110} align="right">Chuyển khoản</Th>
-              <Th width={100} align="right">POS</Th>
               <Th width={120} align="right">Thu hôm nay *</Th>
               <Th width={120} align="right">Công nợ</Th>
               <Th width={140}>Ghi chú</Th>
@@ -614,6 +615,9 @@ function SavedRow({ idx, row, packages, canEdit, batchStatus, branchId, onUpdate
       <Td>
         <PayMethodSelect value={row.paymentMethod} disabled={!canEdit} onChange={(v) => onUpdate({ paymentMethod: v })} />
       </Td>
+      {/* PR-SALES-PAYMENT-SPLIT-SAFE: 3 cell read-only cho saved tx, đặt ngay sau HT thu.
+          User 2026-06-24: position theo HT thu để Sale đọc breakdown nhanh. */}
+      <SavedTxBreakdownCells tx={row} />
       <Td>
         <DocCell
           value={row.receiptNo ?? ''}
@@ -666,9 +670,6 @@ function SavedRow({ idx, row, packages, canEdit, batchStatus, branchId, onUpdate
           <span className="text-slate-600">{row.packageValue.toLocaleString()}</span>
         )}
       </Td>
-      {/* PR-SALES-PAYMENT-SPLIT-SAFE (2026-06-24): 3 cell read-only cho saved tx,
-          resolve từ paymentBreakdown (record mới) hoặc derive legacy (record cũ). */}
-      <SavedTxBreakdownCells tx={row} />
       <Td align="right">
         <NumberCell value={row.collectedToday} disabled={!canEdit} required onCommit={(v) => onUpdate({ collectedToday: v })} />
       </Td>
@@ -867,6 +868,11 @@ function LocalRowItem({ idx, row, packages, canEdit, branchId, batchMonth, onUpd
       <Td>
         <PayMethodSelect value={row.paymentMethod} disabled={!canEdit} onChange={(v) => onUpdate({ paymentMethod: v })} />
       </Td>
+      {/* PR-SALES-PAYMENT-SPLIT-SAFE: 3 cell tiền theo method, đặt ngay sau HT thu.
+          User 2026-06-24: re-order để Sale nhập tiền liền mạch sau khi chọn HT thu.
+          - Single method: cell active = collectedToday read-only; 2 cell khác "—"
+          - Combo method: 2 cell active editable; cell thứ 3 "—" */}
+      <SplitPaymentCells row={row} canEdit={canEdit} onUpdate={onUpdate} />
       <Td>
         <DocCell
           value={row.receiptNo}
@@ -943,10 +949,6 @@ function LocalRowItem({ idx, row, packages, canEdit, branchId, batchMonth, onUpd
           <span className="text-slate-600">{pv.toLocaleString()}</span>
         )}
       </Td>
-      {/* PR-SALES-PAYMENT-SPLIT-SAFE (2026-06-24): 3 cell tiền theo method.
-          - Single method: cell active hiển thị = collectedToday (read-only); 2 cell khác "—"
-          - Combo method: 2 cell active editable; cell thứ 3 "—" */}
-      <SplitPaymentCells row={row} canEdit={canEdit} onUpdate={onUpdate} />
       <Td align="right">
         {/* Combo method: collectedToday tự tính = tổng 2 cell active; read-only */}
         {row.paymentMethod && isSplitPayment(row.paymentMethod) ? (
