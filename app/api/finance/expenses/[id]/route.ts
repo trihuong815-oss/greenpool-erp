@@ -27,7 +27,12 @@ import {
   VALID_EXPENSE_CATEGORIES,
   VALID_EXPENSE_BASIS_TYPES,
   type BranchDailyExpenseDoc,
+  type ExpensePaymentMethod,
 } from '@/lib/finance/expense-types';
+import {
+  normalizeTransferAccount,
+  validateTransferAccountForRecord,
+} from '@/lib/finance/transfer-account';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -36,6 +41,8 @@ const EDITABLE_FIELDS = new Set([
   'voucherNo', 'description', 'amount', 'paymentMethod', 'expenseCategory',
   'counterpartyName', 'counterpartyUnit', 'counterpartyAddress',
   'expenseBasisType', 'expenseBasisRef', 'expenseBasisNote', 'note',
+  // PR-CASH-EXPENSE-BANK-ACCOUNT (2026-06-24).
+  'transferFromAccount',
 ]);
 
 async function loadExpense(id: string): Promise<{ ref: FirebaseFirestore.DocumentReference; data: BranchDailyExpenseDoc } | null> {
@@ -106,6 +113,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       if (!canRecordExpense(role, caller.profile.uid, callerBranchId, tx)) {
         return NextResponse.json({ error: 'Không có quyền record phiếu chi này' }, { status: 403 });
       }
+      // PR-CASH-EXPENSE-BANK-ACCOUNT (2026-06-24): trước khi chuyển sang recorded,
+      // bắt buộc transferFromAccount nếu paymentMethod=transfer. Doc cũ chưa có
+      // field này (BC) → cũng bị chặn để buộc user bổ sung trước khi record.
+      const v = validateTransferAccountForRecord(
+        tx.paymentMethod as ExpensePaymentMethod,
+        tx.transferFromAccount ?? null,
+      );
+      if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 });
       const updates = {
         status: 'recorded' as const,
         recordedBy: caller.profile.uid,
@@ -206,6 +221,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if ('expenseBasisRef' in updates) updates.expenseBasisRef = updates.expenseBasisRef ? String(updates.expenseBasisRef).trim().slice(0, 100) : null;
     if ('expenseBasisNote' in updates) updates.expenseBasisNote = updates.expenseBasisNote ? String(updates.expenseBasisNote).trim().slice(0, 500) : null;
     if ('note' in updates) updates.note = updates.note ? String(updates.note).slice(0, 500) : null;
+
+    // PR-CASH-EXPENSE-BANK-ACCOUNT (2026-06-24): normalize transferFromAccount theo
+    // paymentMethod hiệu lực (new nếu đang đổi, else existing tx.paymentMethod).
+    // Nếu user đổi method từ transfer → khác mà KHÔNG patch transferFromAccount riêng,
+    // server vẫn force clear field nó về null để dữ liệu không bị rác.
+    const effectiveMethod = (updates.paymentMethod ?? tx.paymentMethod) as ExpensePaymentMethod;
+    if ('transferFromAccount' in updates || 'paymentMethod' in updates) {
+      updates.transferFromAccount = normalizeTransferAccount(
+        effectiveMethod,
+        'transferFromAccount' in updates ? updates.transferFromAccount : tx.transferFromAccount ?? null,
+      );
+    }
 
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ error: 'Không có field nào để update' }, { status: 400 });

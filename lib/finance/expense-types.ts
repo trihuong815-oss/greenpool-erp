@@ -98,6 +98,12 @@ export interface BranchDailyExpenseDoc {
 
   note: string | null;
 
+  // PR-CASH-EXPENSE-BANK-ACCOUNT (2026-06-24): tài khoản ngân hàng NGUỒN khi
+  // paymentMethod='transfer'. Bắt buộc khi record (status='recorded'). Với các
+  // method khác (cash/card/other) phải = null. Optional vì doc CŨ chưa có field
+  // — caller dùng `?? null` để safe-read (BC). Max 120 ký tự.
+  transferFromAccount?: string | null;
+
   // Status
   status: ExpenseStatus;
 
@@ -141,6 +147,9 @@ export interface CreateExpenseInput {
   expenseBasisRef?: string | null;
   expenseBasisNote?: string | null;
   note?: string | null;
+  /** PR-CASH-EXPENSE-BANK-ACCOUNT (2026-06-24). Required nếu action='record'
+   *  + paymentMethod='transfer'. Bỏ qua nếu method khác (server force null). */
+  transferFromAccount?: string | null;
   /** Nếu 'record' → status='recorded' ngay. Default 'draft'. */
   action?: 'draft' | 'record';
 }
@@ -159,6 +168,7 @@ export interface UpdateExpenseInput {
   expenseBasisRef?: string | null;
   expenseBasisNote?: string | null;
   note?: string | null;
+  transferFromAccount?: string | null;
 }
 
 export const VALID_EXPENSE_PAYMENT_METHODS: ReadonlySet<string> = new Set([

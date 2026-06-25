@@ -58,6 +58,8 @@ interface EditableFields {
   paymentMethod: ExpensePaymentMethod;
   expenseCategory: ExpenseCategory;
   note: string;
+  // PR-CASH-EXPENSE-BANK-ACCOUNT (2026-06-24): tài khoản nguồn cho transfer.
+  transferFromAccount: string;
 }
 
 interface RowState {
@@ -78,6 +80,7 @@ function emptyDraft(date: string): EditableFields {
     paymentMethod: 'cash',
     expenseCategory: 'khac',
     note: '',
+    transferFromAccount: '',
   };
 }
 
@@ -95,6 +98,8 @@ function draftFromDoc(d: ExpenseDoc): EditableFields {
     paymentMethod: d.paymentMethod,
     expenseCategory: d.expenseCategory,
     note: d.note ?? '',
+    // BC: doc cũ chưa có transferFromAccount → '' (UI hiển thị trống).
+    transferFromAccount: (d as any).transferFromAccount ?? '',
   };
 }
 
@@ -104,6 +109,10 @@ function validateForRecord(d: EditableFields): string | null {
   const amt = Number(d.amount);
   if (!Number.isFinite(amt) || amt <= 0) return 'Số tiền > 0';
   if (!d.counterpartyName.trim()) return 'Thiếu người giao dịch';
+  // PR-CASH-EXPENSE-BANK-ACCOUNT (2026-06-24): bắt buộc tài khoản nguồn khi chuyển khoản.
+  if (d.paymentMethod === 'transfer' && !d.transferFromAccount.trim()) {
+    return 'Vui lòng nhập tài khoản chuyển khoản nguồn.';
+  }
   return null;
 }
 
@@ -226,6 +235,10 @@ export function ExpenseLedgerGrid({
           expenseBasisType: row.draft.expenseBasisType,
           expenseBasisRef: row.draft.expenseBasisRef.trim() || null,
           note: row.draft.note.trim() || null,
+          // PR-CASH-EXPENSE-BANK-ACCOUNT: chỉ gửi khi transfer; method khác server tự normalize null.
+          transferFromAccount: row.draft.paymentMethod === 'transfer'
+            ? (row.draft.transferFromAccount.trim() || null)
+            : null,
           action,
         });
         onSuccess(action === 'record' ? 'Đã ghi nhận chi' : 'Đã lưu nháp');
@@ -245,6 +258,9 @@ export function ExpenseLedgerGrid({
           expenseBasisType: row.draft.expenseBasisType,
           expenseBasisRef: row.draft.expenseBasisRef.trim() || null,
           note: row.draft.note.trim() || null,
+          transferFromAccount: row.draft.paymentMethod === 'transfer'
+            ? (row.draft.transferFromAccount.trim() || null)
+            : null,
         });
         if (action === 'record') {
           await recordExpense(id);
@@ -332,7 +348,7 @@ export function ExpenseLedgerGrid({
               <Th colSpan={2} className="text-center bg-slate-100 border-r border-slate-200">Nội dung & Số tiền</Th>
               <Th colSpan={3} className="text-center bg-sky-50/70 border-r border-slate-200 text-sky-800">Người giao dịch</Th>
               <Th colSpan={2} className="text-center bg-slate-100 border-r border-slate-200">Chứng từ kèm theo</Th>
-              <Th colSpan={4} className="text-center bg-amber-50/70 text-amber-800">Quản lý</Th>
+              <Th colSpan={5} className="text-center bg-amber-50/70 text-amber-800">Quản lý</Th>
               {canEdit && <Th rowSpan={2} className="text-right pr-5 w-44 bg-slate-100">Thao tác</Th>}
             </tr>
             <tr className="text-xs uppercase tracking-wide border-b-2 border-slate-300 bg-slate-50/90">
@@ -346,6 +362,7 @@ export function ExpenseLedgerGrid({
               <Th className="w-32 border-r border-slate-200">Kèm theo</Th>
               <Th className="w-44 border-r border-slate-200">Loại căn cứ</Th>
               <Th className="w-28 border-r border-slate-200">PT chi</Th>
+              <Th className="w-44 border-r border-slate-200">Chuyển từ TK</Th>
               <Th className="w-32 border-r border-slate-200">Nhóm chi</Th>
               <Th className="w-28">Trạng thái</Th>
               <Th className="w-0"></Th>
@@ -481,10 +498,32 @@ export function ExpenseLedgerGrid({
                   <Td className="pt-1">
                     <Select
                       value={row.draft.paymentMethod}
-                      onChange={(v) => updateRowDraft(row.id, { paymentMethod: v as ExpensePaymentMethod })}
+                      onChange={(v) => {
+                        const next = v as ExpensePaymentMethod;
+                        // PR-CASH-EXPENSE-BANK-ACCOUNT (2026-06-24): đổi method KHỎI transfer
+                        // → tự clear transferFromAccount để không submit dữ liệu rác.
+                        const patch: Partial<EditableFields> = { paymentMethod: next };
+                        if (next !== 'transfer') patch.transferFromAccount = '';
+                        updateRowDraft(row.id, patch);
+                      }}
                       disabled={!editable}
                       options={PAYMENT_METHODS.map((m) => ({ value: m, label: EXPENSE_PAYMENT_METHOD_LABEL[m] }))}
                     />
+                  </Td>
+
+                  {/* PR-CASH-EXPENSE-BANK-ACCOUNT (2026-06-24): Chuyển từ TK — chỉ active khi transfer. */}
+                  <Td className="pt-1">
+                    {row.draft.paymentMethod === 'transfer' ? (
+                      <Input
+                        value={row.draft.transferFromAccount}
+                        onChange={(v) => updateRowDraft(row.id, { transferFromAccount: v.slice(0, 120) })}
+                        disabled={!editable}
+                        placeholder="VD: VCB 0101..."
+                        className="bg-violet-50/40 border-violet-200 focus:border-violet-400 focus:ring-violet-100"
+                      />
+                    ) : (
+                      <span className="text-slate-300 text-xs px-2">—</span>
+                    )}
                   </Td>
 
                   {/* Nhóm chi */}
@@ -543,7 +582,7 @@ export function ExpenseLedgerGrid({
                 Tiền mặt <span className="tabular-nums text-slate-800">{fmt(totals.byMethod.cash)}</span> · CK <span className="tabular-nums text-slate-800">{fmt(totals.byMethod.transfer)}</span> · Thẻ <span className="tabular-nums text-slate-800">{fmt(totals.byMethod.card)}</span>
                 {totals.byMethod.other > 0 && <> · Khác <span className="tabular-nums text-slate-800">{fmt(totals.byMethod.other)}</span></>}
               </Td>
-              <Td colSpan={canEdit ? 4 : 3} className="text-xs text-slate-600 py-2 font-medium">
+              <Td colSpan={canEdit ? 5 : 4} className="text-xs text-slate-600 py-2 font-medium">
                 Nháp <span className="text-amber-700">{totals.byStatus.draft}</span> · Trả lại <span className="text-rose-700">{totals.byStatus.returned}</span> · Huỷ <span className="text-slate-500">{totals.byStatus.voided}</span>
               </Td>
             </tr>

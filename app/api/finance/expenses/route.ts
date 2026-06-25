@@ -22,7 +22,12 @@ import {
   VALID_EXPENSE_STATUSES,
   type BranchDailyExpenseDoc,
   type CreateExpenseInput,
+  type ExpensePaymentMethod,
 } from '@/lib/finance/expense-types';
+import {
+  normalizeTransferAccount,
+  validateTransferAccountForRecord,
+} from '@/lib/finance/transfer-account';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -68,6 +73,15 @@ export async function POST(req: NextRequest) {
     if (!VALID_EXPENSE_CATEGORIES.has(expenseCategory)) return NextResponse.json({ error: 'expenseCategory không hợp lệ' }, { status: 400 });
     if (!VALID_EXPENSE_BASIS_TYPES.has(expenseBasisType)) return NextResponse.json({ error: 'expenseBasisType không hợp lệ' }, { status: 400 });
     if (!counterpartyName) return NextResponse.json({ error: 'Thiếu người/đơn vị giao dịch' }, { status: 400 });
+
+    // PR-CASH-EXPENSE-BANK-ACCOUNT (2026-06-24): normalize + validate tài khoản nguồn.
+    // - method≠transfer: force null (ignore dirty input).
+    // - method=transfer: trim + slice; nếu record → bắt buộc non-empty.
+    const transferFromAccount = normalizeTransferAccount(paymentMethod as ExpensePaymentMethod, body.transferFromAccount ?? null);
+    if (action === 'record') {
+      const v = validateTransferAccountForRecord(paymentMethod as ExpensePaymentMethod, transferFromAccount);
+      if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 });
+    }
 
     // Force branch = caller's facility for NV_KE (ADMIN có thể chỉ định)
     if (role === 'NV_KE') {
@@ -124,6 +138,7 @@ export async function POST(req: NextRequest) {
       expenseBasisRef: body.expenseBasisRef ? String(body.expenseBasisRef).trim().slice(0, 100) : null,
       expenseBasisNote: body.expenseBasisNote ? String(body.expenseBasisNote).trim().slice(0, 500) : null,
       note: body.note ? String(body.note).slice(0, 500) : null,
+      transferFromAccount,
       status,
       createdBy: caller.profile.uid,
       createdByName: caller.actorName,
