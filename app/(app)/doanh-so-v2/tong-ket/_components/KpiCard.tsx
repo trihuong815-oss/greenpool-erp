@@ -5,13 +5,23 @@ import type { ReactNode } from 'react';
 
 export type KpiTone = 'slate' | 'emerald' | 'sky' | 'amber' | 'rose' | 'violet';
 
-const TONE_CLS: Record<KpiTone, string> = {
-  slate:   'bg-white text-slate-700 ring-slate-200',
-  emerald: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-  sky:     'bg-sky-50 text-sky-700 ring-sky-200',
-  amber:   'bg-amber-50 text-amber-700 ring-amber-200',
-  rose:    'bg-rose-50 text-rose-700 ring-rose-200',
-  violet:  'bg-violet-50 text-violet-700 ring-violet-200',
+// UI 10/10: card trắng trung tính; màu chỉ ở SỐ + icon theo ngữ nghĩa, không tô nền pastel.
+const VALUE_CLS: Record<KpiTone, string> = {
+  slate:   'text-slate-900',
+  emerald: 'text-emerald-600',
+  sky:     'text-slate-900',
+  amber:   'text-amber-600',
+  rose:    'text-rose-600',
+  violet:  'text-slate-900',
+};
+
+const ICON_CLS: Record<KpiTone, string> = {
+  slate:   'text-slate-400',
+  emerald: 'text-emerald-500',
+  sky:     'text-slate-400',
+  amber:   'text-amber-500',
+  rose:    'text-rose-500',
+  violet:  'text-slate-400',
 };
 
 interface Props {
@@ -23,12 +33,12 @@ interface Props {
 
 export default function KpiCard({ label, value, icon, tone }: Props) {
   return (
-    <div className={`rounded-xl px-3 py-3 ring-1 ${TONE_CLS[tone]}`}>
+    <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
       <div className="flex items-center justify-between">
-        <span className="text-[10px] font-semibold uppercase tracking-wider opacity-70">{label}</span>
-        <span className="opacity-50">{icon}</span>
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{label}</span>
+        <span className={ICON_CLS[tone]}>{icon}</span>
       </div>
-      <div className="text-lg font-bold tabular-nums mt-1">{value}</div>
+      <div className={`text-lg font-bold tabular-nums mt-1 ${VALUE_CLS[tone]}`}>{value}</div>
     </div>
   );
 }

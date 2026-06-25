@@ -458,11 +458,8 @@ export function PersonalWorkClient({ profile, initialTasks }: Props) {
       )}
 
       {/* ─── HERO: greeting + name + role + progress ring + slogan + quote ─── */}
-      <div className="relative overflow-hidden rounded-2xl ring-1 ring-emerald-200 shadow-md bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-700 text-white">
-        {/* Decorative dots */}
-        <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10 blur-2xl" aria-hidden />
-        <div className="absolute right-20 bottom-0 h-32 w-32 rounded-full bg-white/5 blur-xl" aria-hidden />
-
+      {/* UI 10/10: banner trắng trung tính thay gradient đậm — đồng bộ phần còn lại của app. */}
+      <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="relative p-5 md:p-6">
           <div className="flex items-start gap-4 flex-wrap">
             {/* Avatar */}
@@ -471,10 +468,10 @@ export function PersonalWorkClient({ profile, initialTasks }: Props) {
                 <img
                   src={profileState.avatarUrl}
                   alt={profileState.displayName}
-                  className="h-24 w-24 md:h-28 md:w-28 rounded-2xl object-cover ring-4 ring-white/30 shadow-lg"
+                  className="h-24 w-24 md:h-28 md:w-28 rounded-2xl object-cover ring-1 ring-slate-200 shadow-sm"
                 />
               ) : (
-                <div className="h-24 w-24 md:h-28 md:w-28 rounded-2xl bg-white/20 backdrop-blur text-white flex items-center justify-center text-3xl font-bold ring-4 ring-white/30 shadow-lg">
+                <div className="h-24 w-24 md:h-28 md:w-28 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center text-3xl font-bold ring-1 ring-emerald-100">
                   {initials}
                 </div>
               )}
@@ -482,21 +479,21 @@ export function PersonalWorkClient({ profile, initialTasks }: Props) {
 
             {/* Identity */}
             <div className="flex-1 min-w-0">
-              <div className="text-xl md:text-2xl font-bold drop-shadow-sm">{profileState.displayName}</div>
-              <div className="text-sm font-semibold text-emerald-50/90 mt-0.5 flex items-center gap-2 flex-wrap">
+              <div className="text-xl md:text-2xl font-bold text-slate-900">{profileState.displayName}</div>
+              <div className="text-sm font-semibold text-slate-600 mt-0.5 flex items-center gap-2 flex-wrap">
                 <span>{profileState.positionTitle || profileState.roleName || profileState.roleCode}</span>
                 {tagline && (
-                  <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 text-white font-bold uppercase tracking-wider shadow-sm">
+                  <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 ring-1 ring-amber-200 font-bold uppercase tracking-wider">
                     <tagline.Icon size={11} /> {tagline.text}
                   </span>
                 )}
               </div>
-              <div className="text-xs text-emerald-50/70 mt-0.5">
+              <div className="text-xs text-slate-400 mt-0.5">
                 {[profileState.departmentName, profileState.branchName].filter(Boolean).join(' · ') || profileState.email}
               </div>
               {profileState.workSlogan && (
-                <div className="mt-3 text-sm italic flex items-start gap-2 bg-white/10 backdrop-blur rounded-lg px-3 py-2 ring-1 ring-white/20">
-                  <Sparkles size={15} className="text-amber-200 mt-0.5 shrink-0" />
+                <div className="mt-3 text-sm italic flex items-start gap-2 bg-slate-50 rounded-lg px-3 py-2 ring-1 ring-slate-200 text-slate-600">
+                  <Sparkles size={15} className="text-amber-500 mt-0.5 shrink-0" />
                   <span>"{profileState.workSlogan}"</span>
                 </div>
               )}
@@ -509,18 +506,18 @@ export function PersonalWorkClient({ profile, initialTasks }: Props) {
           </div>
 
           {/* Quote of the day */}
-          <div className="mt-5 pt-4 border-t border-white/15 flex items-start gap-2">
-            <Flame size={16} className="text-amber-200 mt-0.5 shrink-0" />
-            <div className="text-sm text-emerald-50/95 italic">
+          <div className="mt-5 pt-4 border-t border-slate-100 flex items-start gap-2">
+            <Flame size={16} className="text-amber-500 mt-0.5 shrink-0" />
+            <div className="text-sm text-slate-500 italic">
               "{quote.text}"
-              {quote.author && <span className="not-italic text-emerald-100/70"> — {quote.author}</span>}
+              {quote.author && <span className="not-italic text-slate-400"> — {quote.author}</span>}
             </div>
           </div>
 
-          {/* Edit button (top-right, dịch sát mép để không che ring biểu đồ tròn) */}
+          {/* Edit button */}
           <button
             onClick={() => setProfileModalOpen(true)}
-            className="absolute top-1.5 right-2 inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold rounded-md bg-white/15 backdrop-blur text-white ring-1 ring-white/30 hover:bg-white/25 transition"
+            className="absolute top-2 right-2 inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold rounded-md bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50 transition"
           >
             <Edit3 size={11} /> Sửa hồ sơ
           </button>
@@ -719,19 +716,19 @@ function ProgressRing({ pct, done, total }: { pct: number; done: number; total: 
   return (
     <div className="relative w-[100px] h-[100px] flex items-center justify-center">
       <svg width={100} height={100} viewBox="0 0 100 100" className="-rotate-90">
-        <circle cx={50} cy={50} r={R} fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth={stroke} />
+        <circle cx={50} cy={50} r={R} fill="none" stroke="#e2e8f0" strokeWidth={stroke} />
         <circle
-          cx={50} cy={50} r={R} fill="none" stroke="#fcd34d" strokeWidth={stroke}
+          cx={50} cy={50} r={R} fill="none" stroke="#059669" strokeWidth={stroke}
           strokeLinecap="round" strokeDasharray={`${dash} ${C - dash}`}
           style={{ transition: 'stroke-dasharray 600ms ease-out' }}
         />
       </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
-        <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider opacity-80">
+      <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-700">
+        <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
           <Target size={10} /> Tuần
         </div>
-        <div className="text-xl font-bold tabular-nums leading-tight">{pct}%</div>
-        <div className="text-[10px] opacity-75">{done}/{total}</div>
+        <div className="text-xl font-bold tabular-nums leading-tight text-slate-900">{pct}%</div>
+        <div className="text-[10px] text-slate-400">{done}/{total}</div>
       </div>
     </div>
   );
@@ -766,20 +763,27 @@ function KpiCard({ label, value, icon: Icon, color }: {
   icon: typeof Calendar;
   color: 'cyan' | 'slate' | 'amber' | 'emerald' | 'rose';
 }) {
-  const colorCls: Record<typeof color, string> = {
-    cyan:    'bg-cyan-50 text-cyan-800 ring-cyan-200',
-    slate:   'bg-slate-100 text-slate-700 ring-slate-200',
-    amber:   'bg-amber-50 text-amber-800 ring-amber-200',
-    emerald: 'bg-emerald-50 text-emerald-800 ring-emerald-200',
-    rose:    'bg-rose-50 text-rose-800 ring-rose-200',
+  // UI 10/10: nền trắng trung tính, màu chỉ ở số + icon theo ngữ nghĩa (Đang làm=vàng, Hoàn tất=xanh, Quá hạn=đỏ).
+  const valueCls: Record<typeof color, string> = {
+    cyan:    'text-slate-900',
+    slate:   'text-slate-900',
+    amber:   'text-amber-600',
+    emerald: 'text-emerald-600',
+    rose:    'text-rose-600',
+  };
+  const iconCls: Record<typeof color, string> = {
+    cyan:    'bg-slate-100 text-slate-500',
+    slate:   'bg-slate-100 text-slate-500',
+    amber:   'bg-amber-50 text-amber-600',
+    emerald: 'bg-emerald-50 text-emerald-600',
+    rose:    'bg-rose-50 text-rose-600',
   };
   return (
-    // Phase 13.16.6: mobile gọn — icon top, label/value dưới, value text-lg tránh chen icon
-    <div className={`rounded-xl ring-1 px-2 py-2 sm:px-3 sm:py-2.5 flex items-center gap-2 min-w-0 ${colorCls[color]}`}>
-      <div className="rounded-md bg-white/60 p-1.5 shrink-0"><Icon size={16} /></div>
+    <div className="rounded-xl border border-slate-200 bg-white px-2 py-2 sm:px-3 sm:py-2.5 flex items-center gap-2 min-w-0">
+      <div className={`rounded-md p-1.5 shrink-0 ${iconCls[color]}`}><Icon size={16} /></div>
       <div className="min-w-0 flex-1">
-        <div className="text-[10px] font-semibold uppercase tracking-wider opacity-80 truncate">{label}</div>
-        <div className="text-lg sm:text-xl font-bold tabular-nums leading-tight">{value}</div>
+        <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 truncate">{label}</div>
+        <div className={`text-lg sm:text-xl font-bold tabular-nums leading-tight ${valueCls[color]}`}>{value}</div>
       </div>
     </div>
   );

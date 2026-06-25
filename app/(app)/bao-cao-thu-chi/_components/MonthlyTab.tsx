@@ -175,19 +175,20 @@ export function MonthlyTab({ myBranchId, canSelectBranch, myBranchLabel, initial
   );
 }
 
-const TONE_CLS: Record<string, string> = {
-  slate: 'bg-white text-slate-700 ring-slate-200',
-  emerald: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-  rose: 'bg-rose-50 text-rose-700 ring-rose-200',
-  violet: 'bg-violet-50 text-violet-700 ring-violet-200',
-  amber: 'bg-amber-50 text-amber-700 ring-amber-200',
+// UI 10/10: card trắng, màu chỉ ở số theo ngữ nghĩa.
+const VALUE_CLS: Record<string, string> = {
+  slate: 'text-slate-900',
+  emerald: 'text-emerald-600',
+  rose: 'text-rose-600',
+  violet: 'text-slate-900',
+  amber: 'text-amber-600',
 };
 
-function KpiCard({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone: keyof typeof TONE_CLS }) {
+function KpiCard({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone: keyof typeof VALUE_CLS }) {
   return (
-    <div className={`rounded-xl px-3 py-2.5 ring-1 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${TONE_CLS[tone]}`}>
-      <div className="flex items-center gap-1.5 text-xs font-medium opacity-90">{icon}{label}</div>
-      <div className="text-lg font-bold tabular-nums mt-0.5">{value}</div>
+    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 transition-all duration-200 hover:shadow-md">
+      <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">{icon}{label}</div>
+      <div className={`text-lg font-bold tabular-nums mt-0.5 ${VALUE_CLS[tone]}`}>{value}</div>
     </div>
   );
 }

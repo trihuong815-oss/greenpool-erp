@@ -3,12 +3,13 @@
 
 export type KpiMiniTone = 'slate' | 'emerald' | 'sky' | 'amber' | 'rose';
 
-const TONE_CLS: Record<KpiMiniTone, string> = {
-  slate:   'bg-slate-50 text-slate-700 ring-slate-200',
-  emerald: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-  sky:     'bg-sky-50 text-sky-700 ring-sky-200',
-  amber:   'bg-amber-50 text-amber-700 ring-amber-200',
-  rose:    'bg-rose-50 text-rose-700 ring-rose-200',
+// UI 10/10: card trắng, màu chỉ ở số theo ngữ nghĩa.
+const VALUE_CLS: Record<KpiMiniTone, string> = {
+  slate:   'text-slate-900',
+  emerald: 'text-emerald-600',
+  sky:     'text-slate-900',
+  amber:   'text-amber-600',
+  rose:    'text-rose-600',
 };
 
 interface Props {
@@ -19,9 +20,9 @@ interface Props {
 
 export default function KpiMini({ label, value, tone }: Props) {
   return (
-    <div className={`rounded-lg px-3 py-2 ring-1 ${TONE_CLS[tone]}`}>
-      <div className="text-xs font-semibold uppercase tracking-wider opacity-70">{label}</div>
-      <div className="text-sm font-bold tabular-nums mt-0.5">{value}</div>
+    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+      <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</div>
+      <div className={`text-sm font-bold tabular-nums mt-0.5 ${VALUE_CLS[tone]}`}>{value}</div>
     </div>
   );
 }

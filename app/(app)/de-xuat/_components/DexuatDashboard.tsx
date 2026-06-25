@@ -590,14 +590,16 @@ export default function DexuatDashboard({
 
 type Tone = 'amber' | 'sky' | 'orange' | 'emerald' | 'violet' | 'rose' | 'rose-dark';
 
-const TONE_STYLES: Record<Tone, { bg: string; text: string; ring: string }> = {
-  amber: { bg: 'bg-amber-50', text: 'text-amber-700', ring: 'ring-amber-200' },
-  sky: { bg: 'bg-sky-50', text: 'text-sky-700', ring: 'ring-sky-200' },
-  orange: { bg: 'bg-orange-50', text: 'text-orange-700', ring: 'ring-orange-200' },
-  emerald: { bg: 'bg-emerald-50', text: 'text-emerald-700', ring: 'ring-emerald-200' },
-  violet: { bg: 'bg-violet-50', text: 'text-violet-700', ring: 'ring-violet-200' },
-  rose: { bg: 'bg-rose-50', text: 'text-rose-700', ring: 'ring-rose-200' },
-  'rose-dark': { bg: 'bg-rose-100', text: 'text-rose-800', ring: 'ring-rose-300' },
+// UI 10/10: nền trắng, màu chỉ theo NGỮ NGHĨA. Thẻ không cảnh báo (đang xem xét, đã tạo điều phối) → xám;
+// chờ duyệt/cần bổ sung → vàng; đã duyệt → xanh; từ chối/quá hạn → đỏ. Số tách màu riêng (value).
+const TONE_STYLES: Record<Tone, { bg: string; text: string; ring: string; value: string }> = {
+  amber: { bg: 'bg-amber-50', text: 'text-amber-600', ring: 'ring-amber-200', value: 'text-amber-600' },
+  sky: { bg: 'bg-slate-100', text: 'text-slate-500', ring: 'ring-slate-200', value: 'text-slate-900' },
+  orange: { bg: 'bg-amber-50', text: 'text-amber-600', ring: 'ring-amber-200', value: 'text-amber-600' },
+  emerald: { bg: 'bg-emerald-50', text: 'text-emerald-600', ring: 'ring-emerald-200', value: 'text-emerald-600' },
+  violet: { bg: 'bg-slate-100', text: 'text-slate-500', ring: 'ring-slate-200', value: 'text-slate-900' },
+  rose: { bg: 'bg-rose-50', text: 'text-rose-600', ring: 'ring-rose-200', value: 'text-rose-600' },
+  'rose-dark': { bg: 'bg-rose-50', text: 'text-rose-600', ring: 'ring-rose-200', value: 'text-rose-600' },
 };
 
 function KpiCard({
@@ -628,7 +630,7 @@ function KpiCard({
         </span>
       </div>
       <p className="text-sm font-medium text-slate-600">{label}</p>
-      <p className={`mt-1 text-2xl font-bold tabular-nums ${t.text}`}>{value}</p>
+      <p className={`mt-1 text-2xl font-bold tabular-nums ${t.value}`}>{value}</p>
     </div>
   );
 }

@@ -25,38 +25,25 @@ interface KpiBarProps {
   currentUserUid: string;
 }
 
-type AccentKey = 'rose' | 'sky' | 'amber' | 'violet' | 'rose-strong';
+// UI 10/10: nền trung tính, màu chỉ dùng theo NGỮ NGHĨA (cảnh báo/quá hạn), không tô loạn mỗi thẻ một màu.
+type AccentKey = 'neutral' | 'warn' | 'danger';
 
 const ICON_WRAP: Record<AccentKey, string> = {
-  rose: 'bg-rose-50',
-  sky: 'bg-sky-50',
-  amber: 'bg-amber-50',
-  violet: 'bg-violet-50',
-  'rose-strong': 'bg-rose-100',
+  neutral: 'bg-slate-100',
+  warn: 'bg-amber-50',
+  danger: 'bg-rose-50',
 };
 
 const ICON_COLOR: Record<AccentKey, string> = {
-  rose: 'text-rose-600',
-  sky: 'text-sky-600',
-  amber: 'text-amber-600',
-  violet: 'text-violet-600',
-  'rose-strong': 'text-rose-700',
+  neutral: 'text-slate-500',
+  warn: 'text-amber-600',
+  danger: 'text-rose-600',
 };
 
 const COUNT_COLOR: Record<AccentKey, string> = {
-  rose: 'text-rose-600',
-  sky: 'text-sky-600',
-  amber: 'text-amber-600',
-  violet: 'text-violet-600',
-  'rose-strong': 'text-rose-700',
-};
-
-const LINK_COLOR: Record<AccentKey, string> = {
-  rose: 'text-rose-600',
-  sky: 'text-sky-600',
-  amber: 'text-amber-600',
-  violet: 'text-violet-600',
-  'rose-strong': 'text-rose-700',
+  neutral: 'text-slate-900',
+  warn: 'text-amber-600',
+  danger: 'text-rose-600',
 };
 
 interface KpiItem {
@@ -165,7 +152,7 @@ export default function KpiBar({ tasks, currentUserUid }: KpiBarProps) {
       label: 'Cần tôi xử lý',
       subtext: 'liên quan đến tôi',
       icon: ClipboardList,
-      accent: 'rose',
+      accent: 'neutral',
       count: cantToiXuLy,
     },
     {
@@ -173,7 +160,7 @@ export default function KpiBar({ tasks, currentUserUid }: KpiBarProps) {
       label: 'Chờ phản hồi',
       subtext: 'liên quan đến tôi',
       icon: MessageSquare,
-      accent: 'sky',
+      accent: 'warn',
       count: choPhanHoi,
     },
     {
@@ -181,7 +168,7 @@ export default function KpiBar({ tasks, currentUserUid }: KpiBarProps) {
       label: 'Chờ Owner xác nhận',
       subtext: 'task chờ chốt cuối',
       icon: CheckCircle,
-      accent: 'amber',
+      accent: 'warn',
       count: choOwnerXacNhan,
     },
     {
@@ -189,7 +176,7 @@ export default function KpiBar({ tasks, currentUserUid }: KpiBarProps) {
       label: 'Liên khối',
       subtext: 'toàn hệ thống',
       icon: Users,
-      accent: 'violet',
+      accent: 'neutral',
       count: lienKhoi,
     },
     {
@@ -197,7 +184,7 @@ export default function KpiBar({ tasks, currentUserUid }: KpiBarProps) {
       label: 'Quá hạn',
       subtext: 'toàn hệ thống',
       icon: AlertTriangle,
-      accent: 'rose-strong',
+      accent: 'danger',
       count: quaHan,
     },
   ];
@@ -231,7 +218,7 @@ export default function KpiBar({ tasks, currentUserUid }: KpiBarProps) {
             </div>
             <button
               type="button"
-              className={`mt-1.5 inline-flex items-center gap-0.5 text-[11px] font-medium hover:underline ${LINK_COLOR[item.accent]}`}
+              className="mt-1.5 inline-flex items-center gap-0.5 text-[11px] font-medium text-emerald-600 hover:underline"
             >
               Xem chi tiết <ChevronRight size={11} />
             </button>
