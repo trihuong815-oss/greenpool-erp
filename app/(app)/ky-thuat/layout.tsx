@@ -16,6 +16,7 @@ export default async function KyThuatLayout({ children }: { children: React.Reac
   return (
     <>
       <AppTopBar
+        breadcrumb={[{ label: 'Khối kinh doanh' }, { label: 'Kỹ thuật vận hành' }]}
         title="Kỹ thuật vận hành"
         subtitle="Hoá chất · Máy · Nhân sự · Giao việc"
         icon="settings"

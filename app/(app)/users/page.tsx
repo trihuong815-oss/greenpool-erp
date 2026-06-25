@@ -39,6 +39,7 @@ export default async function UsersPage() {
   return (
     <>
       <AppTopBar
+        breadcrumb={[{ label: 'Cài đặt' }, { label: 'Quản lý người dùng' }]}
         title="Cài đặt user"
         subtitle="Tạo · Sửa · Tắt tài khoản · Phân vai trò · Lọc theo cơ sở / phòng ban"
         icon="userCog"

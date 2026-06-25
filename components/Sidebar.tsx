@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { effectiveMenu } from '@/lib/permissions';
 import {
   Home, CheckSquare, ListTodo, Inbox,
-  Users, FileBarChart, GraduationCap, Megaphone, Settings, LogOut, UserCog, Wrench, KeyRound, X, Briefcase, ShieldCheck, Search,
+  Users, FileBarChart, GraduationCap, Megaphone, Settings, LogOut, UserCog, Wrench, X, Briefcase, ShieldCheck, Search,
   Sliders, Bell, Building2, Factory, Briefcase as BriefcaseBusiness, Rocket, ChevronDown,
   PencilLine, ClipboardCheck, CreditCard, TrendingUp, Tag, Calculator, BarChart3,
   History, Receipt,
@@ -367,17 +367,14 @@ export function Sidebar({ userName, userRole, roleCode, avatarUrl, menuOverrides
               {initials}
             </div>
           )}
+          {/* Tên + chức vụ đã chuyển lên menu tài khoản góc phải (tránh hiển thị trùng).
+              Footer chỉ giữ avatar nhận diện + thao tác nhanh. */}
           <div className="min-w-0 flex-1">
-            <div className="truncate text-xs font-bold text-emerald-900 leading-tight">{userName}</div>
-            <div className="truncate text-xs font-medium uppercase tracking-wider text-emerald-700 mt-0.5">{userRole}</div>
+            <div className="truncate text-[11px] font-semibold text-emerald-800 leading-tight">Đang đăng nhập</div>
+            <Link href="/doi-mat-khau" className="text-[11px] font-medium text-emerald-600 hover:text-emerald-800 hover:underline">
+              Hồ sơ &amp; mật khẩu
+            </Link>
           </div>
-          <Link
-            href="/doi-mat-khau"
-            title="Đổi mật khẩu"
-            className="rounded-md p-1.5 text-emerald-600 transition hover:bg-emerald-100 hover:text-emerald-800"
-          >
-            <KeyRound className="h-4 w-4" />
-          </Link>
           <button
             onClick={handleLogout}
             title="Đăng xuất"

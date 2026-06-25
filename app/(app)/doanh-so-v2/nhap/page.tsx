@@ -79,7 +79,7 @@ export default async function NhapDoanhSoV2Page() {
 
   return (
     <>
-      <AppTopBar title="Nhập doanh số ngày" icon="task" />
+      <AppTopBar breadcrumb={[{ label: 'Doanh số' }, { label: 'Nhập doanh số ngày' }]} title="Nhập doanh số ngày" icon="task" />
       <NhapClient
         branchId={ctx.branchId}
         branchName={ctx.branchName}

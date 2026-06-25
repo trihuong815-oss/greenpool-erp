@@ -51,6 +51,7 @@ export default async function CongViecCaNhanPage() {
   return (
     <>
       <AppTopBar
+        breadcrumb={[{ label: 'Trung tâm điều hành' }, { label: 'Công việc cá nhân' }]}
         title="Công việc cá nhân"
         subtitle={`${profile.displayName} · không gian riêng tư`}
         icon="task"

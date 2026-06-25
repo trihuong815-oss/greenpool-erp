@@ -25,6 +25,7 @@ export default async function Page() {
   return (
     <>
       <AppTopBar
+        breadcrumb={[{ label: 'Trung tâm điều hành' }, { label: 'Điều phối công việc' }]}
         title="Điều phối công việc"
         subtitle="Điều hành liên khối · phòng ban · cơ sở"
         icon="task"

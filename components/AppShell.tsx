@@ -19,6 +19,7 @@ import { PushHeartbeat } from './PushHeartbeat';
 import { NotiHealthBanner } from './NotiHealthBanner';
 import { ForceEnableNotiModal } from './ForceEnableNotiModal';
 import { IOSInstallPwaBanner } from './IOSInstallPwaBanner';
+import { AccountProvider } from './AccountContext';
 
 interface AppShellProps {
   userName: string;
@@ -112,7 +113,9 @@ export function AppShell({ userName, userRole, roleCode, avatarUrl, menuOverride
           <IOSInstallPwaBanner />
           {/* Phase PWA-Stability (2026-06-09): cảnh báo persistent khi noti subscription unhealthy */}
           <NotiHealthBanner />
-          {children}
+          <AccountProvider value={{ userName, userRole, roleCode, avatarUrl: avatarUrl ?? null }}>
+            {children}
+          </AccountProvider>
         </main>
 
         {/* Phase UI-2.1 (2026-06-07): BottomNavBar mobile chỉ — 5 mục tần số cao */}

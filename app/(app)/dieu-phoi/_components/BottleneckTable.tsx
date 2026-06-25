@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import type { CoordTask, Collaborator } from './types';
+import { safeName, rawIdTooltip } from '@/lib/display-id';
 
 // ============================================================
 // V4 SPEC — GroupBy waitingForPerson HOẶC waitingForUnit
@@ -113,13 +114,13 @@ export default function BottleneckTable({ tasks }: Props) {
         <div>
           {rows.map((row, idx) => (
             <div key={idx} className="grid grid-cols-[minmax(120px,1.4fr)_44px_60px_1.6fr] gap-2 px-3 py-2.5 items-center hover:bg-slate-50/70 text-sm border-b border-slate-50 last:border-0 transition-colors">
-              <div className="flex items-center gap-2 min-w-0">
+              <div className="flex items-center gap-2 min-w-0" title={rawIdTooltip(row.name)}>
                 <span className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-100 to-emerald-200 text-emerald-700 text-[10px] font-bold flex items-center justify-center shrink-0 shadow-sm ring-1 ring-white/60">
-                  {initialsOf(row.name)}
+                  {initialsOf(safeName(row.name, 'NA'))}
                 </span>
                 <div className="min-w-0">
-                  <div className="font-semibold text-slate-800 truncate">{row.name}</div>
-                  {row.unit && row.unit !== '—' && row.unit !== row.name && (
+                  <div className="font-semibold text-slate-800 truncate">{safeName(row.name)}</div>
+                  {row.unit && row.unit !== '—' && row.unit !== row.name && !rawIdTooltip(row.name) && (
                     <div className="text-[10px] text-slate-400 truncate">{row.unit}</div>
                   )}
                 </div>

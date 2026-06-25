@@ -47,6 +47,7 @@ export default async function DeXuatPage() {
   return (
     <>
       <AppTopBar
+        breadcrumb={[{ label: 'Trung tâm điều hành' }, { label: 'Đề xuất' }]}
         title="Đề xuất"
         subtitle="Đề xuất lên trên · Ngang cấp · Liên khối"
         icon="task"

@@ -125,22 +125,18 @@ export default function AuditHistoryClient({ roleCode }: Props) {
   return (
     <div className="flex-1 p-3 md:p-5 bg-slate-50 overflow-y-auto">
       <div className="mx-auto max-w-[1400px] space-y-4">
-        {/* Header note — PR-7B: cập nhật cho union 2 collection */}
+        {/* Header note — ngôn ngữ người dùng (đã bỏ thuật ngữ kỹ thuật) */}
         <div className="card">
           <div className="text-sm text-slate-600">
-            <span className="font-semibold text-slate-800">Lịch sử thao tác Sales V2 (PR-7B union)</span>
+            <span className="font-semibold text-slate-800">Lịch sử thao tác</span>
             {' — '}
-            Read-only audit từ <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded">salesAuditLogs</code> + <code className="text-xs bg-slate-100 px-1.5 py-0.5 rounded">auditLogs (module=sales)</code>.
-            Vai trò: <span className="font-mono text-xs">{roleCode}</span>.
+            Chỉ xem. Ghi lại mọi thao tác trên hệ thống.
           </div>
           <div className="text-xs text-slate-500 mt-1.5">
-            ℹ Filter Tháng/Cơ sở/Nguồn chạy server-side. Filter Action/Module/Người/Khoảng ngày chỉ áp dụng trên trang hiện tại (≤100 record).
+            ℹ Lọc theo Tháng/Cơ sở/Nguồn áp dụng cho toàn bộ dữ liệu. Lọc theo Thao tác/Phân hệ/Người/Khoảng ngày áp dụng trên trang đang xem.
           </div>
           <div className="text-xs text-amber-700 mt-1">
-            ⚠ Một số audit cũ (batch approve/return legacy) thiếu metadata cơ sở/tháng nên có thể không xuất hiện khi lọc theo cơ sở hoặc tháng cụ thể. Chọn "Tất cả" để xem nhiều hơn.
-          </div>
-          <div className="text-xs text-slate-400 mt-1 italic">
-            Audit được merge từ nhiều nguồn; phân trang dựa theo thời gian phát sinh. Với dữ liệu cùng timestamp có thể có sai lệch nhỏ về thứ tự — không ảnh hưởng dữ liệu gốc.
+            ⚠ Một số bản ghi cũ có thể thiếu thông tin cơ sở/tháng nên không xuất hiện khi lọc cụ thể. Chọn "Tất cả" để xem đầy đủ.
           </div>
         </div>
 
@@ -183,7 +179,7 @@ export default function AuditHistoryClient({ roleCode }: Props) {
             <div className="flex items-center justify-between text-xs text-slate-500 pt-2">
               <div>
                 Hiển thị {filteredItems.length}/{items.length} bản ghi
-                {items.length !== filteredItems.length && ' (đã lọc client-side)'}
+                {items.length !== filteredItems.length && ' (đã lọc)'}
               </div>
               {hasMore && (
                 <button

@@ -35,7 +35,7 @@ export default async function DoiChieuPage() {
 
   return (
     <>
-      <AppTopBar title="Đối chiếu doanh số" icon="task" />
+      <AppTopBar breadcrumb={[{ label: 'Doanh số' }, { label: 'Đối chiếu doanh số' }]} title="Đối chiếu doanh số" icon="task" />
       <DoiChieuClient
         myRoleCode={profile.roleCode}
         myBranchId={branchId}

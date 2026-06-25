@@ -31,7 +31,7 @@ export default async function TongKetPage() {
   const myBranchId: BranchId | null = isBranchId(profile.branchId) ? profile.branchId : null;
   return (
     <>
-      <AppTopBar title="Tổng kết tháng" icon="task" />
+      <AppTopBar breadcrumb={[{ label: 'Doanh số' }, { label: 'Tổng kết tháng' }]} title="Tổng kết tháng" icon="task" />
       <TongKetClient
         scope={role}
         myRoleCode={profile.roleCode}

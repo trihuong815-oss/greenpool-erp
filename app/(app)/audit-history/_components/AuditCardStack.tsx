@@ -84,9 +84,9 @@ export default function AuditCardStack({ items, onSelect }: Props) {
                 {/* Optional field/reason */}
                 {(it.field || it.reason) && (
                   <div className="text-xs text-slate-500 mt-1 truncate">
-                    {it.field && <>field: <span className="font-mono">{it.field}</span></>}
+                    {it.field && <>Trường: <span className="font-medium">{it.field}</span></>}
                     {it.field && it.reason && ' · '}
-                    {it.reason && <>lý do: {it.reason}</>}
+                    {it.reason && <>Lý do: {it.reason}</>}
                   </div>
                 )}
               </div>

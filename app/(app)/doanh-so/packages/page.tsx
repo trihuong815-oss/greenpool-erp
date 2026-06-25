@@ -37,6 +37,7 @@ export default async function PackagesPage() {
   return (
     <>
       <AppTopBar
+        breadcrumb={[{ label: 'Cài đặt' }, { label: 'Quản lý gói dịch vụ' }]}
         title="Quản lý gói dịch vụ"
         subtitle="Thêm / sửa / tắt nhóm + gói theo từng cơ sở"
         icon="settings"

@@ -36,7 +36,7 @@ export default async function ReceptionNhapPage() {
 
   return (
     <>
-      <AppTopBar title="Nhập doanh thu quầy lễ tân" icon="task" />
+      <AppTopBar breadcrumb={[{ label: 'Doanh số' }, { label: 'Quầy lễ tân' }, { label: 'Nhập doanh thu' }]} title="Nhập doanh thu quầy lễ tân" icon="task" />
       <ReceptionNhapClient defaultBranch={defaultBranch} allowSwitchBranch={isTpKe} />
     </>
   );

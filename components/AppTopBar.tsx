@@ -5,9 +5,11 @@ import {
   DollarSign, Megaphone, GraduationCap, FileBarChart, ListTodo, KeyRound, Menu,
   type LucideIcon,
 } from 'lucide-react';
+import Link from 'next/link';
 import { TodayBadge } from './TodayBadge';
 import { NotificationBell } from './NotificationBell';
 import { useMobileNav } from './MobileNavContext';
+import { UserMenu } from './UserMenu';
 
 // Map tên → component icon. Pass string từ Server Component an toàn (function refs không serialize qua RSC boundary).
 const ICON_MAP: Record<string, LucideIcon> = {
@@ -28,6 +30,9 @@ const ICON_MAP: Record<string, LucideIcon> = {
 
 export type AppTopBarIcon = keyof typeof ICON_MAP;
 
+/** 1 mục breadcrumb. href bỏ trống = mục hiện tại (không link). */
+export interface Crumb { label: string; href?: string }
+
 interface AppTopBarProps {
   /** Tiêu đề trang hiển thị bên trái. */
   title: string;
@@ -35,11 +40,13 @@ interface AppTopBarProps {
   subtitle?: string;
   /** Tên icon (string) — xem ICON_MAP để lấy danh sách hợp lệ. */
   icon?: AppTopBarIcon;
+  /** Breadcrumb phía trên title (vd [{label:'Tài chính kế toán'},{label:'Chi phí cơ sở'}]). */
+  breadcrumb?: Crumb[];
   /** Slot phụ ở giữa (vd. filter chip nhỏ). */
   children?: React.ReactNode;
 }
 
-export function AppTopBar({ title, subtitle, icon, children }: AppTopBarProps) {
+export function AppTopBar({ title, subtitle, icon, breadcrumb, children }: AppTopBarProps) {
   const Icon = icon ? ICON_MAP[icon] : null;
   const { open, setOpen } = useMobileNav();
 
@@ -66,6 +73,20 @@ export function AppTopBar({ title, subtitle, icon, children }: AppTopBarProps) {
             </div>
           )}
           <div className="min-w-0">
+            {breadcrumb && breadcrumb.length > 0 && (
+              <nav aria-label="Breadcrumb" className="hidden sm:flex items-center gap-1 text-[10px] text-slate-400 leading-tight mb-0.5">
+                {breadcrumb.map((c, i) => (
+                  <span key={i} className="flex items-center gap-1">
+                    {i > 0 && <span aria-hidden>›</span>}
+                    {c.href ? (
+                      <Link href={c.href} className="font-medium text-slate-500 hover:text-emerald-700">{c.label}</Link>
+                    ) : (
+                      <span className="font-medium text-slate-500">{c.label}</span>
+                    )}
+                  </span>
+                ))}
+              </nav>
+            )}
             <div className="truncate text-sm font-bold leading-tight text-slate-900">{title}</div>
             {subtitle && (
               <div className="hidden sm:block truncate text-[11px] text-slate-500 leading-tight mt-0.5">{subtitle}</div>
@@ -82,6 +103,7 @@ export function AppTopBar({ title, subtitle, icon, children }: AppTopBarProps) {
               approval/task/checklist. InAppNotiBell mới đã gỡ tránh trùng. */}
           <NotificationBell />
           <TodayBadge />
+          <UserMenu />
         </div>
       </div>
     </header>

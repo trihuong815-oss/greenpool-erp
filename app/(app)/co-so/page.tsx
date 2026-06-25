@@ -44,7 +44,7 @@ export default async function CoSoListPage() {
 
   return (
     <>
-      <AppTopBar title="Cơ sở" icon="home" />
+      <AppTopBar breadcrumb={[{ label: 'Khối kinh doanh' }, { label: 'Cơ sở' }]} title="Cơ sở" icon="home" />
       <div className="flex-1 p-3 md:p-6 bg-slate-50 overflow-y-auto">
         <div className="mx-auto max-w-5xl space-y-4">
           <div className="card">

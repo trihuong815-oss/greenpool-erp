@@ -36,7 +36,7 @@ export default async function AuditHistoryPage() {
 
   return (
     <>
-      <AppTopBar title="Lịch sử thao tác" icon="task" />
+      <AppTopBar breadcrumb={[{ label: 'Tài chính kế toán' }, { label: 'Lịch sử thao tác' }]} title="Lịch sử thao tác" icon="task" />
       <AuditHistoryClient roleCode={profile.roleCode} />
     </>
   );

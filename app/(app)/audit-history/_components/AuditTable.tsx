@@ -6,6 +6,7 @@
 import { ChevronRight } from 'lucide-react';
 import { BRANCH_BY_ID } from '@/lib/branches';
 import { actionLabelOrRaw, moduleLabel, isKnownAction } from '@/lib/audit-history/action-labels';
+import { entityFriendly } from '@/lib/display-id';
 import type { AuditHistoryEntry } from '@/lib/audit-history/types';
 
 interface Props {
@@ -20,17 +21,18 @@ function fmtTimeVN(ms: number): string {
 }
 
 function entityRef(entry: AuditHistoryEntry): string {
-  if (entry.transactionId) return `Tx ${entry.transactionId.slice(0, 6)}…`;
-  if (entry.batchId) return `Batch ${entry.batchId.slice(0, 6)}…`;
-  if (entry.programId) return `CT ${entry.programId.slice(0, 6)}…`;
-  return '—';
+  return entityFriendly({
+    transactionId: entry.transactionId,
+    batchId: entry.batchId,
+    programId: entry.programId,
+  });
 }
 
 function summary(entry: AuditHistoryEntry): string {
-  if (entry.field) return `field: ${entry.field}`;
+  if (entry.field) return `Trường: ${entry.field}`;
   if (entry.reason) {
     const r = entry.reason.length > 60 ? entry.reason.slice(0, 60) + '…' : entry.reason;
-    return `lý do: ${r}`;
+    return `Lý do: ${r}`;
   }
   return '';
 }
@@ -81,7 +83,7 @@ export default function AuditTable({ items, onSelect }: Props) {
                     </span>
                   </td>
                   <td className="px-3 py-2">
-                    <div className="font-medium text-slate-800">{it.changedByName || '(không tên)'}</div>
+                    <div className="font-medium text-slate-800">{it.changedByName || 'Chưa định danh'}</div>
                     <div className="text-xs text-slate-500">{it.changedByRole || '—'}</div>
                   </td>
                   <td className="px-3 py-2">
@@ -110,7 +112,7 @@ export default function AuditTable({ items, onSelect }: Props) {
                       {actionLabelOrRaw(it.action)}
                     </span>
                   </td>
-                  <td className="px-3 py-2 font-mono text-xs text-slate-600">{entityRef(it)}</td>
+                  <td className="px-3 py-2 text-xs text-slate-600">{entityRef(it)}</td>
                   <td className="px-3 py-2 text-xs text-slate-500">{summary(it)}</td>
                   <td className="px-3 py-2 text-slate-400">
                     <ChevronRight size={16} />

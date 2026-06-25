@@ -29,7 +29,7 @@ export default async function CongNoPage() {
   const role = getScopeRole(profile.roleCode) ?? 'qlcs';
   return (
     <>
-      <AppTopBar title="Công nợ" icon="task" />
+      <AppTopBar breadcrumb={[{ label: 'Doanh số' }, { label: 'Công nợ' }]} title="Công nợ" icon="task" />
       <CongNoClient scope={role} />
     </>
   );

@@ -28,7 +28,7 @@ export default async function ReceptionPricingPage() {
 
   return (
     <>
-      <AppTopBar title="Cấu hình đơn giá quầy lễ tân" icon="task" />
+      <AppTopBar breadcrumb={[{ label: 'Doanh số' }, { label: 'Quầy lễ tân' }, { label: 'Cấu hình đơn giá' }]} title="Cấu hình đơn giá quầy lễ tân" icon="task" />
       <ReceptionPricingClient />
     </>
   );

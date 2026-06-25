@@ -78,6 +78,7 @@ export default async function ChecklistV2Page({ searchParams }: PageProps) {
   return (
     <>
       <AppTopBar
+        breadcrumb={[{ label: 'Khối văn phòng' }, { label: 'Checklist vận hành' }]}
         title="Checklist vận hành"
         subtitle={`${ROLE_LABEL_V2[role]} · hôm nay ${today}`}
         icon="checkSquare"

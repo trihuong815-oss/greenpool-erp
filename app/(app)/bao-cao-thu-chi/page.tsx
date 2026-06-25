@@ -52,6 +52,7 @@ export default async function BaoCaoThuChiPage() {
   return (
     <>
       <AppTopBar
+        breadcrumb={[{ label: 'Tài chính kế toán' }, { label: 'Báo cáo thu-chi' }]}
         title="Báo cáo thu-chi"
         subtitle="Theo dõi báo cáo thu-chi đã nộp từ các cơ sở, kiểm tra và trả lại nếu cần bổ sung"
         icon="report"

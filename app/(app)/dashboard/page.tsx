@@ -109,6 +109,7 @@ export default async function DashboardPage() {
   return (
     <>
       <AppTopBar
+        breadcrumb={[{ label: 'Tổng quan' }, { label: 'Dashboard' }]}
         title="Green Pool System"
         subtitle={`Dashboard · ${profile.roleName ?? profile.roleCode}`}
         icon="home"

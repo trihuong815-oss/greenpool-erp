@@ -59,6 +59,7 @@ export default async function SoDoPage() {
   return (
     <>
       <AppTopBar
+        breadcrumb={[{ label: 'Khối văn phòng' }, { label: 'Sơ đồ tổ chức' }]}
         title="Sơ đồ tổ chức"
         subtitle={`${roles.length} vai trò × 6 tầng · Click vai trò để xem nhân sự`}
         icon="users"

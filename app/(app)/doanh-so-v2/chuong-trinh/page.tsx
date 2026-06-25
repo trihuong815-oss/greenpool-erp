@@ -37,7 +37,7 @@ export default async function ChuongTrinhPage({ searchParams }: PageProps) {
 
   return (
     <>
-      <AppTopBar title="Chương trình khuyến mãi" icon="task" />
+      <AppTopBar breadcrumb={[{ label: 'Doanh số' }, { label: 'Chương trình khuyến mãi' }]} title="Chương trình khuyến mãi" icon="task" />
       <ChuongTrinhClient
         callerUid={profile.id}
         callerRole={profile.roleCode}
