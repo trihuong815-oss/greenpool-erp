@@ -53,7 +53,7 @@ export default async function CongViecCaNhanPage() {
       <AppTopBar
         breadcrumb={[{ label: 'Trung tâm điều hành' }, { label: 'Công việc cá nhân' }]}
         title="Công việc cá nhân"
-        subtitle={`${profile.displayName} · không gian riêng tư`}
+        subtitle="Không gian riêng tư · việc, thói quen, mục tiêu của bạn"
         icon="task"
       />
       <div className="flex-1 overflow-y-auto p-3 md:p-6 bg-slate-50">

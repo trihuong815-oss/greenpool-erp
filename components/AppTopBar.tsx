@@ -66,7 +66,7 @@ export function AppTopBar({ title, subtitle, icon, breadcrumb, children }: AppTo
           >
             <Menu size={20} />
           </button>
-          <div className="hidden md:block h-8 w-1 rounded-full bg-gradient-to-b from-emerald-500 to-teal-600" aria-hidden />
+          <div className="hidden md:block h-8 w-1 rounded-full bg-emerald-500" aria-hidden />
           {Icon && (
             <div className="hidden sm:flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 ring-1 ring-emerald-100 text-emerald-700">
               <Icon size={16} />

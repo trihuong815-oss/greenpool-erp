@@ -39,7 +39,7 @@ export default async function ChiPhiCoSoPage() {
       <AppTopBar
         breadcrumb={[{ label: 'Tài chính kế toán' }, { label: 'Chi phí cơ sở' }]}
         title="Chi phí cơ sở"
-        subtitle="Ghi nhận khoản chi thực tế trong ngày và nộp báo cáo thu-chi"
+        subtitle="Ghi nhận khoản chi thực tế trong ngày"
         icon="dollar"
       />
       <ChiPhiCoSoClient
