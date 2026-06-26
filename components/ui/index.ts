@@ -25,3 +25,20 @@ export type { ToastTone } from './Toast';
 // ─── UI-3: Desktop pro ───
 export { CommandPaletteProvider, useCommandPalette } from './CommandPalette';
 export { KeyboardShortcuts } from './KeyboardShortcuts';
+
+// ─── UI-4: Pixel-match design system (PR-UI-PIXEL-MATCH B1, 2026-06-26) ───
+// Bộ primitive khoá chuẩn UI Green Pool. Mọi page/module mới PHẢI dùng từ đây
+// — KHÔNG tạo lại KpiCard/StatusBadge/Drawer ad-hoc. Spec: docs/green-pool-ui-design-system.md.
+export { PageHeader } from './PageHeader';
+export type { Crumb } from './PageHeader';
+
+export { StatCard, SegmentSummary } from './StatCard';
+export type { StatCardTone } from './StatCard';
+
+export { StatusPill } from './StatusPill';
+
+export { TableWrap, Num, formatVnd, formatMillion } from './TableWrap';
+
+export { FilterPanel, Field } from './FilterPanel';
+
+export { Drawer } from './Drawer';
