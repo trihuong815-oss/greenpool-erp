@@ -1,10 +1,14 @@
 // PR-TK1 (2026-06-21) — 5 KPI cards tháng. Tách từ TongKetClient.tsx.
 // PR-TK2 (2026-06-21) — Thêm KPI "Số khách" + "Chờ đối chiếu". Layout responsive 2→7 cols.
+// PR-UI-PIXEL-MATCH B5 (2026-06-26): KPI dashboard top-level dùng formatMillion
+// ("73 tr", "57,5 tr", "1,56 tỷ") thay full "73.000.000đ" — match mockup
+// `green-pool-prototype-sau-toi-uu.html` (.stat .val có suffix " tr"/" tỷ").
+// Bảng chi tiết (BranchSummaryTable, SaleCustomerDrawer...) giữ fmtMoney full.
 
 import { TrendingUp, Wallet, AlertTriangle, Users, UserCheck, Clock } from 'lucide-react';
 import KpiCard from './KpiCard';
-import { fmtMoney } from './utils';
 import type { Summary } from './types';
+import { formatMillion } from '@/components/ui/TableWrap';
 
 interface Props {
   totals: Summary['totals'];
@@ -31,10 +35,10 @@ export default function MonthlyKpiCards({ totals, customerCount, pendingReviewCo
       {hasCustomer && (
         <KpiCard label="Số khách" value={customerCount.toString()} icon={<UserCheck size={18} />} tone="slate" />
       )}
-      <KpiCard label="Doanh số" value={fmtMoney(totals.sales)} icon={<TrendingUp size={18} />} tone="emerald" />
-      <KpiCard label="Thực thu" value={fmtMoney(totals.collected)} icon={<Wallet size={18} />} tone="sky" />
-      <KpiCard label="Công nợ phát sinh" value={fmtMoney(totals.debtGenerated)} icon={<AlertTriangle size={18} />} tone="amber" />
-      <KpiCard label="Công nợ còn lại" value={fmtMoney(totals.debtRemaining)} icon={<AlertTriangle size={18} />} tone="rose" />
+      <KpiCard label="Doanh số" value={formatMillion(totals.sales)} icon={<TrendingUp size={18} />} tone="emerald" />
+      <KpiCard label="Thực thu" value={formatMillion(totals.collected)} icon={<Wallet size={18} />} tone="sky" />
+      <KpiCard label="Công nợ phát sinh" value={formatMillion(totals.debtGenerated)} icon={<AlertTriangle size={18} />} tone="amber" />
+      <KpiCard label="Công nợ còn lại" value={formatMillion(totals.debtRemaining)} icon={<AlertTriangle size={18} />} tone="rose" />
       {hasPending && (
         <KpiCard label="Chờ đối chiếu" value={pendingReviewCount.toString()} icon={<Clock size={18} />} tone="amber" />
       )}
