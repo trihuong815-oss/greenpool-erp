@@ -56,20 +56,20 @@ export default function AuditFilters({ state, onChange, onReset }: Props) {
           </select>
         </Field>
 
-        {/* PR-7B: source filter (server-side) */}
-        <Field label="Nguồn audit" hint="toàn hệ thống">
+        {/* PR-UI-PIXEL-MATCH B6 (2026-06-26): label nhãn nguồn dữ liệu thân thiện. */}
+        <Field label="Nhóm nhật ký" hint="toàn hệ thống">
           <select
             value={state.source}
             onChange={(e) => update('source', e.target.value as AuditSourceFilter)}
             className="w-full px-3 py-1.5 text-sm rounded-md border border-slate-200 focus:border-emerald-500 outline-none"
           >
-            <option value="all">Tất cả nguồn</option>
-            <option value="salesAuditLogs">Sales Audit (tx/batch/lock/export)</option>
-            <option value="auditLogs">Generic Audit (program/target)</option>
+            <option value="all">Tất cả</option>
+            <option value="salesAuditLogs">Nhật ký doanh số (giao dịch / đợt / khoá / xuất)</option>
+            <option value="auditLogs">Nhật ký chung (chương trình / chỉ tiêu)</option>
           </select>
         </Field>
 
-        {/* Client-side filters */}
+        {/* Bộ lọc trên dữ liệu đã tải */}
         <Field label="Module" hint="trang hiện tại">
           <select
             value={state.module}

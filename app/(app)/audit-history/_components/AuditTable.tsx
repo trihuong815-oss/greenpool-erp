@@ -70,16 +70,17 @@ export default function AuditTable({ items, onSelect }: Props) {
                     {fmtTimeVN(it.changedAtMs)}
                   </td>
                   <td className="px-3 py-2">
-                    {/* PR-7B: source badge */}
+                    {/* PR-UI-PIXEL-MATCH B6 (2026-06-26): badge nguồn dữ liệu —
+                        tooltip dùng nhãn thân thiện, không lộ tên collection nội bộ. */}
                     <span
                       className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium ${
                         it.source === 'salesAuditLogs'
                           ? 'bg-sky-50 text-sky-700 border border-sky-200'
                           : 'bg-violet-50 text-violet-700 border border-violet-200'
                       }`}
-                      title={it.source}
+                      title={it.source === 'salesAuditLogs' ? 'Nhật ký doanh số' : 'Nhật ký chung'}
                     >
-                      {it.source === 'salesAuditLogs' ? 'Sales' : 'Generic'}
+                      {it.source === 'salesAuditLogs' ? 'Doanh số' : 'Chung'}
                     </span>
                   </td>
                   <td className="px-3 py-2">
@@ -107,7 +108,7 @@ export default function AuditTable({ items, onSelect }: Props) {
                           ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                           : 'bg-amber-50 text-amber-700 border border-amber-200'
                       }`}
-                      title={known ? '' : 'Action chưa có label tiếng Việt (PR-7A tolerant string)'}
+                      title={known ? '' : 'Loại thao tác chưa có nhãn tiếng Việt'}
                     >
                       {actionLabelOrRaw(it.action)}
                     </span>

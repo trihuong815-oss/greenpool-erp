@@ -45,7 +45,7 @@ export default function AuditCardStack({ items, onSelect }: Props) {
                     {actionLabelOrRaw(it.action)}
                   </span>
                   <span className="text-xs text-slate-500">{moduleLabel(it.module)}</span>
-                  {/* PR-7B: source badge */}
+                  {/* PR-UI-PIXEL-MATCH B6 (2026-06-26): badge nguồn dữ liệu thân thiện. */}
                   <span
                     className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium ${
                       it.source === 'salesAuditLogs'
@@ -53,7 +53,7 @@ export default function AuditCardStack({ items, onSelect }: Props) {
                         : 'bg-violet-50 text-violet-700 border border-violet-200'
                     }`}
                   >
-                    {it.source === 'salesAuditLogs' ? 'Sales' : 'Generic'}
+                    {it.source === 'salesAuditLogs' ? 'Doanh số' : 'Chung'}
                   </span>
                   {it.branchId ? (
                     <span
