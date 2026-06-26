@@ -757,36 +757,25 @@ function TabBtn({ active, onClick, Icon, label, highlight }: {
 }
 
 // ─────────── KpiCard ───────────
+// PR-UI-PIXEL-MATCH B3 (2026-06-26): wrapper gọi <StatCard> chuẩn.
+// Giữ props signature cũ (color cyan/slate/amber/emerald/rose) để callsite
+// không phải sửa; map sang StatCard tone (default/success/danger/warning/info).
+import { StatCard, type StatCardTone } from '@/components/ui/StatCard';
+
 function KpiCard({ label, value, icon: Icon, color }: {
   label: string;
   value: number;
   icon: typeof Calendar;
   color: 'cyan' | 'slate' | 'amber' | 'emerald' | 'rose';
 }) {
-  // UI 10/10: nền trắng trung tính, màu chỉ ở số + icon theo ngữ nghĩa (Đang làm=vàng, Hoàn tất=xanh, Quá hạn=đỏ).
-  const valueCls: Record<typeof color, string> = {
-    cyan:    'text-slate-900',
-    slate:   'text-slate-900',
-    amber:   'text-amber-600',
-    emerald: 'text-emerald-600',
-    rose:    'text-rose-600',
+  const toneMap: Record<typeof color, StatCardTone> = {
+    cyan:    'default',
+    slate:   'default',
+    amber:   'warning',
+    emerald: 'success',
+    rose:    'danger',
   };
-  const iconCls: Record<typeof color, string> = {
-    cyan:    'bg-slate-100 text-slate-500',
-    slate:   'bg-slate-100 text-slate-500',
-    amber:   'bg-amber-50 text-amber-600',
-    emerald: 'bg-emerald-50 text-emerald-600',
-    rose:    'bg-rose-50 text-rose-600',
-  };
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white px-2 py-2 sm:px-3 sm:py-2.5 flex items-center gap-2 min-w-0">
-      <div className={`rounded-md p-1.5 shrink-0 ${iconCls[color]}`}><Icon size={16} /></div>
-      <div className="min-w-0 flex-1">
-        <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 truncate">{label}</div>
-        <div className={`text-lg sm:text-xl font-bold tabular-nums leading-tight ${valueCls[color]}`}>{value}</div>
-      </div>
-    </div>
-  );
+  return <StatCard label={label} value={value} icon={<Icon size={14} />} tone={toneMap[color]} />;
 }
 
 // ─────────── ProfileModal ───────────

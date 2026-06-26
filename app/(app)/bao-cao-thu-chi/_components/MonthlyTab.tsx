@@ -175,22 +175,19 @@ export function MonthlyTab({ myBranchId, canSelectBranch, myBranchLabel, initial
   );
 }
 
-// UI 10/10: card trắng, màu chỉ ở số theo ngữ nghĩa.
-const VALUE_CLS: Record<string, string> = {
-  slate: 'text-slate-900',
-  emerald: 'text-emerald-600',
-  rose: 'text-rose-600',
-  violet: 'text-slate-900',
-  amber: 'text-amber-600',
+// PR-UI-PIXEL-MATCH B3 (2026-06-26): dùng <StatCard> chuẩn.
+import { StatCard, type StatCardTone } from '@/components/ui/StatCard';
+
+const TONE_MAP: Record<string, StatCardTone> = {
+  slate: 'default',
+  emerald: 'success',
+  rose: 'danger',
+  violet: 'default',
+  amber: 'warning',
 };
 
-function KpiCard({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone: keyof typeof VALUE_CLS }) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 transition-all duration-200 hover:shadow-md">
-      <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500">{icon}{label}</div>
-      <div className={`text-lg font-bold tabular-nums mt-0.5 ${VALUE_CLS[tone]}`}>{value}</div>
-    </div>
-  );
+function KpiCard({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone: keyof typeof TONE_MAP }) {
+  return <StatCard label={label} value={value} icon={icon} tone={TONE_MAP[tone]} />;
 }
 function Pill({ children, cls }: { children: React.ReactNode; cls: string }) {
   return <span className={`inline-flex items-center px-2 py-0.5 rounded-full ring-1 text-xs font-medium ${cls}`}>{children}</span>;

@@ -254,18 +254,15 @@ export default function CongNoClient({ scope }: Props) {
   );
 }
 
+// PR-UI-PIXEL-MATCH B3 (2026-06-26): dùng <StatCard> chuẩn.
+import { StatCard, type StatCardTone } from '@/components/ui/StatCard';
+
 function Kpi({ label, value, tone }: { label: string; value: string; tone: 'slate' | 'emerald' | 'sky' | 'rose' }) {
-  // UI Phase 2: card trắng, value màu theo ngữ nghĩa (emerald=tốt, rose=nợ, slate/sky=neutral).
-  const valueCls = {
-    slate:   'text-slate-900',
-    emerald: 'text-emerald-600',
-    sky:     'text-slate-900',
-    rose:    'text-rose-600',
-  }[tone];
-  return (
-    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{label}</div>
-      <div className={`text-base font-bold tabular-nums mt-0.5 ${valueCls}`}>{value}</div>
-    </div>
-  );
+  const toneMap: Record<typeof tone, StatCardTone> = {
+    slate:   'default',
+    emerald: 'success',
+    sky:     'default',
+    rose:    'danger',
+  };
+  return <StatCard label={label} value={value} tone={toneMap[tone]} />;
 }

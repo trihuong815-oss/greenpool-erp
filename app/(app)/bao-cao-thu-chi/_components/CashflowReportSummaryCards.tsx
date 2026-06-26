@@ -35,19 +35,16 @@ export function CashflowReportSummaryCards({ reports }: Props) {
   );
 }
 
-// UI 10/10: card trắng, màu chỉ ở số theo ngữ nghĩa (thu=xanh, chi=đỏ, cảnh báo=vàng).
-const VALUE_CLS: Record<string, string> = {
-  slate:    'text-slate-900',
-  emerald:  'text-emerald-600',
-  rose:     'text-rose-600',
-  amber:    'text-amber-600',
+// PR-UI-PIXEL-MATCH B3 (2026-06-26): dùng <StatCard> chuẩn.
+import { StatCard, type StatCardTone } from '@/components/ui/StatCard';
+
+const TONE_MAP: Record<string, StatCardTone> = {
+  slate:    'default',
+  emerald:  'success',
+  rose:     'danger',
+  amber:    'warning',
 };
 
-function Stat({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone: keyof typeof VALUE_CLS }) {
-  return (
-    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-      <div className="flex items-center gap-1.5 text-xs text-slate-500">{icon}{label}</div>
-      <div className={`text-lg font-bold tabular-nums ${VALUE_CLS[tone]}`}>{value}</div>
-    </div>
-  );
+function Stat({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone: keyof typeof TONE_MAP }) {
+  return <StatCard label={label} value={value} icon={icon} tone={TONE_MAP[tone]} />;
 }

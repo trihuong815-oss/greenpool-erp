@@ -198,20 +198,18 @@ export function YearlyTab({ myBranchId, canSelectBranch, myBranchLabel, onSelect
   );
 }
 
-const TONE_CLS: Record<string, string> = {
-  slate: 'bg-white text-slate-700 ring-slate-200',
-  emerald: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-  rose: 'bg-rose-50 text-rose-700 ring-rose-200',
-  violet: 'bg-violet-50 text-violet-700 ring-violet-200',
-  amber: 'bg-amber-50 text-amber-700 ring-amber-200',
+// PR-UI-PIXEL-MATCH B3 (2026-06-26): dùng <StatCard> chuẩn.
+import { StatCard, type StatCardTone } from '@/components/ui/StatCard';
+
+const TONE_MAP: Record<string, StatCardTone> = {
+  slate: 'default',
+  emerald: 'success',
+  rose: 'danger',
+  violet: 'default',
+  amber: 'warning',
 };
-function KpiCard({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone: keyof typeof TONE_CLS }) {
-  return (
-    <div className={`rounded-xl px-3 py-2.5 ring-1 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${TONE_CLS[tone]}`}>
-      <div className="flex items-center gap-1.5 text-xs font-medium opacity-90">{icon}{label}</div>
-      <div className="text-lg font-bold tabular-nums mt-0.5">{value}</div>
-    </div>
-  );
+function KpiCard({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone: keyof typeof TONE_MAP }) {
+  return <StatCard label={label} value={value} icon={icon} tone={TONE_MAP[tone]} />;
 }
 function Th({ children, className = '' }: { children?: React.ReactNode; className?: string }) {
   return <th className={`text-left font-medium py-2 px-2 ${className}`}>{children}</th>;
