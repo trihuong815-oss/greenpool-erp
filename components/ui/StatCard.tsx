@@ -53,7 +53,10 @@ export function StatCard({ label, value, icon, tone = 'default', sub, delta }: P
           <span className={`grid h-7 w-7 place-items-center rounded-md text-sm ${ICON_TONE[tone]}`}>{icon}</span>
         )}
       </div>
-      <div className={`font-mono text-2xl font-semibold tabular-nums ${VAL_TONE[tone]}`}>{value}</div>
+      {/* PR-UI-TYPOGRAPHY-DENSITY-BALANCE (2026-06-26): text-2xl (24px) → text-[22px]
+          + leading-tight để value cân với card p-4 (KPI tiền "73 tr"/"57,5 tr" bớt phình ô,
+          vẫn nổi bật). Áp dụng toàn app qua mọi callsite StatCard. */}
+      <div className={`font-mono text-[22px] font-semibold leading-tight tabular-nums ${VAL_TONE[tone]}`}>{value}</div>
       {(sub || delta) && (
         <div className="mt-1 flex items-center gap-2 text-[11px]">
           {delta && (
@@ -74,10 +77,13 @@ export function StatCard({ label, value, icon, tone = 'default', sub, delta }: P
 export function SegmentSummary({ items }: { items: { n: ReactNode; label: string; tone?: StatCardTone }[] }) {
   return (
     <div className="flex overflow-hidden rounded-xl border border-slate-200 bg-white">
+      {/* PR-UI-TYPOGRAPHY-DENSITY-BALANCE (2026-06-26): text-xl (20px) → text-[19px]
+          + leading-tight, padding py-3 → py-2.5. Dải gộp 7 trạng thái /de-xuat đỡ cao,
+          số nhỏ hơn nhưng vẫn dễ đọc. */}
       {items.map((it, i) => (
-        <div key={i} className="flex-1 border-r border-slate-200 px-3 py-3 text-center last:border-r-0">
-          <div className={`font-mono text-xl font-semibold tabular-nums ${VAL_TONE[it.tone ?? 'default']}`}>{it.n}</div>
-          <div className="mt-0.5 text-[11px] uppercase tracking-wide text-slate-500">{it.label}</div>
+        <div key={i} className="flex-1 border-r border-slate-200 px-3 py-2.5 text-center last:border-r-0">
+          <div className={`font-mono text-[19px] font-semibold leading-tight tabular-nums ${VAL_TONE[it.tone ?? 'default']}`}>{it.n}</div>
+          <div className="mt-1 text-[11px] uppercase tracking-wide text-slate-500">{it.label}</div>
         </div>
       ))}
     </div>

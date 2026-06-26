@@ -271,25 +271,28 @@ export default function DexuatDashboard({
       {/* V6.5 (2026-06-13) anh chốt — Tầng 1B: 4 KPI tổng GIÁ TRỊ */}
       {stats.valTotal > 0 && (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          {/* PR-UI-TYPOGRAPHY-DENSITY-BALANCE (2026-06-26): 4 KPI value text-2xl font-bold
+              → text-[22px] font-semibold leading-tight + label text-[10px] → text-[11px].
+              Khớp StatCard chuẩn. text-[10px] cũ vi phạm rule font ≥12 (CLAUDE.md). */}
           <div className="rounded-xl border border-slate-200 bg-white p-4">
             <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Tổng giá trị</div>
-            <div className="mt-1 text-2xl font-bold tabular-nums text-slate-800">{fmtVndShort(stats.valTotal)}</div>
-            <div className="text-[10px] text-slate-400 mt-0.5">đề xuất có giá trị</div>
+            <div className="mt-1 text-[22px] font-semibold leading-tight tabular-nums text-slate-800">{fmtVndShort(stats.valTotal)}</div>
+            <div className="text-[11px] text-slate-400 mt-1">đề xuất có giá trị</div>
           </div>
           <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-4">
             <div className="text-[11px] uppercase tracking-wider text-amber-700 font-semibold">Chờ duyệt</div>
-            <div className="mt-1 text-2xl font-bold tabular-nums text-amber-700">{fmtVndShort(stats.valCho)}</div>
-            <div className="text-[10px] text-slate-400 mt-0.5">đang chờ quyết định</div>
+            <div className="mt-1 text-[22px] font-semibold leading-tight tabular-nums text-amber-700">{fmtVndShort(stats.valCho)}</div>
+            <div className="text-[11px] text-slate-400 mt-1">đang chờ quyết định</div>
           </div>
           <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 p-4">
             <div className="text-[11px] uppercase tracking-wider text-emerald-700 font-semibold">Đã duyệt</div>
-            <div className="mt-1 text-2xl font-bold tabular-nums text-emerald-700">{fmtVndShort(stats.valDuyet)}</div>
-            <div className="text-[10px] text-slate-400 mt-0.5">sẵn sàng triển khai</div>
+            <div className="mt-1 text-[22px] font-semibold leading-tight tabular-nums text-emerald-700">{fmtVndShort(stats.valDuyet)}</div>
+            <div className="text-[11px] text-slate-400 mt-1">sẵn sàng triển khai</div>
           </div>
           <div className="rounded-xl border border-violet-200 bg-violet-50/40 p-4">
             <div className="text-[11px] uppercase tracking-wider text-violet-700 font-semibold">Đã chuyển ĐP</div>
-            <div className="mt-1 text-2xl font-bold tabular-nums text-violet-700">{fmtVndShort(stats.valDP)}</div>
-            <div className="text-[10px] text-slate-400 mt-0.5">đang triển khai</div>
+            <div className="mt-1 text-[22px] font-semibold leading-tight tabular-nums text-violet-700">{fmtVndShort(stats.valDP)}</div>
+            <div className="text-[11px] text-slate-400 mt-1">đang triển khai</div>
           </div>
         </div>
       )}

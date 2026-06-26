@@ -65,7 +65,9 @@ export default function SwipeKpiBar({ proposals, currentUserUid, active, onSelec
               <div className={`inline-flex rounded-xl p-2 ${a.wrap} mb-2`}>
                 <Icon size={18} className={a.icon} />
               </div>
-              <div className={`text-3xl font-bold tabular-nums ${a.count} leading-none`}>{item.count}</div>
+              {/* PR-UI-TYPOGRAPHY-DENSITY-BALANCE (2026-06-26): text-3xl (30px) font-bold
+                  → text-[26px] font-semibold leading-none. Card mobile 148x cân hơn. */}
+              <div className={`text-[26px] font-semibold tabular-nums ${a.count} leading-none`}>{item.count}</div>
               <div className="text-[12px] font-medium text-slate-600 mt-1.5 truncate">{item.label}</div>
             </button>
           );
