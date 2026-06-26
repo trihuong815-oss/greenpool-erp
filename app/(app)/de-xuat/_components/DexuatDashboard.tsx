@@ -10,15 +10,9 @@
 // Tiếng Việt CÓ DẤU đầy đủ. Tailwind only. Không phụ thuộc chart lib.
 
 import { useMemo } from 'react';
-import {
-  AlertCircle,
-  Eye,
-  Send,
-  CheckCircle2,
-  ArrowRightCircle,
-  XCircle,
-  Clock,
-} from 'lucide-react';
+// PR-UI-PIXEL-MATCH B4 (2026-06-26): bỏ 7 icon import — KpiCard riêng đã thay
+// bằng <SegmentSummary> (1 dải gộp 7 trạng thái) không cần icon per card.
+import { SegmentSummary } from '@/components/ui/StatCard';
 
 // ───────────────────────────────────────────────────────────────
 // Types V6 — định nghĩa cục bộ để dashboard self-contained.
@@ -251,56 +245,26 @@ export default function DexuatDashboard({
 
   return (
     <div className="space-y-4">
-      {/* Tầng 1 — 7 KPI cards */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
-        <KpiCard
-          label="Chờ tôi duyệt"
-          value={stats.cardCho}
-          icon={<AlertCircle size={18} />}
-          tone="amber"
-          tooltip="Đề xuất đang chờ TÔI duyệt — tôi là currentApprover trong chuỗi duyệt."
-        />
-        <KpiCard
-          label="Đang xem xét"
-          value={stats.cardDangXX}
-          icon={<Eye size={18} />}
-          tone="sky"
-          tooltip="Đề xuất đã gửi và đang trong quá trình duyệt chuỗi (chưa đến lượt tôi)."
-        />
-        <KpiCard
-          label="Cần bổ sung"
-          value={stats.cardYCBS}
-          icon={<Send size={18} />}
-          tone="orange"
-          tooltip="Đề xuất bị approver yêu cầu bổ sung — người tạo cần sửa và gửi lại."
-        />
-        <KpiCard
-          label="Đã phê duyệt"
-          value={stats.cardDuyet}
-          icon={<CheckCircle2 size={18} />}
-          tone="emerald"
-          tooltip="Đề xuất đã duyệt cuối chuỗi nhưng chưa tạo task điều phối."
-        />
-        <KpiCard
-          label="Đã tạo điều phối"
-          value={stats.cardDP}
-          icon={<ArrowRightCircle size={18} />}
-          tone="violet"
-          tooltip="Đề xuất duyệt xong và đã tạo task Điều phối liên kết — workflow hoàn tất."
-        />
-        <KpiCard
-          label="Từ chối"
-          value={stats.cardTuChoi}
-          icon={<XCircle size={18} />}
-          tone="rose"
-          tooltip="Đề xuất bị từ chối — creator có thể sửa và gửi lại (resubmit)."
-        />
-        <KpiCard
-          label="Quá hạn"
-          value={stats.cardQuaSLA}
-          icon={<Clock size={18} />}
-          tone="rose-dark"
-          tooltip="Đề xuất đang chờ duyệt và đã vượt SLA (12h urgent / 24h normal / 48h low)."
+      {/* PR-UI-PIXEL-MATCH B4 (2026-06-26): "Tình trạng đề xuất — gộp 7 trạng thái
+          thành 1 dải" — thay 7 KpiCard riêng bằng <SegmentSummary> chuẩn mockup
+          (green-pool-prototype-sau-toi-uu.html .segsum). 4 KPI cao cấp (Tổng/Chờ
+          duyệt/Đã duyệt/Tạo ĐP) giữ bên dưới. */}
+      <div className="rounded-xl border border-slate-200 bg-white">
+        <div className="flex items-center gap-2 border-b border-slate-200 px-5 py-3">
+          <span className="h-4 w-1 rounded bg-emerald-600" />
+          <h2 className="text-sm font-semibold text-slate-900">Tình trạng đề xuất</h2>
+          <span className="text-[12px] text-slate-500">— gộp 7 trạng thái thành 1 dải</span>
+        </div>
+        <SegmentSummary
+          items={[
+            { n: stats.cardCho,     label: 'Chờ tôi duyệt',     tone: 'warning' },
+            { n: stats.cardDangXX,  label: 'Đang xem xét',      tone: 'default' },
+            { n: stats.cardYCBS,    label: 'Cần bổ sung',       tone: 'warning' },
+            { n: stats.cardDuyet,   label: 'Đã phê duyệt',      tone: 'success' },
+            { n: stats.cardDP,      label: 'Đã tạo điều phối',  tone: 'default' },
+            { n: stats.cardTuChoi,  label: 'Từ chối',           tone: 'danger' },
+            { n: stats.cardQuaSLA,  label: 'Quá hạn',           tone: 'danger' },
+          ]}
         />
       </div>
 
@@ -588,52 +552,8 @@ export default function DexuatDashboard({
 // Sub-components
 // ───────────────────────────────────────────────────────────────
 
-type Tone = 'amber' | 'sky' | 'orange' | 'emerald' | 'violet' | 'rose' | 'rose-dark';
-
-// UI 10/10: nền trắng, màu chỉ theo NGỮ NGHĨA. Thẻ không cảnh báo (đang xem xét, đã tạo điều phối) → xám;
-// chờ duyệt/cần bổ sung → vàng; đã duyệt → xanh; từ chối/quá hạn → đỏ. Số tách màu riêng (value).
-const TONE_STYLES: Record<Tone, { bg: string; text: string; ring: string; value: string }> = {
-  amber: { bg: 'bg-amber-50', text: 'text-amber-600', ring: 'ring-amber-200', value: 'text-amber-600' },
-  sky: { bg: 'bg-slate-100', text: 'text-slate-500', ring: 'ring-slate-200', value: 'text-slate-900' },
-  orange: { bg: 'bg-amber-50', text: 'text-amber-600', ring: 'ring-amber-200', value: 'text-amber-600' },
-  emerald: { bg: 'bg-emerald-50', text: 'text-emerald-600', ring: 'ring-emerald-200', value: 'text-emerald-600' },
-  violet: { bg: 'bg-slate-100', text: 'text-slate-500', ring: 'ring-slate-200', value: 'text-slate-900' },
-  rose: { bg: 'bg-rose-50', text: 'text-rose-600', ring: 'ring-rose-200', value: 'text-rose-600' },
-  'rose-dark': { bg: 'bg-rose-50', text: 'text-rose-600', ring: 'ring-rose-200', value: 'text-rose-600' },
-};
-
-function KpiCard({
-  label,
-  value,
-  icon,
-  tone,
-  tooltip,
-}: {
-  label: string;
-  value: number;
-  icon: React.ReactNode;
-  tone: Tone;
-  /** V6.5 Audit fix Phase B.2 (2026-06-15) — Issue 6.4: tooltip giải nghĩa KPI cho user. */
-  tooltip?: string;
-}) {
-  const t = TONE_STYLES[tone];
-  return (
-    <div
-      className="rounded-xl border border-slate-200 bg-white p-3 transition hover:shadow-md cursor-help"
-      title={tooltip ?? label}
-    >
-      <div className="mb-2 flex items-center justify-between">
-        <span
-          className={`inline-flex h-8 w-8 items-center justify-center rounded-lg ${t.bg} ${t.text} ring-1 ${t.ring}`}
-        >
-          {icon}
-        </span>
-      </div>
-      <p className="text-sm font-medium text-slate-600">{label}</p>
-      <p className={`mt-1 text-2xl font-bold tabular-nums ${t.value}`}>{value}</p>
-    </div>
-  );
-}
+// PR-UI-PIXEL-MATCH B4 (2026-06-26): KpiCard + Tone + TONE_STYLES đã được thay
+// hoàn toàn bằng <SegmentSummary> từ @/components/ui/StatCard — dead code đã gỡ.
 
 function DonutChart({
   segments,
