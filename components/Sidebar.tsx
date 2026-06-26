@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { effectiveMenu } from '@/lib/permissions';
 import {
   Home, CheckSquare, ListTodo, Inbox,
-  Users, FileBarChart, GraduationCap, Megaphone, Settings, LogOut, UserCog, Wrench, X, Briefcase, ShieldCheck, Search,
+  Users, FileBarChart, GraduationCap, Megaphone, Settings, UserCog, Wrench, X, Briefcase, ShieldCheck, Search,
   Sliders, Bell, Building2, Factory, Briefcase as BriefcaseBusiness, Rocket, ChevronDown,
   PencilLine, ClipboardCheck, CreditCard, TrendingUp, Tag, Calculator, BarChart3,
   History, Receipt,
@@ -233,16 +233,18 @@ const MENU_SECTIONS: MenuSection[] = [
 ];
 
 interface SidebarProps {
+  /** PR-UI-SIDEBAR-ACCOUNT-CLEANUP (2026-06-26): userName/userRole/avatarUrl giữ
+   *  trong interface để callsite AppShell không phải sửa (backward compat).
+   *  Sidebar không còn render account info — UserMenu góc phải đã handle. */
   userName: string;
   userRole: string;
-  roleCode: string;
   avatarUrl?: string | null;
+  roleCode: string;
   menuOverrides?: Record<string, boolean>;
 }
 
-export function Sidebar({ userName, userRole, roleCode, avatarUrl, menuOverrides }: SidebarProps) {
+export function Sidebar({ roleCode, menuOverrides }: SidebarProps) {
   const pathname = usePathname();
-  const router = useRouter();
   const { setOpen } = useMobileNav();
   const allowed = effectiveMenu(roleCode, menuOverrides);
 
@@ -273,24 +275,9 @@ export function Sidebar({ userName, userRole, roleCode, avatarUrl, menuOverrides
     .map((s) => ({ ...s, items: filterItems(s.items) }))
     .filter((s) => s.items.length > 0);
 
-  async function handleLogout() {
-    // Phase 13.9.3 (2026-06-05): KHÔNG xoá FCM token khi logout — anh chốt rule
-    // "bật noti là dùng mãi đến khi tắt". User chủ động tắt trong /bao-mat thì token mới bị xoá.
-    // Logout chỉ clear session/auth, giữ token để login sau noti vẫn tới.
-    // 1. SignOut Firebase client SDK (xóa trạng thái LOCAL persistence)
-    //    → ngăn SessionRefresher tự tạo lại cookie
-    try {
-      const { getFirebaseClientAuth } = await import('@/lib/firebase/client');
-      await getFirebaseClientAuth().signOut();
-      try { localStorage.removeItem('gp_last_session_refresh'); } catch { /* ignore */ }
-    } catch { /* ignore */ }
-    // 2. Clear Firebase session cookie qua API route
-    await fetch('/api/auth/session', { method: 'DELETE' }).catch(() => {});
-    router.push('/login');
-    router.refresh();
-  }
-
-  const initials = userName.split(' ').slice(-2).map(w => w[0]).join('').toUpperCase();
+  // PR-UI-SIDEBAR-ACCOUNT-CLEANUP (2026-06-26): handleLogout + initials đã được
+  // chuyển hoàn toàn sang UserMenu góc phải topbar. Sidebar không còn thao tác
+  // account riêng nên xoá function/var để tránh dead code.
 
   return (
     <aside className="md:sticky md:top-0 flex h-screen w-[85vw] max-w-[300px] md:w-64 flex-col border-r border-slate-200 bg-white shadow-xl md:shadow-none">
@@ -353,36 +340,11 @@ export function Sidebar({ userName, userRole, roleCode, avatarUrl, menuOverrides
         ))}
       </nav>
 
-      {/* User footer — emerald brand đồng bộ với Green Pool System */}
-      <div className="border-t border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-cyan-50 px-3 py-3 pb-[max(env(safe-area-inset-bottom),0.75rem)]">
-        <div className="flex items-center gap-2.5 rounded-lg bg-white p-2 ring-1 ring-emerald-100 shadow-sm">
-          {avatarUrl ? (
-            <img
-              src={avatarUrl}
-              alt={userName}
-              className="h-9 w-9 rounded-full object-cover ring-2 ring-emerald-200 shadow-sm"
-            />
-          ) : (
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-emerald-600 to-teal-700 text-xs font-bold text-white shadow-sm">
-              {initials}
-            </div>
-          )}
-          {/* Tên + chức vụ đã chuyển lên menu tài khoản góc phải (tránh hiển thị trùng).
-              Footer chỉ giữ avatar nhận diện + thao tác nhanh. */}
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-[11px] font-semibold text-emerald-800 leading-tight">Đang đăng nhập</div>
-            <Link href="/doi-mat-khau" className="text-[11px] font-medium text-emerald-600 hover:text-emerald-800 hover:underline">
-              Hồ sơ &amp; mật khẩu
-            </Link>
-          </div>
-          <button
-            onClick={handleLogout}
-            title="Đăng xuất"
-            className="rounded-md p-1.5 text-emerald-600 transition hover:bg-rose-50 hover:text-rose-600"
-          >
-            <LogOut className="h-4 w-4" />
-          </button>
-        </div>
+      {/* PR-UI-SIDEBAR-ACCOUNT-CLEANUP (2026-06-26): bỏ khối account trùng với
+          UserMenu góc phải topbar. Footer còn 1 dòng © brand tối giản. Các thao
+          tác Hồ sơ / Đổi mật khẩu / Đăng xuất đã có đầy đủ trong UserMenu. */}
+      <div className="border-t border-slate-100 px-4 py-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] text-[11px] text-slate-400">
+        © Green Pool 2026
       </div>
     </aside>
   );
