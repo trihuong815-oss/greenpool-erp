@@ -287,7 +287,7 @@ export function ChecklistV2Client({
           <button
             onClick={submit}
             disabled={submitting || pct < 100}
-            className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-bold rounded-lg bg-gradient-to-r from-emerald-600 to-teal-700 text-white shadow-sm hover:shadow-md disabled:opacity-50"
+            className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-bold rounded-lg bg-emerald-600 text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50 transition-colors"
           >
             {submitting ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
             Gửi checklist

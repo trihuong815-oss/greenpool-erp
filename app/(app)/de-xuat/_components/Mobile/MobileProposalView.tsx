@@ -127,7 +127,7 @@ export default function MobileProposalView({ proposals, currentUserUid, canCreat
           type="button"
           onClick={onCreate}
           aria-label="Tạo đề xuất mới"
-          className="fixed bottom-[calc(56px+env(safe-area-inset-bottom)+12px)] right-4 z-30 h-14 w-14 rounded-full bg-gradient-to-b from-emerald-500 to-emerald-600 text-white shadow-xl ring-1 ring-emerald-700/20 flex items-center justify-center active:scale-90 transition"
+          className="fixed bottom-[calc(56px+env(safe-area-inset-bottom)+12px)] right-4 z-30 h-14 w-14 rounded-full bg-emerald-600 text-white shadow-xl ring-1 ring-emerald-700/20 flex items-center justify-center active:scale-90 transition hover:bg-emerald-700"
         >
           <Plus size={26} strokeWidth={2.5} />
         </button>

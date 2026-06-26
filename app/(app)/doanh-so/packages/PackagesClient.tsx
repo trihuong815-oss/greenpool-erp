@@ -301,7 +301,7 @@ export function PackagesClient({ allowedBranches }: Props) {
         </div>
         <button
           onClick={() => setGroupModal({ mode: 'add' })}
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-700 text-white rounded-lg hover:shadow-md font-semibold transition"
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 hover:shadow-md font-semibold transition-colors"
         >
           <Plus size={16} /> Thêm nhóm
         </button>
@@ -729,7 +729,7 @@ function ModalShell({ title, icon, children, onClose, narrow = false }: {
         className={`bg-white rounded-2xl shadow-2xl w-full ${narrow ? 'max-w-md' : 'max-w-lg'} flex flex-col overflow-hidden`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-5 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white flex items-center justify-between gap-3">
+        <div className="px-5 py-3 bg-emerald-600 text-white flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             {icon}
             <h2 className="text-base font-bold">{title}</h2>
@@ -761,7 +761,7 @@ function ModalFooter({ onCancel, onSave, saving, saveDisabled = false, saveLabel
         onClick={onSave}
         disabled={saving || saveDisabled}
         className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white rounded-lg shadow-sm transition disabled:opacity-50 ${
-          danger ? 'bg-rose-600 hover:bg-rose-700' : 'bg-gradient-to-r from-emerald-600 to-teal-700 hover:shadow-md'
+          danger ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700 hover:shadow-md'
         }`}
       >
         {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}

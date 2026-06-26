@@ -548,7 +548,7 @@ export default function NhapClient({ branchId, branchName, saleName, packages }:
               type="button"
               disabled={!canEdit || saving || submitting || (rows.length === 0 && localRows.length === 0)}
               onClick={handleSubmit}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-gradient-to-b from-emerald-500 to-emerald-600 text-sm font-semibold text-white shadow-sm hover:from-emerald-600 hover:to-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-600 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {submitting ? <Loader2 className="animate-spin" size={16} /> : <Send size={16} />}
               Gửi đối chiếu ngày

@@ -690,7 +690,7 @@ export default function DieuPhoiClient({
             title={canCreate ? 'Tạo điều phối mới' : 'Bạn không có quyền tạo điều phối'}
             className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold rounded-lg shadow-md ring-1 ring-inset transition ${
               canCreate
-                ? 'bg-gradient-to-b from-emerald-500 to-emerald-600 text-white ring-emerald-400/30 hover:from-emerald-600 hover:to-emerald-700 hover:shadow-lg'
+                ? 'bg-emerald-600 text-white ring-emerald-400/30 hover:bg-emerald-700 hover:shadow-lg'
                 : 'bg-slate-200 text-slate-500 ring-slate-300/40 cursor-not-allowed'
             }`}
           >

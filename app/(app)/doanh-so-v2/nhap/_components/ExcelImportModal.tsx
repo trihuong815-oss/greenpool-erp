@@ -232,7 +232,7 @@ export default function ExcelImportModal({ packages, onClose, onImport }: Props)
               type="button"
               onClick={handleImport}
               disabled={stats.valid === 0}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gradient-to-b from-emerald-500 to-emerald-600 text-sm font-semibold text-white shadow-sm hover:from-emerald-600 hover:to-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <Check size={14} /> Thêm {stats.valid} dòng vào bảng
             </button>

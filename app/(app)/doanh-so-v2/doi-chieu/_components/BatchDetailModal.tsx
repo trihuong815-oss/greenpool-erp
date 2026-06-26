@@ -366,7 +366,7 @@ export default function BatchDetailModal({ batch, canReview, onClose, onAfterAct
                   : reviewCounts.rejected > 0
                     ? 'Có giao dịch lỗi — phải Trả lại Sale trước'
                     : 'Tick ✓ tất cả giao dịch để duyệt'}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-gradient-to-b from-emerald-500 to-emerald-600 text-sm font-semibold text-white shadow-sm hover:from-emerald-600 hover:to-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {busy === 'approve' ? <Loader2 className="animate-spin" size={14} /> : <Check size={14} />}
                 Duyệt toàn bộ{canApprove && ` (${reviewCounts.approved})`}
