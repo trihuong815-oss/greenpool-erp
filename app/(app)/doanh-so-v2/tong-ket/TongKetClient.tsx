@@ -5,63 +5,52 @@
 // PR-TK2 (2026-06-21): wire BusinessAlerts, MonthLockBadge, MonthlyKpiCards extend, CTA.
 // PR-TK3A (2026-06-21): wire TargetProgressCard read-only.
 // PR-TK3B (2026-06-21): wire tabs (Tổng kết / Chỉ tiêu) + TargetEditTab.
-// PR-TK4A (2026-06-22): role-based view layout — pickView() chọn 1 trong 5 view
-//   component (TopExecutive / Accountant / Qlcs / Sale / ReadOnlyAudit) thay vì
-//   render đồng nhất cho mọi role. Section order khác nhau theo persona.
+// PR-TK4A (2026-06-22): role-based view layout (TopExecutive / Accountant / Qlcs / Sale / ReadOnlyAudit).
+// PR-SALES-SUMMARY-SIMPLE-THREE-TABS-UI (2026-06-26): refactor về ĐÚNG 3 TAB user-facing
+//   theo mockup (Tổng quan / Theo cơ sở-Sale / Rủi ro giá). Tab "Chỉ tiêu" thứ 4 chỉ
+//   visible cho role có quyền edit (ADMIN/CEO/CHU_TICH/GD_KD) — giữ chức năng,
+//   không xoá. Mỗi tab render fixed sections — KHÔNG đổi data/API/calculation/permission.
+//   Bỏ pickView() 5-view per-role: data scope đã filter server-side đủ an toàn cho
+//   mọi role; section view nhất quán giúp người dùng dễ scan.
+//   View files (TopExecutiveView/AccountantView/QlcsView/SaleView/ReadOnlyAuditView)
+//   giữ trong repo (chưa xoá) để rollback dễ nếu cần.
 
-import { useCallback, useEffect, useState, type ComponentType } from 'react';
-import { BarChart3, Target } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import type { BranchId } from '@/lib/branches';
 import type { ScopeRole } from '@/lib/sales-v2/scope';
 
 import TongKetHeader from './_components/TongKetHeader';
 import { LoadingState, ErrorState, EmptyState } from './_components/TongKetStates';
 import BusinessAlerts from './_components/BusinessAlerts';
+import MonthlyKpiCards from './_components/MonthlyKpiCards';
+import TargetProgressCard from './_components/TargetProgressCard';
+import BranchSummaryTable from './_components/BranchSummaryTable';
+import SaleRankingTable from './_components/SaleRankingTable';
+import AdHocDiscountCard from './_components/AdHocDiscountCard';
 import TargetEditTab from './_components/TargetEditTab';
-import TopExecutiveView from './_components/views/TopExecutiveView';
-import AccountantView from './_components/views/AccountantView';
-import QlcsView from './_components/views/QlcsView';
-import SaleView from './_components/views/SaleView';
-import ReadOnlyAuditView from './_components/views/ReadOnlyAuditView';
 import { currentMonthVN } from './_components/utils';
 import type { Summary } from './_components/types';
 
 interface Props {
   scope: ScopeRole;
-  // PR-TK3B: cần thêm để permission UI tab "Chỉ tiêu" + branch defaulting
   myRoleCode: string;
   myUid: string;
   myBranchId: BranchId | null;
 }
 
-type MainTab = 'summary' | 'target';
+// PR-SALES-SUMMARY-SIMPLE-THREE-TABS-UI: 3 tab user-facing + 1 tab admin (Chỉ tiêu).
+type MainTab = 'overview' | 'by-branch' | 'risk' | 'target';
 
-// ─── Role-based view selection (PR-TK4A) ───────────────────────────────────
+const TARGET_WRITE_ROLES = new Set(['ADMIN', 'CEO', 'CHU_TICH', 'GD_KD']);
 
-/** Chọn view component theo roleCode + scope. Order check QUAN TRỌNG:
- *  TP_GS check TRƯỚC scope='top' vì TP_GS scope cũng = 'top' (theo getScopeRole)
- *  nhưng cần ReadOnlyAuditView không phải TopExecutiveView. */
-function pickView(scope: ScopeRole, roleCode: string): ComponentType<any> {
-  if (roleCode === 'TP_GS') return ReadOnlyAuditView;
-  if (roleCode === 'TP_KE' || roleCode === 'NV_KE') return AccountantView;
-  if (scope === 'sale') return SaleView;
-  if (scope === 'qlcs') return QlcsView;
-  // Fallback: scope='top' hoặc 'accountant' (đã handle TP_KE/NV_KE ở trên)
-  return TopExecutiveView;
-}
-
-/** CTA "Sang đối chiếu" hiện khi user có quyền vào /doi-chieu.
- *  Sale + TP_GS KHÔNG có quyền → ẩn CTA tránh dead link. */
 function shouldShowReconcileCta(scope: ScopeRole, roleCode: string): boolean {
   if (scope === 'sale') return false;
   if (roleCode === 'TP_GS') return false;
   return true;
 }
 
-// ─── Main orchestrator ─────────────────────────────────────────────────────
-
 export default function TongKetClient({ scope, myRoleCode, myUid, myBranchId }: Props) {
-  const [tab, setTab] = useState<MainTab>('summary');
+  const [tab, setTab] = useState<MainTab>('overview');
   const [month, setMonth] = useState<string>(currentMonthVN());
   const [branchId, setBranchId] = useState<BranchId | 'all'>('all');
   const [data, setData] = useState<Summary | null>(null);
@@ -69,6 +58,7 @@ export default function TongKetClient({ scope, myRoleCode, myUid, myBranchId }: 
   const [error, setError] = useState<string | null>(null);
 
   const showBranchFilter = scope === 'top';
+  const canWriteTarget = TARGET_WRITE_ROLES.has(myRoleCode);
 
   const fetchSummary = useCallback(async () => {
     setLoading(true);
@@ -87,24 +77,29 @@ export default function TongKetClient({ scope, myRoleCode, myUid, myBranchId }: 
     }
   }, [month, branchId, showBranchFilter]);
 
-  useEffect(() => {
-    if (tab === 'summary') void fetchSummary();
-  }, [tab, fetchSummary]);
-
-  // PR-TK4A: chọn view component theo role/scope
-  const ViewComponent = pickView(scope, myRoleCode);
   // PR-TK4B: scopeBranchId cho SaleRankingTable showBranchColumn check.
-  // showBranchFilter=true (top scope) + branchId='all' → scope all → showBranchColumn=true.
-  // showBranchFilter=true + branchId chọn 1 → showBranchColumn=false (filter 1 branch).
-  // showBranchFilter=false (QLCS/NV_KE/Sale) → branchId hardcoded → showBranchColumn=false.
   const scopeBranchId = (showBranchFilter && branchId !== 'all') ? branchId : (showBranchFilter ? null : myBranchId);
+  const showBranchColumn = scopeBranchId == null;
+
+  // 3 tab data-driven đều cần Summary (không phải tab 'target'). Fetch khi không phải tab target.
+  useEffect(() => {
+    if (tab !== 'target') void fetchSummary();
+  }, [tab, fetchSummary]);
 
   return (
     <div className="flex-1 p-3 md:p-5 bg-slate-50 overflow-y-auto">
       <div className="mx-auto max-w-[1400px] space-y-4">
-        <TabSwitcher tab={tab} setTab={setTab} />
+        <TabSwitcher tab={tab} setTab={setTab} canWriteTarget={canWriteTarget} />
 
-        {tab === 'summary' ? (
+        {tab === 'target' ? (
+          <TargetEditTab
+            scope={scope}
+            roleCode={myRoleCode}
+            uid={myUid}
+            myBranchId={myBranchId}
+            currentMonth={month}
+          />
+        ) : (
           <>
             <TongKetHeader
               scope={scope}
@@ -121,46 +116,94 @@ export default function TongKetClient({ scope, myRoleCode, myUid, myBranchId }: 
               <LoadingState />
             ) : error ? (
               <ErrorState message={error} />
-            ) : !data ? null : data.totals.transactions === 0 ? (
-              <>
-                <BusinessAlerts data={data} />
-                <EmptyState month={month} scope={scope} roleCode={myRoleCode} />
-              </>
-            ) : (
-              // PR-TK4A: render view component theo role/scope.
-              // Mỗi view tự handle section order + filter section nào hiển thị.
-              // PR-TK4B: pass scopeBranchId + uid để SaleRankingTable/SaleView nhận đúng prop.
-              <ViewComponent
-                data={data}
-                month={month}
-                roleCode={myRoleCode}
-                scopeBranchId={scopeBranchId}
-                uid={myUid}
-              />
+            ) : !data ? null : (
+              <TabContent tab={tab} data={data} month={month} showBranchColumn={showBranchColumn} scope={scope} roleCode={myRoleCode} />
             )}
           </>
-        ) : (
-          // Tab "Chỉ tiêu" — TargetEditTab tự fetch riêng
-          <TargetEditTab
-            scope={scope}
-            roleCode={myRoleCode}
-            uid={myUid}
-            myBranchId={myBranchId}
-            currentMonth={month}
-          />
         )}
       </div>
     </div>
   );
 }
 
-// ─── Tab switcher ──────────────────────────────────────────────────────────
+// ─── Tab content (3 tab fixed sections) ───────────────────────────────────
 
-function TabSwitcher({ tab, setTab }: { tab: MainTab; setTab: (t: MainTab) => void }) {
-  const tabs: Array<{ id: MainTab; label: string; icon: React.ReactNode }> = [
-    { id: 'summary', label: 'Tổng kết tháng', icon: <BarChart3 size={16} /> },
-    { id: 'target',  label: 'Chỉ tiêu',       icon: <Target size={16} /> },
+function TabContent({
+  tab, data, month, showBranchColumn, scope, roleCode,
+}: {
+  tab: Exclude<MainTab, 'target'>;
+  data: Summary;
+  month: string;
+  showBranchColumn: boolean;
+  scope: ScopeRole;
+  roleCode: string;
+}) {
+  const isEmpty = data.totals.transactions === 0;
+  if (isEmpty) {
+    return (
+      <>
+        <BusinessAlerts data={data} />
+        <EmptyState month={month} scope={scope} roleCode={roleCode} />
+      </>
+    );
+  }
+  if (tab === 'overview') {
+    return (
+      <>
+        <BusinessAlerts data={data} />
+        <MonthlyKpiCards
+          totals={data.totals}
+          customerCount={data.customerCount}
+          pendingReviewCount={(data.txStatusStats?.pending ?? 0) + (data.batchStats?.pendingReview ?? 0)}
+        />
+        <TargetProgressCard targetSummary={data.targetSummary} />
+      </>
+    );
+  }
+  if (tab === 'by-branch') {
+    const hasBranch = Object.keys(data.byBranch).length > 0;
+    const hasSalesCustomers = data.salesCustomers && Object.keys(data.salesCustomers).length > 0;
+    return (
+      <>
+        {hasBranch && <BranchSummaryTable byBranch={data.byBranch} />}
+        {hasSalesCustomers && (
+          <SaleRankingTable
+            salesCustomers={data.salesCustomers!}
+            saleTargetsThisMonth={data.saleTargetsThisMonth}
+            daysElapsedPercent={data.targetSummary?.daysElapsedPercent ?? 0}
+            showBranchColumn={showBranchColumn}
+          />
+        )}
+        {!hasBranch && !hasSalesCustomers && (
+          <div className="card text-center py-12 text-sm text-slate-500">Chưa có dữ liệu phù hợp.</div>
+        )}
+      </>
+    );
+  }
+  // tab === 'risk'
+  return data.adHocSummary ? (
+    <AdHocDiscountCard data={data.adHocSummary} />
+  ) : (
+    <div className="card text-center py-12 text-sm text-slate-500">Chưa có giao dịch nào cần kiểm tra rủi ro giá.</div>
+  );
+}
+
+// ─── Tab switcher (3 tab + 1 tab admin) ───────────────────────────────────
+
+function TabSwitcher({
+  tab, setTab, canWriteTarget,
+}: {
+  tab: MainTab;
+  setTab: (t: MainTab) => void;
+  canWriteTarget: boolean;
+}) {
+  // PR-SALES-SUMMARY-SIMPLE-THREE-TABS-UI: tab style underline emerald, no icon, no pill.
+  const tabs: Array<{ id: MainTab; label: string }> = [
+    { id: 'overview',  label: 'Tổng quan' },
+    { id: 'by-branch', label: 'Theo cơ sở / Sale' },
+    { id: 'risk',      label: 'Rủi ro giá' },
   ];
+  if (canWriteTarget) tabs.push({ id: 'target', label: 'Chỉ tiêu' });
   return (
     <div className="flex gap-1 border-b border-slate-200">
       {tabs.map((t) => {
@@ -170,13 +213,12 @@ function TabSwitcher({ tab, setTab }: { tab: MainTab; setTab: (t: MainTab) => vo
             key={t.id}
             type="button"
             onClick={() => setTab(t.id)}
-            className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-t-lg text-sm font-medium border-b-2 transition ${
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
               active
-                ? 'bg-white text-emerald-700 border-emerald-600'
-                : 'bg-transparent text-slate-600 border-transparent hover:text-slate-800 hover:bg-white/50'
+                ? 'text-emerald-700 border-emerald-600'
+                : 'text-slate-500 border-transparent hover:text-slate-800'
             }`}
           >
-            {t.icon}
             {t.label}
           </button>
         );
