@@ -13,6 +13,8 @@ import {
   SHIFT_LABEL_V2, ROLE_LABEL_V2,
   type ChecklistRole, type ChecklistShift,
 } from '@/lib/checklist-v2/templates';
+// PR-CHECKLIST-V2-NORMALIZE (2026-06-27): SegmentSummary thay 4 Stat custom.
+import { SegmentSummary } from '@/components/ui/StatCard';
 
 interface Notification {
   id: string;
@@ -137,43 +139,49 @@ export function SupervisorView({ myUid, myRoleLabel }: Props) {
         </div>
       </div>
 
-      {/* Stats + filter */}
-      <div className="card space-y-3">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          <Stat label="Tổng gửi" value={stats.total} cls="bg-slate-100 text-slate-700" />
-          <Stat label="Chưa xem" value={stats.unseen} cls={stats.unseen > 0 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-500'} />
-          <Stat label="QLCS" value={stats.byRole.QLCS ?? 0} cls="bg-emerald-50 text-emerald-800" />
-          <Stat label="KT (HT+XLN)" value={(stats.byRole.PP_HT ?? 0) + (stats.byRole.PP_XLN ?? 0)} cls="bg-cyan-50 text-cyan-800" />
-        </div>
+      {/* PR-CHECKLIST-V2-NORMALIZE (2026-06-27): 4 Stat custom (4 màu pastel khác nhau)
+          → SegmentSummary 4 cell nhất quán pattern /dieu-phoi+/de-xuat.
+          Filter row: bỏ ring/border button, dùng chip emerald-50 active đơn giản. */}
+      <SegmentSummary
+        items={[
+          { n: stats.total,                                              label: 'Tổng gửi',     tone: 'default' },
+          { n: stats.unseen,                                             label: 'Chưa xem',     tone: stats.unseen > 0 ? 'warning' : 'default' },
+          { n: stats.byRole.QLCS ?? 0,                                   label: 'QLCS',         tone: 'success' },
+          { n: (stats.byRole.PP_HT ?? 0) + (stats.byRole.PP_XLN ?? 0),   label: 'KT (HT+XLN)',  tone: 'default' },
+        ]}
+      />
 
-        <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-slate-100">
-          <div className="text-xs text-slate-500 font-semibold uppercase tracking-wider">Khoảng thời gian:</div>
-          {[7, 14, 30].map((d) => (
-            <button
-              key={d}
-              onClick={() => setDays(d as 7 | 14 | 30)}
-              className={`px-3 py-1 text-xs font-semibold rounded ring-1 transition ${
-                days === d ? 'bg-emerald-50 text-emerald-800 ring-emerald-300' : 'bg-white text-slate-600 ring-slate-200 hover:bg-slate-50'
-              }`}
-            >
-              {d} ngày
-            </button>
-          ))}
-          <div className="text-xs text-slate-500 font-semibold uppercase tracking-wider ml-2">Vai trò:</div>
-          <select
-            value={filterRole}
-            onChange={(e) => setFilterRole(e.target.value as any)}
-            className="text-xs rounded border border-slate-200 px-2 py-1"
+      {/* Filter row — chip mini nhất quán */}
+      <div className="flex items-center gap-2 flex-wrap text-xs">
+        <span className="text-slate-500 font-medium">Khoảng thời gian:</span>
+        {[7, 14, 30].map((d) => (
+          <button
+            key={d}
+            type="button"
+            onClick={() => setDays(d as 7 | 14 | 30)}
+            className={`px-2.5 py-1 rounded-md transition ${
+              days === d
+                ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 font-semibold'
+                : 'text-slate-600 hover:bg-slate-100'
+            }`}
           >
-            {ROLE_FILTER_OPTIONS.filter((opt) => opt.value === 'all' || scope.includes(opt.value as ChecklistRole)).map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-          <label className="text-xs text-slate-700 inline-flex items-center gap-1.5 ml-2 cursor-pointer">
-            <input type="checkbox" checked={filterUnseen} onChange={(e) => setFilterUnseen(e.target.checked)} />
-            Chỉ chưa xem
-          </label>
-        </div>
+            {d} ngày
+          </button>
+        ))}
+        <span className="text-slate-500 font-medium ml-2">Vai trò:</span>
+        <select
+          value={filterRole}
+          onChange={(e) => setFilterRole(e.target.value as any)}
+          className="rounded-md border border-slate-200 px-2 py-1 bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+        >
+          {ROLE_FILTER_OPTIONS.filter((opt) => opt.value === 'all' || scope.includes(opt.value as ChecklistRole)).map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+        <label className="text-slate-700 inline-flex items-center gap-1.5 ml-2 cursor-pointer">
+          <input type="checkbox" checked={filterUnseen} onChange={(e) => setFilterUnseen(e.target.checked)} />
+          Chỉ chưa xem
+        </label>
       </div>
 
       {/* List submissions */}
@@ -243,14 +251,8 @@ export function SupervisorView({ myUid, myRoleLabel }: Props) {
   );
 }
 
-function Stat({ label, value, cls }: { label: string; value: number; cls: string }) {
-  return (
-    <div className={`p-2.5 rounded-lg ${cls}`}>
-      <div className="text-[10px] uppercase tracking-wider opacity-80">{label}</div>
-      <div className="text-xl font-bold mt-0.5 tabular-nums">{value}</div>
-    </div>
-  );
-}
+// PR-CHECKLIST-V2-NORMALIZE (2026-06-27): Stat() đã thay bằng SegmentSummary
+// (callsite duy nhất). Xoá function deadcode + text-[10px] vi phạm rule font ≥12.
 
 function RunDetailModal({ runId, onClose }: { runId: string; onClose: () => void }) {
   const [run, setRun] = useState<Run | null>(null);

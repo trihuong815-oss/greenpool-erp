@@ -185,23 +185,25 @@ export function ChecklistV2Client({
         </div>
       </div>
 
-      {/* Shift selector */}
-      <div className="flex items-center gap-2 flex-wrap">
+      {/* PR-CHECKLIST-V2-NORMALIZE (2026-06-27): shift selector pill ring →
+          underline emerald-600 workspace tab pattern, nhất quán với /dieu-phoi+
+          /de-xuat+/cong-viec-ca-nhan. text-sm font-medium px-4 py-2.5. */}
+      <div className="flex items-center gap-1 border-b border-slate-200 overflow-x-auto">
         {templates.map((t) => {
           const Icon = SHIFT_ICON[t.shift];
           const isActive = t.shift === shift;
           return (
             <button
               key={t.shift}
+              type="button"
               onClick={() => changeShift(t.shift)}
-              className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg ring-1 transition text-sm font-semibold ${
+              className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
                 isActive
-                  ? 'bg-emerald-50 text-emerald-800 ring-emerald-300'
-                  : 'bg-white text-slate-600 ring-slate-200 hover:bg-slate-50'
+                  ? 'text-emerald-700 border-emerald-600'
+                  : 'text-slate-500 border-transparent hover:text-slate-800'
               }`}
             >
-              <Icon size={14} />
-              {t.shiftLabel.replace(/Checklist /, '')}
+              <Icon size={14} /> {t.shiftLabel.replace(/Checklist /, '')}
             </button>
           );
         })}
