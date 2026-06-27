@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Briefcase, Plus, Edit3, Trash2, X, Save, Loader2, AlertCircle, CheckCircle2,
-  Camera, Calendar, Bell, Sparkles, ListTodo, AlertTriangle, CheckCircle, Hourglass,
+  Camera, Calendar, Bell, Sparkles, CheckCircle,
   Sunrise, Sun, Moon, Flame, Target, BookOpen, Repeat, Crown, Star,
 } from 'lucide-react';
 import { JournalPanel } from './JournalPanel';
@@ -525,12 +525,14 @@ export function PersonalWorkClient({ profile, initialTasks }: Props) {
       </div>
 
       {/* ─── TAB NAV ─── */}
-      <div className="flex items-center gap-1.5 flex-wrap">
+      {/* PR-PERSONAL-WORK-NORMALIZE (2026-06-27): wrap border-b underline pattern
+          nhất quán với /dieu-phoi + /de-xuat workspace tab. */}
+      <div className="flex items-center gap-1 border-b border-slate-200 overflow-x-auto">
         <TabBtn active={tab === 'overview'} onClick={() => setTab('overview')} Icon={Briefcase} label="Tổng quan" />
         <TabBtn active={tab === 'journal'}  onClick={() => setTab('journal')}  Icon={BookOpen}  label="Nhật ký" />
         <TabBtn active={tab === 'habits'}   onClick={() => setTab('habits')}   Icon={Repeat}    label="Thói quen" />
         <TabBtn active={tab === 'goals'}    onClick={() => setTab('goals')}    Icon={Target}    label="Mục tiêu" />
-        <TabBtn active={tab === 'ai'}       onClick={() => setTab('ai')}       Icon={Sparkles}  label="AI cá nhân" highlight />
+        <TabBtn active={tab === 'ai'}       onClick={() => setTab('ai')}       Icon={Sparkles}  label="AI cá nhân" />
       </div>
 
       {/* ─── PANELS ─── */}
@@ -549,14 +551,34 @@ export function PersonalWorkClient({ profile, initialTasks }: Props) {
       )}
 
       {tab === 'overview' && (<>
-      {/* ─── KPI MINI ─── */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-2">
-        <KpiCard label="Hôm nay" value={stats.todayCnt} icon={Calendar} color="cyan" />
-        <KpiCard label="Cần làm" value={stats.todoCnt} icon={ListTodo} color="slate" />
-        <KpiCard label="Đang làm" value={stats.doingCnt} icon={Hourglass} color="amber" />
-        <KpiCard label="Hoàn tất" value={stats.doneCnt} icon={CheckCircle} color="emerald" />
-        <KpiCard label="Quá hạn" value={stats.overdueCnt} icon={AlertTriangle} color="rose" />
-      </div>
+      {/* ─── SNAPSHOT 5 cell ─── */}
+      {/* PR-PERSONAL-WORK-NORMALIZE (2026-06-27): 5 KpiCard độc lập (không click)
+          → 1 dải SegmentSummary clickable nhất quán với /dieu-phoi + /de-xuat.
+          4 cell action (Cần làm / Đang làm / Hoàn tất / Quá hạn) → click filter
+          "Việc của tôi" status tương ứng. "Hôm nay" giữ static (không click) vì
+          không có filterStatus='today' — chỉ là thông tin. */}
+      <SegmentSummary
+        items={[
+          { n: stats.todayCnt,   label: 'Hôm nay',   tone: 'default',
+            title: stats.todayCnt === 0 ? 'Hôm nay không có việc' : `${stats.todayCnt} việc tới hạn hôm nay` },
+          { n: stats.todoCnt,    label: 'Cần làm',   tone: 'default',
+            onClick: stats.todoCnt > 0 ? () => setFilterStatus('todo') : undefined,
+            active: filterStatus === 'todo',
+            title: stats.todoCnt === 0 ? 'Không có việc cần làm' : 'Lọc: Cần làm' },
+          { n: stats.doingCnt,   label: 'Đang làm',  tone: 'warning',
+            onClick: stats.doingCnt > 0 ? () => setFilterStatus('doing') : undefined,
+            active: filterStatus === 'doing',
+            title: stats.doingCnt === 0 ? 'Không có việc đang làm' : 'Lọc: Đang làm' },
+          { n: stats.doneCnt,    label: 'Hoàn tất',  tone: 'success',
+            onClick: stats.doneCnt > 0 ? () => setFilterStatus('done') : undefined,
+            active: filterStatus === 'done',
+            title: stats.doneCnt === 0 ? 'Chưa có việc hoàn tất' : 'Lọc: Hoàn tất' },
+          { n: stats.overdueCnt, label: 'Quá hạn',   tone: 'danger',
+            onClick: stats.overdueCnt > 0 ? () => setFilterStatus('overdue') : undefined,
+            active: filterStatus === 'overdue',
+            title: stats.overdueCnt === 0 ? 'Không có việc quá hạn' : 'Lọc: Quá hạn' },
+        ]}
+      />
 
       {/* ─── TASK LIST ─── */}
       <div className="card p-0">
@@ -735,48 +757,37 @@ function ProgressRing({ pct, done, total }: { pct: number; done: number; total: 
 }
 
 // ─────────── TabBtn ───────────
-function TabBtn({ active, onClick, Icon, label, highlight }: {
+// PR-PERSONAL-WORK-NORMALIZE (2026-06-27): chuẩn hoá underline emerald-600
+// nhất quán với /dieu-phoi + /de-xuat workspace tab. Bỏ pill ring + gradient
+// violet/fuchsia loud cho AI tab + Badge "Beta" text-[9px] vi phạm rule font ≥12.
+// `highlight` prop giữ tham số (callsite cũ không phải sửa) nhưng KHÔNG dùng
+// để đổi style — đồng nhất emerald.
+function TabBtn({ active, onClick, Icon, label }: {
   active: boolean;
   onClick: () => void;
   Icon: typeof Calendar;
   label: string;
   highlight?: boolean;
 }) {
-  const baseCls = 'inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-semibold ring-1 transition';
-  const activeCls = highlight
-    ? 'bg-gradient-to-r from-violet-50 to-fuchsia-50 text-violet-800 ring-violet-300'
-    : 'bg-emerald-50 text-emerald-800 ring-emerald-300';
-  const idleCls = 'bg-white text-slate-600 ring-slate-200 hover:bg-slate-50';
   return (
-    <button onClick={onClick} className={`${baseCls} ${active ? activeCls : idleCls}`}>
-      <Icon size={14} />
-      {label}
-      {highlight && !active && <span className="text-[9px] px-1 py-0.5 rounded bg-violet-100 text-violet-700 font-bold">Beta</span>}
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+        active
+          ? 'text-emerald-700 border-emerald-600'
+          : 'text-slate-500 border-transparent hover:text-slate-800'
+      }`}
+    >
+      <Icon size={14} /> {label}
     </button>
   );
 }
 
-// ─────────── KpiCard ───────────
-// PR-UI-PIXEL-MATCH B3 (2026-06-26): wrapper gọi <StatCard> chuẩn.
-// Giữ props signature cũ (color cyan/slate/amber/emerald/rose) để callsite
-// không phải sửa; map sang StatCard tone (default/success/danger/warning/info).
-import { StatCard, type StatCardTone } from '@/components/ui/StatCard';
-
-function KpiCard({ label, value, icon: Icon, color }: {
-  label: string;
-  value: number;
-  icon: typeof Calendar;
-  color: 'cyan' | 'slate' | 'amber' | 'emerald' | 'rose';
-}) {
-  const toneMap: Record<typeof color, StatCardTone> = {
-    cyan:    'default',
-    slate:   'default',
-    amber:   'warning',
-    emerald: 'success',
-    rose:    'danger',
-  };
-  return <StatCard label={label} value={value} icon={<Icon size={14} />} tone={toneMap[color]} />;
-}
+// PR-PERSONAL-WORK-NORMALIZE (2026-06-27): KpiCard wrapper xoá (deadcode sau khi
+// 5 card replace bằng SegmentSummary clickable). StatCard tương lai có thể dùng
+// cho widget khác — chỉ import SegmentSummary.
+import { SegmentSummary } from '@/components/ui/StatCard';
 
 // ─────────── ProfileModal ───────────
 function ProfileModal({
