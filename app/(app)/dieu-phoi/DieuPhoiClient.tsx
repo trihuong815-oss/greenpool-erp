@@ -17,7 +17,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Calendar, ChevronDown, Loader2, Plus, RefreshCw, X } from 'lucide-react';
+import { ChevronDown, Loader2, Plus, RefreshCw, X } from 'lucide-react';
 import { isTP, isQLCS } from '@/lib/auth/roles';
 import { useNotiCounts } from '@/lib/hooks/use-noti-counts';
 import { BRANCHES, type BranchId } from '@/lib/branches';
@@ -762,62 +762,37 @@ export default function DieuPhoiClient({
           </button>
         </div>
 
-        {/* Filter bar — desktop only (mobile có search + bottom sheet riêng).
-            PR-DISPATCH-INTERACTIVE-CONTROLS-FIX (2026-06-27): "Tất cả khối" + "Tất cả
-            cơ sở" trước đây là 2 button render-only không có onClick → đổi thành
-            <select> client-side filter. Áp dụng cho KpiBar + 3 chart + TheoDoiPanel +
-            CoordinationTable. Không gọi API mới, không đổi permission. */}
-        <div className="hidden md:flex flex-wrap items-center gap-2 rounded-xl border border-slate-200/70 bg-white px-3 py-2 shadow-sm ring-1 ring-slate-50">
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-50 text-xs text-slate-600">
-            <Calendar size={12} className="text-slate-400" />
-            <span className="tabular-nums font-medium">{new Date().toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</span>
-          </div>
-          <span className="h-4 w-px bg-slate-200" />
-          <select
-            value={selectedBlock}
-            onChange={(e) => setSelectedBlock(e.target.value as 'all' | 'KD' | 'VP')}
-            className="px-2.5 py-1 rounded-md border border-slate-200 bg-white text-xs text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition"
-            title="Lọc theo khối"
-          >
-            <option value="all">Tất cả khối</option>
-            <option value="KD">Khối Kinh doanh</option>
-            <option value="VP">Khối Văn phòng</option>
-          </select>
-          <select
-            value={selectedBranch}
-            onChange={(e) => setSelectedBranch(e.target.value as 'all' | BranchId)}
-            className="px-2.5 py-1 rounded-md border border-slate-200 bg-white text-xs text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition"
-            title="Lọc theo cơ sở"
-          >
-            <option value="all">Tất cả cơ sở</option>
-            {BRANCHES.map((b) => (
-              <option key={b.id} value={b.id}>{b.shortName} — {b.name}</option>
-            ))}
-          </select>
+        {/* PR-DISPATCH-LAYOUT-CLEANUP (2026-06-27): user feedback —
+            • Bỏ chip ngày (AppTopBar đã có ngày)
+            • Move 2 select Khối/Cơ sở xuống đầu section "Danh sách điều phối"
+              (gắn với context xem chi tiết) — filter VẪN apply toàn dashboard
+              (KPI + Vấn đề + Bảng + 3 chart Hiệu suất), chỉ thay vị trí.
+            Filter bar top giờ chỉ còn nút "Tải lại" + chip filter active.  */}
+        <div className="hidden md:flex flex-wrap items-center gap-2">
           {hasActiveFilter && (
             <button
               type="button"
               onClick={clearFilters}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-emerald-200 bg-emerald-50 text-xs text-emerald-700 hover:bg-emerald-100 transition"
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-emerald-200 bg-emerald-50 text-xs text-emerald-700 hover:bg-emerald-100 transition"
               title="Xóa lọc"
             >
               <X size={11} /> Xóa lọc
+              {selectedBlock !== 'all' && <span className="ml-1 font-semibold">· {selectedBlock === 'KD' ? 'KD' : 'VP'}</span>}
+              {selectedBranch !== 'all' && <span className="ml-1 font-semibold">· {selectedBranch}</span>}
             </button>
           )}
-          <div className="ml-auto">
-            <button
-              type="button"
-              onClick={reload}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-slate-200 bg-white text-xs text-slate-600 hover:bg-slate-50 transition"
-              title="Tải lại"
-            >
-              <RefreshCw
-                size={12}
-                className={loading ? 'animate-spin text-slate-400' : 'text-slate-500'}
-              />
-              <span className="hidden sm:inline">Tải lại</span>
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={reload}
+            className="ml-auto inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-slate-200 bg-white text-xs text-slate-600 hover:bg-slate-50 transition"
+            title="Tải lại"
+          >
+            <RefreshCw
+              size={12}
+              className={loading ? 'animate-spin text-slate-400' : 'text-slate-500'}
+            />
+            <span className="hidden sm:inline">Tải lại</span>
+          </button>
         </div>
 
         {error && (
@@ -910,9 +885,33 @@ export default function DieuPhoiClient({
                 </section>
 
                 <section ref={tableSectionRef} className="space-y-2 scroll-mt-4">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Danh sách điều phối</span>
                     <span className="flex-1 h-px bg-gradient-to-r from-slate-200 to-transparent" />
+                    {/* PR-DISPATCH-LAYOUT-CLEANUP (2026-06-27): 2 select khối/cơ sở
+                        move xuống đây từ filter bar top — gắn với context "xem chi tiết".
+                        Filter VẪN apply toàn dashboard (KPI + Vấn đề + Bảng + 3 chart Hiệu suất). */}
+                    <select
+                      value={selectedBlock}
+                      onChange={(e) => setSelectedBlock(e.target.value as 'all' | 'KD' | 'VP')}
+                      className="px-2.5 py-1 rounded-md border border-slate-200 bg-white text-xs text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition"
+                      title="Lọc theo khối"
+                    >
+                      <option value="all">Tất cả khối</option>
+                      <option value="KD">Khối Kinh doanh</option>
+                      <option value="VP">Khối Văn phòng</option>
+                    </select>
+                    <select
+                      value={selectedBranch}
+                      onChange={(e) => setSelectedBranch(e.target.value as 'all' | BranchId)}
+                      className="px-2.5 py-1 rounded-md border border-slate-200 bg-white text-xs text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition"
+                      title="Lọc theo cơ sở"
+                    >
+                      <option value="all">Tất cả cơ sở</option>
+                      {BRANCHES.map((b) => (
+                        <option key={b.id} value={b.id}>{b.shortName} — {b.name}</option>
+                      ))}
+                    </select>
                   </div>
                   <CoordinationTable
                     tasks={filteredTasks}

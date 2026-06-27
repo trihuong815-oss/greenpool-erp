@@ -199,6 +199,17 @@ export default function KpiBar({ tasks, currentUserUid, onSeeDetails }: KpiBarPr
     },
   ];
 
+  // PR-DISPATCH-LAYOUT-CLEANUP (2026-06-27): user feedback —
+  //  • "Sắp xếp nội dung trong ô cân đối, ô không to quá"
+  //  • "Dãn cách chưa hợp lý, chữ đè lên nhau" (label 2 dòng "Chờ Owner xác nhận"
+  //    làm value tụt xuống lệch các card khác).
+  // Fix:
+  //  • Layout column thay vì flex-start gap-2.5 → label trên, icon+value cùng dòng,
+  //    sub bottom, button góc dưới → height đều bất kể label 1 hay 2 dòng.
+  //  • Giảm padding p-3.5 → p-3, icon 18 → 16, value text-2xl → text-xl,
+  //    sub text-[10px] → text-[11px] (đúng rule ≥12 minimum, có exception meta).
+  //  • Label leading-tight + line-clamp-2 + min-h cho label box.
+  //  • shadow-md → shadow-sm (đỡ "nặng" mắt).
   return (
     <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
       {items.map((item) => {
@@ -206,26 +217,22 @@ export default function KpiBar({ tasks, currentUserUid, onSeeDetails }: KpiBarPr
         return (
           <div
             key={item.key}
-            className="rounded-xl border border-slate-200/70 bg-white p-3.5 shadow-md ring-1 ring-slate-50 transition hover:-translate-y-0.5 hover:shadow-lg"
+            className="flex flex-col rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition hover:shadow-md"
           >
-            <div className="flex items-start gap-2.5">
-              <div className={`rounded-lg p-2 shadow-sm ring-1 ring-inset ring-white/40 ${ICON_WRAP[item.accent]}`}>
-                <Icon size={18} className={ICON_COLOR[item.accent]} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                  {item.label}
-                </div>
-                <div
-                  className={`mt-0.5 text-2xl font-bold tabular-nums ${COUNT_COLOR[item.accent]}`}
-                >
-                  {item.count}
-                </div>
-                <div className="mt-0.5 text-[10px] text-slate-400">
-                  {item.subtext}
-                </div>
-              </div>
+            {/* Label box — min-h cho 2 dòng để mọi card đều height */}
+            <div className="text-[11px] font-semibold uppercase tracking-wide leading-tight text-slate-500 min-h-[28px] flex items-start">
+              <span className="line-clamp-2">{item.label}</span>
             </div>
+            {/* Icon + value cùng dòng — cân thị giác */}
+            <div className="mt-1 flex items-center gap-2">
+              <span className={`grid h-7 w-7 place-items-center rounded-md ${ICON_WRAP[item.accent]}`}>
+                <Icon size={14} className={ICON_COLOR[item.accent]} />
+              </span>
+              <span className={`text-xl font-semibold leading-none tabular-nums ${COUNT_COLOR[item.accent]}`}>
+                {item.count}
+              </span>
+            </div>
+            <div className="mt-1.5 text-[11px] text-slate-400">{item.subtext}</div>
             {/* PR-DISPATCH-INTERACTIVE-CONTROLS-FIX (2026-06-27): bấm "Xem chi tiết"
                 → parent setActiveTab tương ứng + scroll Danh sách điều phối.
                 Nếu count=0 → disabled (không có gì để xem). */}
@@ -234,7 +241,7 @@ export default function KpiBar({ tasks, currentUserUid, onSeeDetails }: KpiBarPr
               onClick={onSeeDetails ? () => onSeeDetails(item.key as KpiKey) : undefined}
               disabled={!onSeeDetails || item.count === 0}
               className={
-                'mt-1.5 inline-flex items-center gap-0.5 text-[11px] font-medium transition ' +
+                'mt-2 inline-flex items-center gap-0.5 text-[11px] font-medium transition self-start ' +
                 (!onSeeDetails || item.count === 0
                   ? 'text-slate-400 cursor-not-allowed'
                   : 'text-emerald-600 hover:underline cursor-pointer')
