@@ -15,7 +15,7 @@
 // Tái sử dụng ProposalV5 (alias Proposal) + label/color maps trong ./types.
 // KHÔNG đụng /giao-viec /dieu-phoi /doanh-so /checklist.
 
-import { useMemo, useState, useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Search,
   Inbox,
@@ -49,8 +49,10 @@ import {
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Tabs V6 — 7 tabs (bỏ "Quá hạn" V5)
+// PR-PROPOSAL-RESTRUCTURE (2026-06-27): export TabKey để ProposalSnapshot
+// map cell→tab khi click.
 // ──────────────────────────────────────────────────────────────────────────────
-type TabKey =
+export type TabKey =
   | 'all'
   | 'mine'
   | 'pending_me'
@@ -187,17 +189,31 @@ export interface DexuatTableProps {
   currentUserRole: string;
   onRowClick: (p: ProposalV5) => void;
   onAction?: (action: ActionKey, id: string) => void;
+  // PR-PROPOSAL-RESTRUCTURE (2026-06-27): external tab signal cho ProposalSnapshot
+  // "Click cell" — parent set requestedTab + bump signal → useEffect setTab.
+  // Mirror CoordinationTable.requestedTab+tabSignal pattern.
+  requestedTab?: TabKey;
+  tabSignal?: number;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Component
 // ──────────────────────────────────────────────────────────────────────────────
 function DexuatTable(props: DexuatTableProps) {
-  const { proposals, currentUserUid, currentUserRole, onRowClick, onAction } = props;
+  const { proposals, currentUserUid, currentUserRole, onRowClick, onAction, requestedTab, tabSignal } = props;
 
   const [tab, setTab] = useState<TabKey>('all');
   // V6.5 Audit fix Phase A.3: tab phụ chỉ hiện khi user click "+ Lọc nâng cao"
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // PR-PROPOSAL-RESTRUCTURE (2026-06-27): nhận tab signal từ ProposalSnapshot.
+  useEffect(() => {
+    if (requestedTab) {
+      setTab(requestedTab);
+      // Nếu là tab phụ (SECONDARY) → tự mở "Lọc nâng cao" để tab visible.
+      if (SECONDARY_TAB_KEYS.includes(requestedTab)) setShowAdvanced(true);
+    }
+  }, [requestedTab, tabSignal]);
   const [keyword, setKeyword] = useState('');
   const [filterKind, setFilterKind] = useState<'all' | ProposalKind>('all');
 
@@ -301,6 +317,10 @@ function DexuatTable(props: DexuatTableProps) {
     <div className="space-y-3">
       {/* V6.5 Audit fix Phase A.3 (2026-06-15) — 4 tab chính luôn hiện + 3 tab phụ
           hiện inline khi active hoặc khi showAdvanced=true. Nút "+ Lọc nâng cao" toggle. */}
+      {/* PR-PROPOSAL-RESTRUCTURE (2026-06-27): chuẩn hoá style nhất quán với
+          CoordinationTable + TheoDoiPanel /dieu-phoi — emerald-600 border,
+          text-xs font-medium, bỏ font-bold, count chip text-[11px] (đúng rule
+          ≥12 exception meta), bỏ pill emerald-100 active (giữ slate-100 đồng nhất). */}
       <div className="flex items-center gap-1 border-b border-slate-200 overflow-x-auto -mx-3 px-3 md:mx-0 md:px-0">
         {TABS.filter(({ key }) => PRIMARY_TAB_KEYS.includes(key) || SECONDARY_TAB_KEYS.includes(key) && (showAdvanced || tab === key)).map(({ key, label, icon: Icon }) => {
           const active = tab === key;
@@ -308,33 +328,30 @@ function DexuatTable(props: DexuatTableProps) {
           return (
             <button
               key={key}
+              type="button"
               onClick={() => setTab(key)}
-              className={`relative inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition ${
+              className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium whitespace-nowrap border-b-2 -mb-px transition-colors ${
                 active
                   ? 'border-emerald-600 text-emerald-700'
-                  : 'border-transparent text-slate-600 hover:text-slate-800'
+                  : 'border-transparent text-slate-500 hover:text-slate-800'
               }`}
             >
-              <Icon size={14} /> {label}
+              <Icon size={13} /> {label}
               {badge > 0 && (
-                <span
-                  className={`ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                    active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'
-                  }`}
-                >
+                <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-[18px] px-1.5 rounded-full bg-slate-100 text-slate-600 text-[11px] tabular-nums">
                   {badge}
                 </span>
               )}
             </button>
           );
         })}
-        {/* V6.5 Audit fix Phase A.3: nút toggle 3 tab phụ */}
         <button
           type="button"
           onClick={() => setShowAdvanced((v) => !v)}
-          className="ml-auto shrink-0 px-3 py-1.5 text-[11px] font-semibold text-slate-500 hover:text-emerald-700 rounded-md border border-slate-200 bg-white"
+          className="ml-auto shrink-0 px-2.5 py-1 text-xs font-medium text-slate-500 hover:text-emerald-700 transition"
+          title={showAdvanced ? 'Ẩn lọc nâng cao' : 'Hiện lọc nâng cao'}
         >
-          {showAdvanced ? '↑ Ẩn lọc nâng cao' : '+ Lọc nâng cao'}
+          {showAdvanced ? '↑ Lọc nâng cao' : '+ Lọc nâng cao'}
         </button>
       </div>
 

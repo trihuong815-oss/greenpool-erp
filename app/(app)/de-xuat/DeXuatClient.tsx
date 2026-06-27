@@ -29,7 +29,7 @@
 // Convert: tạo task `kind='assignment'` mới với meta.fromProposalId + .fromProposalCode
 // rồi router.push('/dieu-phoi'). KHÔNG map Owner/KPI/Deadline (xác định tại Điều phối).
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, Plus, RefreshCw } from 'lucide-react';
 import { tasksApi, type Task } from '@/lib/services/tasks/api-client';
@@ -37,10 +37,13 @@ import { isTP, isQLCS } from '@/lib/auth/roles';
 import { useNotiCounts } from '@/lib/hooks/use-noti-counts';
 import CompactDashboard from './_components/CompactDashboard';
 import MobileProposalView from './_components/Mobile/MobileProposalView';
-import DexuatDashboard, {
-  type ProposalV6 as DashboardProposalV6,
-} from './_components/DexuatDashboard';
-import DexuatTable, { type ActionKey } from './_components/DexuatTable';
+// PR-PROPOSAL-RESTRUCTURE (2026-06-27): DexuatDashboard.tsx (660 LOC) split sang
+// 3 component nhỏ + 1 shared types file. Layout 3-tier nhất quán với /dieu-phoi.
+import type { ProposalV6 as DashboardProposalV6 } from './_components/dashboard-types';
+import ProposalSnapshot, { type ProposalSnapshotKey } from './_components/ProposalSnapshot';
+import ProposalIssuesPanel from './_components/ProposalIssuesPanel';
+import ProposalPerformancePanel from './_components/ProposalPerformancePanel';
+import DexuatTable, { type ActionKey, type TabKey as DexuatTabKey } from './_components/DexuatTable';
 import CreateProposalModal, {
   type CreateProposalPayloadV6,
 } from './_components/CreateProposalModal';
@@ -385,6 +388,40 @@ export function DeXuatClient(props: Props) {
   const [selected, setSelected] = useState<ProposalV6 | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const refresh = useCallback(() => setReloadKey((k) => k + 1), []);
+
+  // PR-PROPOSAL-RESTRUCTURE (2026-06-27): TIER 3 workspace tab + snapshot signal.
+  const [pageTab, setPageTab] = useState<'list' | 'issues' | 'performance'>('list');
+  const [requestedTableTab, setRequestedTableTab] = useState<DexuatTabKey>('all');
+  const [tabSignal, setTabSignal] = useState(0);
+  const tableSectionRef = useRef<HTMLDivElement>(null);
+
+  // Snapshot cell → DexuatTable tab.
+  const handleSnapshotSelect = useCallback((key: ProposalSnapshotKey) => {
+    const map: Record<ProposalSnapshotKey, DexuatTabKey> = {
+      'pending_me':   'pending_me',
+      'dang_xem_xet': 'dang_xem_xet',
+      'ycbs':         'ycbs',
+      // Quá hạn không có tab riêng → fallback "Tất cả" + user xem cột SLA đỏ.
+      'overdue':      'all',
+    };
+    setPageTab('list'); // chuyển về tab Danh sách nếu đang tab khác
+    setRequestedTableTab(map[key]);
+    setTabSignal((n) => n + 1);
+    requestAnimationFrame(() => {
+      tableSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, []);
+
+  // Active snapshot cell — đồng bộ với DexuatTable tab hiện tại.
+  const activeSnapshotKey: ProposalSnapshotKey | null = (() => {
+    if (tabSignal === 0) return null;
+    switch (requestedTableTab) {
+      case 'pending_me':   return 'pending_me';
+      case 'dang_xem_xet': return 'dang_xem_xet';
+      case 'ycbs':         return 'ycbs';
+      default:             return null;
+    }
+  })();
   // V6.5 Audit fix Phase A.5 (2026-06-15) — Issue 4.4: refresh badge sidebar
   // sau mỗi action (approve/reject/revision/resubmit) để count update tức thì
   // thay vì đợi polling 180s. Đồng bộ với pattern Điều phối.
@@ -672,35 +709,43 @@ export function DeXuatClient(props: Props) {
 
   return (
     <div className="max-w-screen-2xl mx-auto space-y-4">
-      {/* Header — desktop only (mobile có title + FAB trong MobileProposalView) */}
-      <div className="hidden md:flex items-center justify-between gap-3 flex-wrap">
+      {/* PR-PROPOSAL-RESTRUCTURE (2026-06-27): cấu trúc 3-tier tối giản,
+          nhất quán với /dieu-phoi (commit 6882272 + d6a6535).
+          • TIER 1 — Header: title + Tải lại + Tạo đề xuất
+          • TIER 2 — Snapshot 4 cell click filter table
+          • TIER 3 — Workspace tabs: Danh sách / Vấn đề / Hiệu suất
+          Compact (TP/QLCS) + Mobile giữ path riêng. */}
+
+      {/* TIER 1 — Header (desktop only) */}
+      <div className="hidden md:flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-base font-bold text-slate-900">Đề xuất</h2>
+          <h1 className="text-xl font-bold text-slate-900">Đề xuất</h1>
           <p className="text-xs text-slate-500 mt-0.5 capitalize">
             {todayStr} · {totalCount} đề xuất trong hệ thống
           </p>
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={refresh}
-            className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"
-            title="Làm mới"
             type="button"
+            onClick={refresh}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-slate-200 bg-white text-xs font-medium text-slate-600 hover:bg-slate-50 transition"
+            title="Tải lại"
           >
-            <RefreshCw size={15} />
+            <RefreshCw size={13} className={loading ? 'animate-spin text-slate-400' : 'text-slate-500'} />
+            Tải lại
           </button>
           <button
             type="button"
             onClick={() => canCreate && setShowCreate(true)}
             disabled={!canCreate}
             title={canCreate ? 'Tạo đề xuất mới' : 'Bạn không có quyền tạo đề xuất'}
-            className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold rounded-lg shadow-sm ${
+            className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold rounded-md transition ${
               canCreate
                 ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                : 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                : 'bg-slate-100 text-slate-400 cursor-not-allowed'
             }`}
           >
-            <Plus size={15} /> Tạo đề xuất mới
+            <Plus size={14} /> Tạo đề xuất
           </button>
         </div>
       </div>
@@ -710,13 +755,12 @@ export function DeXuatClient(props: Props) {
           <Loader2 size={20} className="animate-spin mr-2" /> Đang tải đề xuất…
         </div>
       ) : error ? (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+        <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
           {error}
         </div>
       ) : (
         <>
-          {/* V6.4 (2026-06-13): MOBILE — spec anh chốt: card view + bottom sheet +
-              swipe KPI + sticky tabs + FAB tạo. */}
+          {/* MOBILE — giữ path riêng */}
           <div className="md:hidden">
             <MobileProposalView
               proposals={proposals}
@@ -727,8 +771,8 @@ export function DeXuatClient(props: Props) {
             />
           </div>
 
-          {/* Desktop (md+) — giữ 2 branch CompactDashboard (TP/QLCS) hoặc full (GD/CEO) */}
-          <div className="hidden md:block">
+          {/* DESKTOP (md+) — Compact (TP/QLCS) hoặc Full 3-tier (GD/CEO/ADMIN) */}
+          <div className="hidden md:block space-y-4">
             {isTP(currentUserRole) || isQLCS(currentUserRole) ? (
               <CompactDashboard
                 proposals={proposals}
@@ -738,18 +782,61 @@ export function DeXuatClient(props: Props) {
               />
             ) : (
               <>
-                <DexuatDashboard
+                {/* TIER 2 — Snapshot 4 cell click filter */}
+                <ProposalSnapshot
                   proposals={dashboardProposals}
                   currentUserUid={currentUserId}
                   currentUserRole={currentUserRole}
+                  onSelectCell={handleSnapshotSelect}
+                  activeKey={activeSnapshotKey}
                 />
-                <DexuatTable
-                  proposals={proposals}
-                  currentUserUid={currentUserId}
-                  currentUserRole={currentUserRole}
-                  onRowClick={setSelected}
-                  onAction={handleTableAction}
-                />
+
+                {/* TIER 3 — Workspace tabs */}
+                <div ref={tableSectionRef} className="scroll-mt-4">
+                  <div className="flex items-center gap-1 border-b border-slate-200">
+                    {([
+                      { id: 'list',        label: 'Danh sách' },
+                      { id: 'issues',      label: 'Vấn đề' },
+                      { id: 'performance', label: 'Hiệu suất' },
+                    ] as const).map((t) => {
+                      const active = pageTab === t.id;
+                      return (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => setPageTab(t.id)}
+                          className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                            active
+                              ? 'text-emerald-700 border-emerald-600'
+                              : 'text-slate-500 border-transparent hover:text-slate-800'
+                          }`}
+                        >
+                          {t.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="pt-4">
+                    {pageTab === 'list' && (
+                      <DexuatTable
+                        proposals={proposals}
+                        currentUserUid={currentUserId}
+                        currentUserRole={currentUserRole}
+                        onRowClick={setSelected}
+                        onAction={handleTableAction}
+                        requestedTab={requestedTableTab}
+                        tabSignal={tabSignal}
+                      />
+                    )}
+                    {pageTab === 'issues' && (
+                      <ProposalIssuesPanel proposals={dashboardProposals} />
+                    )}
+                    {pageTab === 'performance' && (
+                      <ProposalPerformancePanel proposals={dashboardProposals} />
+                    )}
+                  </div>
+                </div>
               </>
             )}
           </div>
