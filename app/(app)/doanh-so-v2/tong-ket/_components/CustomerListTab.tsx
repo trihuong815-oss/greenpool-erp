@@ -12,8 +12,8 @@
 // 1 hàng = 1 giao dịch (giữ lịch sử "từng ngày sale nhập" như user phát biểu).
 // Sort: ngày DESC. Filter: search tên/SĐT + dropdown sale (top+QLCS có nhiều sale).
 
-import { useMemo, useState } from 'react';
-import { Search, Users } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { ChevronLeft, ChevronRight, Download, Search, Users } from 'lucide-react';
 import { BRANCH_BY_ID } from '@/lib/branches';
 import type { Summary } from './types';
 
@@ -54,9 +54,21 @@ function fmtDate(d: string): string {
   return `${day}/${m}/${y}`;
 }
 
+// PR-TONGKET-PHASE2 (2026-06-27): pagination + export CSV.
+// PAGE_SIZE 50 rows/page giữ render nhẹ (kể cả 5000 tx vẫn 100 page → OK).
+const PAGE_SIZE = 50;
+
+/** Escape CSV field per RFC 4180 — wrap quotes if contains comma/quote/newline. */
+function csvEscape(v: string | number): string {
+  const s = String(v ?? '');
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
 export default function CustomerListTab({ salesCustomers, showBranchColumn }: Props) {
   const [keyword, setKeyword] = useState('');
   const [saleFilter, setSaleFilter] = useState<string>('all');
+  const [page, setPage] = useState(1);
 
   // Flatten salesCustomers → rows
   const allRows = useMemo<Row[]>(() => {
@@ -113,6 +125,42 @@ export default function CustomerListTab({ salesCustomers, showBranchColumn }: Pr
     return set.size;
   }, [rows]);
 
+  // PR-TONGKET-PHASE2: pagination.
+  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  // Reset về page 1 khi filter đổi.
+  useEffect(() => { setPage(1); }, [keyword, saleFilter]);
+  // Clamp page nếu rows thu hẹp (filter loại bớt → totalPages giảm).
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
+  const startIdx = (page - 1) * PAGE_SIZE;
+  const pagedRows = rows.slice(startIdx, startIdx + PAGE_SIZE);
+
+  // PR-TONGKET-PHASE2: export CSV (client-side, không tốn API). Export FILTERED
+  // rows (theo keyword + saleFilter hiện tại) — user mong chờ download đúng cái
+  // đang xem. UTF-8 BOM để Excel mở tiếng Việt không vỡ.
+  function handleExport() {
+    if (rows.length === 0) return;
+    const headers = ['Ngày', 'Khách hàng', 'SĐT'];
+    if (showBranchColumn) headers.push('Cơ sở');
+    headers.push('Sale', 'Gói', 'Doanh số', 'Thực thu', 'Công nợ', 'Loại GD');
+    const lines: string[] = [headers.map(csvEscape).join(',')];
+    for (const r of rows) {
+      const cells: Array<string | number> = [r.date, r.customerName, r.phone];
+      if (showBranchColumn) cells.push(r.branchName || r.branchId);
+      cells.push(r.saleName, r.packageName, r.packageValue, r.collectedToday, r.debtAmount, TX_TYPE_LABEL[r.txType] ?? r.txType);
+      lines.push(cells.map(csvEscape).join(','));
+    }
+    const csv = '﻿' + lines.join('\n'); // BOM cho Excel UTF-8
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `khach-hang_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   if (allRows.length === 0) {
     return (
       <div className="card text-center py-12">
@@ -156,6 +204,16 @@ export default function CustomerListTab({ salesCustomers, showBranchColumn }: Pr
               ))}
             </select>
           )}
+          {/* PR-TONGKET-PHASE2: Export CSV — download đúng filtered rows. */}
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={rows.length === 0}
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+            title="Xuất CSV danh sách khách (theo bộ lọc hiện tại)"
+          >
+            <Download size={12} /> Xuất CSV
+          </button>
         </div>
       </div>
 
@@ -184,7 +242,7 @@ export default function CustomerListTab({ salesCustomers, showBranchColumn }: Pr
                 </td>
               </tr>
             ) : (
-              rows.map((r) => {
+              pagedRows.map((r) => {
                 const branch = BRANCH_BY_ID[r.branchId as keyof typeof BRANCH_BY_ID];
                 return (
                   <tr key={r.txId} className="border-b border-slate-100 hover:bg-emerald-50/30 transition-colors">
@@ -214,6 +272,36 @@ export default function CustomerListTab({ salesCustomers, showBranchColumn }: Pr
           </tbody>
         </table>
       </div>
+
+      {/* PR-TONGKET-PHASE2: Pagination footer (chỉ hiện khi totalPages > 1). */}
+      {totalPages > 1 && (
+        <div className="px-4 py-2.5 border-t border-slate-200 flex items-center justify-between gap-3 text-xs">
+          <span className="text-slate-500 tabular-nums">
+            Hàng {startIdx + 1}–{Math.min(startIdx + PAGE_SIZE, rows.length)} / {rows.length}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="inline-flex items-center gap-0.5 px-2 py-1 rounded-md text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
+              aria-label="Trang trước"
+            >
+              <ChevronLeft size={14} /> Trước
+            </button>
+            <span className="px-3 py-1 tabular-nums text-slate-700 font-medium">{page} / {totalPages}</span>
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="inline-flex items-center gap-0.5 px-2 py-1 rounded-md text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition"
+              aria-label="Trang sau"
+            >
+              Sau <ChevronRight size={14} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

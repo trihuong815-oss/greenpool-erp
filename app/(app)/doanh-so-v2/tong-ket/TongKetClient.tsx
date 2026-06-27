@@ -169,12 +169,14 @@ function TabContent({
           totals={data.totals}
           customerCount={data.customerCount}
           pendingReviewCount={(data.txStatusStats?.pending ?? 0) + (data.batchStats?.pendingReview ?? 0)}
+          prevMonth={data.prevMonth}
         />
         <TargetProgressCard targetSummary={data.targetSummary} />
         {(hasBranch || hasBranchTargets) && (
           <BranchProgressList
             byBranch={data.byBranch}
             branchTargets={data.branchTargetsThisMonth}
+            daysElapsedPercent={data.targetSummary?.daysElapsedPercent}
           />
         )}
         {hasBranch && <BranchSummaryTable byBranch={data.byBranch} />}

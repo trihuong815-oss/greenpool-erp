@@ -131,6 +131,20 @@ export interface Summary {
    *  - Top: tất cả branches có target (key = BranchId, value = số tiền target VND)
    *  Dùng cho BranchProgressList ở tab Tổng quan (so target vs actual). */
   branchTargetsThisMonth?: Record<string, number>;
+  /** PR-TONGKET-PHASE2 (2026-06-27): totals tháng trước cùng scope.
+   *  Dùng cho MoM growth % trong MonthlyKpiCards.
+   *  null nếu compute fail server (UI fallback ẩn delta — không crash). */
+  prevMonth?: {
+    month: string;
+    totals: {
+      sales: number;
+      collected: number;
+      debtGenerated: number;
+      debtRemaining: number;
+      transactions: number;
+    };
+    customerCount: number;
+  } | null;
   /** PR-PROMO2-B (2026-06-23): báo cáo read-only ưu đãi ngoài chương trình.
    *  - undefined nếu role='sale' (SaleView không hiện card) hoặc không có raw tx
    *  - undefined nếu compute fail (fail-soft) */

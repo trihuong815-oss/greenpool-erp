@@ -57,6 +57,74 @@ function emptyBySource(): Record<SalesV2Source, Bucket> {
   };
 }
 
+// PR-TONGKET-PHASE2 (2026-06-27): MoM growth — compute totals tháng trước
+// để client tính delta. Chỉ aggregate basic (totals + customerCount), KHÔNG
+// fetch full snap/bySale/byBranch/adhoc — tránh overhead.
+//
+// Helper: YYYY-MM → previous month YYYY-MM (Jan rollback to Dec last year).
+function prevMonth(month: string): string {
+  const [y, m] = month.split('-').map(Number);
+  if (!Number.isInteger(y) || !Number.isInteger(m)) return month;
+  if (m === 1) return `${y - 1}-12`;
+  return `${y}-${String(m - 1).padStart(2, '0')}`;
+}
+
+interface PrevMonthTotals {
+  sales: number;
+  collected: number;
+  debtGenerated: number;
+  debtRemaining: number;
+  transactions: number;
+}
+interface PrevMonthResult {
+  month: string;
+  totals: PrevMonthTotals;
+  customerCount: number;
+}
+
+/** Aggregate tháng trước với CÙNG scope như tháng đang xem. Fail-soft. */
+async function computePrevMonthTotals(
+  db: FirebaseFirestore.Firestore,
+  prevMonthStr: string,
+  scopeBranchId: string | null,
+  scopeSaleId: string | null,
+): Promise<PrevMonthResult | null> {
+  try {
+    const PREV_LIMIT = 5000;
+    const snap = await db.collection(COLLECTIONS.SALES_TRANSACTIONS)
+      .where('month', '==', prevMonthStr)
+      .limit(PREV_LIMIT)
+      .get();
+    const totals: PrevMonthTotals = { sales: 0, collected: 0, debtGenerated: 0, debtRemaining: 0, transactions: 0 };
+    const custKeys = new Set<string>();
+    for (const d of snap.docs) {
+      const x = d.data() as Record<string, any>;
+      if (scopeBranchId && x.branchId !== scopeBranchId) continue;
+      if (scopeSaleId && x.saleId !== scopeSaleId) continue;
+      if (x.reviewStatus !== 'approved') continue;
+      const pv = Number(x.packageValue ?? 0);
+      const ct = Number(x.collectedToday ?? 0);
+      const debt = Number(x.debtAmount ?? 0);
+      const originalDebt = Number(x.originalDebt ?? debt);
+      const txType = String(x.transactionType ?? '');
+      totals.sales += pv;
+      totals.collected += ct;
+      if (txType === 'dat_coc') {
+        totals.debtGenerated += originalDebt;
+        totals.debtRemaining += debt;
+      }
+      totals.transactions += 1;
+      const phoneRaw = String(x.phone ?? '').trim();
+      if (phoneRaw) custKeys.add(`p:${phoneRaw}`);
+      else custKeys.add(`n:${String(x.customerName ?? '').trim()}:${String(x.saleId ?? '')}`);
+    }
+    return { month: prevMonthStr, totals, customerCount: custKeys.size };
+  } catch (e) {
+    console.warn('[monthly-summary] prev month fail (swallowed):', (e as Error)?.message);
+    return null;
+  }
+}
+
 export async function GET(req: NextRequest) {
   try {
     const caller = await getAuthedCaller();
@@ -633,6 +701,9 @@ export async function GET(req: NextRequest) {
       branchTargetsThisMonth,
       // ─── PR-PROMO2-B (2026-06-23) — Ad-hoc discount report (read-only) ───
       adHocSummary,
+      // PR-TONGKET-PHASE2 (2026-06-27): MoM growth — totals tháng trước cùng scope.
+      // Client tự tính %. null nếu fail (UI fallback ẩn delta).
+      prevMonth: await computePrevMonthTotals(db, prevMonth(month), scopeBranchId, scopeSaleId),
     });
   } catch (err: any) {
     if (err instanceof UnauthorizedError) {

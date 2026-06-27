@@ -20,6 +20,10 @@ import type { Summary } from './types';
 interface Props {
   byBranch: Summary['byBranch'];
   branchTargets?: Record<string, number>;
+  /** PR-TONGKET-PHASE2 (2026-06-27): % ngày đã trôi qua trong tháng — để forecast
+   *  cuối tháng per-branch. Lấy từ targetSummary.daysElapsedPercent.
+   *  Undefined hoặc 0/100 → ẩn forecast. */
+  daysElapsedPercent?: number;
 }
 
 function fmtVnd(n: number): string {
@@ -32,7 +36,13 @@ function toneByPct(pct: number): { bar: string; text: string; chip: string } {
   return                  { bar: 'bg-rose-500',    text: 'text-rose-700',    chip: 'bg-rose-50 text-rose-700 ring-rose-200' };
 }
 
-export default function BranchProgressList({ byBranch, branchTargets }: Props) {
+export default function BranchProgressList({ byBranch, branchTargets, daysElapsedPercent }: Props) {
+  // PR-TONGKET-PHASE2: forecast cuối tháng = actual / daysElapsedPercent × 100
+  // (giả định pace giữ nguyên). Chỉ hiện khi daysElapsedPercent ∈ (5, 95) — biên
+  // ngoài 2 đầu rất sớm/rất muộn → forecast nhiễu hoặc redundant.
+  const showForecast = typeof daysElapsedPercent === 'number'
+    && daysElapsedPercent > 5
+    && daysElapsedPercent < 95;
   // Liệt kê branches có target HOẶC có actual (>0). Sale role không có byBranch → empty render null.
   const branchIds = Array.from(new Set<string>([
     ...Object.keys(branchTargets ?? {}),
@@ -94,6 +104,18 @@ export default function BranchProgressList({ byBranch, branchTargets }: Props) {
                 <span className="tabular-nums text-slate-500">
                   Chỉ tiêu: {target > 0 ? `${fmtVnd(target)} đ` : '—'}
                 </span>
+                {/* PR-TONGKET-PHASE2: Forecast cuối tháng (dự kiến nếu pace giữ nguyên). */}
+                {showForecast && actual > 0 && (() => {
+                  const forecast = Math.round(actual / (daysElapsedPercent! / 100));
+                  return (
+                    <>
+                      <span className="text-slate-400">·</span>
+                      <span className="tabular-nums text-slate-500" title="Dự kiến cuối tháng nếu pace hiện tại giữ nguyên">
+                        Dự kiến: <strong className="text-slate-700">{fmtVnd(forecast)} đ</strong>
+                      </span>
+                    </>
+                  );
+                })()}
               </div>
               <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
                 {barWidth > 0 && (
