@@ -125,6 +125,10 @@ export default function DieuPhoiClient({
   // /api/tasks list mode='all').
   const [selectedBlock, setSelectedBlock] = useState<'all' | 'KD' | 'VP'>('all');
   const [selectedBranch, setSelectedBranch] = useState<'all' | BranchId>('all');
+  // PR-DISPATCH-PERFORMANCE-TAB (2026-06-27): tách section "Phân tích" (3 chart
+  // BlockDonut + DeptBarChart + BranchBarChart) khỏi màn chính sang 1 tab riêng
+  // "Hiệu suất" → trang Điều hành đỡ rối, dễ scan KPI + bảng. User yêu cầu rõ.
+  const [pageTab, setPageTab] = useState<'overview' | 'performance'>('overview');
   // Tab signal cho CoordinationTable — KpiBar "Xem chi tiết" click → bump signal.
   const [requestedTableTab, setRequestedTableTab] = useState<
     'all' | 'mine' | 'sent' | 'cross' | 'waiting_resp' | 'waiting_appr' | 'overdue' | 'bottleneck'
@@ -856,52 +860,82 @@ export default function DieuPhoiClient({
                 />
               ) : (
           <>
-            {/* PR-DISPATCH-INTERACTIVE-CONTROLS-FIX (2026-06-27): tất cả widget pass
-                filteredTasks (block/branch filter) thay vì tasks gốc — KPI + chart +
-                "Vấn đề cần xử lý ngay" + bảng cùng lọc đồng bộ. */}
-            <section className="space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Tổng quan</span>
-                <span className="flex-1 h-px bg-gradient-to-r from-slate-200 to-transparent" />
-              </div>
-              <KpiBar tasks={filteredTasks} currentUserUid={currentUserUid} onSeeDetails={handleSeeDetails} />
-            </section>
+            {/* PR-DISPATCH-PERFORMANCE-TAB (2026-06-27): tab switcher 2 tab —
+                "Điều hành" (KPI + Vấn đề + Bảng — workflow hằng ngày) và
+                "Hiệu suất" (3 chart phân tích). Tránh nhồi quá nhiều section
+                trên 1 màn → dễ scan hơn. Filter bar bên trên áp dụng cho cả 2 tab. */}
+            <div className="flex gap-1 border-b border-slate-200">
+              {([
+                { id: 'overview',    label: 'Điều hành' },
+                { id: 'performance', label: 'Hiệu suất' },
+              ] as const).map((t) => {
+                const active = pageTab === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setPageTab(t.id)}
+                    className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                      active
+                        ? 'text-emerald-700 border-emerald-600'
+                        : 'text-slate-500 border-transparent hover:text-slate-800'
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                );
+              })}
+            </div>
 
-            <section className="space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Phân tích</span>
-                <span className="flex-1 h-px bg-gradient-to-r from-slate-200 to-transparent" />
-              </div>
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <BlockDonut tasks={filteredTasks} />
-                <DeptBarChart tasks={filteredTasks} />
-                <BranchBarChart tasks={filteredTasks} />
-              </div>
-            </section>
+            {pageTab === 'overview' ? (
+              <>
+                {/* PR-DISPATCH-INTERACTIVE-CONTROLS-FIX (2026-06-27): widgets pass
+                    filteredTasks — KPI + Vấn đề + Bảng cùng lọc đồng bộ. */}
+                <section className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Tổng quan</span>
+                    <span className="flex-1 h-px bg-gradient-to-r from-slate-200 to-transparent" />
+                  </div>
+                  <KpiBar tasks={filteredTasks} currentUserUid={currentUserUid} onSeeDetails={handleSeeDetails} />
+                </section>
 
-            {/* V6.5 Phase 5 (2026-06-15): Section "Vấn đề cần xử lý ngay" — gộp 3 widget
-                cũ (BottleneckTable + TopWatchList + ImportantNotiPanel) → 1 panel 3 tab. */}
-            <section className="space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Vấn đề cần xử lý ngay</span>
-                <span className="flex-1 h-px bg-gradient-to-r from-slate-200 to-transparent" />
-              </div>
-              <TheoDoiPanel tasks={filteredTasks} />
-            </section>
+                {/* V6.5 Phase 5 (2026-06-15): Section "Vấn đề cần xử lý ngay" — gộp 3
+                    widget cũ (BottleneckTable + TopWatchList + ImportantNotiPanel) → 1 panel 3 tab. */}
+                <section className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Vấn đề cần xử lý ngay</span>
+                    <span className="flex-1 h-px bg-gradient-to-r from-slate-200 to-transparent" />
+                  </div>
+                  <TheoDoiPanel tasks={filteredTasks} />
+                </section>
 
-            <section ref={tableSectionRef} className="space-y-2 scroll-mt-4">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Danh sách điều phối</span>
-                <span className="flex-1 h-px bg-gradient-to-r from-slate-200 to-transparent" />
-              </div>
-              <CoordinationTable
-                tasks={filteredTasks}
-                onRowClick={setSelected}
-                currentUserUid={currentUserUid}
-                requestedTab={requestedTableTab}
-                tabSignal={tabSignal}
-              />
-            </section>
+                <section ref={tableSectionRef} className="space-y-2 scroll-mt-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Danh sách điều phối</span>
+                    <span className="flex-1 h-px bg-gradient-to-r from-slate-200 to-transparent" />
+                  </div>
+                  <CoordinationTable
+                    tasks={filteredTasks}
+                    onRowClick={setSelected}
+                    currentUserUid={currentUserUid}
+                    requestedTab={requestedTableTab}
+                    tabSignal={tabSignal}
+                  />
+                </section>
+              </>
+            ) : (
+              <section className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Phân tích</span>
+                  <span className="flex-1 h-px bg-gradient-to-r from-slate-200 to-transparent" />
+                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                  <BlockDonut tasks={filteredTasks} />
+                  <DeptBarChart tasks={filteredTasks} />
+                  <BranchBarChart tasks={filteredTasks} />
+                </div>
+              </section>
+            )}
           </>
               )}
             </div>
