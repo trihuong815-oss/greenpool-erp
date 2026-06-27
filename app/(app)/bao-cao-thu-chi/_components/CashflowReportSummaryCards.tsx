@@ -1,9 +1,13 @@
 'use client';
 
 // PR-CASH1D: KPI top cards — chỉ hiển thị cho role nhìn nhiều cơ sở (THU_QUY/top).
+// PR-UI-PIXEL-MATCH B3 (2026-06-26): dùng <StatCard> chuẩn.
+// PR-CASHFLOW-NORMALIZE (2026-06-27): 5 grid KpiCard → SegmentSummary nhất quán
+// pattern Snapshot toàn app (/dieu-phoi+/de-xuat+/cong-viec-ca-nhan+
+// /checklist-v2+/tong-ket). Bỏ Stat wrapper duplicate.
 
-import { FileText, Wallet, Receipt, TrendingDown, AlertTriangle } from 'lucide-react';
 import type { DailyCashflowReportDoc } from '@/lib/finance/cashflow-report-types';
+import { SegmentSummary } from '@/components/ui/StatCard';
 
 interface Props {
   reports: Array<DailyCashflowReportDoc & { id: string }>;
@@ -25,26 +29,14 @@ export function CashflowReportSummaryCards({ reports }: Props) {
   );
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-      <Stat icon={<FileText size={16} />} label="Báo cáo" value={String(totals.count)} tone="slate" />
-      <Stat icon={<Wallet size={16} />} label="Tổng thu" value={`${fmt(totals.revenue)} ₫`} tone="emerald" />
-      <Stat icon={<Receipt size={16} />} label="Tổng chi" value={`${fmt(totals.expense)} ₫`} tone="rose" />
-      <Stat icon={<TrendingDown size={16} />} label="Net" value={`${fmt(totals.net)} ₫`} tone={totals.net < 0 ? 'rose' : 'emerald'} />
-      <Stat icon={<AlertTriangle size={16} />} label="Có cảnh báo" value={String(totals.alerted)} tone={totals.alerted > 0 ? 'amber' : 'slate'} />
-    </div>
+    <SegmentSummary
+      items={[
+        { n: totals.count,                   label: 'Báo cáo',     tone: 'default' },
+        { n: `${fmt(totals.revenue)} ₫`,     label: 'Tổng thu',    tone: 'success' },
+        { n: `${fmt(totals.expense)} ₫`,     label: 'Tổng chi',    tone: 'danger' },
+        { n: `${fmt(totals.net)} ₫`,         label: 'Net',         tone: totals.net < 0 ? 'danger' : 'success' },
+        { n: totals.alerted,                 label: 'Có cảnh báo', tone: totals.alerted > 0 ? 'warning' : 'default' },
+      ]}
+    />
   );
-}
-
-// PR-UI-PIXEL-MATCH B3 (2026-06-26): dùng <StatCard> chuẩn.
-import { StatCard, type StatCardTone } from '@/components/ui/StatCard';
-
-const TONE_MAP: Record<string, StatCardTone> = {
-  slate:    'default',
-  emerald:  'success',
-  rose:     'danger',
-  amber:    'warning',
-};
-
-function Stat({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone: keyof typeof TONE_MAP }) {
-  return <StatCard label={label} value={value} icon={icon} tone={TONE_MAP[tone]} />;
 }

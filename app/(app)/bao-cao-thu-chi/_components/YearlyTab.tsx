@@ -3,7 +3,7 @@
 // PR-CASH1G (2026-06-23) — Tab Theo năm cho /bao-cao-thu-chi.
 
 import { useCallback, useEffect, useState } from 'react';
-import { Filter, FileSpreadsheet, RefreshCw, FileText, Wallet, Receipt, TrendingDown, AlertTriangle, ChevronRight } from 'lucide-react';
+import { Filter, FileSpreadsheet, RefreshCw, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import type { BranchId } from '@/lib/branches';
 import { BRANCHES, isBranchId } from '@/lib/branches';
@@ -86,15 +86,17 @@ export function YearlyTab({ myBranchId, canSelectBranch, myBranchLabel, onSelect
         </div>
       </div>
 
-      {/* Summary cards */}
+      {/* PR-CASHFLOW-NORMALIZE (2026-06-27): 5 KpiCard → SegmentSummary nhất quán. */}
       {summary && (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          <KpiCard icon={<Wallet size={16} />} label="Tổng thu năm" value={`${fmt(summary.totals.revenue.total)} ₫`} tone="emerald" />
-          <KpiCard icon={<Receipt size={16} />} label="Tổng chi năm" value={`${fmt(summary.totals.expense.total)} ₫`} tone="rose" />
-          <KpiCard icon={<TrendingDown size={16} />} label="Net năm" value={`${fmt(summary.totals.net.total)} ₫`} tone={summary.totals.net.total < 0 ? 'rose' : 'emerald'} />
-          <KpiCard icon={<FileText size={16} />} label="Đã khóa" value={String(summary.statusCounts.locked)} tone="violet" />
-          <KpiCard icon={<AlertTriangle size={16} />} label="Có cảnh báo" value={String(summary.alertDays)} tone={summary.alertDays > 0 ? 'amber' : 'slate'} />
-        </div>
+        <SegmentSummary
+          items={[
+            { n: `${fmt(summary.totals.revenue.total)} ₫`,     label: 'Tổng thu năm',  tone: 'success' },
+            { n: `${fmt(summary.totals.expense.total)} ₫`,     label: 'Tổng chi năm',  tone: 'danger' },
+            { n: `${fmt(summary.totals.net.total)} ₫`,         label: 'Net năm',       tone: summary.totals.net.total < 0 ? 'danger' : 'success' },
+            { n: summary.statusCounts.locked,                  label: 'Đã khóa',       tone: 'default' },
+            { n: summary.alertDays,                            label: 'Có cảnh báo',   tone: summary.alertDays > 0 ? 'warning' : 'default' },
+          ]}
+        />
       )}
 
       {/* Bảng 12 tháng */}
@@ -198,19 +200,9 @@ export function YearlyTab({ myBranchId, canSelectBranch, myBranchLabel, onSelect
   );
 }
 
-// PR-UI-PIXEL-MATCH B3 (2026-06-26): dùng <StatCard> chuẩn.
-import { StatCard, type StatCardTone } from '@/components/ui/StatCard';
+// PR-CASHFLOW-NORMALIZE (2026-06-27): KpiCard wrapper deadcode sau convert. Import SegmentSummary trực tiếp.
+import { SegmentSummary } from '@/components/ui/StatCard';
 
-const TONE_MAP: Record<string, StatCardTone> = {
-  slate: 'default',
-  emerald: 'success',
-  rose: 'danger',
-  violet: 'default',
-  amber: 'warning',
-};
-function KpiCard({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone: keyof typeof TONE_MAP }) {
-  return <StatCard label={label} value={value} icon={icon} tone={TONE_MAP[tone]} />;
-}
 function Th({ children, className = '' }: { children?: React.ReactNode; className?: string }) {
   return <th className={`text-left font-medium py-2 px-2 ${className}`}>{children}</th>;
 }

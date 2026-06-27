@@ -60,7 +60,7 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 type TabKey = 'daily' | 'monthly' | 'yearly';
 const VALID_TABS: ReadonlySet<TabKey> = new Set(['daily', 'monthly', 'yearly']);
 
-export default function BaoCaoThuChiClient({ myRoleCode, myBranchId, canCheckReturn, canLock, canUnlock, canSubmit, canSelectBranch, showSummaryCards }: Props) {
+export default function BaoCaoThuChiClient({ myBranchId, canCheckReturn, canLock, canUnlock, canSubmit, canSelectBranch, showSummaryCards }: Props) {
   const toast = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -184,14 +184,14 @@ export default function BaoCaoThuChiClient({ myRoleCode, myBranchId, canCheckRet
 
   return (
     <div className="flex-1 p-3 md:p-6 bg-slate-50 space-y-4 overflow-y-auto">
-      {/* TAB SWITCHER */}
-      <div className="flex items-center gap-1 flex-wrap bg-white rounded-xl p-1.5 ring-1 ring-slate-200 shadow-sm w-fit">
-        <TabBtn active={tab === 'daily'} onClick={() => setTab('daily')} icon={<Calendar size={14} />} label="Theo ngày" />
+      {/* PR-CASHFLOW-NORMALIZE (2026-06-27): TAB SWITCHER chuẩn hoá pattern
+          underline emerald-600 nhất quán toàn app. Bỏ pill bg-emerald-600 cứng
+          + bỏ wrap card riêng. "Vai trò: XXX" inline bỏ — info đã hiện
+          ở AppTopBar subtitle, redundant trong tab strip. */}
+      <div className="flex items-center gap-1 border-b border-slate-200 overflow-x-auto">
+        <TabBtn active={tab === 'daily'}   onClick={() => setTab('daily')}   icon={<Calendar size={14} />}     label="Theo ngày" />
         <TabBtn active={tab === 'monthly'} onClick={() => setTab('monthly')} icon={<CalendarRange size={14} />} label="Theo tháng" />
-        <TabBtn active={tab === 'yearly'} onClick={() => setTab('yearly')} icon={<CalendarDays size={14} />} label="Theo năm" />
-        <div className="ml-3 mr-2 text-xs text-slate-500 flex items-center gap-1.5">
-          Vai trò: <span className="font-mono font-semibold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">{myRoleCode}</span>
-        </div>
+        <TabBtn active={tab === 'yearly'}  onClick={() => setTab('yearly')}  icon={<CalendarDays size={14} />}  label="Theo năm" />
       </div>
 
       {tab === 'daily' && (
@@ -304,14 +304,18 @@ export default function BaoCaoThuChiClient({ myRoleCode, myBranchId, canCheckRet
 }
 
 function TabBtn({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
+  // PR-CASHFLOW-NORMALIZE (2026-06-27): underline emerald-600 nhất quán workspace tab.
   return (
-    <button type="button" onClick={onClick} className={[
-      'inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold rounded-md transition-all duration-150 active:scale-[0.97]',
-      active
-        ? 'bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-700/50'
-        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-    ].join(' ')}>
-      {icon}{label}
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+        active
+          ? 'text-emerald-700 border-emerald-600'
+          : 'text-slate-500 border-transparent hover:text-slate-800'
+      }`}
+    >
+      {icon} {label}
     </button>
   );
 }
