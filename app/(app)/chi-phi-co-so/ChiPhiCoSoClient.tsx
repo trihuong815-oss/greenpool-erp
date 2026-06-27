@@ -56,7 +56,7 @@ function todayVN(): string {
   return new Date(ms).toISOString().slice(0, 10);
 }
 
-export default function ChiPhiCoSoClient({ myRoleCode, myBranchId, canEdit, canSelectBranch }: Props) {
+export default function ChiPhiCoSoClient({ myBranchId, canEdit, canSelectBranch }: Props) {
   const toast = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -168,17 +168,18 @@ export default function ChiPhiCoSoClient({ myRoleCode, myBranchId, canEdit, canS
         </Link>
       </div>
 
-      {/* CARD BỘ LỌC LỚN — bố cục theo ảnh tham chiếu */}
+      {/* PR-CHIPHI-NORMALIZE (2026-06-27): bỏ "Vai trò: XXX" inline (redundant
+          với AppTopBar subtitle). "View-only" chip thu gọn, chỉ hiện khi !canEdit. */}
       <div className="card shadow-sm space-y-3">
-        {/* Header */}
         <div className="flex items-center justify-between gap-2 flex-wrap pb-2 border-b border-slate-100">
           <div className="flex items-center gap-2 text-sm font-bold text-slate-800">
             <Filter size={14} className="text-emerald-600" /> Bộ lọc
           </div>
-          <div className="text-xs text-slate-500">
-            Vai trò: <span className="font-mono font-semibold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">{myRoleCode}</span>
-            {!canEdit && <span className="ml-2 text-amber-700 font-medium bg-amber-50 px-2 py-0.5 rounded-md ring-1 ring-amber-200">• View-only</span>}
-          </div>
+          {!canEdit && (
+            <span className="text-[11px] text-amber-700 font-medium bg-amber-50 px-2 py-0.5 rounded-md ring-1 ring-amber-200">
+              Chỉ xem
+            </span>
+          )}
         </div>
 
         {/* Hàng lọc chính: time range + branch */}
@@ -216,17 +217,17 @@ export default function ChiPhiCoSoClient({ myRoleCode, myBranchId, canEdit, canS
         </div>
       ) : (
         <>
+          {/* PR-CHIPHI-NORMALIZE (2026-06-27): bỏ gradient violet/purple loud
+              → solid bg-violet-50 ring-violet-200 chuẩn rule "không gradient lớn". */}
           {isLocked && (
-            <div className="rounded-xl bg-gradient-to-r from-violet-50 to-purple-50/60 ring-1 ring-violet-300 px-4 py-3 flex items-start gap-3 text-sm shadow-sm">
-              <div className="rounded-lg p-1.5 bg-violet-100 text-violet-700 shrink-0">
-                <Lock size={16} />
-              </div>
+            <div className="rounded-lg bg-violet-50 ring-1 ring-violet-200 px-4 py-3 flex items-start gap-3 text-sm">
+              <Lock size={16} className="text-violet-600 shrink-0 mt-0.5" />
               <div className="text-violet-900 flex-1">
-                <div className="font-semibold mb-1">Ngày này đã khóa báo cáo thu-chi.</div>
-                <div className="text-xs text-violet-800 leading-relaxed">
+                <div className="font-semibold mb-0.5">Ngày này đã khóa báo cáo thu-chi.</div>
+                <div className="text-xs text-violet-700 leading-relaxed">
                   Bạn chỉ có thể xem, không thể thêm/sửa/ghi nhận chi phí.
-                  {lockedByName ? <> Người khóa: <strong className="text-violet-900">{lockedByName}</strong>.</> : null}
-                  {lockedAt ? <> Thời gian: <span className="font-mono text-violet-900">{lockedAt}</span>.</> : null}
+                  {lockedByName ? <> Người khóa: <strong>{lockedByName}</strong>.</> : null}
+                  {lockedAt ? <> Thời gian: <span className="font-mono">{lockedAt}</span>.</> : null}
                 </div>
               </div>
             </div>
@@ -271,25 +272,30 @@ export default function ChiPhiCoSoClient({ myRoleCode, myBranchId, canEdit, canS
             onSuccess={(msg) => toast.success(msg)}
           />
 
-          {/* Tổng — label tự đổi theo filter/range */}
-          <div className="card shadow-sm">
+          {/* PR-CHIPHI-NORMALIZE (2026-06-27): tổng card compact — value lớn 1 dòng
+              + 2 dòng breakdown nhỏ chỉ hiện khi filter active. Bỏ shadow-sm dày. */}
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
             <div className="flex items-center justify-between text-sm flex-wrap gap-2">
               <span className="font-semibold text-slate-700">
                 {totalLabel}
-                <span className="ml-2 text-xs font-normal text-slate-500">(chỉ tính đã ghi nhận)</span>
+                <span className="ml-2 text-[11px] font-normal text-slate-500">(chỉ tính đã ghi nhận)</span>
               </span>
-              <span className="text-base font-bold text-slate-800 tabular-nums">{totalRecordedFiltered.toLocaleString()} ₫</span>
+              <span className="text-[22px] font-semibold leading-tight text-slate-900 tabular-nums">
+                {totalRecordedFiltered.toLocaleString()} ₫
+              </span>
             </div>
             {active && (
-              <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 flex-wrap gap-2">
-                <span>Tổng theo bộ lọc (bao gồm cả nháp/trả lại/hủy)</span>
-                <span className="tabular-nums">{totalAllFiltered.toLocaleString()} ₫</span>
-              </div>
-            )}
-            {active && totalRecordedAll !== totalRecordedFiltered && (
-              <div className="mt-1 flex items-center justify-between text-xs text-slate-500 flex-wrap gap-2">
-                <span>{days > 1 ? 'Tổng toàn khoảng' : 'Tổng toàn ngày'} (đã ghi nhận, không filter)</span>
-                <span className="tabular-nums">{totalRecordedAll.toLocaleString()} ₫</span>
+              <div className="mt-2 pt-2 border-t border-slate-100 space-y-1 text-[11px] text-slate-500">
+                <div className="flex items-center justify-between">
+                  <span>Tổng theo bộ lọc (gồm nháp/trả lại/hủy)</span>
+                  <span className="tabular-nums">{totalAllFiltered.toLocaleString()} ₫</span>
+                </div>
+                {totalRecordedAll !== totalRecordedFiltered && (
+                  <div className="flex items-center justify-between">
+                    <span>{days > 1 ? 'Tổng toàn khoảng' : 'Tổng toàn ngày'} (đã ghi nhận, không filter)</span>
+                    <span className="tabular-nums">{totalRecordedAll.toLocaleString()} ₫</span>
+                  </div>
+                )}
               </div>
             )}
           </div>
