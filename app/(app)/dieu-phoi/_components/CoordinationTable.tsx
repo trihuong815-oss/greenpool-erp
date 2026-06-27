@@ -225,11 +225,22 @@ export default function CoordinationTable({
   const rows = sortedTasks.slice(0, 10);
   const totalCount = counts.all;
 
+  // PR-DISPATCH-TABS-NORMALIZE (2026-06-27): chuẩn hoá style nhất quán mọi tab.
+  // Sub-tab cấp 2 (text-xs px-3 py-2 + border-emerald-600 emerald-700 + font-medium).
+  // Count chip text-[11px] (đúng rule ≥12 exception cho meta), bg-slate-100.
+  // Bỏ gradient strip + shadow-md + ring → border slate-200 + shadow-sm phẳng.
+  // Severity "Mức độ" gộp vào tab strip (ml-auto) thay vì 1 row riêng → đỡ rối.
+  const subTabClass = (isActive: boolean) =>
+    'px-3 py-2 text-xs font-medium whitespace-nowrap border-b-2 -mb-px transition-colors ' +
+    (isActive
+      ? 'border-emerald-600 text-emerald-700'
+      : 'border-transparent text-slate-500 hover:text-slate-800');
+
   return (
-    <div className="rounded-xl border border-slate-200/70 bg-white shadow-md ring-1 ring-slate-50 overflow-hidden">
-      {/* V6.5 Phase 5 (2026-06-15): Tabs row — 4 tab chính + nút "Lọc nâng cao" mở 4 tab phụ */}
-      <div className="border-b border-slate-200 overflow-x-auto bg-gradient-to-b from-slate-50/60 to-white">
-        <div className="flex items-center gap-1 px-2">
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+      {/* Sub-tabs strip + Mức độ filter cùng 1 hàng */}
+      <div className="border-b border-slate-200 overflow-x-auto">
+        <div className="flex items-center gap-1 px-3">
           {PRIMARY_TABS.map((key) => {
             const isActive = activeTab === key;
             return (
@@ -237,18 +248,12 @@ export default function CoordinationTable({
                 key={key}
                 type="button"
                 onClick={() => setActiveTab(key)}
-                className={
-                  'px-3.5 py-2.5 text-xs whitespace-nowrap border-b-2 -mb-px transition-colors ' +
-                  (isActive
-                    ? 'border-emerald-500 text-emerald-700 font-bold'
-                    : 'border-transparent text-slate-600 hover:text-slate-800 font-medium')
-                }
+                className={subTabClass(isActive)}
               >
-                {TAB_LABEL[key]} <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[16px] px-1 rounded-full bg-slate-100 text-slate-600 text-[10px] font-semibold tabular-nums">{counts[key]}</span>
+                {TAB_LABEL[key]} <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-[18px] px-1.5 rounded-full bg-slate-100 text-slate-600 text-[11px] tabular-nums">{counts[key]}</span>
               </button>
             );
           })}
-          {/* SECONDARY tabs hiện inline khi đã chọn (active) hoặc khi showAdvanced */}
           {SECONDARY_TABS.filter((k) => showAdvanced || activeTab === k).map((key) => {
             const isActive = activeTab === key;
             return (
@@ -256,40 +261,31 @@ export default function CoordinationTable({
                 key={key}
                 type="button"
                 onClick={() => setActiveTab(key)}
-                className={
-                  'px-3.5 py-2.5 text-xs whitespace-nowrap border-b-2 -mb-px transition-colors ' +
-                  (isActive
-                    ? 'border-emerald-500 text-emerald-700 font-bold'
-                    : 'border-transparent text-slate-500 hover:text-slate-800 font-medium')
-                }
+                className={subTabClass(isActive)}
               >
-                {TAB_LABEL[key]} <span className="ml-1 inline-flex items-center justify-center min-w-[18px] h-[16px] px-1 rounded-full bg-slate-100 text-slate-600 text-[10px] font-semibold tabular-nums">{counts[key]}</span>
+                {TAB_LABEL[key]} <span className="ml-1 inline-flex items-center justify-center min-w-[20px] h-[18px] px-1.5 rounded-full bg-slate-100 text-slate-600 text-[11px] tabular-nums">{counts[key]}</span>
               </button>
             );
           })}
-          {/* Toggle nâng cao */}
           <button
             type="button"
             onClick={() => setShowAdvanced((v) => !v)}
-            className="ml-auto px-3 py-1.5 text-[11px] font-semibold text-slate-500 hover:text-emerald-700 rounded-md border border-slate-200 bg-white shrink-0"
+            className="ml-auto px-2.5 py-1 text-xs font-medium text-slate-500 hover:text-emerald-700 transition shrink-0"
+            title={showAdvanced ? 'Ẩn lọc nâng cao' : 'Hiện lọc nâng cao'}
           >
-            {showAdvanced ? '↑ Ẩn lọc nâng cao' : '+ Lọc nâng cao'}
+            {showAdvanced ? '↑ Lọc nâng cao' : '+ Lọc nâng cao'}
           </button>
+          <select
+            value={severityFilter}
+            onChange={(e) => setSeverityFilter(e.target.value as SeverityFilter)}
+            className="text-xs border border-slate-200 rounded px-2 py-1 bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 shrink-0"
+            title="Lọc theo mức độ"
+          >
+            <option value="all">Mức độ: Tất cả</option>
+            <option value="binh_thuong">Bình thường</option>
+            <option value="khan_cap">Khẩn cấp</option>
+          </select>
         </div>
-      </div>
-
-      {/* Filter row — V4: select Mức độ */}
-      <div className="flex items-center justify-end gap-2 px-4 py-2 border-b border-slate-100 bg-slate-50/40">
-        <label className="text-xs text-slate-500 font-medium">Mức độ:</label>
-        <select
-          value={severityFilter}
-          onChange={(e) => setSeverityFilter(e.target.value as SeverityFilter)}
-          className="text-xs border border-slate-200 rounded px-2 py-1.5 bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-        >
-          <option value="all">Tất cả</option>
-          <option value="binh_thuong">Bình thường</option>
-          <option value="khan_cap">Khẩn cấp</option>
-        </select>
       </div>
 
       {/* Table — V6.5 (2026-06-15) anh chốt:

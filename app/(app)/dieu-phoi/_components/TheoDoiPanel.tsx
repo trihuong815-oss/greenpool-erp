@@ -23,34 +23,35 @@ interface Props {
 
 type Tab = 'bottleneck' | 'watch' | 'noti';
 
-const TABS: { key: Tab; label: string; icon: typeof AlertTriangle; color: string }[] = [
-  { key: 'bottleneck', label: 'Điểm nghẽn',        icon: AlertTriangle, color: 'rose'    },
-  { key: 'watch',      label: 'Theo dõi cá nhân',  icon: Eye,           color: 'sky'     },
-  { key: 'noti',       label: 'Thông báo quan trọng', icon: Bell,       color: 'amber'   },
+const TABS: { key: Tab; label: string; icon: typeof AlertTriangle }[] = [
+  { key: 'bottleneck', label: 'Điểm nghẽn',           icon: AlertTriangle },
+  { key: 'watch',      label: 'Theo dõi cá nhân',     icon: Eye           },
+  { key: 'noti',       label: 'Thông báo quan trọng', icon: Bell          },
 ];
 
 export default function TheoDoiPanel({ tasks }: Props) {
   const [active, setActive] = useState<Tab>('bottleneck');
 
+  // PR-DISPATCH-TABS-NORMALIZE (2026-06-27): chuẩn hoá emerald đồng nhất, bỏ
+  // 3 màu khác (rose/sky/amber) — semantic màu chỉ dành cho trạng thái, không
+  // dùng để phân biệt tab. Bỏ font-bold + gradient strip + shadow-md + ring.
   return (
-    <div className="rounded-xl border border-slate-200/70 bg-white shadow-md ring-1 ring-slate-50 overflow-hidden">
-      {/* Header + tabs */}
-      <div className="border-b border-slate-200 bg-gradient-to-b from-slate-50/60 to-white">
-        <div className="flex items-center gap-1 px-2">
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+      <div className="border-b border-slate-200">
+        <div className="flex items-center gap-1 px-3">
           {TABS.map((t) => {
             const isActive = active === t.key;
             const Icon = t.icon;
-            const colorClasses = isActive
-              ? t.color === 'rose'  ? 'border-rose-500 text-rose-700'
-              : t.color === 'sky'   ? 'border-sky-500 text-sky-700'
-              :                       'border-amber-500 text-amber-700'
-              : 'border-transparent text-slate-600 hover:text-slate-800';
             return (
               <button
                 key={t.key}
                 type="button"
                 onClick={() => setActive(t.key)}
-                className={`flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-medium whitespace-nowrap border-b-2 -mb-px transition-colors ${colorClasses} ${isActive ? 'font-bold' : ''}`}
+                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium whitespace-nowrap border-b-2 -mb-px transition-colors ${
+                  isActive
+                    ? 'border-emerald-600 text-emerald-700'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
               >
                 <Icon size={13} /> {t.label}
               </button>
