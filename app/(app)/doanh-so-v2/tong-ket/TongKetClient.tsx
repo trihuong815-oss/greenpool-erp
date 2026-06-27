@@ -26,6 +26,7 @@ import MonthlyKpiCards from './_components/MonthlyKpiCards';
 import TargetProgressCard from './_components/TargetProgressCard';
 import BranchSummaryTable from './_components/BranchSummaryTable';
 import SaleRankingTable from './_components/SaleRankingTable';
+import BranchProgressList from './_components/BranchProgressList';
 import AdHocDiscountCard from './_components/AdHocDiscountCard';
 import TargetEditTab from './_components/TargetEditTab';
 import { currentMonthVN } from './_components/utils';
@@ -39,7 +40,10 @@ interface Props {
 }
 
 // PR-SALES-SUMMARY-SIMPLE-THREE-TABS-UI: 3 tab user-facing + 1 tab admin (Chỉ tiêu).
-type MainTab = 'overview' | 'by-branch' | 'risk' | 'target';
+// PR-TONGKET-OVERVIEW-V2 (2026-06-27): BỎ tab 'by-branch' — ghép BranchSummary +
+// SaleRanking + BranchProgressList (per-branch target vs actual) vào tab 'overview'.
+// User feedback: top sale + top cơ sở + chỉ tiêu từng cơ sở phải ở Tổng quan.
+type MainTab = 'overview' | 'risk' | 'target';
 
 const TARGET_WRITE_ROLES = new Set(['ADMIN', 'CEO', 'CHU_TICH', 'GD_KD']);
 
@@ -78,6 +82,7 @@ export default function TongKetClient({ scope, myRoleCode, myUid, myBranchId }: 
   }, [month, branchId, showBranchFilter]);
 
   // PR-TK4B: scopeBranchId cho SaleRankingTable showBranchColumn check.
+  // null → show cột Cơ sở (top all branches). Có giá trị → ẩn (chỉ 1 cơ sở).
   const scopeBranchId = (showBranchFilter && branchId !== 'all') ? branchId : (showBranchFilter ? null : myBranchId);
   const showBranchColumn = scopeBranchId == null;
 
@@ -148,6 +153,12 @@ function TabContent({
     );
   }
   if (tab === 'overview') {
+    // PR-TONGKET-OVERVIEW-V2 (2026-06-27): user feedback hội đồng — gộp
+    // BranchProgressList (chỉ tiêu vs thực đạt từng cơ sở) + BranchSummaryTable
+    // (top cơ sở) + SaleRankingTable (top sale) vào Tổng quan. Bỏ tab "Theo cơ sở/Sale".
+    const hasBranch = Object.keys(data.byBranch).length > 0;
+    const hasBranchTargets = data.branchTargetsThisMonth && Object.keys(data.branchTargetsThisMonth).length > 0;
+    const hasSalesCustomers = data.salesCustomers && Object.keys(data.salesCustomers).length > 0;
     return (
       <>
         <BusinessAlerts data={data} />
@@ -157,14 +168,12 @@ function TabContent({
           pendingReviewCount={(data.txStatusStats?.pending ?? 0) + (data.batchStats?.pendingReview ?? 0)}
         />
         <TargetProgressCard targetSummary={data.targetSummary} />
-      </>
-    );
-  }
-  if (tab === 'by-branch') {
-    const hasBranch = Object.keys(data.byBranch).length > 0;
-    const hasSalesCustomers = data.salesCustomers && Object.keys(data.salesCustomers).length > 0;
-    return (
-      <>
+        {(hasBranch || hasBranchTargets) && (
+          <BranchProgressList
+            byBranch={data.byBranch}
+            branchTargets={data.branchTargetsThisMonth}
+          />
+        )}
         {hasBranch && <BranchSummaryTable byBranch={data.byBranch} />}
         {hasSalesCustomers && (
           <SaleRankingTable
@@ -173,9 +182,6 @@ function TabContent({
             daysElapsedPercent={data.targetSummary?.daysElapsedPercent ?? 0}
             showBranchColumn={showBranchColumn}
           />
-        )}
-        {!hasBranch && !hasSalesCustomers && (
-          <div className="card text-center py-12 text-sm text-slate-500">Chưa có dữ liệu phù hợp.</div>
         )}
       </>
     );
@@ -197,11 +203,10 @@ function TabSwitcher({
   setTab: (t: MainTab) => void;
   canWriteTarget: boolean;
 }) {
-  // PR-SALES-SUMMARY-SIMPLE-THREE-TABS-UI: tab style underline emerald, no icon, no pill.
+  // PR-TONGKET-OVERVIEW-V2 (2026-06-27): bỏ tab "Theo cơ sở / Sale" (ghép vào Tổng quan).
   const tabs: Array<{ id: MainTab; label: string }> = [
-    { id: 'overview',  label: 'Tổng quan' },
-    { id: 'by-branch', label: 'Theo cơ sở / Sale' },
-    { id: 'risk',      label: 'Rủi ro giá' },
+    { id: 'overview', label: 'Tổng quan' },
+    { id: 'risk',     label: 'Rủi ro giá' },
   ];
   if (canWriteTarget) tabs.push({ id: 'target', label: 'Chỉ tiêu' });
   return (

@@ -469,6 +469,10 @@ export async function GET(req: NextRequest) {
     let targetScope: TargetScope = 'none';
     let targetRevenue: number | null = null;
     const saleTargetsThisMonth: Record<string, number> = {};
+    // PR-TONGKET-OVERVIEW-V2 (2026-06-27): per-branch target tháng (READ-ONLY)
+    // → expose ra response để BranchProgressList ở tab Tổng quan hiển thị
+    //   "chỉ tiêu vs thực đạt" của TỪNG CƠ SỞ. User feedback hội đồng.
+    const branchTargetsThisMonth: Record<string, number> = {};
 
     try {
       if (role === 'sale') {
@@ -502,6 +506,8 @@ export async function GET(req: NextRequest) {
             const v = Number(mt[monthIndex] ?? 0);
             targetScope = 'branch';
             targetRevenue = v > 0 ? v : null;
+            // PR-TONGKET-OVERVIEW-V2: expose target của branch caller.
+            if (v > 0) branchTargetsThisMonth[scopeBranchId] = v;
           }
           // staffTargets của branch này — fill tất cả Sale
           const staff = (d.staffTargets ?? {}) as Record<string, number[]>;
@@ -524,13 +530,19 @@ export async function GET(req: NextRequest) {
         );
         let sumTarget = 0;
         let anyTarget = false;
-        for (const ds of docs) {
+        for (let i = 0; i < docs.length; i += 1) {
+          const ds = docs[i];
           if (!ds.exists) continue;
           const d = ds.data() ?? {};
           const mt = (d.monthTargets ?? null) as number[] | null;
           if (Array.isArray(mt) && mt.length >= 12) {
             const v = Number(mt[monthIndex] ?? 0);
-            if (v > 0) { sumTarget += v; anyTarget = true; }
+            if (v > 0) {
+              sumTarget += v;
+              anyTarget = true;
+              // PR-TONGKET-OVERVIEW-V2: per-branch target → BranchProgressList ở Tổng quan.
+              branchTargetsThisMonth[allBranches[i]] = v;
+            }
           }
           const staff = (d.staffTargets ?? {}) as Record<string, number[]>;
           for (const [sid, arr] of Object.entries(staff)) {
@@ -616,6 +628,9 @@ export async function GET(req: NextRequest) {
       // ─── PR-TK3A (2026-06-21) — Chỉ tiêu (read-only) ───
       targetSummary,
       saleTargetsThisMonth,
+      // PR-TONGKET-OVERVIEW-V2 (2026-06-27): per-branch target → BranchProgressList
+      // ở tab Tổng quan. Sale: empty. QLCS: 1 key của cơ sở mình. Top: 5 cơ sở.
+      branchTargetsThisMonth,
       // ─── PR-PROMO2-B (2026-06-23) — Ad-hoc discount report (read-only) ───
       adHocSummary,
     });

@@ -125,6 +125,12 @@ export interface Summary {
    *  - Empty {} nếu chưa đặt target Sale nào.
    */
   saleTargetsThisMonth?: Record<string, number>;
+  /** PR-TONGKET-OVERVIEW-V2 (2026-06-27): chỉ tiêu doanh số per-branch tháng đang xem.
+   *  - Sale: empty
+   *  - QLCS/Acct: 1 key = branch của mình (nếu có target)
+   *  - Top: tất cả branches có target (key = BranchId, value = số tiền target VND)
+   *  Dùng cho BranchProgressList ở tab Tổng quan (so target vs actual). */
+  branchTargetsThisMonth?: Record<string, number>;
   /** PR-PROMO2-B (2026-06-23): báo cáo read-only ưu đãi ngoài chương trình.
    *  - undefined nếu role='sale' (SaleView không hiện card) hoặc không có raw tx
    *  - undefined nếu compute fail (fail-soft) */

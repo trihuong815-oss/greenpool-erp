@@ -5,8 +5,12 @@
 // Section trong /doanh-so-v2/tong-ket. Wire vào 4 views (Top/Accountant/Qlcs/ReadOnlyAudit).
 // KHÔNG có status review/approve/reject — chỉ display.
 //
-// Default filter: LOW + REVIEW + HIGH_RISK. Chip "Hiển thị NORMAL" để xem giảm nhẹ.
-// NORMAL VẪN counted vào tổng thống kê (chốt user 2026-06-23).
+// PR-TONGKET-OVERVIEW-V2 (2026-06-27): user feedback hội đồng — "Rủi ro giá" chỉ
+// chứa giao dịch SAI LỆCH (HIGH_RISK/REVIEW/LOW). Bỏ NORMAL khỏi UI:
+//   - ClassificationBreakdown chỉ 3 row (bỏ NORMAL)
+//   - FilterChip "NORMAL" + filter mode 'normal_only' bỏ hẳn
+//   - Empty state khi tổng số GD rủi ro (HIGH+REVIEW+LOW) === 0
+//   - NORMAL VẪN counted ở backend stats (tradeOffNote), chỉ ẨN khỏi UI người xem.
 
 import { useMemo, useState } from 'react';
 import { AlertTriangle, ChevronDown, ChevronRight, Filter } from 'lucide-react';
@@ -22,7 +26,10 @@ interface Props {
   data: AdHocSummary;
 }
 
-type FilterMode = 'review_plus' | 'all_levels' | 'high_risk' | 'review_only' | 'low_only' | 'normal_only';
+// PR-TONGKET-OVERVIEW-V2 (2026-06-27): bỏ 'normal_only' + 'all_levels' (vì all
+// sẽ bao gồm NORMAL — không phù hợp với mục đích "rủi ro"). Còn 4 mode:
+//   review_plus (default) = HIGH+REVIEW+LOW · high_risk · review_only · low_only
+type FilterMode = 'review_plus' | 'high_risk' | 'review_only' | 'low_only';
 
 const TONE_CLASSES: Record<'slate' | 'amber' | 'orange' | 'rose', { badge: string; text: string }> = {
   slate:  { badge: 'bg-slate-100 text-slate-700 ring-slate-300', text: 'text-slate-700' },
@@ -53,19 +60,28 @@ export default function AdHocDiscountCard({ data }: Props) {
     return data.items.filter((it) => allow.has(it.classification));
   }, [data.items, filter]);
 
-  // Empty state
-  const hasAnyAdHoc = data.totals.transactionsCount > 0;
+  // PR-TONGKET-OVERVIEW-V2: "rủi ro" = chỉ HIGH+REVIEW+LOW (bỏ NORMAL).
+  // Empty state khi không có bất kỳ GD rủi ro nào (kể cả khi NORMAL > 0).
+  const riskCount =
+    data.byClassification.HIGH_RISK.count +
+    data.byClassification.REVIEW.count +
+    data.byClassification.LOW.count;
   const hasUnknown = data.totals.unknownBaselineCount > 0;
 
-  if (!hasAnyAdHoc && !hasUnknown) {
+  if (riskCount === 0 && !hasUnknown) {
     return (
       <section className="card">
         <Header />
         <div className="text-center py-10 text-slate-400">
           <div className="text-4xl mb-2">✅</div>
           <div className="text-sm font-medium text-slate-600">
-            Chưa phát hiện giao dịch bán thấp hơn giá chuẩn ngoài chương trình trong tháng này.
+            Không có giao dịch sai lệch giá trong tháng này.
           </div>
+          {data.byClassification.NORMAL.count > 0 && (
+            <div className="text-xs text-slate-400 mt-1">
+              ({data.byClassification.NORMAL.count} GD giảm nhẹ trong ngưỡng cho phép.)
+            </div>
+          )}
         </div>
       </section>
     );
@@ -112,12 +128,10 @@ export default function AdHocDiscountCard({ data }: Props) {
         {expanded && (
           <div className="flex items-center gap-1.5 flex-wrap">
             <Filter size={12} className="text-slate-400" />
-            <FilterChip current={filter} value="review_plus" label="LOW+REVIEW+HIGH" onClick={setFilter} />
-            <FilterChip current={filter} value="high_risk" label="HIGH_RISK" onClick={setFilter} />
+            <FilterChip current={filter} value="review_plus" label="Tất cả rủi ro" onClick={setFilter} />
+            <FilterChip current={filter} value="high_risk"   label="HIGH_RISK" onClick={setFilter} />
             <FilterChip current={filter} value="review_only" label="REVIEW" onClick={setFilter} />
-            <FilterChip current={filter} value="low_only" label="LOW" onClick={setFilter} />
-            <FilterChip current={filter} value="normal_only" label="NORMAL" onClick={setFilter} />
-            <FilterChip current={filter} value="all_levels" label="Tất cả" onClick={setFilter} />
+            <FilterChip current={filter} value="low_only"    label="LOW" onClick={setFilter} />
           </div>
         )}
       </div>
@@ -240,13 +254,14 @@ function KpiBox({ label, value, sub, tone }: { label: string; value: string; sub
 }
 
 function ClassificationBreakdown({ data }: { data: AdHocSummary }) {
+  // PR-TONGKET-OVERVIEW-V2 (2026-06-27): chỉ hiện 3 mức rủi ro (bỏ NORMAL).
+  // Total cho % bar = sum amount của 3 mức rủi ro (không tính NORMAL).
   const items: Array<{ key: AdHocClassification; count: number; amount: number }> = [
     { key: 'HIGH_RISK', count: data.byClassification.HIGH_RISK.count, amount: data.byClassification.HIGH_RISK.amount },
     { key: 'REVIEW',    count: data.byClassification.REVIEW.count,    amount: data.byClassification.REVIEW.amount },
     { key: 'LOW',       count: data.byClassification.LOW.count,       amount: data.byClassification.LOW.amount },
-    { key: 'NORMAL',    count: data.byClassification.NORMAL.count,    amount: data.byClassification.NORMAL.amount },
   ];
-  const total = data.totals.totalAdHocAmount;
+  const total = items.reduce((s, it) => s + it.amount, 0);
 
   return (
     <div className="mb-3">
@@ -424,12 +439,11 @@ function MobileCard({ it }: { it: AdHocDiscountItem }) {
 // ─── Filter helper ────────────────────────────────────────────────────
 
 function matchesFilter(mode: FilterMode): Set<AdHocClassification> {
+  // PR-TONGKET-OVERVIEW-V2 (2026-06-27): bỏ NORMAL khỏi mọi mode rủi ro giá.
   switch (mode) {
     case 'high_risk':    return new Set(['HIGH_RISK']);
     case 'review_only':  return new Set(['REVIEW']);
     case 'low_only':     return new Set(['LOW']);
-    case 'normal_only':  return new Set(['NORMAL']);
-    case 'all_levels':   return new Set(['HIGH_RISK', 'REVIEW', 'LOW', 'NORMAL']);
     case 'review_plus':
     default:             return new Set(['HIGH_RISK', 'REVIEW', 'LOW']);
   }
