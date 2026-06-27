@@ -73,19 +73,55 @@ export function StatCard({ label, value, icon, tone = 'default', sub, delta }: P
 
 /** Dải gộp nhiều trạng thái — thay 7 thẻ ở màn Đề xuất.
  *  Pixel-spec từ HTML .segsum: border slate-200 rounded-xl, mỗi seg flex-1
- *  border-r giữa, value font-mono 20px, label 11px uppercase 0.3px. */
-export function SegmentSummary({ items }: { items: { n: ReactNode; label: string; tone?: StatCardTone }[] }) {
+ *  border-r giữa, value font-mono 20px, label 11px uppercase 0.3px.
+ *
+ *  PR-DISPATCH-RESTRUCTURE (2026-06-27): hỗ trợ optional onClick per item +
+ *  active state. Cell có onClick → render button focusable + hover highlight.
+ *  Cell không onClick → render div (backward compat 7-cell /de-xuat). */
+export function SegmentSummary({
+  items,
+}: {
+  items: {
+    n: ReactNode;
+    label: string;
+    tone?: StatCardTone;
+    onClick?: () => void;
+    active?: boolean;
+    title?: string;
+  }[];
+}) {
   return (
     <div className="flex overflow-hidden rounded-xl border border-slate-200 bg-white">
       {/* PR-UI-TYPOGRAPHY-DENSITY-BALANCE (2026-06-26): text-xl (20px) → text-[19px]
           + leading-tight, padding py-3 → py-2.5. Dải gộp 7 trạng thái /de-xuat đỡ cao,
           số nhỏ hơn nhưng vẫn dễ đọc. */}
-      {items.map((it, i) => (
-        <div key={i} className="flex-1 border-r border-slate-200 px-3 py-2.5 text-center last:border-r-0">
-          <div className={`font-mono text-[19px] font-semibold leading-tight tabular-nums ${VAL_TONE[it.tone ?? 'default']}`}>{it.n}</div>
-          <div className="mt-1 text-[11px] uppercase tracking-wide text-slate-500">{it.label}</div>
-        </div>
-      ))}
+      {items.map((it, i) => {
+        const valueClass = `font-mono text-[19px] font-semibold leading-tight tabular-nums ${VAL_TONE[it.tone ?? 'default']}`;
+        const labelClass = 'mt-1 text-[11px] uppercase tracking-wide text-slate-500';
+        const base = 'flex-1 border-r border-slate-200 px-3 py-2.5 text-center last:border-r-0';
+        if (it.onClick) {
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={it.onClick}
+              title={it.title}
+              className={`${base} transition-colors ${
+                it.active ? 'bg-emerald-50' : 'hover:bg-slate-50'
+              }`}
+            >
+              <div className={valueClass}>{it.n}</div>
+              <div className={labelClass}>{it.label}</div>
+            </button>
+          );
+        }
+        return (
+          <div key={i} className={base}>
+            <div className={valueClass}>{it.n}</div>
+            <div className={labelClass}>{it.label}</div>
+          </div>
+        );
+      })}
     </div>
   );
 }

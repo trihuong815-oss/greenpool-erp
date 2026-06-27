@@ -17,11 +17,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ChevronDown, Loader2, Plus, RefreshCw, X } from 'lucide-react';
+import { Loader2, Plus, RefreshCw, X } from 'lucide-react';
 import { isTP, isQLCS } from '@/lib/auth/roles';
 import { useNotiCounts } from '@/lib/hooks/use-noti-counts';
 import { BRANCHES, type BranchId } from '@/lib/branches';
-import KpiBar, { type KpiKey } from './_components/KpiBar';
+import DispatchSnapshot, { type SnapshotKey } from './_components/DispatchSnapshot';
 import BlockDonut from './_components/BlockDonut';
 import DeptBarChart from './_components/DeptBarChart';
 import BranchBarChart from './_components/BranchBarChart';
@@ -125,16 +125,14 @@ export default function DieuPhoiClient({
   // /api/tasks list mode='all').
   const [selectedBlock, setSelectedBlock] = useState<'all' | 'KD' | 'VP'>('all');
   const [selectedBranch, setSelectedBranch] = useState<'all' | BranchId>('all');
-  // PR-DISPATCH-PERFORMANCE-TAB (2026-06-27): tách section "Phân tích" (3 chart
-  // BlockDonut + DeptBarChart + BranchBarChart) khỏi màn chính sang 1 tab riêng
-  // "Hiệu suất" → trang Điều hành đỡ rối, dễ scan KPI + bảng. User yêu cầu rõ.
-  const [pageTab, setPageTab] = useState<'overview' | 'performance'>('overview');
+  // PR-DISPATCH-RESTRUCTURE (2026-06-27): 3 tab workspace.
+  const [pageTab, setPageTab] = useState<'list' | 'issues' | 'performance'>('list');
   // Tab signal cho CoordinationTable — KpiBar "Xem chi tiết" click → bump signal.
   const [requestedTableTab, setRequestedTableTab] = useState<
     'all' | 'mine' | 'sent' | 'cross' | 'waiting_resp' | 'waiting_appr' | 'overdue' | 'bottleneck'
   >('all');
   const [tabSignal, setTabSignal] = useState(0);
-  const tableSectionRef = useRef<HTMLElement>(null);
+  const tableSectionRef = useRef<HTMLDivElement>(null);
 
   // PR-DISPATCH-INTERACTIVE-CONTROLS-FIX (2026-06-27): áp dụng filter khối/cơ sở
   // lên tasks trước khi pass xuống KpiBar/charts/TheoDoiPanel/table.
@@ -157,22 +155,33 @@ export default function DieuPhoiClient({
     });
   }, [tasks, selectedBlock, selectedBranch]);
 
-  // KpiBar key → CoordinationTable tab.
-  const handleSeeDetails = useCallback((key: KpiKey) => {
-    const map: Record<KpiKey, 'mine' | 'waiting_resp' | 'waiting_appr' | 'cross' | 'overdue'> = {
+  // PR-DISPATCH-RESTRUCTURE (2026-06-27): Snapshot 4 cell → CoordinationTable tab.
+  // Bỏ 'lien-khoi' khỏi snapshot (chỉ dimension, không phải action).
+  const handleSeeDetails = useCallback((key: SnapshotKey) => {
+    const map: Record<SnapshotKey, 'mine' | 'waiting_resp' | 'waiting_appr' | 'overdue'> = {
       'can-toi-xu-ly':       'mine',
       'cho-phan-hoi':        'waiting_resp',
       'cho-owner-xac-nhan':  'waiting_appr',
-      'lien-khoi':           'cross',
       'qua-han':             'overdue',
     };
     setRequestedTableTab(map[key]);
     setTabSignal((n) => n + 1);
-    // Defer scroll 1 tick để table re-render với tab mới rồi mới scroll.
     requestAnimationFrame(() => {
       tableSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   }, []);
+
+  // Active snapshot cell — đồng bộ với CoordinationTable sub-tab hiện tại.
+  const activeSnapshotKey: SnapshotKey | null = (() => {
+    if (tabSignal === 0) return null; // chưa click cell nào
+    switch (requestedTableTab) {
+      case 'mine':         return 'can-toi-xu-ly';
+      case 'waiting_resp': return 'cho-phan-hoi';
+      case 'waiting_appr': return 'cho-owner-xac-nhan';
+      case 'overdue':      return 'qua-han';
+      default:             return null;
+    }
+  })();
 
   const clearFilters = useCallback(() => {
     setSelectedBlock('all');
@@ -739,64 +748,51 @@ export default function DieuPhoiClient({
 
   return (
     <div className="max-w-screen-2xl mx-auto">
-      <div className="space-y-5">
-        {/* Page header — title + actions (mobile ẩn vì có TopBar + nút tạo ở MobileView) */}
-        <div className="hidden md:flex flex-wrap items-end justify-between gap-3 pb-1">
+      <div className="space-y-4">
+        {/* PR-DISPATCH-RESTRUCTURE (2026-06-27): cấu trúc 3-tier tối giản.
+            User principles: tối giản, chuyên nghiệp, tập trung quan sát + quản lý
+            công việc, không phần nào chỉ để trang trí.
+            • TIER 1 — Header: title + 2 action (Tải lại + Tạo điều phối)
+            • TIER 2 — Snapshot: 1 dải 4 cell click → filter table
+            • TIER 3 — Workspace tabs: Danh sách (default) / Vấn đề / Hiệu suất
+            Filter Khối/Cơ sở nằm INLINE trong tab Danh sách (gắn context).
+            Tab Hiệu suất KHÔNG có filter (chart toàn cảnh strategic).
+            Mobile + Compact (TP/QLCS) giữ nguyên path riêng. */}
+
+        {/* TIER 1 — Header (desktop only — mobile có TopBar + nút tạo trong MobileView) */}
+        <div className="hidden md:flex items-center justify-between gap-3">
           <div>
-            <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-emerald-700 to-teal-600 bg-clip-text text-transparent">Điều phối công việc</h1>
+            <h1 className="text-xl font-bold text-slate-900">Điều phối công việc</h1>
             <p className="text-xs text-slate-500 mt-0.5">Theo dõi & điều phối nhiệm vụ liên phòng ban, liên cơ sở.</p>
           </div>
-          <button
-            type="button"
-            onClick={() => canCreate && setShowCreate(true)}
-            disabled={!canCreate}
-            title={canCreate ? 'Tạo điều phối mới' : 'Bạn không có quyền tạo điều phối'}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold rounded-lg shadow-md ring-1 ring-inset transition ${
-              canCreate
-                ? 'bg-emerald-600 text-white ring-emerald-400/30 hover:bg-emerald-700 hover:shadow-lg'
-                : 'bg-slate-200 text-slate-500 ring-slate-300/40 cursor-not-allowed'
-            }`}
-          >
-            <Plus size={15} /> Tạo điều phối mới
-            <ChevronDown size={13} className="opacity-80" />
-          </button>
-        </div>
-
-        {/* PR-DISPATCH-LAYOUT-CLEANUP (2026-06-27): user feedback —
-            • Bỏ chip ngày (AppTopBar đã có ngày)
-            • Move 2 select Khối/Cơ sở xuống đầu section "Danh sách điều phối"
-              (gắn với context xem chi tiết) — filter VẪN apply toàn dashboard
-              (KPI + Vấn đề + Bảng + 3 chart Hiệu suất), chỉ thay vị trí.
-            Filter bar top giờ chỉ còn nút "Tải lại" + chip filter active.  */}
-        <div className="hidden md:flex flex-wrap items-center gap-2">
-          {hasActiveFilter && (
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={clearFilters}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-emerald-200 bg-emerald-50 text-xs text-emerald-700 hover:bg-emerald-100 transition"
-              title="Xóa lọc"
+              onClick={reload}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md border border-slate-200 bg-white text-xs font-medium text-slate-600 hover:bg-slate-50 transition"
+              title="Tải lại"
             >
-              <X size={11} /> Xóa lọc
-              {selectedBlock !== 'all' && <span className="ml-1 font-semibold">· {selectedBlock === 'KD' ? 'KD' : 'VP'}</span>}
-              {selectedBranch !== 'all' && <span className="ml-1 font-semibold">· {selectedBranch}</span>}
+              <RefreshCw size={13} className={loading ? 'animate-spin text-slate-400' : 'text-slate-500'} />
+              Tải lại
             </button>
-          )}
-          <button
-            type="button"
-            onClick={reload}
-            className="ml-auto inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-slate-200 bg-white text-xs text-slate-600 hover:bg-slate-50 transition"
-            title="Tải lại"
-          >
-            <RefreshCw
-              size={12}
-              className={loading ? 'animate-spin text-slate-400' : 'text-slate-500'}
-            />
-            <span className="hidden sm:inline">Tải lại</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => canCreate && setShowCreate(true)}
+              disabled={!canCreate}
+              title={canCreate ? 'Tạo điều phối mới' : 'Bạn không có quyền tạo điều phối'}
+              className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold rounded-md transition ${
+                canCreate
+                  ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                  : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+              }`}
+            >
+              <Plus size={14} /> Tạo điều phối
+            </button>
+          </div>
         </div>
 
         {error && (
-          <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm text-rose-700 shadow-sm">
+          <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
             ⚠ {error}
           </div>
         )}
@@ -807,8 +803,7 @@ export default function DieuPhoiClient({
           </div>
         ) : (
           <>
-            {/* V6.4 (2026-06-13): MOBILE — spec anh chốt full redesign: card view + bottom sheet +
-                swipe KPI + sticky tabs. CHỈ render mobile (md:hidden) — desktop view giữ nguyên. */}
+            {/* MOBILE — giữ path riêng */}
             <div className="md:hidden">
               <MobileDispatchView
                 tasks={tasks}
@@ -822,8 +817,8 @@ export default function DieuPhoiClient({
               />
             </div>
 
-            {/* Desktop (md+) — giữ nguyên 2 branch CompactDashboard (TP/QLCS) hoặc full (GD/CEO) */}
-            <div className="hidden md:block">
+            {/* DESKTOP (md+) — Compact (TP/QLCS) hoặc Full 3-tier (GD/CEO/ADMIN) */}
+            <div className="hidden md:block space-y-4">
               {isCompactRole ? (
                 <CompactDashboard
                   tasks={tasks}
@@ -834,108 +829,103 @@ export default function DieuPhoiClient({
                   onRowClick={setSelected}
                 />
               ) : (
-          <>
-            {/* PR-DISPATCH-PERFORMANCE-TAB (2026-06-27): tab switcher 2 tab —
-                "Điều hành" (KPI + Vấn đề + Bảng — workflow hằng ngày) và
-                "Hiệu suất" (3 chart phân tích). Tránh nhồi quá nhiều section
-                trên 1 màn → dễ scan hơn. Filter bar bên trên áp dụng cho cả 2 tab. */}
-            <div className="flex gap-1 border-b border-slate-200">
-              {([
-                { id: 'overview',    label: 'Điều hành' },
-                { id: 'performance', label: 'Hiệu suất' },
-              ] as const).map((t) => {
-                const active = pageTab === t.id;
-                return (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => setPageTab(t.id)}
-                    className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
-                      active
-                        ? 'text-emerald-700 border-emerald-600'
-                        : 'text-slate-500 border-transparent hover:text-slate-800'
-                    }`}
-                  >
-                    {t.label}
-                  </button>
-                );
-              })}
-            </div>
-
-            {pageTab === 'overview' ? (
-              <>
-                {/* PR-DISPATCH-INTERACTIVE-CONTROLS-FIX (2026-06-27): widgets pass
-                    filteredTasks — KPI + Vấn đề + Bảng cùng lọc đồng bộ. */}
-                <section className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Tổng quan</span>
-                    <span className="flex-1 h-px bg-gradient-to-r from-slate-200 to-transparent" />
-                  </div>
-                  <KpiBar tasks={filteredTasks} currentUserUid={currentUserUid} onSeeDetails={handleSeeDetails} />
-                </section>
-
-                {/* V6.5 Phase 5 (2026-06-15): Section "Vấn đề cần xử lý ngay" — gộp 3
-                    widget cũ (BottleneckTable + TopWatchList + ImportantNotiPanel) → 1 panel 3 tab. */}
-                <section className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Vấn đề cần xử lý ngay</span>
-                    <span className="flex-1 h-px bg-gradient-to-r from-slate-200 to-transparent" />
-                  </div>
-                  <TheoDoiPanel tasks={filteredTasks} />
-                </section>
-
-                <section ref={tableSectionRef} className="space-y-2 scroll-mt-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Danh sách điều phối</span>
-                    <span className="flex-1 h-px bg-gradient-to-r from-slate-200 to-transparent" />
-                    {/* PR-DISPATCH-LAYOUT-CLEANUP (2026-06-27): 2 select khối/cơ sở
-                        move xuống đây từ filter bar top — gắn với context "xem chi tiết".
-                        Filter VẪN apply toàn dashboard (KPI + Vấn đề + Bảng + 3 chart Hiệu suất). */}
-                    <select
-                      value={selectedBlock}
-                      onChange={(e) => setSelectedBlock(e.target.value as 'all' | 'KD' | 'VP')}
-                      className="px-2.5 py-1 rounded-md border border-slate-200 bg-white text-xs text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition"
-                      title="Lọc theo khối"
-                    >
-                      <option value="all">Tất cả khối</option>
-                      <option value="KD">Khối Kinh doanh</option>
-                      <option value="VP">Khối Văn phòng</option>
-                    </select>
-                    <select
-                      value={selectedBranch}
-                      onChange={(e) => setSelectedBranch(e.target.value as 'all' | BranchId)}
-                      className="px-2.5 py-1 rounded-md border border-slate-200 bg-white text-xs text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition"
-                      title="Lọc theo cơ sở"
-                    >
-                      <option value="all">Tất cả cơ sở</option>
-                      {BRANCHES.map((b) => (
-                        <option key={b.id} value={b.id}>{b.shortName} — {b.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <CoordinationTable
+                <>
+                  {/* TIER 2 — SNAPSHOT (1 dải 4 cell, click = filter table) */}
+                  <DispatchSnapshot
                     tasks={filteredTasks}
-                    onRowClick={setSelected}
                     currentUserUid={currentUserUid}
-                    requestedTab={requestedTableTab}
-                    tabSignal={tabSignal}
+                    onSelectCell={handleSeeDetails}
+                    activeKey={activeSnapshotKey}
                   />
-                </section>
-              </>
-            ) : (
-              <section className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Phân tích</span>
-                  <span className="flex-1 h-px bg-gradient-to-r from-slate-200 to-transparent" />
-                </div>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                  <BlockDonut tasks={filteredTasks} />
-                  <DeptBarChart tasks={filteredTasks} />
-                  <BranchBarChart tasks={filteredTasks} />
-                </div>
-              </section>
-            )}
-          </>
+
+                  {/* TIER 3 — WORKSPACE TABS */}
+                  <div ref={tableSectionRef} className="scroll-mt-4">
+                    <div className="flex items-center gap-1 border-b border-slate-200">
+                      {([
+                        { id: 'list',        label: 'Danh sách' },
+                        { id: 'issues',      label: 'Vấn đề' },
+                        { id: 'performance', label: 'Hiệu suất' },
+                      ] as const).map((t) => {
+                        const active = pageTab === t.id;
+                        return (
+                          <button
+                            key={t.id}
+                            type="button"
+                            onClick={() => setPageTab(t.id)}
+                            className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                              active
+                                ? 'text-emerald-700 border-emerald-600'
+                                : 'text-slate-500 border-transparent hover:text-slate-800'
+                            }`}
+                          >
+                            {t.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Tab content */}
+                    <div className="pt-4 space-y-3">
+                      {pageTab === 'list' && (
+                        <>
+                          {/* Filter inline — chỉ trong tab Danh sách */}
+                          <div className="flex flex-wrap items-center gap-2">
+                            <select
+                              value={selectedBlock}
+                              onChange={(e) => setSelectedBlock(e.target.value as 'all' | 'KD' | 'VP')}
+                              className="px-2.5 py-1.5 rounded-md border border-slate-200 bg-white text-xs text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition"
+                              title="Lọc theo khối"
+                            >
+                              <option value="all">Tất cả khối</option>
+                              <option value="KD">Khối Kinh doanh</option>
+                              <option value="VP">Khối Văn phòng</option>
+                            </select>
+                            <select
+                              value={selectedBranch}
+                              onChange={(e) => setSelectedBranch(e.target.value as 'all' | BranchId)}
+                              className="px-2.5 py-1.5 rounded-md border border-slate-200 bg-white text-xs text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition"
+                              title="Lọc theo cơ sở"
+                            >
+                              <option value="all">Tất cả cơ sở</option>
+                              {BRANCHES.map((b) => (
+                                <option key={b.id} value={b.id}>{b.shortName} — {b.name}</option>
+                              ))}
+                            </select>
+                            {hasActiveFilter && (
+                              <button
+                                type="button"
+                                onClick={clearFilters}
+                                className="inline-flex items-center gap-1 px-2 py-1.5 rounded-md text-xs text-slate-500 hover:text-slate-800 transition"
+                                title="Xóa lọc"
+                              >
+                                <X size={11} /> Xóa lọc
+                              </button>
+                            )}
+                          </div>
+                          <CoordinationTable
+                            tasks={filteredTasks}
+                            onRowClick={setSelected}
+                            currentUserUid={currentUserUid}
+                            requestedTab={requestedTableTab}
+                            tabSignal={tabSignal}
+                          />
+                        </>
+                      )}
+
+                      {pageTab === 'issues' && (
+                        <TheoDoiPanel tasks={filteredTasks} />
+                      )}
+
+                      {pageTab === 'performance' && (
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                          <BlockDonut tasks={filteredTasks} />
+                          <DeptBarChart tasks={filteredTasks} />
+                          <BranchBarChart tasks={filteredTasks} />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
               )}
             </div>
           </>
