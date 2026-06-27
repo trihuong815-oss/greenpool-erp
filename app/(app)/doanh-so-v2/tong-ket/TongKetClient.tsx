@@ -27,6 +27,7 @@ import TargetProgressCard from './_components/TargetProgressCard';
 import BranchSummaryTable from './_components/BranchSummaryTable';
 import SaleRankingTable from './_components/SaleRankingTable';
 import BranchProgressList from './_components/BranchProgressList';
+import CustomerListTab from './_components/CustomerListTab';
 import AdHocDiscountCard from './_components/AdHocDiscountCard';
 import TargetEditTab from './_components/TargetEditTab';
 import { currentMonthVN } from './_components/utils';
@@ -42,8 +43,10 @@ interface Props {
 // PR-SALES-SUMMARY-SIMPLE-THREE-TABS-UI: 3 tab user-facing + 1 tab admin (Chỉ tiêu).
 // PR-TONGKET-OVERVIEW-V2 (2026-06-27): BỎ tab 'by-branch' — ghép BranchSummary +
 // SaleRanking + BranchProgressList (per-branch target vs actual) vào tab 'overview'.
-// User feedback: top sale + top cơ sở + chỉ tiêu từng cơ sở phải ở Tổng quan.
-type MainTab = 'overview' | 'risk' | 'target';
+// PR-TONGKET-CUSTOMER-LIST (2026-06-27): thêm tab 'customers' — danh sách khách
+// hàng theo từng giao dịch trong tháng. Phân quyền theo salesCustomers scope
+// (server enforce: Sale=own, QLCS=branch, Top=all).
+type MainTab = 'overview' | 'customers' | 'risk' | 'target';
 
 const TARGET_WRITE_ROLES = new Set(['ADMIN', 'CEO', 'CHU_TICH', 'GD_KD']);
 
@@ -186,6 +189,16 @@ function TabContent({
       </>
     );
   }
+  if (tab === 'customers') {
+    // PR-TONGKET-CUSTOMER-LIST (2026-06-27): danh sách khách hàng từ salesCustomers.
+    // Server đã enforce scope: Sale=own, QLCS=branch, Top=all.
+    return (
+      <CustomerListTab
+        salesCustomers={data.salesCustomers}
+        showBranchColumn={showBranchColumn}
+      />
+    );
+  }
   // tab === 'risk'
   return data.adHocSummary ? (
     <AdHocDiscountCard data={data.adHocSummary} />
@@ -203,10 +216,11 @@ function TabSwitcher({
   setTab: (t: MainTab) => void;
   canWriteTarget: boolean;
 }) {
-  // PR-TONGKET-OVERVIEW-V2 (2026-06-27): bỏ tab "Theo cơ sở / Sale" (ghép vào Tổng quan).
+  // PR-TONGKET-CUSTOMER-LIST (2026-06-27): thêm tab "Khách hàng" giữa Tổng quan và Rủi ro.
   const tabs: Array<{ id: MainTab; label: string }> = [
-    { id: 'overview', label: 'Tổng quan' },
-    { id: 'risk',     label: 'Rủi ro giá' },
+    { id: 'overview',  label: 'Tổng quan' },
+    { id: 'customers', label: 'Khách hàng' },
+    { id: 'risk',      label: 'Rủi ro giá' },
   ];
   if (canWriteTarget) tabs.push({ id: 'target', label: 'Chỉ tiêu' });
   return (
