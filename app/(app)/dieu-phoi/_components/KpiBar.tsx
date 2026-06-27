@@ -20,9 +20,19 @@ import type { CoordTask, Collaborator } from './types';
 // 5. Quá hạn (rose-strong)      : isOverdue helper
 // ============================================================
 
+// PR-DISPATCH-INTERACTIVE-CONTROLS-FIX (2026-06-27): khoá kết nối KPI ↔ table.
+export type KpiKey =
+  | 'can-toi-xu-ly'
+  | 'cho-phan-hoi'
+  | 'cho-owner-xac-nhan'
+  | 'lien-khoi'
+  | 'qua-han';
+
 interface KpiBarProps {
   tasks: CoordTask[];
   currentUserUid: string;
+  /** Click "Xem chi tiết" trên 1 card — parent set table tab + scroll. */
+  onSeeDetails?: (key: KpiKey) => void;
 }
 
 // UI 10/10: nền trung tính, màu chỉ dùng theo NGỮ NGHĨA (cảnh báo/quá hạn), không tô loạn mỗi thẻ một màu.
@@ -73,7 +83,7 @@ function taskStatusOf(t: CoordTask): string {
   return (t as unknown as { status?: string }).status ?? t.status;
 }
 
-export default function KpiBar({ tasks, currentUserUid }: KpiBarProps) {
+export default function KpiBar({ tasks, currentUserUid, onSeeDetails }: KpiBarProps) {
   const todayMs = Date.now();
 
   // Lấy tên hiển thị của user hiện tại (mock-data driven)
@@ -216,9 +226,20 @@ export default function KpiBar({ tasks, currentUserUid }: KpiBarProps) {
                 </div>
               </div>
             </div>
+            {/* PR-DISPATCH-INTERACTIVE-CONTROLS-FIX (2026-06-27): bấm "Xem chi tiết"
+                → parent setActiveTab tương ứng + scroll Danh sách điều phối.
+                Nếu count=0 → disabled (không có gì để xem). */}
             <button
               type="button"
-              className="mt-1.5 inline-flex items-center gap-0.5 text-[11px] font-medium text-emerald-600 hover:underline"
+              onClick={onSeeDetails ? () => onSeeDetails(item.key as KpiKey) : undefined}
+              disabled={!onSeeDetails || item.count === 0}
+              className={
+                'mt-1.5 inline-flex items-center gap-0.5 text-[11px] font-medium transition ' +
+                (!onSeeDetails || item.count === 0
+                  ? 'text-slate-400 cursor-not-allowed'
+                  : 'text-emerald-600 hover:underline cursor-pointer')
+              }
+              title={item.count === 0 ? 'Không có dữ liệu để xem' : `Lọc danh sách: ${item.label}`}
             >
               Xem chi tiết <ChevronRight size={11} />
             </button>

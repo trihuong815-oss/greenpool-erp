@@ -15,12 +15,13 @@
 // - Tiếng Việt CÓ DẤU đầy đủ (không mojibake).
 // ============================================================
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Calendar, ChevronDown, Loader2, Plus, RefreshCw } from 'lucide-react';
+import { Calendar, ChevronDown, Loader2, Plus, RefreshCw, X } from 'lucide-react';
 import { isTP, isQLCS } from '@/lib/auth/roles';
 import { useNotiCounts } from '@/lib/hooks/use-noti-counts';
-import KpiBar from './_components/KpiBar';
+import { BRANCHES, type BranchId } from '@/lib/branches';
+import KpiBar, { type KpiKey } from './_components/KpiBar';
 import BlockDonut from './_components/BlockDonut';
 import DeptBarChart from './_components/DeptBarChart';
 import BranchBarChart from './_components/BranchBarChart';
@@ -116,6 +117,64 @@ export default function DieuPhoiClient({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+
+  // PR-DISPATCH-INTERACTIVE-CONTROLS-FIX (2026-06-27): client-side filter cho
+  // bar "Tất cả khối" + "Tất cả cơ sở" (trước đây là 2 button chết). Lọc trên
+  // tasks đã tải — không gọi API mới. Áp dụng cho KpiBar + 3 chart + TheoDoiPanel
+  // + CoordinationTable. KHÔNG đổi permission (server vẫn enforce scope qua
+  // /api/tasks list mode='all').
+  const [selectedBlock, setSelectedBlock] = useState<'all' | 'KD' | 'VP'>('all');
+  const [selectedBranch, setSelectedBranch] = useState<'all' | BranchId>('all');
+  // Tab signal cho CoordinationTable — KpiBar "Xem chi tiết" click → bump signal.
+  const [requestedTableTab, setRequestedTableTab] = useState<
+    'all' | 'mine' | 'sent' | 'cross' | 'waiting_resp' | 'waiting_appr' | 'overdue' | 'bottleneck'
+  >('all');
+  const [tabSignal, setTabSignal] = useState(0);
+  const tableSectionRef = useRef<HTMLElement>(null);
+
+  // PR-DISPATCH-INTERACTIVE-CONTROLS-FIX (2026-06-27): áp dụng filter khối/cơ sở
+  // lên tasks trước khi pass xuống KpiBar/charts/TheoDoiPanel/table.
+  // - Block: match task.ownerBlock.
+  // - Branch: match task.branch ?? task.ownerUnitId (KD owner). Hoặc collab có facility match.
+  const filteredTasks = useMemo(() => {
+    if (selectedBlock === 'all' && selectedBranch === 'all') return tasks;
+    return tasks.filter((t) => {
+      if (selectedBlock !== 'all' && t.ownerBlock !== selectedBlock) return false;
+      if (selectedBranch !== 'all') {
+        const ownerBranch =
+          (t.branch as string | undefined) ??
+          (t.ownerBlock === 'KD' ? t.ownerUnitId : undefined);
+        if (ownerBranch === selectedBranch) return true;
+        // Collab có branch khớp → task vẫn liên quan đến cơ sở đó.
+        if ((t.collaborators ?? []).some((c) => c.branch === selectedBranch)) return true;
+        return false;
+      }
+      return true;
+    });
+  }, [tasks, selectedBlock, selectedBranch]);
+
+  // KpiBar key → CoordinationTable tab.
+  const handleSeeDetails = useCallback((key: KpiKey) => {
+    const map: Record<KpiKey, 'mine' | 'waiting_resp' | 'waiting_appr' | 'cross' | 'overdue'> = {
+      'can-toi-xu-ly':       'mine',
+      'cho-phan-hoi':        'waiting_resp',
+      'cho-owner-xac-nhan':  'waiting_appr',
+      'lien-khoi':           'cross',
+      'qua-han':             'overdue',
+    };
+    setRequestedTableTab(map[key]);
+    setTabSignal((n) => n + 1);
+    // Defer scroll 1 tick để table re-render với tab mới rồi mới scroll.
+    requestAnimationFrame(() => {
+      tableSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, []);
+
+  const clearFilters = useCallback(() => {
+    setSelectedBlock('all');
+    setSelectedBranch('all');
+  }, []);
+  const hasActiveFilter = selectedBlock !== 'all' || selectedBranch !== 'all';
 
   // V6.5 Noti Audit Phase A.2 (2026-06-15) — Issue 4.1: refresh badge sidebar
   // sau mỗi action workflow (collab/owner/result) → count update tức thì thay vì
@@ -699,25 +758,48 @@ export default function DieuPhoiClient({
           </button>
         </div>
 
-        {/* Filter bar — desktop only (mobile có search + bottom sheet riêng) */}
+        {/* Filter bar — desktop only (mobile có search + bottom sheet riêng).
+            PR-DISPATCH-INTERACTIVE-CONTROLS-FIX (2026-06-27): "Tất cả khối" + "Tất cả
+            cơ sở" trước đây là 2 button render-only không có onClick → đổi thành
+            <select> client-side filter. Áp dụng cho KpiBar + 3 chart + TheoDoiPanel +
+            CoordinationTable. Không gọi API mới, không đổi permission. */}
         <div className="hidden md:flex flex-wrap items-center gap-2 rounded-xl border border-slate-200/70 bg-white px-3 py-2 shadow-sm ring-1 ring-slate-50">
           <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-50 text-xs text-slate-600">
             <Calendar size={12} className="text-slate-400" />
             <span className="tabular-nums font-medium">{new Date().toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}</span>
           </div>
           <span className="h-4 w-px bg-slate-200" />
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-slate-200 bg-white text-xs text-slate-700 hover:bg-slate-50 transition"
+          <select
+            value={selectedBlock}
+            onChange={(e) => setSelectedBlock(e.target.value as 'all' | 'KD' | 'VP')}
+            className="px-2.5 py-1 rounded-md border border-slate-200 bg-white text-xs text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition"
+            title="Lọc theo khối"
           >
-            Tất cả khối <ChevronDown size={12} className="text-slate-400" />
-          </button>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-slate-200 bg-white text-xs text-slate-700 hover:bg-slate-50 transition"
+            <option value="all">Tất cả khối</option>
+            <option value="KD">Khối Kinh doanh</option>
+            <option value="VP">Khối Văn phòng</option>
+          </select>
+          <select
+            value={selectedBranch}
+            onChange={(e) => setSelectedBranch(e.target.value as 'all' | BranchId)}
+            className="px-2.5 py-1 rounded-md border border-slate-200 bg-white text-xs text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition"
+            title="Lọc theo cơ sở"
           >
-            Tất cả cơ sở <ChevronDown size={12} className="text-slate-400" />
-          </button>
+            <option value="all">Tất cả cơ sở</option>
+            {BRANCHES.map((b) => (
+              <option key={b.id} value={b.id}>{b.shortName} — {b.name}</option>
+            ))}
+          </select>
+          {hasActiveFilter && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-emerald-200 bg-emerald-50 text-xs text-emerald-700 hover:bg-emerald-100 transition"
+              title="Xóa lọc"
+            >
+              <X size={11} /> Xóa lọc
+            </button>
+          )}
           <div className="ml-auto">
             <button
               type="button"
@@ -774,49 +856,50 @@ export default function DieuPhoiClient({
                 />
               ) : (
           <>
-            {/* Section: Tổng quan KPI */}
+            {/* PR-DISPATCH-INTERACTIVE-CONTROLS-FIX (2026-06-27): tất cả widget pass
+                filteredTasks (block/branch filter) thay vì tasks gốc — KPI + chart +
+                "Vấn đề cần xử lý ngay" + bảng cùng lọc đồng bộ. */}
             <section className="space-y-2">
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Tổng quan</span>
                 <span className="flex-1 h-px bg-gradient-to-r from-slate-200 to-transparent" />
               </div>
-              <KpiBar tasks={tasks} currentUserUid={currentUserUid} />
+              <KpiBar tasks={filteredTasks} currentUserUid={currentUserUid} onSeeDetails={handleSeeDetails} />
             </section>
 
-            {/* Section: Phân tích */}
             <section className="space-y-2">
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Phân tích</span>
                 <span className="flex-1 h-px bg-gradient-to-r from-slate-200 to-transparent" />
               </div>
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <BlockDonut tasks={tasks} />
-                <DeptBarChart tasks={tasks} />
-                <BranchBarChart tasks={tasks} />
+                <BlockDonut tasks={filteredTasks} />
+                <DeptBarChart tasks={filteredTasks} />
+                <BranchBarChart tasks={filteredTasks} />
               </div>
             </section>
 
             {/* V6.5 Phase 5 (2026-06-15): Section "Vấn đề cần xử lý ngay" — gộp 3 widget
-                cũ (BottleneckTable + TopWatchList + ImportantNotiPanel) → 1 panel 3 tab.
-                Lý do: 3 widget cũ hiển thị từ 3 góc khác nhau gây confusion + chiếm 3 cột. */}
+                cũ (BottleneckTable + TopWatchList + ImportantNotiPanel) → 1 panel 3 tab. */}
             <section className="space-y-2">
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Vấn đề cần xử lý ngay</span>
                 <span className="flex-1 h-px bg-gradient-to-r from-slate-200 to-transparent" />
               </div>
-              <TheoDoiPanel tasks={tasks} />
+              <TheoDoiPanel tasks={filteredTasks} />
             </section>
 
-            {/* Section: Danh sách điều phối */}
-            <section className="space-y-2">
+            <section ref={tableSectionRef} className="space-y-2 scroll-mt-4">
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Danh sách điều phối</span>
                 <span className="flex-1 h-px bg-gradient-to-r from-slate-200 to-transparent" />
               </div>
               <CoordinationTable
-                tasks={tasks}
+                tasks={filteredTasks}
                 onRowClick={setSelected}
                 currentUserUid={currentUserUid}
+                requestedTab={requestedTableTab}
+                tabSignal={tabSignal}
               />
             </section>
           </>

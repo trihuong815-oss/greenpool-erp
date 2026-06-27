@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Briefcase, UserCheck, Users, Activity, Clock, Calendar, CircleDot, ArrowUp } from 'lucide-react';
 import {
   COORD_STATUS_LABEL,
@@ -23,9 +23,15 @@ interface CoordinationTableProps {
   tasks: CoordTask[];
   onRowClick: (t: CoordTask) => void;
   currentUserUid: string;
+  // PR-DISPATCH-INTERACTIVE-CONTROLS-FIX (2026-06-27): external tab signal cho
+  // KpiBar "Xem chi tiết" — khi parent set requestedTab + bump signal, table
+  // setActiveTab tương ứng. useEffect deps = [requestedTab, tabSignal] để cùng
+  // 1 tab vẫn re-trigger khi user bấm nhiều lần.
+  requestedTab?: TabKey;
+  tabSignal?: number;
 }
 
-type TabKey =
+export type TabKey =
   | 'all'
   | 'mine'
   | 'sent'
@@ -162,9 +168,17 @@ export default function CoordinationTable({
   tasks,
   onRowClick,
   currentUserUid: _currentUserUid,
+  requestedTab,
+  tabSignal,
 }: CoordinationTableProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('all');
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all');
+
+  // PR-DISPATCH-INTERACTIVE-CONTROLS-FIX (2026-06-27): nhận tab signal từ KpiBar
+  // "Xem chi tiết". Re-fire khi signal đổi (bấm lại cùng KPI).
+  useEffect(() => {
+    if (requestedTab) setActiveTab(requestedTab);
+  }, [requestedTab, tabSignal]);
 
   // V6.5 Phase 5 (2026-06-15): collapse 8 tab → 4 tab CHÍNH (mặc định nhìn thấy)
   // + 4 tab phụ ẨN trong dropdown "Lọc nâng cao" để giảm noise:
