@@ -66,6 +66,12 @@ export const COLLECTIONS = {
   BRANCH_DAILY_EXPENSES: 'branchDailyExpenses',
   // PR-CASH1B (2026-06-23) — Báo cáo thu-chi ngày (auto-aggregate khi NV_KE nộp)
   DAILY_CASHFLOW_REPORTS: 'dailyCashflowReports',
+  // PR-DATA-01-CUSTOMER-MASTER-MODEL (2026-06-29) — Customer master (foundation).
+  // KHÔNG migration trong PR-01: doc skeleton only, chưa có endpoint write/read.
+  // PR-02 sẽ add /api/customers/search; PR-03 sẽ link customerId vào tx mới.
+  // Audit 10-year scale: ~500K customers/10y. Phải có index phoneNormalized +
+  // customerCode + normalizedName + (primaryBranchId, updatedAt DESC) trước go-live.
+  CUSTOMERS: 'customers',
 } as const;
 
 // Subcollection names — đứng trong context của doc cha.
