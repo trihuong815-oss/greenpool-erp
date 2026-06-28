@@ -103,13 +103,11 @@ export default function AdHocDiscountCard({ data }: Props) {
       {/* Breakdown classification */}
       <ClassificationBreakdown data={data} />
 
-      {/* Top branches + top sales (chỉ hiện nếu có data) */}
-      {(data.topBranches.length > 0 || data.topSales.length > 0) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-          {data.topBranches.length > 0 && <TopBranches branches={data.topBranches} />}
-          {data.topSales.length > 0 && <TopSales sales={data.topSales} />}
-        </div>
-      )}
+      {/* PR-ADHOC-REMOVE-TOPS (2026-06-28): user feedback — bỏ Top cơ sở +
+          Top sale khỏi card Rủi ro giá. Lý do user phát biểu trực tiếp.
+          Server vẫn compute data.topBranches/topSales (giữ API), chỉ ẨN UI.
+          Top theo doanh số overall đã có ở tab Tổng quan (BranchSummary +
+          SaleRanking) — đủ cho mục đích quan sát Top. */}
 
       {/* List header — collapse toggle + filter */}
       <div className="flex items-center justify-between flex-wrap gap-2 mt-4 pt-3 border-t border-slate-100">
@@ -294,50 +292,9 @@ function ClassificationBreakdown({ data }: { data: AdHocSummary }) {
   );
 }
 
-function TopBranches({ branches }: { branches: AdHocSummary['topBranches'] }) {
-  return (
-    <div className="rounded-lg bg-slate-50 ring-1 ring-slate-200 p-3">
-      <div className="text-xs font-semibold text-slate-600 mb-2">Top cơ sở</div>
-      <div className="space-y-1">
-        {branches.map((b) => {
-          const branch = BRANCH_BY_ID[b.branchId];
-          return (
-            <div key={b.branchId} className="flex items-center justify-between text-xs">
-              <span className="inline-flex items-center gap-1.5">
-                <span
-                  className="inline-block w-2 h-2 rounded-full"
-                  style={{ backgroundColor: branch?.color ?? '#64748b' }}
-                />
-                <span className="text-slate-700">{branch?.name ?? b.branchId}</span>
-              </span>
-              <span className="tabular-nums text-slate-600">
-                {b.count} GD · <strong>{fmtVnd(b.amount)} đ</strong>
-              </span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function TopSales({ sales }: { sales: AdHocSummary['topSales'] }) {
-  return (
-    <div className="rounded-lg bg-slate-50 ring-1 ring-slate-200 p-3">
-      <div className="text-xs font-semibold text-slate-600 mb-2">Top Sale</div>
-      <div className="space-y-1">
-        {sales.map((s) => (
-          <div key={s.saleId} className="flex items-center justify-between text-xs">
-            <span className="text-slate-700 truncate">{s.saleName || '(không tên)'}</span>
-            <span className="tabular-nums text-slate-600 shrink-0 ml-2">
-              {s.count} GD · <strong>{fmtVnd(s.amount)} đ</strong>
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+// PR-ADHOC-REMOVE-TOPS (2026-06-28): TopBranches + TopSales functions deleted
+// (deadcode sau khi remove khỏi JSX render). Top doanh số overall đã có ở tab
+// Tổng quan. Server response data.topBranches/topSales giữ nguyên cho compat.
 
 function FilterChip({
   current, value, label, onClick,
