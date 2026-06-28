@@ -194,13 +194,17 @@ export function UsersClient({ currentUserId, currentUserRole, isAdminUser, facil
 
   // ─────────── Nhóm theo 5 cấp tier ───────────
   // Tier 1-2 (CEO/GĐ) · Tier 3 (TP + QLCS) · Tier 4 (PP) · Tier 5 (Tổ trưởng) · Tier 6 (NV)
-  interface TierGroup { label: string; subtitle: string; minTier: number; maxTier: number; cls: string }
+  // PR-USERS-NORMALIZE (2026-06-28): bỏ gradient + 5 màu khác nhau (amber/violet/
+  // cyan/emerald/slate). Semantic màu chỉ dành cho TRẠNG THÁI nghiệp vụ, KHÔNG
+  // dùng để phân biệt tier. Section header dùng bg-slate-50 đồng nhất + tier label
+  // làm phân biệt thay vì màu.
+  interface TierGroup { label: string; subtitle: string; minTier: number; maxTier: number }
   const TIER_GROUPS: TierGroup[] = [
-    { label: 'Chủ tịch · Giám đốc & Chủ đầu tư', subtitle: 'Chủ tịch HĐQT · CEO · GĐ Khối', minTier: 1, maxTier: 2, cls: 'from-amber-50 to-yellow-50 border-amber-200 text-amber-900' },
-    { label: 'Trưởng phòng & Quản lý',subtitle: 'TP · QLCS',               minTier: 3, maxTier: 3, cls: 'from-violet-50 to-fuchsia-50 border-violet-200 text-violet-900' },
-    { label: 'Phó phòng',             subtitle: 'PP',                       minTier: 4, maxTier: 4, cls: 'from-cyan-50 to-teal-50 border-cyan-200 text-cyan-900' },
-    { label: 'Tổ trưởng',             subtitle: 'TT',                       minTier: 5, maxTier: 5, cls: 'from-emerald-50 to-green-50 border-emerald-200 text-emerald-900' },
-    { label: 'Nhân viên',             subtitle: 'NV · KTV · GV',            minTier: 6, maxTier: 99, cls: 'from-slate-50 to-slate-100 border-slate-200 text-slate-800' },
+    { label: 'Chủ tịch · Giám đốc & Chủ đầu tư', subtitle: 'Chủ tịch HĐQT · CEO · GĐ Khối', minTier: 1, maxTier: 2  },
+    { label: 'Trưởng phòng & Quản lý',           subtitle: 'TP · QLCS',                      minTier: 3, maxTier: 3  },
+    { label: 'Phó phòng',                        subtitle: 'PP',                              minTier: 4, maxTier: 4  },
+    { label: 'Tổ trưởng',                        subtitle: 'TT',                              minTier: 5, maxTier: 5  },
+    { label: 'Nhân viên',                        subtitle: 'NV · KTV · GV',                   minTier: 6, maxTier: 99 },
   ];
 
   const grouped = useMemo(() => {
@@ -232,26 +236,13 @@ export function UsersClient({ currentUserId, currentUserRole, isAdminUser, facil
 
   return (
     <div className="space-y-4">
-      {/* Tab nav */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <button
-          onClick={() => setTab('list')}
-          className={`inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold ring-1 transition ${
-            tab === 'list' ? 'bg-emerald-50 text-emerald-800 ring-emerald-300' : 'bg-white text-slate-600 ring-slate-200 hover:bg-slate-50'
-          }`}
-        >
-          <ListChecks size={15} /> Danh sách người dùng
-        </button>
+      {/* PR-USERS-NORMALIZE (2026-06-28): tab pill ring → underline emerald-600
+          nhất quán workspace tab pattern 7 module trước. Bỏ badge "ADMIN"
+          text-[10px] (vi phạm rule font ≥12) — Shield icon đã đủ semantic. */}
+      <div className="flex items-center gap-1 border-b border-slate-200">
+        <TabBtn active={tab === 'list'} onClick={() => setTab('list')} icon={<ListChecks size={14} />} label="Danh sách người dùng" />
         {isAdminUser && (
-          <button
-            onClick={() => setTab('permissions')}
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-semibold ring-1 transition ${
-              tab === 'permissions' ? 'bg-emerald-50 text-emerald-800 ring-emerald-300' : 'bg-white text-slate-600 ring-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            <Shield size={15} /> Cấp quyền sử dụng
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800">ADMIN</span>
-          </button>
+          <TabBtn active={tab === 'permissions'} onClick={() => setTab('permissions')} icon={<Shield size={14} />} label="Cấp quyền sử dụng" />
         )}
       </div>
 
@@ -263,11 +254,15 @@ export function UsersClient({ currentUserId, currentUserRole, isAdminUser, facil
           onSaved={load}
         />
       ) : (<>
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-        <StatCard label="Tổng user" value={stats.total} cls="bg-slate-100 text-slate-700" />
-        <StatCard label="Đang hoạt động" value={stats.active} cls="bg-emerald-100 text-emerald-800" />
-        <StatCard label="Đã tắt" value={stats.inactive} cls="bg-slate-100 text-slate-500" />
-      </div>
+      {/* PR-USERS-NORMALIZE (2026-06-28): 3 StatCard local (custom cls pastel) →
+          SegmentSummary nhất quán pattern Snapshot 7 module trước. */}
+      <SegmentSummary
+        items={[
+          { n: stats.total,    label: 'Tổng user',       tone: 'default' },
+          { n: stats.active,   label: 'Đang hoạt động',  tone: 'success' },
+          { n: stats.inactive, label: 'Đã tắt',          tone: 'default' },
+        ]}
+      />
       <div className="card">
         {/* Phase 13.16.4: mobile grid 2x2 cho select, search + button full-width riêng */}
         <div className="space-y-3">
@@ -315,8 +310,10 @@ export function UsersClient({ currentUserId, currentUserRole, isAdminUser, facil
               </select>
             </label>
           </div>
+          {/* PR-USERS-NORMALIZE (2026-06-28): primary button slate-800 → emerald-600
+              đồng bộ pattern primary action toàn app. */}
           <button onClick={() => setShowCreate(true)}
-            className="w-full sm:w-auto sm:ml-auto inline-flex items-center justify-center gap-2 px-4 py-2 bg-slate-800 text-white text-sm rounded hover:bg-slate-700">
+            className="w-full sm:w-auto sm:ml-auto inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-md hover:bg-emerald-700 transition">
             <UserPlus size={14} /> Thêm người dùng
           </button>
         </div>
@@ -344,13 +341,15 @@ export function UsersClient({ currentUserId, currentUserRole, isAdminUser, facil
             if (list.length === 0) return null;
             return (
               <section key={g.label} className="rounded-lg overflow-hidden border border-slate-200 bg-white shadow-sm">
-                <header className={`px-4 py-2.5 bg-gradient-to-r ${g.cls} border-b flex items-center justify-between`}>
+                {/* PR-USERS-NORMALIZE (2026-06-28): bỏ gradient + 5 màu khác nhau,
+                    dùng solid bg-slate-50 đồng nhất. */}
+                <header className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
                   <div>
-                    <div className="font-bold text-sm">{g.label}</div>
-                    <div className="text-[11px] opacity-75">{g.subtitle}</div>
+                    <div className="font-semibold text-sm text-slate-800">{g.label}</div>
+                    <div className="text-[11px] text-slate-500">{g.subtitle}</div>
                   </div>
-                  <span className="text-xs font-semibold bg-white/70 px-2 py-0.5 rounded">
-                    {list.length} người
+                  <span className="inline-flex items-center justify-center min-w-[20px] h-[18px] px-1.5 rounded-full bg-white text-slate-600 text-[11px] font-medium ring-1 ring-slate-200 tabular-nums">
+                    {list.length}
                   </span>
                 </header>
                 <div className="overflow-x-auto">
@@ -453,12 +452,23 @@ export function UsersClient({ currentUserId, currentUserRole, isAdminUser, facil
   );
 }
 
-function StatCard({ label, value, cls }: { label: string; value: number; cls: string }) {
+// PR-USERS-NORMALIZE (2026-06-28): StatCard local deadcode sau khi convert
+// 3 stat cell sang SegmentSummary. TabBtn nội bộ underline emerald-600 chuẩn.
+import { SegmentSummary } from '@/components/ui/StatCard';
+
+function TabBtn({ active, onClick, icon, label }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string }) {
   return (
-    <div className={`p-3 rounded-lg ${cls}`}>
-      <div className="text-xs opacity-80">{label}</div>
-      <div className="text-2xl font-bold mt-0.5">{value}</div>
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+        active
+          ? 'text-emerald-700 border-emerald-600'
+          : 'text-slate-500 border-transparent hover:text-slate-800'
+      }`}
+    >
+      {icon} {label}
+    </button>
   );
 }
 
