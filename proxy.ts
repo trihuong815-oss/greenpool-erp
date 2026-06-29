@@ -1,4 +1,5 @@
-// Middleware (Next.js gọi là `middleware`, project này đặt là `proxy.ts`).
+// Middleware (Next.js 16 đổi convention: file `proxy.ts` được nhận diện như
+// middleware — xem node_modules/next/dist/lib/constants.js: PROXY_FILENAME).
 //
 // Phase 4.C cut-over: verify Firebase session cookie (gp_session).
 // Middleware chạy trong Edge Runtime → KHÔNG dùng firebase-admin (Node-only).
@@ -8,19 +9,22 @@
 // Nếu session cookie hết hạn/sai chữ ký → page server tự redirect login.
 
 import { NextResponse, type NextRequest } from 'next/server';
+import { isAllowedOrigin } from '@/lib/auth/request-origin';
 
 const SESSION_COOKIE = 'gp_session';
 
 // Phase A.5 (2026-06-07): Origin check CSRF defense-in-depth.
-// SameSite=lax cookie là layer 1; Origin check là layer 2 (chặn cross-origin POST từ XSS-driven submit).
-// Phase HOTFIX (2026-06-07): logic robust với Vercel alias + PWA + custom domain:
-// - Same-host = pass.
-// - Cả origin lẫn host kết thúc .vercel.app = pass (Vercel canonical/alias/preview).
-// - Cả origin lẫn host kết thúc .hosted.app = pass (Firebase App Hosting canonical/alias).
-// - !origin (server-side fetch) = pass.
+// SameSite=lax cookie là layer 1; Origin check là layer 2 (chặn cross-origin
+// POST từ XSS-driven submit).
+//
+// 2026-06-29 REWRITE: chuyển sang allowlist Origin trực tiếp (không so Host).
+// Lý do: Firebase App Hosting Envoy proxy không expose host header đáng tin
+// cho backend → so origin === host bị false negative trên hosted.app. Allowlist
+// origin (browser-controlled, không thể spoof từ XSS) là chuẩn CSRF defense.
+// Logic chi tiết: lib/auth/request-origin.ts → isAllowedOrigin().
 
 const ORIGIN_BYPASS_PREFIXES = [
-  '/api/cron/',        // Vercel cron internal call không có Origin
+  '/api/cron/',        // GitHub Actions / Cloud Scheduler cron — không có Origin
   '/api/fcm-config',   // Service Worker fetch no-cors
 ];
 
@@ -28,37 +32,17 @@ export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const method = req.method;
 
-  // ─── Phase A.5: Origin check cho /api/ non-GET ───
+  // ─── Origin check cho /api/ non-GET ───
   if (pathname.startsWith('/api/') && method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
     const bypass = ORIGIN_BYPASS_PREFIXES.some((p) => pathname.startsWith(p));
     if (!bypass) {
-      const origin = req.headers.get('origin');
-      // HTTP/2 (Firebase App Hosting via Envoy) KHÔNG gửi header `host:` — chỉ pseudo-header
-      // `:authority:`. Next.js parse cả 2 vào nextUrl.host → dùng đó làm canonical, fallback
-      // sang host header / x-forwarded-host cho compat. Trước đây chỉ đọc `host` → null → mọi
-      // origin check fail → 403 "Origin không hợp lệ" trên App Hosting.
-      const host =
-        req.headers.get('host')
-        || req.headers.get('x-forwarded-host')
-        || req.nextUrl.host
-        || null;
-      const isDev = process.env.NODE_ENV !== 'production';
-      let originHost: string | null = null;
-      if (origin) {
-        try { originHost = new URL(origin).host.toLowerCase(); } catch { /* malformed */ }
-      }
-      const normalizedHost = host?.toLowerCase() ?? null;
-      const isVercelSub = (h: string | null) => !!h && h.endsWith('.vercel.app');
-      const isHostedAppSub = (h: string | null) => !!h && h.endsWith('.hosted.app');
-      const isAllowed = isDev
-        || !origin
-        || (originHost !== null && (
-          originHost === normalizedHost
-          || (isVercelSub(originHost) && isVercelSub(normalizedHost))
-          || (isHostedAppSub(originHost) && isHostedAppSub(normalizedHost))
-        ));
-      if (!isAllowed) {
-        console.warn('[proxy] origin mismatch — origin=' + origin + ' host=' + host);
+      const check = isAllowedOrigin(req);
+      if (!check.allowed) {
+        console.warn(
+          '[proxy] origin rejected — origin=' + check.origin
+          + ' host=' + check.host
+          + ' selfOrigin=' + check.selfOrigin,
+        );
         return NextResponse.json({ error: 'Origin không hợp lệ' }, { status: 403 });
       }
     }
