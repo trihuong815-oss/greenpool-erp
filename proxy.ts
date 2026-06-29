@@ -33,7 +33,15 @@ export async function proxy(req: NextRequest) {
     const bypass = ORIGIN_BYPASS_PREFIXES.some((p) => pathname.startsWith(p));
     if (!bypass) {
       const origin = req.headers.get('origin');
-      const host = req.headers.get('host');
+      // HTTP/2 (Firebase App Hosting via Envoy) KHÔNG gửi header `host:` — chỉ pseudo-header
+      // `:authority:`. Next.js parse cả 2 vào nextUrl.host → dùng đó làm canonical, fallback
+      // sang host header / x-forwarded-host cho compat. Trước đây chỉ đọc `host` → null → mọi
+      // origin check fail → 403 "Origin không hợp lệ" trên App Hosting.
+      const host =
+        req.headers.get('host')
+        || req.headers.get('x-forwarded-host')
+        || req.nextUrl.host
+        || null;
       const isDev = process.env.NODE_ENV !== 'production';
       let originHost: string | null = null;
       if (origin) {
