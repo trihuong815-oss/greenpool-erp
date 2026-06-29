@@ -95,6 +95,26 @@ export async function runHealingCheck(opts?: { force?: boolean }): Promise<Heart
     return { kind: 'skipped', reason: `heartbeat fresh (${Math.round(sinceLastMs / 60_000)}m ago)` };
   }
 
+  // 2026-06-29: skip heartbeat ping on first-time / fresh session (no
+  // LS_LAST_HEARTBEAT). Previously this would ping → 404 (token not yet
+  // in server fcmDevices) → trigger re-register. Functionally correct but
+  // produced a 404 entry in Network tab + console noise every fresh session
+  // (after clearing site data, incognito, new device, etc).
+  //
+  // New flow: lastHeartbeatTs===0 → go straight to silentReregister, which
+  // does the same thing (registers current token with server) without the
+  // wasted 404 round-trip. After register, mark LS_LAST_HEARTBEAT.
+  if (lastHeartbeatTs === 0 && !opts?.force) {
+    log('first-time / no LS_LAST_HEARTBEAT — skip ping, register directly');
+    const reReg = await silentReregister();
+    if (reReg.ok) {
+      safeSet(LS_LAST_HEARTBEAT, String(Date.now()));
+      log('first-time register OK');
+      return { kind: 'sent' };
+    }
+    return { kind: 'skipped', reason: `first-time register: ${reReg.reason ?? 'unknown'}` };
+  }
+
   // Get current token from Firebase Messaging SDK
   let token: string | null = null;
   try {
@@ -121,8 +141,9 @@ export async function runHealingCheck(opts?: { force?: boolean }): Promise<Heart
     log('server says token stale, attempting re-register');
     const reReg = await silentReregister();
     if (reReg.ok) {
-      // Heartbeat with new token
-      if (reReg.newToken) await pingHeartbeat(reReg.newToken);
+      // Heartbeat with new token — record success without re-pinging server
+      // (avoid double 404 round-trip if newToken is same as old).
+      safeSet(LS_LAST_HEARTBEAT, String(Date.now()));
     }
     return { kind: 'token-stale', reason: result.err ?? 'token stale' };
   }
