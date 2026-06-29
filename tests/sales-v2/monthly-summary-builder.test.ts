@@ -148,6 +148,72 @@ describe('buildMonthlySalesSummariesFromTransactions — single tx', () => {
   });
 });
 
+// ─── 2b. Debt parity với route (PR-SUMMARY-03A smoke fix) ──────────
+
+describe('Debt fields — match route logic (PR-SUMMARY-03A)', () => {
+  it('debtGenerated + debtRemaining CHỈ sum dat_coc, KHÔNG sum thanh_toan_full/not có debt legacy', () => {
+    // Repro smoke 2026-06_24: trong production 1 tx non-dat_coc có debtAmount=1M
+    // (legacy data). Builder SAI cũ sẽ tính debtAmount=13.5M; FIX: chỉ debtGenerated/
+    // debtRemaining = 12.5M (chỉ dat_coc).
+    const result = buildMonthlySalesSummariesFromTransactions({
+      month: '2026-06',
+      transactions: [
+        makeTx({
+          transactionType: 'dat_coc',
+          packageValue: 10_000_000,
+          collectedToday: 2_500_000,
+          debtAmount: 7_500_000,
+          originalDebt: 7_500_000,
+        }),
+        makeTx({
+          transactionType: 'dat_coc',
+          packageValue: 10_000_000,
+          collectedToday: 5_000_000,
+          debtAmount: 5_000_000,
+          originalDebt: 5_000_000,
+        }),
+        // ⚠️ Tx non-dat_coc có debtAmount=1M (legacy/edge data) — phải IGNORE
+        makeTx({
+          transactionType: 'thanh_toan_full',
+          packageValue: 5_000_000,
+          collectedToday: 5_000_000,
+          debtAmount: 1_000_000,  // legacy field non-zero
+        }),
+      ],
+    });
+    const b = result.branchSummaries[0];
+    expect(b.debtGenerated).toBe(12_500_000);   // chỉ 2 dat_coc
+    expect(b.debtRemaining).toBe(12_500_000);   // chỉ 2 dat_coc
+    expect(b.transactionCount).toBe(3);
+    expect(b.finalRevenue).toBe(25_000_000);    // tất cả 3 tx
+    expect(b.collectedAmount).toBe(12_500_000); // tất cả 3 tx
+  });
+
+  it('Schema KHÔNG có field debtAmount (PR-SUMMARY-03A removed)', () => {
+    const result = buildMonthlySalesSummariesFromTransactions({
+      month: '2026-06',
+      transactions: [makeTx({
+        transactionType: 'dat_coc',
+        packageValue: 3_000_000,
+        collectedToday: 1_000_000,
+        debtAmount: 2_000_000,
+        originalDebt: 2_000_000,
+      })],
+    });
+    const b = result.branchSummaries[0];
+    const s = result.saleSummaries[0];
+    // debtAmount field KHÔNG TỒN TẠI trong schema mới
+    expect(b).not.toHaveProperty('debtAmount');
+    expect(s).not.toHaveProperty('debtAmount');
+    // Chỉ debtGenerated + debtRemaining ở Branch
+    expect(b.debtGenerated).toBe(2_000_000);
+    expect(b.debtRemaining).toBe(2_000_000);
+    // Sale summary KHÔNG còn debt field nào (PR-SUMMARY-03A bỏ cho consistent)
+    expect(s).not.toHaveProperty('debtGenerated');
+    expect(s).not.toHaveProperty('debtRemaining');
+  });
+});
+
 // ─── 3-4. Multi-branch + Multi-sale ──────────────────────────────────
 
 describe('Multi-branch + multi-sale grouping', () => {

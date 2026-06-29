@@ -74,7 +74,8 @@ interface BranchAcc {
   grossRevenue: number;
   finalRevenue: number;
   collectedAmount: number;
-  debtAmountAll: number;             // sum debt hiện tại của TẤT CẢ tx (cho future)
+  // PR-SUMMARY-03A (2026-06-29): bỏ debtAmountAll (sum ALL tx) — chỉ giữ
+  // debtGenerated + debtRemaining (chỉ dat_coc) match 100% route.
   debtGenerated: number;             // sum originalDebt CHỈ dat_coc
   debtRemaining: number;             // sum debt CHỈ dat_coc
   bySource: Record<string, MonthlySummaryBreakdownItem>;
@@ -99,7 +100,7 @@ interface SaleAcc {
   grossRevenue: number;
   finalRevenue: number;
   collectedAmount: number;
-  debtAmount: number;                // sum debt CHỈ dat_coc (giống route bySale logic — kept consistent)
+  // PR-SUMMARY-03A (2026-06-29): bỏ debtAmount cho consistent với Branch summary.
   sourceTransactionCount: number;
 }
 
@@ -127,7 +128,6 @@ function ensureBranchAcc(map: Map<BranchId, BranchAcc>, tx: SalesTransaction): B
       grossRevenue: 0,
       finalRevenue: 0,
       collectedAmount: 0,
-      debtAmountAll: 0,
       debtGenerated: 0,
       debtRemaining: 0,
       bySource: {},
@@ -163,7 +163,6 @@ function ensureSaleAcc(map: Map<string, SaleAcc>, tx: SalesTransaction): SaleAcc
       grossRevenue: 0,
       finalRevenue: 0,
       collectedAmount: 0,
-      debtAmount: 0,
       sourceTransactionCount: 0,
     };
     map.set(sid, acc);
@@ -254,7 +253,6 @@ export function buildMonthlySalesSummariesFromTransactions(
       branchAcc.grossRevenue += basePv;
       branchAcc.finalRevenue += pv;
       branchAcc.collectedAmount += ct;
-      branchAcc.debtAmountAll += debt;
 
       // MATCH route L311-314: chỉ dat_coc → debtGenerated/Remaining
       if (txType === 'dat_coc') {
@@ -316,9 +314,8 @@ export function buildMonthlySalesSummariesFromTransactions(
       saleAcc.grossRevenue += basePv;
       saleAcc.finalRevenue += pv;
       saleAcc.collectedAmount += ct;
-      if (txType === 'dat_coc') {
-        saleAcc.debtAmount += debt;
-      }
+      // PR-SUMMARY-03A (2026-06-29): bỏ saleAcc.debtAmount — Sale summary
+      // không còn field debt. Nếu PR-04 cần, sẽ ADD field rõ ràng riêng.
     }
   }
 
@@ -339,7 +336,6 @@ export function buildMonthlySalesSummariesFromTransactions(
         discountAmount: acc.grossRevenue - finalRevenue,
         finalRevenue,
         collectedAmount: acc.collectedAmount,
-        debtAmount: acc.debtAmountAll,
         debtGenerated: acc.debtGenerated,
         debtRemaining: acc.debtRemaining,
         refundAmount,
@@ -382,7 +378,6 @@ export function buildMonthlySalesSummariesFromTransactions(
         discountAmount: acc.grossRevenue - finalRevenue,
         finalRevenue,
         collectedAmount: acc.collectedAmount,
-        debtAmount: acc.debtAmount,
         refundAmount,
         netRevenue: finalRevenue - refundAmount,
         computedAt: now,

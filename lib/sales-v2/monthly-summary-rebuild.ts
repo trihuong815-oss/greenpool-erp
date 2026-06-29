@@ -170,7 +170,6 @@ export async function rebuildMonthlySalesSummaryForBranch(
         discountAmount: 0,
         finalRevenue: 0,
         collectedAmount: 0,
-        debtAmount: 0,
         debtGenerated: 0,
         debtRemaining: 0,
         refundAmount: 0,

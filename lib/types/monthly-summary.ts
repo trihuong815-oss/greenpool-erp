@@ -48,12 +48,19 @@ export interface MonthlyPackageSummaryItem {
  *   - finalRevenue = sum(packageValue) — sau promo (= totals.sales hiện tại)
  *   - discountAmount = grossRevenue - finalRevenue (consistent invariant)
  *   - collectedAmount = sum(collectedToday) — thực thu
- *   - debtAmount = sum(debt hiện tại) — sau auto-link
- *   - debtGenerated = sum(originalDebt) chỉ tx dat_coc — snapshot không đổi
- *   - debtRemaining = sum(debt hiện tại) chỉ tx dat_coc — đồng nghĩa với debtAmount
- *     hiện tại trong route (kept separate cho consistency với SalesMonthlySummary cũ)
+ *   - debtGenerated = sum(originalDebt) CHỈ tx dat_coc — snapshot không đổi
+ *   - debtRemaining = sum(debt hiện tại) CHỈ tx dat_coc — sau auto-link đã giảm
  *   - refundAmount = 0 trong PR-02 (chưa có refund workflow)
  *   - netRevenue = finalRevenue - refundAmount
+ *
+ * PR-SUMMARY-03A-DEBT-FIELD-AUDIT-FIX (2026-06-29): REMOVE field `debtAmount`
+ * khỏi schema. Lý do: smoke 2026-06_24 phát hiện `debtAmount = 13.500.000` lệch
+ * với UI "Công nợ còn lại" = 12.500.000 do builder sum debt của TẤT CẢ tx
+ * (kể cả non-dat_coc có legacy debt field). Schema cleaner — chỉ giữ
+ * debtGenerated + debtRemaining match 100% route hiện tại.
+ * PR-SUMMARY-04 BẮT BUỘC map:
+ *   - UI "Công nợ phát sinh" ← summary.debtGenerated
+ *   - UI "Công nợ còn lại"   ← summary.debtRemaining
  */
 export interface MonthlyBranchSalesSummary {
   id: string;                                // ${month}_${branchId}
@@ -65,11 +72,12 @@ export interface MonthlyBranchSalesSummary {
   uniqueCustomerCount: number;
 
   // Money — match logic route hiện tại
+  // PR-SUMMARY-03A (2026-06-29): bỏ debtAmount — chỉ giữ debtGenerated/debtRemaining
+  // match 100% route. PR-SUMMARY-04 dùng đúng 2 field này cho UI mapping.
   grossRevenue: number;
   discountAmount: number;
   finalRevenue: number;
   collectedAmount: number;
-  debtAmount: number;
   debtGenerated: number;
   debtRemaining: number;
 
@@ -122,7 +130,9 @@ export interface MonthlySaleSalesSummary {
   discountAmount: number;
   finalRevenue: number;
   collectedAmount: number;
-  debtAmount: number;
+  // PR-SUMMARY-03A (2026-06-29): bỏ debtAmount khỏi Sale summary cho consistent
+  // với Branch summary. Nếu PR-SUMMARY-04 cần debt per-Sale, sẽ ADD debtGenerated
+  // + debtRemaining riêng (không reuse field ambiguous).
 
   refundAmount: number;
   netRevenue: number;
