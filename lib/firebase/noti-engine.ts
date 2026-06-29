@@ -30,7 +30,22 @@ import { pushToUsers } from './push-notifications';
 // domain chỉ gửi tới email owner. Gmail SMTP gửi tới mọi user qua App Password.
 import { sendEmailNotiBatch } from '@/lib/email/gmail-smtp-client';
 
-const APP_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://greenpool-erp.vercel.app';
+// PR-DOMAIN-PREP-01 (2026-06-30): NEXT_PUBLIC_APP_URL phải set trong env.
+// Trước đây fallback `https://greenpool-erp.vercel.app` → khi prod chuyển sang
+// hosted.app / erp.greenpool.vn, email/push deep-link vẫn trỏ vercel = wrong.
+// Giờ fail-loud bằng warn (KHÔNG throw — tránh block noti pipeline). Caller
+// vẫn nhận URL tương đối nếu env empty, browser sẽ resolve theo origin hiện tại
+// khi user click. Production phải LUÔN set env qua apphosting.yaml.
+const APP_BASE_URL = (() => {
+  const v = process.env.NEXT_PUBLIC_APP_URL;
+  if (!v || v.length === 0) {
+    // eslint-disable-next-line no-console
+    console.warn('[noti-engine] NEXT_PUBLIC_APP_URL chưa cấu hình — deep-link sẽ là path tương đối');
+    return '';
+  }
+  // Strip trailing slash để concat path sạch
+  return v.endsWith('/') ? v.slice(0, -1) : v;
+})();
 
 export interface NotificationChannels {
   /** Tạo doc Firestore (badge + bell + lịch sử). Mặc định true — luôn nên bật. */

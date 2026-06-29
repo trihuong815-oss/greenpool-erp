@@ -21,6 +21,16 @@ env:
       - BUILD
       - RUNTIME
 
+  # ─── Public app URL (PR-DOMAIN-PREP-01, 2026-06-30) ───
+  # Base URL absolute dùng cho deep-link trong notification (email + FCM payload).
+  # Hiện trỏ App Hosting technical domain. Khi cut-over xong sang erp.greenpool.vn
+  # → đổi value sang `https://erp.greenpool.vn` rồi manual rollout.
+  - variable: NEXT_PUBLIC_APP_URL
+    value: https://greenpool-erp--green-pool-system.asia-southeast1.hosted.app
+    availability:
+      - BUILD
+      - RUNTIME
+
   # ─── Firebase Admin (server) — projectId + clientEmail không nhạy cảm ───
   - variable: FIREBASE_PROJECT_ID
     value: green-pool-system
