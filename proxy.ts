@@ -16,6 +16,7 @@ const SESSION_COOKIE = 'gp_session';
 // Phase HOTFIX (2026-06-07): logic robust với Vercel alias + PWA + custom domain:
 // - Same-host = pass.
 // - Cả origin lẫn host kết thúc .vercel.app = pass (Vercel canonical/alias/preview).
+// - Cả origin lẫn host kết thúc .hosted.app = pass (Firebase App Hosting canonical/alias).
 // - !origin (server-side fetch) = pass.
 
 const ORIGIN_BYPASS_PREFIXES = [
@@ -40,11 +41,13 @@ export async function proxy(req: NextRequest) {
       }
       const normalizedHost = host?.toLowerCase() ?? null;
       const isVercelSub = (h: string | null) => !!h && h.endsWith('.vercel.app');
+      const isHostedAppSub = (h: string | null) => !!h && h.endsWith('.hosted.app');
       const isAllowed = isDev
         || !origin
         || (originHost !== null && (
           originHost === normalizedHost
           || (isVercelSub(originHost) && isVercelSub(normalizedHost))
+          || (isHostedAppSub(originHost) && isHostedAppSub(normalizedHost))
         ));
       if (!isAllowed) {
         console.warn('[proxy] origin mismatch — origin=' + origin + ' host=' + host);
