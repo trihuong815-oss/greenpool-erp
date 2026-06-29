@@ -452,6 +452,56 @@
         { "fieldPath": "module", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
+    },
+    {
+      "_comment": "PR-INDEX-PLAN-SALESTRANSACTIONS (2026-06-29) P0 #1: Cron rebuild MonthlyBranchSalesSummary — where(month) where(branchId) where(reviewStatus='approved'). Chuẩn bị cho PR-SUMMARY-03 cron daily.",
+      "collectionGroup": "salesTransactions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "month", "order": "ASCENDING" },
+        { "fieldPath": "branchId", "order": "ASCENDING" },
+        { "fieldPath": "reviewStatus", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "_comment": "PR-INDEX-PLAN-SALESTRANSACTIONS (2026-06-29) P0 #2: Cron rebuild MonthlySaleSalesSummary — where(month) where(saleId) where(reviewStatus='approved'). Per-Sale aggregate cho /tong-ket SaleRankingTable.",
+      "collectionGroup": "salesTransactions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "month", "order": "ASCENDING" },
+        { "fieldPath": "saleId", "order": "ASCENDING" },
+        { "fieldPath": "reviewStatus", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "_comment": "PR-INDEX-PLAN-SALESTRANSACTIONS (2026-06-29) P0 #3: List tx per branch/month sort theo date — where(month) where(branchId) orderBy(date DESC). Dùng cho display order trong /tong-ket per-branch view + future drill-down. LƯU Ý: field name là 'date' (YYYY-MM-DD), KHÔNG phải 'transactionDate'.",
+      "collectionGroup": "salesTransactions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "month", "order": "ASCENDING" },
+        { "fieldPath": "branchId", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "_comment": "PR-INDEX-PLAN-SALESTRANSACTIONS (2026-06-29) P0 #4: List tx per branch sort theo month + date — where(branchId) orderBy(month, date DESC). Dùng cho list 12 tháng gần nhất per branch.",
+      "collectionGroup": "salesTransactions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "branchId", "order": "ASCENDING" },
+        { "fieldPath": "month", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "_comment": "PR-INDEX-PLAN-SALESTRANSACTIONS (2026-06-29) P0 #5: List tx per sale per month sort theo date — where(saleId) where(month) orderBy(date DESC). Dùng cho SaleRankingTable drill-down + future Sale customer history.",
+      "collectionGroup": "salesTransactions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "saleId", "order": "ASCENDING" },
+        { "fieldPath": "month", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
