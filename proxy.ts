@@ -29,51 +29,74 @@ const ORIGIN_BYPASS_PREFIXES = [
 ];
 
 export async function proxy(req: NextRequest) {
-  const { pathname } = req.nextUrl;
-  const method = req.method;
+  // Top-level try/catch — Edge Runtime middleware throw = 500 text/plain
+  // from framework. Catching defensively ensures we always return a proper
+  // response and log to Cloud Run for diagnosis.
+  try {
+    const { pathname } = req.nextUrl;
+    const method = req.method;
 
-  // ─── Origin check cho /api/ non-GET ───
-  if (pathname.startsWith('/api/') && method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
-    const bypass = ORIGIN_BYPASS_PREFIXES.some((p) => pathname.startsWith(p));
-    if (!bypass) {
-      const check = isAllowedOrigin(req);
-      if (!check.allowed) {
-        console.warn(
-          '[proxy] origin rejected — origin=' + check.origin
-          + ' host=' + check.host
-          + ' selfOrigin=' + check.selfOrigin,
-        );
-        return NextResponse.json({ error: 'Origin không hợp lệ' }, { status: 403 });
+    // ─── Origin check cho /api/ non-GET ───
+    if (pathname.startsWith('/api/') && method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
+      const bypass = ORIGIN_BYPASS_PREFIXES.some((p) => pathname.startsWith(p));
+      if (!bypass) {
+        const check = isAllowedOrigin(req);
+        if (!check.allowed) {
+          console.warn(
+            '[proxy] origin rejected — origin=' + check.origin
+            + ' host=' + check.host
+            + ' selfOrigin=' + check.selfOrigin,
+          );
+          return NextResponse.json({ error: 'Origin không hợp lệ' }, { status: 403 });
+        }
       }
     }
+
+    // ─── Auth gate ───
+    const isLoginPage = pathname.startsWith('/login');
+    const isPublicAsset =
+      pathname.startsWith('/_next') ||
+      pathname.startsWith('/api') ||
+      pathname.endsWith('.svg') ||
+      pathname.endsWith('.png') ||
+      pathname.endsWith('.ico') ||
+      // PWA assets — Chrome cần fetch không cookie để cài app
+      pathname === '/manifest.json' ||
+      pathname === '/firebase-messaging-sw.js';
+
+    const hasSession = !!req.cookies.get(SESSION_COOKIE)?.value;
+
+    if (!hasSession && !isLoginPage && !isPublicAsset) {
+      return NextResponse.redirect(new URL('/login', req.url));
+    }
+    // Phase HOTFIX (2026-06-07): KHÔNG redirect /login → /dashboard khi có cookie.
+    // Lý do: cookie có thể bị REVOKED (Phase A.3 logout-revoke-tokens) trong khi
+    // browser vẫn giữ cookie. Layout (app)/ verify fail → redirect /login → proxy
+    // redirect /dashboard → LOOP "nhiều sự chuyển hướng" (mobile báo lỗi).
+    // Trade-off UX: user đã login mà mở /login sẽ thấy form login (Firebase Auth
+    // client SDK persistence vẫn detect → có thể tự redirect /dashboard ở client).
+    // An toàn hơn redirect loop.
+
+    return NextResponse.next();
+  } catch (e: unknown) {
+    const msg = (e as Error)?.message ?? String(e);
+    const name = (e as Error)?.name ?? 'Error';
+    console.error(
+      '[proxy] middleware unhandled error — name=' + name + ' msg=' + msg
+      + ' path=' + (req.nextUrl?.pathname ?? 'unknown')
+      + ' method=' + req.method,
+    );
+    // Fail-open for non-API routes (let request through, page handler may
+    // still gate auth). For API, return 500 JSON so caller sees a parseable
+    // error instead of framework text/plain.
+    if (req.nextUrl?.pathname?.startsWith('/api/')) {
+      return NextResponse.json(
+        { error: 'Middleware error', name, message: msg },
+        { status: 500 },
+      );
+    }
+    return NextResponse.next();
   }
-
-  // ─── Auth gate ───
-  const isLoginPage = pathname.startsWith('/login');
-  const isPublicAsset =
-    pathname.startsWith('/_next') ||
-    pathname.startsWith('/api') ||
-    pathname.endsWith('.svg') ||
-    pathname.endsWith('.png') ||
-    pathname.endsWith('.ico') ||
-    // PWA assets — Chrome cần fetch không cookie để cài app
-    pathname === '/manifest.json' ||
-    pathname === '/firebase-messaging-sw.js';
-
-  const hasSession = !!req.cookies.get(SESSION_COOKIE)?.value;
-
-  if (!hasSession && !isLoginPage && !isPublicAsset) {
-    return NextResponse.redirect(new URL('/login', req.url));
-  }
-  // Phase HOTFIX (2026-06-07): KHÔNG redirect /login → /dashboard khi có cookie.
-  // Lý do: cookie có thể bị REVOKED (Phase A.3 logout-revoke-tokens) trong khi
-  // browser vẫn giữ cookie. Layout (app)/ verify fail → redirect /login → proxy
-  // redirect /dashboard → LOOP "nhiều sự chuyển hướng" (mobile báo lỗi).
-  // Trade-off UX: user đã login mà mở /login sẽ thấy form login (Firebase Auth
-  // client SDK persistence vẫn detect → có thể tự redirect /dashboard ở client).
-  // An toàn hơn redirect loop.
-
-  return NextResponse.next();
 }
 
 export const config = {

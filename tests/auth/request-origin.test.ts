@@ -24,7 +24,15 @@ function makeReq(opts: MockReqOpts = {}): any {
   }
   return {
     headers: {
-      get: (k: string) => headers.get(k.toLowerCase()) ?? null,
+      get: (k: string) => {
+        // Emulate WHATWG Headers behavior: names starting with ':' are
+        // INVALID (HTTP/2 pseudo-headers must not be accessed via Headers API)
+        // and Edge Runtime THROWS TypeError. Our helpers must never trigger this.
+        if (k.startsWith(':')) {
+          throw new TypeError(`Invalid header name: ${k}`);
+        }
+        return headers.get(k.toLowerCase()) ?? null;
+      },
     },
     nextUrl: opts.nextUrlHost !== undefined
       ? {
@@ -87,8 +95,14 @@ describe('getRequestHost', () => {
     expect(getRequestHost(req)).toBe('d.example.com');
   });
 
-  it('falls back to :authority (HTTP/2)', () => {
-    const req = makeReq({ headers: { ':authority': 'e.example.com' } });
+  it('DOES NOT read :authority directly (would throw TypeError in Edge Runtime — root cause of prod 500)', () => {
+    // Verify helper never touches `:authority` — mock throws if accessed.
+    // nextUrl.host is the correct source for HTTP/2 (Next.js parses :authority into it).
+    const req = makeReq({
+      headers: {},                          // no host header
+      nextUrlHost: 'e.example.com',         // Next.js-parsed canonical
+    });
+    expect(() => getRequestHost(req)).not.toThrow();
     expect(getRequestHost(req)).toBe('e.example.com');
   });
 
@@ -244,13 +258,13 @@ describe('isAllowedOrigin — rejected', () => {
 // ─── KEY SCENARIO: HTTP/2 App Hosting (the original bug) ───────────
 
 describe('isAllowedOrigin — HTTP/2 App Hosting bug reproduction', () => {
-  it('HTTP/2 request with NO host header, only :authority → allowed via exact allowlist', () => {
-    // Simulates exact production scenario: Envoy strips host header,
-    // backend sees only :authority. Origin is the public hosted.app URL.
+  it('HTTP/2 request: no host header, :authority would throw, only nextUrl.host → allowed via exact allowlist', () => {
+    // Production scenario: Envoy strips host header, backend reads :authority
+    // via nextUrl.host (Next.js parsed). The helper MUST NOT access ':authority'
+    // directly — mock would throw TypeError to enforce this.
     const req = makeReq({
-      // No host, no x-forwarded-host. Only :authority + nextUrl.
+      // No host, no x-forwarded-host. Only origin + nextUrl.
       headers: {
-        ':authority': 'greenpool-erp--green-pool-system.asia-southeast1.hosted.app',
         origin: 'https://greenpool-erp--green-pool-system.asia-southeast1.hosted.app',
       },
       nextUrlHost: 'greenpool-erp--green-pool-system.asia-southeast1.hosted.app',
@@ -281,5 +295,42 @@ describe('isAllowedOrigin — HTTP/2 App Hosting bug reproduction', () => {
     const r = isAllowedOrigin(req);
     expect(r.allowed).toBe(false);
     expect(r.reason).toBe('rejected');
+  });
+});
+
+// ─── DEFENSIVE: helpers MUST swallow header API throws ──────────────
+
+describe('Defensive: helpers never throw on hostile Headers implementations', () => {
+  function makeAlwaysThrowsReq(): any {
+    return {
+      headers: {
+        get: () => {
+          throw new TypeError('Invalid header name');
+        },
+      },
+      nextUrl: { host: 'fallback.example.com', protocol: 'https:' },
+    };
+  }
+
+  it('getRequestOrigin returns null instead of throwing', () => {
+    expect(() => getRequestOrigin(makeAlwaysThrowsReq())).not.toThrow();
+    expect(getRequestOrigin(makeAlwaysThrowsReq())).toBe(null);
+  });
+
+  it('getRequestHost falls back to nextUrl.host', () => {
+    expect(() => getRequestHost(makeAlwaysThrowsReq())).not.toThrow();
+    expect(getRequestHost(makeAlwaysThrowsReq())).toBe('fallback.example.com');
+  });
+
+  it('getRequestSelfOrigin reconstructs from nextUrl alone', () => {
+    expect(() => getRequestSelfOrigin(makeAlwaysThrowsReq())).not.toThrow();
+    expect(getRequestSelfOrigin(makeAlwaysThrowsReq())).toBe('https://fallback.example.com');
+  });
+
+  it('isAllowedOrigin returns rejected (not throw) when headers hostile', () => {
+    const r = isAllowedOrigin(makeAlwaysThrowsReq());
+    // origin is null → no-origin path → allowed in prod (RSC/internal fetch)
+    expect(r.allowed).toBe(true);
+    expect(r.reason).toBe('no-origin');
   });
 });

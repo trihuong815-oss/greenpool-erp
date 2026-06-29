@@ -53,27 +53,46 @@ const PROD_ORIGIN_SUFFIXES: readonly string[] = [
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
-/** Returns the request's Origin header lowercased, or null. */
+/** Returns the request's Origin header lowercased, or null. Safe-guarded against Edge Runtime header API throws. */
 export function getRequestOrigin(req: NextRequest): string | null {
-  const o = req.headers.get('origin');
-  return o ? o.toLowerCase() : null;
+  try {
+    const o = req.headers.get('origin');
+    return o ? o.toLowerCase() : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
  * Returns the request's effective host, trying multiple sources:
- *   1. nextUrl.host (Next.js parsed canonical)
+ *   1. nextUrl.host (Next.js parsed canonical — works for HTTP/1 and HTTP/2)
  *   2. host header (HTTP/1.1)
  *   3. x-forwarded-host (proxy/CDN forward)
- *   4. :authority pseudo-header (HTTP/2 — some Edge Runtimes expose it)
+ *
+ * Note: HTTP/2 `:authority` pseudo-header is NOT readable via Web Headers API
+ * (`:` is not a valid token char per WHATWG fetch spec — `headers.get(':authority')`
+ * THROWS `TypeError: Invalid header name` in Edge Runtime). nextUrl.host is the
+ * canonical replacement: Next.js parses :authority into nextUrl during request
+ * normalization, so we never need to touch the pseudo-header directly.
+ *
+ * Each header read is wrapped in try/catch in case Edge Runtime rejects any
+ * other quirky header name in the future — defensive against future spec
+ * changes / runtime upgrades.
  *
  * Returns null if all sources empty (rare; means we lost the routing context).
  */
 export function getRequestHost(req: NextRequest): string | null {
+  const safeGet = (name: string): string | null => {
+    try {
+      return req.headers.get(name);
+    } catch {
+      return null;
+    }
+  };
   const sources: Array<string | null | undefined> = [
     req.nextUrl?.host,
-    req.headers.get('host'),
-    req.headers.get('x-forwarded-host'),
-    req.headers.get(':authority'),
+    safeGet('host'),
+    safeGet('x-forwarded-host'),
   ];
   for (const s of sources) {
     if (s && s.length > 0) return s.toLowerCase();
@@ -91,8 +110,10 @@ export function getRequestSelfOrigin(req: NextRequest): string | null {
   const host = getRequestHost(req);
   if (!host) return null;
   // Force https in prod (App Hosting/Vercel always TLS). Dev allows http.
+  let xfp: string | null = null;
+  try { xfp = req.headers.get('x-forwarded-proto'); } catch { /* ignore */ }
   const proto =
-    req.headers.get('x-forwarded-proto')
+    xfp
     || req.nextUrl?.protocol?.replace(':', '')
     || (process.env.NODE_ENV === 'production' ? 'https' : 'http');
   return `${proto}://${host}`.toLowerCase();
