@@ -11,6 +11,7 @@ import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 import { getAuth, type Auth } from 'firebase-admin/auth';
 import { existsSync, readFileSync } from 'fs';
 import { resolve } from 'path';
+import { normalizePrivateKey, getPrivateKeyDiagnostic, PrivateKeyFormatError } from './private-key-normalize';
 
 let _app: AdminApp | null = null;
 
@@ -33,11 +34,21 @@ function loadCredentials(): Credential {
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
   const rawKey = process.env.FIREBASE_PRIVATE_KEY;
   if (projectId && clientEmail && rawKey) {
-    return cert({
-      projectId,
-      clientEmail,
-      privateKey: rawKey.replace(/\\n/g, '\n'),
-    });
+    try {
+      return cert({
+        projectId,
+        clientEmail,
+        privateKey: normalizePrivateKey(rawKey),
+      });
+    } catch (err) {
+      const diag = getPrivateKeyDiagnostic(rawKey);
+      console.error(
+        '[firebase/admin] FIREBASE_PRIVATE_KEY load fail:',
+        err instanceof PrivateKeyFormatError ? err.diagnostic : (err as Error)?.message,
+        '— diag:', JSON.stringify(diag),
+      );
+      throw err;
+    }
   }
 
   try {
