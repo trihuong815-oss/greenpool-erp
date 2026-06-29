@@ -27,6 +27,16 @@ import { fetchFreshPackageMap, applyFreshPackageName, collectPackageIds } from '
 import { buildAdHocSummary, type AdHocTxInput, type AdHocPackageInput } from '@/lib/sales-v2/ad-hoc-discount';
 import { getMonthLockState } from '@/lib/sales-v2/month-lock';
 import { buildTargetSummary, parseMonth, type TargetScope } from '@/lib/sales-v2/target-progress';
+// PR-SUMMARY-04 (2026-06-29) — summary fast path
+import {
+  canUseSummaryForScope,
+  tryReadMonthlyBranchSummary,
+  tryReadMonthlySaleSummariesForBranch,
+  mapBranchSummaryToTotals,
+  mapSaleSummariesToBySale,
+  mapBranchSummaryToPrevMonth,
+} from '@/lib/sales-v2/monthly-summary-reader';
+import type { MonthlyBranchSalesSummary, MonthlySaleSalesSummary } from '@/lib/types/monthly-summary';
 import type { SalesV2Source } from '@/lib/types/sales-v2';
 
 export const runtime = 'nodejs';
@@ -157,6 +167,46 @@ export async function GET(req: NextRequest) {
     }
 
     const db = getFirebaseAdminDb();
+
+    // ─── PR-SUMMARY-04 (2026-06-29) — TRY SUMMARY FAST PATH ───────────
+    // Conservative: chỉ activated cho qlcs/accountant (1 branch xác định) +
+    // top scope với branchId filter. Sale + top all-branches → fallback raw.
+    //
+    // Summary path benefit:
+    //   - Totals/breakdown chính xác từ summary cap 20K (vs raw cap 5000)
+    //   - Khi 1 branch có >5000 tx/tháng, raw bị truncate → summary correct.
+    //
+    // Dynamic fields (salesCustomers, adHocSummary, batchStats, txStatusStats)
+    // VẪN query raw cap 5000 BÊN DƯỚI — PR-04 chỉ override totals/breakdowns
+    // sau khi raw compute xong. PR-05 future sẽ extend summary cho dynamic fields.
+    //
+    // KHÔNG ghi Firestore trong GET. KHÔNG dùng debtAmount (PR-03A removed).
+    let summaryOverride: {
+      branchSummary: MonthlyBranchSalesSummary;
+      saleSummaries: MonthlySaleSalesSummary[];
+      prevMonthSummary: MonthlyBranchSalesSummary | null;
+    } | null = null;
+    if (canUseSummaryForScope(role, scopeBranchId)) {
+      try {
+        const summaryDoc = await tryReadMonthlyBranchSummary(month, scopeBranchId as BranchId);
+        if (summaryDoc) {
+          const [saleSummaries, prevSummaryDoc] = await Promise.all([
+            tryReadMonthlySaleSummariesForBranch(month, scopeBranchId as BranchId),
+            tryReadMonthlyBranchSummary(prevMonth(month), scopeBranchId as BranchId),
+          ]);
+          summaryOverride = {
+            branchSummary: summaryDoc,
+            saleSummaries,
+            prevMonthSummary: prevSummaryDoc,
+          };
+        }
+      } catch (err) {
+        // Fail-soft: summary read fail → fallback raw, log warning, KHÔNG block response
+        // eslint-disable-next-line no-console
+        console.warn('[monthly-summary] summary read fail (fallback raw):', (err as Error)?.message);
+      }
+    }
+
     // BUG-2 audit fix: bỏ where(branchId) tránh cần composite index. Filter client.
     const LIMIT = 5000;
     const snap = await db.collection(COLLECTIONS.SALES_TRANSACTIONS)
@@ -668,6 +718,50 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // ─── PR-SUMMARY-04 (2026-06-29) — APPLY SUMMARY OVERRIDE ─────────
+    // Nếu summary fast path activated → override totals/bySource/byPackage/
+    // bySale/customerCount/truncated từ summary doc. Dynamic fields
+    // (salesCustomers, adHocSummary, batchStats, txStatusStats) giữ raw.
+    // KHÔNG override byBranch (top scope skip summary path).
+    // Mapping debt: summary.debtGenerated/debtRemaining (PR-03A FIX), KHÔNG debtAmount.
+    if (summaryOverride) {
+      const { branchSummary, saleSummaries: ss, prevMonthSummary } = summaryOverride;
+      // Override totals từ summary (accuracy ưu tiên — bypass cap 5000 risk)
+      totals.sales = branchSummary.finalRevenue;
+      totals.collected = branchSummary.collectedAmount;
+      totals.transactions = branchSummary.transactionCount;
+      totals.debtGenerated = branchSummary.debtGenerated;
+      totals.debtRemaining = branchSummary.debtRemaining;
+      // Override breakdowns
+      Object.keys(bySource).forEach((k) => delete bySource[k as SalesV2Source]);
+      Object.assign(bySource, branchSummary.bySource as typeof bySource);
+      Object.keys(byPackage).forEach((k) => delete byPackage[k]);
+      for (const [pid, item] of Object.entries(branchSummary.byPackage)) {
+        byPackage[pid] = {
+          name: item.packageName,
+          count: item.count,
+          sales: item.sales,
+          collected: item.collected,
+        };
+      }
+      // Override bySale từ N sale summaries (KHÔNG cho sale role — already filter)
+      if (role !== 'sale' && ss.length > 0) {
+        Object.keys(bySale).forEach((k) => delete bySale[k]);
+        Object.assign(bySale, mapSaleSummariesToBySale(ss));
+      }
+      // Override customerKeys count (set replaceable size)
+      customerKeys.clear();
+      // Re-add N placeholder để Set.size = uniqueCustomerCount từ summary
+      for (let i = 0; i < branchSummary.uniqueCustomerCount; i += 1) {
+        customerKeys.add(`__summary_placeholder_${i}`);
+      }
+      // Apply prevMonth từ summary if available (bypass raw prev fetch)
+      // Note: prevMonthFromSummary có thể là null nếu summary prev chưa rebuild
+      const _prevFromSummary = mapBranchSummaryToPrevMonth(prevMonthSummary);
+      // Mark summary path activated (set _source ở response cuối)
+      (summaryOverride as unknown as { _prevFromSummary?: unknown })._prevFromSummary = _prevFromSummary;
+    }
+
     return NextResponse.json({
       ok: true,
       month,
@@ -703,7 +797,18 @@ export async function GET(req: NextRequest) {
       adHocSummary,
       // PR-TONGKET-PHASE2 (2026-06-27): MoM growth — totals tháng trước cùng scope.
       // Client tự tính %. null nếu fail (UI fallback ẩn delta).
-      prevMonth: await computePrevMonthTotals(db, prevMonth(month), scopeBranchId, scopeSaleId),
+      // PR-SUMMARY-04: nếu summary fast path có prev → dùng summary; else raw.
+      prevMonth: summaryOverride
+        ? (summaryOverride as unknown as { _prevFromSummary?: ReturnType<typeof mapBranchSummaryToPrevMonth> })._prevFromSummary
+          ?? await computePrevMonthTotals(db, prevMonth(month), scopeBranchId, scopeSaleId)
+        : await computePrevMonthTotals(db, prevMonth(month), scopeBranchId, scopeSaleId),
+      // PR-SUMMARY-04 (2026-06-29): observability metadata.
+      // 'summary' = totals/breakdowns từ materialized summary (precise, cap 20K)
+      // 'raw' = full compute từ salesTransactions (cap 5000)
+      // Dynamic fields (salesCustomers/adHocSummary/batchStats/txStatusStats)
+      // VẪN từ raw trong cả 2 cases (PR-05 extend).
+      _source: summaryOverride ? 'summary' : 'raw',
+      _summaryComputedAt: summaryOverride ? summaryOverride.branchSummary.computedAt : null,
     });
   } catch (err: any) {
     if (err instanceof UnauthorizedError) {
