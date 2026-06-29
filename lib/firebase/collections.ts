@@ -72,6 +72,15 @@ export const COLLECTIONS = {
   // Audit 10-year scale: ~500K customers/10y. Phải có index phoneNormalized +
   // customerCode + normalizedName + (primaryBranchId, updatedAt DESC) trước go-live.
   CUSTOMERS: 'customers',
+  // PR-SUMMARY-03-WRITE-REBUILD-JOB (2026-06-29) — Monthly materialized summary.
+  // DocId pattern: ${month}_${branchId} cho per-branch, ${month}_${saleId} cho per-sale.
+  // Rebuild qua POST /api/admin/rebuild-monthly-summary (admin only) hoặc cron daily.
+  // Legacy 'salesMonthlySummary' (declared L54) là dead code chưa dùng — GIỮ NGUYÊN
+  // không xoá, không write nữa. Mọi write/read mới dùng 2 collection bên dưới.
+  // Schema: xem lib/types/monthly-summary.ts (MonthlyBranchSalesSummary,
+  // MonthlySaleSalesSummary). Builder: lib/sales-v2/monthly-summary-builder.ts.
+  MONTHLY_BRANCH_SALES_SUMMARIES: 'monthlyBranchSalesSummaries',
+  MONTHLY_SALE_SALES_SUMMARIES: 'monthlySaleSalesSummaries',
 } as const;
 
 // Subcollection names — đứng trong context của doc cha.
