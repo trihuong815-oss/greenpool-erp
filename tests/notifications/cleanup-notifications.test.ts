@@ -118,9 +118,86 @@ describe('cleanup-notifications — delete safety', () => {
   });
 });
 
+// ─── PR-NOTIFICATION-RETENTION-DRYRUN (2026-06-30) ──────────────────
+
+describe('cleanup-notifications — dryRun parser', () => {
+  it('parseDryRun helper exists', () => {
+    expect(src).toMatch(/function parseDryRun\(req:[^)]*\):\s*boolean/);
+  });
+
+  it('reads ?dryRun query param via nextUrl.searchParams', () => {
+    expect(src).toMatch(/searchParams\.get\(['"]dryRun['"]\)/);
+  });
+
+  it('accepts "1", "true", "yes" as truthy (case-insensitive)', () => {
+    expect(src).toMatch(/['"]1['"]/);
+    expect(src).toMatch(/['"]true['"]/);
+    expect(src).toMatch(/['"]yes['"]/);
+    expect(src).toMatch(/toLowerCase\(\)/);
+  });
+});
+
+describe('cleanup-notifications — dryRun write protection', () => {
+  it('handler parses dryRun before any Firestore action', () => {
+    // dryRun parsed inside POST, before db.batch() etc.
+    expect(src).toMatch(/const dryRun = parseDryRun\(req\)/);
+  });
+
+  it('dryRun branch logs "DRY RUN — no notifications deleted"', () => {
+    expect(src).toMatch(/DRY RUN — no notifications deleted/);
+  });
+
+  it('batch.delete + batch.commit are ONLY called inside `else if (processed > 0)` branch (after dryRun check)', () => {
+    // Structural check: batch.commit() must NOT be inside the dryRun branch.
+    // We approximate by asserting `if (dryRun)` appears BEFORE the first batch.delete() in source.
+    const dryRunIdx = src.indexOf('if (dryRun)');
+    const batchDeleteIdx = src.indexOf('batch.delete(');
+    const batchCommitIdx = src.indexOf('batch.commit()');
+    expect(dryRunIdx).toBeGreaterThan(-1);
+    expect(batchDeleteIdx).toBeGreaterThan(dryRunIdx);
+    expect(batchCommitIdx).toBeGreaterThan(dryRunIdx);
+  });
+
+  it('dryRun affected = processed (counts but does not write)', () => {
+    // Inside dryRun branch we set affected = processed
+    const dryRunBlock = src.match(/if \(dryRun\) \{[\s\S]*?\}\s*else if/)?.[0] ?? '';
+    expect(dryRunBlock).toMatch(/affected\s*=\s*processed/);
+    // Verify dryRun block does NOT contain batch.delete or batch.commit
+    expect(dryRunBlock).not.toMatch(/batch\.delete/);
+    expect(dryRunBlock).not.toMatch(/batch\.commit/);
+  });
+});
+
+describe('cleanup-notifications — dryRun response + audit', () => {
+  it('response payload includes dryRun boolean', () => {
+    expect(src).toMatch(/dryRun,?[\s\S]{0,200}processed/);
+  });
+
+  it('audit action differentiates dryrun vs real cleanup', () => {
+    expect(src).toMatch(/cleanup_old_notifications_dryrun/);
+    expect(src).toMatch(/['"]cleanup_old_notifications['"]/);
+  });
+
+  it('audit after-payload includes dryRun field', () => {
+    expect(src).toMatch(/after:\s*\{[\s\S]{0,400}dryRun,?/);
+  });
+});
+
+describe('cleanup-notifications — dryRun still requires auth', () => {
+  it('checkAuth runs BEFORE parseDryRun (auth gate stays first)', () => {
+    // Order: checkAuth → unauthorized 401 → parseDryRun → continue
+    const checkAuthIdx = src.search(/if \(!checkAuth\(req\)\)/);
+    const parseDryRunIdx = src.search(/const dryRun = parseDryRun\(req\)/);
+    expect(checkAuthIdx).toBeGreaterThan(-1);
+    expect(parseDryRunIdx).toBeGreaterThan(checkAuthIdx);
+  });
+});
+
 describe('cleanup-notifications — audit log', () => {
-  it('logs cleanup_old_notifications action to auditLogs', () => {
-    expect(src).toMatch(/action:\s*['"]cleanup_old_notifications['"]/);
+  it('logs cleanup_old_notifications action to auditLogs (either real or dryrun variant)', () => {
+    // After dryRun PR: action is `dryRun ? 'cleanup_old_notifications_dryrun' : 'cleanup_old_notifications'`
+    // → string must appear at least once in source, no specific prefix required.
+    expect(src).toMatch(/['"]cleanup_old_notifications['"]/);
   });
 
   it('audit write is fail-soft (try/catch wraps writeAuditLog)', () => {
