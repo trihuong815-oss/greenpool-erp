@@ -1,12 +1,15 @@
 // PR-TK2 (2026-06-21) — Alert cảnh báo nghiệp vụ:
-// - Dữ liệu vượt limit (truncated)
 // - Còn tx chờ duyệt / bị từ chối
 // - Còn batch chờ đối chiếu / trả lại
 // - Tháng chưa khóa (chỉ hiển thị nếu user là Top/QLCS/Acct + tháng đã qua)
 //
+// PR-SUMMARY-UI-TRUNCATED-WARNING (2026-06-29): truncated alert TÁCH RA
+// DataTruncatedBanner riêng — render TRƯỚC component này với style banner lớn
+// hơn vì là DATA INTEGRITY issue (sai số liệu nghiêm trọng hơn workflow alert).
+//
 // Hiển thị compact — chỉ render alert nào CÓ vấn đề. Nếu không có gì → render null.
 
-import { AlertTriangle, Clock, RotateCcw, XCircle } from 'lucide-react';
+import { Clock, RotateCcw, XCircle } from 'lucide-react';
 import type { Summary } from './types';
 
 interface Props {
@@ -29,14 +32,8 @@ const TONE_CLS: Record<Alert['tone'], string> = {
 export default function BusinessAlerts({ data }: Props) {
   const alerts: Alert[] = [];
 
-  // 1. Truncated — data accuracy risk (severity cao nhất)
-  if (data.truncated) {
-    alerts.push({
-      tone: 'rose',
-      icon: <AlertTriangle size={14} />,
-      text: `Dữ liệu tháng này vượt giới hạn tải (${data.limit ?? 5000} GD). Số liệu có thể chưa đầy đủ — vui lòng lọc theo cơ sở hoặc liên hệ admin.`,
-    });
-  }
+  // PR-SUMMARY-UI-TRUNCATED-WARNING (2026-06-29): truncated alert moved to
+  // DataTruncatedBanner (banner riêng, style lớn hơn) — render trước component này.
 
   // 2. Tx pending review
   const pendingTx = data.txStatusStats?.pending ?? 0;

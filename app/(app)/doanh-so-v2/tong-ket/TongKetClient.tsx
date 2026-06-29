@@ -29,6 +29,9 @@ import SaleRankingTable from './_components/SaleRankingTable';
 import BranchProgressList from './_components/BranchProgressList';
 import CustomerListTab from './_components/CustomerListTab';
 import AdHocDiscountCard from './_components/AdHocDiscountCard';
+// PR-SUMMARY-UI-TRUNCATED-WARNING (2026-06-29): banner cảnh báo data integrity
+// khi API trả truncated=true (vượt cap 5000 tx). Render TRƯỚC BusinessAlerts.
+import DataTruncatedBanner from './_components/DataTruncatedBanner';
 import TargetEditTab from './_components/TargetEditTab';
 import { currentMonthVN } from './_components/utils';
 import type { Summary } from './_components/types';
@@ -150,6 +153,7 @@ function TabContent({
   if (isEmpty) {
     return (
       <>
+        <DataTruncatedBanner truncated={data.truncated} limit={data.limit} />
         <BusinessAlerts data={data} />
         <EmptyState month={month} scope={scope} roleCode={roleCode} />
       </>
@@ -164,6 +168,7 @@ function TabContent({
     const hasSalesCustomers = data.salesCustomers && Object.keys(data.salesCustomers).length > 0;
     return (
       <>
+        <DataTruncatedBanner truncated={data.truncated} limit={data.limit} />
         <BusinessAlerts data={data} />
         <MonthlyKpiCards
           totals={data.totals}
