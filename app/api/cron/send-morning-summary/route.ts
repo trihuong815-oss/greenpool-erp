@@ -17,6 +17,13 @@ import { extractFcmTokens, cleanupInvalidFcmTokens } from '@/lib/firebase/fcm-to
 
 export const maxDuration = 60;
 
+// PR-CRON-LIMIT-USERS (2026-06-30): Hard cap user scan per run.
+// Hiện ~50 users prod; cap 500 = 10x headroom đến 300+ users.
+// Khi snap.size === USER_SCAN_HARD_LIMIT → truncated=true trong response +
+// warn vào Cloud Run logs. Pagination cursor continuation defer khi org thực sự
+// chạm cap (xem TODO bên trong handler).
+const USER_SCAN_HARD_LIMIT = 500;
+
 function checkAuth(req: NextRequest): boolean {
   const expected = process.env.CRON_SECRET;
   if (!expected) return false;
@@ -46,10 +53,21 @@ export async function POST(req: NextRequest) {
   const db = getFirebaseAdminDb();
   const today = todayDateStrVN();
 
-  // Fetch active users với fcmTokens
+  // PR-CRON-LIMIT-USERS (2026-06-30): bounded read.
+  // TODO khi user count chạm USER_SCAN_HARD_LIMIT: wrap thành loop với
+  // .orderBy('__name__').startAfter(lastDoc) cursor để xử lý nhiều batch
+  // tuần tự trong 1 run. Hiện ~50 users prod, cap 500 = đủ headroom.
   const usersSnap = await db.collection(COLLECTIONS.USERS)
     .where('status', '==', 'active')
+    .limit(USER_SCAN_HARD_LIMIT)
     .get();
+  const usersTruncated = usersSnap.size >= USER_SCAN_HARD_LIMIT;
+  if (usersTruncated) {
+    console.warn(
+      '[send-morning-summary] reached USER_SCAN_HARD_LIMIT=' + USER_SCAN_HARD_LIMIT
+      + ' — some active users not notified this run. Implement cursor pagination soon.',
+    );
+  }
 
   const candidates: { uid: string; tokens: string[]; displayName: string }[] = [];
   for (const d of usersSnap.docs) {
@@ -173,6 +191,8 @@ export async function POST(req: NextRequest) {
     sent: totalSent,
     tokensCleaned: tokensToRemove.length,
     today,
+    truncated: usersTruncated,
+    scanLimit: USER_SCAN_HARD_LIMIT,
   });
 }
 

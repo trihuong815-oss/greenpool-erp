@@ -16,6 +16,13 @@ export const maxDuration = 60;
 
 const STALE_MS = 7 * 24 * 60 * 60_000; // 7 ngày
 
+// PR-CRON-LIMIT-USERS (2026-06-30): Hard cap user scan per run.
+// Hiện ~50 users prod; cap 500 = 10x headroom đến 300+ users.
+// Khi snap.size === USER_SCAN_HARD_LIMIT → truncated=true trong response +
+// warn vào Cloud Run logs. Pagination cursor continuation defer khi org thực sự
+// chạm cap (xem TODO bên dưới).
+const USER_SCAN_HARD_LIMIT = 500;
+
 export async function POST(req: NextRequest) {
   // Auth bearer CRON_SECRET — constant-time compare
   const auth = req.headers.get('authorization') || '';
@@ -30,9 +37,21 @@ export async function POST(req: NextRequest) {
 
   let scanned = 0, usersWithStale = 0, devicesRemoved = 0;
   try {
+    // PR-CRON-LIMIT-USERS (2026-06-30): bounded read.
+    // TODO khi user count chạm USER_SCAN_HARD_LIMIT: wrap thành loop với
+    // .orderBy('__name__').startAfter(lastDoc) cursor để xử lý nhiều batch
+    // tuần tự trong 1 run. Tránh full-scan unintended khi org lớn.
     const snap = await db.collection(COLLECTIONS.USERS)
       .where('status', '==', 'active')
+      .limit(USER_SCAN_HARD_LIMIT)
       .get();
+    const truncated = snap.size >= USER_SCAN_HARD_LIMIT;
+    if (truncated) {
+      console.warn(
+        '[cleanup-stale-fcm] reached USER_SCAN_HARD_LIMIT=' + USER_SCAN_HARD_LIMIT
+        + ' — some active users not scanned this run. Implement cursor pagination soon.',
+      );
+    }
 
     for (const doc of snap.docs) {
       scanned++;
@@ -58,7 +77,7 @@ export async function POST(req: NextRequest) {
       userId: 'cron',
       branchId: null,
       before: null,
-      after: { scanned, usersWithStale, devicesRemoved, staleDays: 7 },
+      after: { scanned, usersWithStale, devicesRemoved, staleDays: 7, truncated, scanLimit: USER_SCAN_HARD_LIMIT },
       actorName: 'cron',
       actorRole: 'system',
       source: 'cron',
@@ -69,6 +88,8 @@ export async function POST(req: NextRequest) {
       scanned,
       usersWithStale,
       devicesRemoved,
+      truncated,
+      scanLimit: USER_SCAN_HARD_LIMIT,
       message: `Đã xóa ${devicesRemoved} token stale từ ${usersWithStale}/${scanned} user`,
     });
   } catch (e: any) {
