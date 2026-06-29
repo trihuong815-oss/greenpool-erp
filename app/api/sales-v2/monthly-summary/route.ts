@@ -29,13 +29,15 @@ import { getMonthLockState } from '@/lib/sales-v2/month-lock';
 import { buildTargetSummary, parseMonth, type TargetScope } from '@/lib/sales-v2/target-progress';
 // PR-SUMMARY-04 (2026-06-29) — summary fast path
 import {
-  canUseSummaryForScope,
   tryReadMonthlyBranchSummary,
   tryReadMonthlySaleSummariesForBranch,
   mapBranchSummaryToTotals,
   mapSaleSummariesToBySale,
   mapBranchSummaryToPrevMonth,
 } from '@/lib/sales-v2/monthly-summary-reader';
+// PR-SUMMARY-04B (2026-06-29) — active-month / unlocked-month raw guard
+import { getMonthlySummaryReadStrategy, type SummaryReadReason } from '@/lib/sales-v2/monthly-summary-read-strategy';
+import { getCurrentAndPreviousMonth } from '@/lib/sales-v2/monthly-summary-rebuild';
 import type { MonthlyBranchSalesSummary, MonthlySaleSalesSummary } from '@/lib/types/monthly-summary';
 import type { SalesV2Source } from '@/lib/types/sales-v2';
 
@@ -168,25 +170,56 @@ export async function GET(req: NextRequest) {
 
     const db = getFirebaseAdminDb();
 
-    // ─── PR-SUMMARY-04 (2026-06-29) — TRY SUMMARY FAST PATH ───────────
-    // Conservative: chỉ activated cho qlcs/accountant (1 branch xác định) +
-    // top scope với branchId filter. Sale + top all-branches → fallback raw.
+    // ─── PR-SUMMARY-04B (2026-06-29) — TRY SUMMARY FAST PATH + ACTIVE-MONTH GUARD ─
+    // Decision pipeline (conservative, raw-by-default):
+    //   1. getMonthlySummaryReadStrategy() rejects:
+    //      - sale-scope, top-all-branches, invalid-branch        (PR-04 baseline)
+    //      - active-month (= current VN month)                   (PR-04B new)
+    //      - unlocked-month (not closed via month-lock)          (PR-04B new)
+    //   2. If strategy approves → fetch summary docs.
+    //   3. If summary missing / schemaVersion mismatch / truncated → fallback raw.
     //
-    // Summary path benefit:
-    //   - Totals/breakdown chính xác từ summary cap 20K (vs raw cap 5000)
-    //   - Khi 1 branch có >5000 tx/tháng, raw bị truncate → summary correct.
+    // Rationale for active/unlocked guard: materialized summary is a snapshot
+    // at rebuild time. If sale enters a new transaction afterwards in an open
+    // month, summary becomes stale and dashboards report wrong totals. RAW must
+    // always serve active/open months even if a summary doc happens to exist.
     //
     // Dynamic fields (salesCustomers, adHocSummary, batchStats, txStatusStats)
-    // VẪN query raw cap 5000 BÊN DƯỚI — PR-04 chỉ override totals/breakdowns
-    // sau khi raw compute xong. PR-05 future sẽ extend summary cho dynamic fields.
+    // VẪN query raw cap 5000 BÊN DƯỚI — fast path chỉ override totals/breakdowns.
     //
-    // KHÔNG ghi Firestore trong GET. KHÔNG dùng debtAmount (PR-03A removed).
+    // Pre-fetch month lock state (fail-safe: unlocked on error → forces raw,
+    // which is the safe default). Reused later for the `monthLock` response field.
+    const { current: currentMonthVN } = getCurrentAndPreviousMonth();
+    let preFetchedLockedState = false;
+    if (scopeBranchId && isBranchId(scopeBranchId)) {
+      try {
+        const st = await getMonthLockState(scopeBranchId as BranchId, month);
+        preFetchedLockedState = st.locked;
+      } catch (err) {
+        // Fail-safe: lock check fail → treat as unlocked → raw. Logged for audit.
+        // eslint-disable-next-line no-console
+        console.warn('[monthly-summary] pre-fetch monthLock fail (treat unlocked → raw):', (err as Error)?.message);
+        preFetchedLockedState = false;
+      }
+    }
+    const readStrategy = getMonthlySummaryReadStrategy({
+      requestedMonth: month,
+      currentMonth: currentMonthVN,
+      scopeRole: role,
+      scopeBranchId,
+      isMonthLocked: preFetchedLockedState,
+    });
+
     let summaryOverride: {
       branchSummary: MonthlyBranchSalesSummary;
       saleSummaries: MonthlySaleSalesSummary[];
       prevMonthSummary: MonthlyBranchSalesSummary | null;
     } | null = null;
-    if (canUseSummaryForScope(role, scopeBranchId)) {
+    // Track "strategy approved but read returned nothing/truncated" so we can
+    // report a precise _sourceReason. Initialize from strategy decision.
+    let sourceReason: SummaryReadReason | 'summary-unavailable' = readStrategy.reason;
+
+    if (readStrategy.useSummary) {
       try {
         const summaryDoc = await tryReadMonthlyBranchSummary(month, scopeBranchId as BranchId);
         if (summaryDoc) {
@@ -199,11 +232,16 @@ export async function GET(req: NextRequest) {
             saleSummaries,
             prevMonthSummary: prevSummaryDoc,
           };
+          // sourceReason stays 'eligible' — summary used.
+        } else {
+          // Strategy approved but no doc → raw fallback. Distinguish from blocked.
+          sourceReason = 'summary-unavailable';
         }
       } catch (err) {
         // Fail-soft: summary read fail → fallback raw, log warning, KHÔNG block response
         // eslint-disable-next-line no-console
         console.warn('[monthly-summary] summary read fail (fallback raw):', (err as Error)?.message);
+        sourceReason = 'summary-unavailable';
       }
     }
 
@@ -809,6 +847,16 @@ export async function GET(req: NextRequest) {
       // VẪN từ raw trong cả 2 cases (PR-05 extend).
       _source: summaryOverride ? 'summary' : 'raw',
       _summaryComputedAt: summaryOverride ? summaryOverride.branchSummary.computedAt : null,
+      // PR-SUMMARY-04B (2026-06-29): WHY raw vs summary was chosen — for debug.
+      // Values:
+      //   eligible             → summary path approved + doc usable → totals from summary
+      //   summary-unavailable  → strategy approved but doc missing/truncated → raw fallback
+      //   sale-scope           → sale role, always raw
+      //   top-all-branches     → top scope without branchId, always raw
+      //   invalid-branch       → missing/invalid branchId
+      //   active-month         → requested month is current VN month, always raw
+      //   unlocked-month       → historical month not locked, raw to capture late edits
+      _sourceReason: sourceReason,
     });
   } catch (err: any) {
     if (err instanceof UnauthorizedError) {
