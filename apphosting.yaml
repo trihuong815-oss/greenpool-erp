@@ -1,10 +1,12 @@
 # Firebase App Hosting configuration
 # Docs: https://firebase.google.com/docs/app-hosting/configure
 #
-# Secrets luu trong Google Cloud Secret Manager roi reference qua secret field.
-# Khong dua gia tri secret that vao file nay.
+# Secrets (FIREBASE_PRIVATE_KEY, GEMINI_API_KEY...) lưu trong Google Cloud Secret Manager
+# rồi reference qua `secret:` field. Xem hướng dẫn bên dưới để upload secret.
 
 runConfig:
+  # Min instances 0 = scale-to-zero (free tier friendly), không tốn tiền khi idle.
+  # Tăng lên 1 nếu cần cold-start fast (charge ~$0.5/month per instance).
   minInstances: 0
   maxInstances: 10
   concurrency: 80
@@ -12,12 +14,14 @@ runConfig:
   memoryMiB: 512
 
 env:
+  # ─── Public env (commit-safe — không nhạy cảm) ───
   - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
     value: green-pool-system
     availability:
       - BUILD
       - RUNTIME
 
+  # ─── Firebase Admin (server) — projectId + clientEmail không nhạy cảm ───
   - variable: FIREBASE_PROJECT_ID
     value: green-pool-system
     availability:
@@ -27,6 +31,13 @@ env:
     value: firebase-adminsdk-fbsvc@green-pool-system.iam.gserviceaccount.com
     availability:
       - RUNTIME
+
+  # ─── Secrets — đẩy vào Cloud Secret Manager ───
+  # Tạo secret bằng lệnh (xem README đính kèm):
+  #   firebase apphosting:secrets:set FIREBASE_PRIVATE_KEY
+  #   firebase apphosting:secrets:set GEMINI_API_KEY
+  #   firebase apphosting:secrets:set NEXT_PUBLIC_FIREBASE_API_KEY
+  #   ... (các key khác)
 
   - variable: FIREBASE_PRIVATE_KEY
     secret: FIREBASE_PRIVATE_KEY
@@ -68,6 +79,9 @@ env:
     availability:
       - RUNTIME
 
+  # ─── FCM Push Notifications (Phase: cong-viec-ca-nhan) ───
+  # NEXT_PUBLIC_FCM_VAPID_KEY: lấy từ Firebase Console → Cloud Messaging → Web Push certificates
+  # CRON_SECRET: random string ≥32 ký tự — GitHub Actions dùng để auth cron endpoints
   - variable: NEXT_PUBLIC_FCM_VAPID_KEY
     secret: NEXT_PUBLIC_FCM_VAPID_KEY
     availability:
@@ -79,6 +93,12 @@ env:
     availability:
       - RUNTIME
 
+  # ─── Monthly Summary Cron (PR-SUMMARY-05) ───
+  # MONTHLY_SUMMARY_CRON_SECRET: secret độc lập với CRON_SECRET, dùng cho
+  # endpoint POST /api/cron/rebuild-monthly-summary. Header: x-cron-secret.
+  # Tạo bằng: firebase apphosting:secrets:set MONTHLY_SUMMARY_CRON_SECRET
+  # Grant access: firebase apphosting:secrets:grantaccess MONTHLY_SUMMARY_CRON_SECRET \
+  #   --backend greenpool-erp --project green-pool-system --location asia-southeast1
   - variable: MONTHLY_SUMMARY_CRON_SECRET
     secret: MONTHLY_SUMMARY_CRON_SECRET
     availability:
