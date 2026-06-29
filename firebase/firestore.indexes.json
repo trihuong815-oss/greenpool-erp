@@ -502,6 +502,24 @@
         { "fieldPath": "month", "order": "ASCENDING" },
         { "fieldPath": "date", "order": "DESCENDING" }
       ]
+    },
+    {
+      "_comment": "PR-INDEX-CUSTOMERS (2026-06-30) #1: Phone duplicate search — where(phoneNormalized=X) orderBy(updatedAt DESC). Khoá search/dedupe mềm khi sale nhập tx mới (PR-DATA-02). Schema-only foundation (PR-DATA-01) chưa write doc nào, nhưng deploy index TRƯỚC để PR-02 sẵn sàng wire mà không phát hiện missing-index ở production.",
+      "collectionGroup": "customers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "phoneNormalized", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "_comment": "PR-INDEX-CUSTOMERS (2026-06-30) #2: Branch admin/QLCS customer list — where(primaryBranchId=X) orderBy(updatedAt DESC). Dùng cho /khach-hang list per branch sort theo recency. Single-field auto-index trên primaryBranchId không đủ khi cần orderBy(updatedAt).",
+      "collectionGroup": "customers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "primaryBranchId", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []
