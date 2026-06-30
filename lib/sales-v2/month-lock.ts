@@ -70,6 +70,10 @@ export async function getMonthLockState(
     locked: doc.locked,
     lockedByName: doc.locked ? doc.lockedByName : null,
     lockedAt: doc.locked ? doc.lockedAt : null,
+    // PR-JUNE-LOCK-AND-MARK (2026-06-30): pass-through optional test marker.
+    // Caller có thể bỏ qua field nếu không quan tâm (backward-compat).
+    isTestMonth: doc.isTestMonth === true ? true : undefined,
+    testReason: doc.isTestMonth === true ? (doc.testReason ?? null) : undefined,
   };
 }
 
@@ -92,6 +96,11 @@ export interface LockMonthInput {
   actorUid: string;
   actorName: string;
   actorRole: string;
+  // PR-JUNE-LOCK-AND-MARK (2026-06-30): optional test month marker.
+  // Khi true → set isTestMonth=true + testReason + testMarkedAt/By trên doc.
+  // KHÔNG cản caller dùng lockMonth thông thường (không truyền = no-op).
+  markAsTestMonth?: boolean;
+  testReason?: string | null;
 }
 
 export interface UnlockMonthInput extends LockMonthInput {
@@ -126,6 +135,24 @@ export async function lockMonth(input: LockMonthInput): Promise<SalesMonthLockDo
       lockedByName: input.actorName,
       lockedByRole: input.actorRole,
       unlockHistory: existing?.unlockHistory ?? [],
+      // PR-JUNE-LOCK-AND-MARK (2026-06-30): preserve OR set test marker.
+      // Nếu caller pass markAsTestMonth=true → set fresh marker.
+      // Nếu KHÔNG pass nhưng existing doc đã có isTestMonth=true → preserve
+      //   (avoid losing marker on re-lock).
+      // Nếu KHÔNG pass + existing không có → undefined (KHÔNG ghi field).
+      ...(input.markAsTestMonth === true ? {
+        isTestMonth: true,
+        testReason: input.testReason ?? null,
+        testMarkedAt: now,
+        testMarkedBy: input.actorUid,
+        testMarkedByName: input.actorName,
+      } : (existing?.isTestMonth === true ? {
+        isTestMonth: true,
+        testReason: existing.testReason ?? null,
+        testMarkedAt: existing.testMarkedAt ?? null,
+        testMarkedBy: existing.testMarkedBy ?? null,
+        testMarkedByName: existing.testMarkedByName ?? null,
+      } : {})),
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
     };

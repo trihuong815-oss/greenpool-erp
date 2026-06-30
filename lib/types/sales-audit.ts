@@ -125,6 +125,21 @@ export interface SalesMonthLockDoc {
   /** Lịch sử mọi lần mở khoá — immutable append. */
   unlockHistory: SalesMonthUnlockEntry[];
 
+  // PR-JUNE-LOCK-AND-MARK (2026-06-30) — Test month marker.
+  // OPTIONAL & backward-compatible: docs cũ không có 2 field này; UI mặc định
+  // coi như non-test. Khi true → /tong-ket banner "Dữ liệu test" + MoM/YTD
+  // logic skip month này.
+  /** True = tháng này chứa data test (vd June 2026 pre-go-live). KHÔNG cản
+   *  mutation (đó là việc của `locked`); chỉ là metadata cho reporting. */
+  isTestMonth?: boolean;
+  /** Lý do test month — vd "June 2026 pre-go-live test data". Required khi
+   *  isTestMonth=true để audit. */
+  testReason?: string | null;
+  /** Khi marked. Audit trace ai mark. */
+  testMarkedAt?: Timestamp | null;
+  testMarkedBy?: string | null;          // uid
+  testMarkedByName?: string | null;
+
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -148,4 +163,7 @@ export interface MonthLockState {
   lockedByName: string | null;
   /** Thời điểm khoá — null nếu chưa locked. */
   lockedAt: Timestamp | null;
+  // PR-JUNE-LOCK-AND-MARK (2026-06-30) — Pass-through test marker.
+  isTestMonth?: boolean;
+  testReason?: string | null;
 }

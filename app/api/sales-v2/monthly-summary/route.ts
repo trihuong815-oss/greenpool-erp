@@ -581,8 +581,25 @@ export async function GET(req: NextRequest) {
     // - Top + filter 1 branch: lock của branch đó
     // - Top + xem all: trả summary { lockedCount, totalBranches, lockedBranchIds }
     // - Sale: null (không quan tâm)
-    type MonthLockSingle = { branchId: string; locked: boolean; lockedByName: string | null; lockedAt: string | null };
-    type MonthLockSummary = { totalBranches: number; lockedCount: number; lockedBranchIds: string[] };
+    // PR-JUNE-LOCK-AND-MARK (2026-06-30): pass-through optional isTestMonth +
+    // testReason fields. Backward compat: omitted nếu undefined.
+    type MonthLockSingle = {
+      branchId: string;
+      locked: boolean;
+      lockedByName: string | null;
+      lockedAt: string | null;
+      isTestMonth?: boolean;
+      testReason?: string | null;
+    };
+    type MonthLockSummary = {
+      totalBranches: number;
+      lockedCount: number;
+      lockedBranchIds: string[];
+      // Test month: chỉ surface khi >=1 branch test → giảm noise cho all-branches view
+      isTestMonth?: boolean;
+      testReason?: string | null;
+      testBranchIds?: string[];
+    };
     let monthLock: MonthLockSingle | MonthLockSummary | null = null;
     if (role !== 'sale') {
       try {
@@ -594,6 +611,10 @@ export async function GET(req: NextRequest) {
             locked: st.locked,
             lockedByName: st.lockedByName,
             lockedAt: st.lockedAt ? st.lockedAt.toDate().toISOString() : null,
+            ...(st.isTestMonth === true ? {
+              isTestMonth: true,
+              testReason: st.testReason ?? null,
+            } : {}),
           };
         } else if (role === 'top') {
           // Top xem all branches → summary
@@ -602,10 +623,17 @@ export async function GET(req: NextRequest) {
             allBranches.map(async (bid) => ({ bid, st: await getMonthLockState(bid, month) })),
           );
           const lockedBranchIds = results.filter((r) => r.st.locked).map((r) => r.bid);
+          const testBranchIds = results.filter((r) => r.st.isTestMonth === true).map((r) => r.bid);
+          const firstTestReason = results.find((r) => r.st.isTestMonth === true && r.st.testReason)?.st.testReason ?? null;
           monthLock = {
             totalBranches: allBranches.length,
             lockedCount: lockedBranchIds.length,
             lockedBranchIds,
+            ...(testBranchIds.length > 0 ? {
+              isTestMonth: true,
+              testReason: firstTestReason,
+              testBranchIds,
+            } : {}),
           };
         }
       } catch (e) {
