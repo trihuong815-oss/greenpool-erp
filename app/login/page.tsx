@@ -1,7 +1,10 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+
+// 2026-07-01: force dynamic — trang login đọc ?reason= qua useSearchParams
+// và không nên bị prerender static.
 import {
   signInWithEmailAndPassword, setPersistence, browserLocalPersistence,
   getMultiFactorResolver, TotpMultiFactorGenerator,
@@ -13,8 +16,45 @@ import { Button } from '@/components/ui';
 // Phase 13.5: hỗ trợ MFA TOTP. Khi user bật 2FA, signInWithEmailAndPassword sẽ throw
 // `auth/multi-factor-auth-required` → bắt error, lấy resolver, hiện step 2 nhập mã 6 chữ số.
 
+// 2026-07-01 HOTFIX: friendly banner khi user bị redirect kèm ?reason=. Ánh xạ
+// reason code từ requireAuthedProfile / layout / proxy → text tiếng Việt.
+const REDIRECT_REASON_LABEL: Record<string, { icon: string; title: string; msg: string }> = {
+  'no-session-cookie': {
+    icon: '🔑',
+    title: 'Phiên đăng nhập đã hết hạn',
+    msg: 'Cookie phiên không hợp lệ hoặc đã bị thu hồi. Đăng nhập lại để tiếp tục.',
+  },
+  'no-user-doc': {
+    icon: '⚠️',
+    title: 'Tài khoản chưa được cấu hình',
+    msg: 'Tài khoản đăng nhập thành công ở Firebase Auth nhưng chưa có hồ sơ trong Firestore. Liên hệ ADMIN để tạo hồ sơ.',
+  },
+  'status-inactive': {
+    icon: '🔒',
+    title: 'Tài khoản đã bị tắt',
+    msg: 'Tài khoản đang ở trạng thái inactive. Liên hệ ADMIN/CEO để kích hoạt lại.',
+  },
+  'firestore-throw': {
+    icon: '🌐',
+    title: 'Lỗi kết nối máy chủ',
+    msg: 'Không tải được hồ sơ do lỗi Firestore. Thử lại sau 30 giây.',
+  },
+};
+
 export default function LoginPage() {
+  // 2026-07-01: Suspense wrapper cho useSearchParams (Next 16 static render guard)
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-900" />}>
+      <LoginPageInner />
+    </Suspense>
+  );
+}
+
+function LoginPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectReason = searchParams.get('reason');
+  const banner = redirectReason ? REDIRECT_REASON_LABEL[redirectReason] : null;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -131,6 +171,21 @@ export default function LoginPage() {
           <h1 className="text-3xl font-bold text-slate-800">Green Pool System</h1>
           <p className="text-slate-500 mt-2">Hệ thống Quản lý Nội bộ — Cụm 5 cơ sở</p>
         </div>
+
+        {banner && (
+          <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+            <div className="flex items-start gap-3">
+              <div className="text-2xl leading-none">{banner.icon}</div>
+              <div className="flex-1">
+                <div className="font-bold text-amber-900 text-sm mb-1">{banner.title}</div>
+                <div className="text-xs text-amber-800">{banner.msg}</div>
+                <div className="text-xs text-amber-600 mt-2 font-mono">
+                  reason={redirectReason}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {!mfaResolver ? (
           // ─── Step 1: email + password ───

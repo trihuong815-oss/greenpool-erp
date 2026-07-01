@@ -59,12 +59,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
       );
     }
-    // no-session-cookie / no-user-doc: clear cookie + redirect /login như cũ
+    // no-session-cookie / no-user-doc: clear cookie + redirect /login WITH reason
     try {
       const c = await cookies();
       c.set(SESSION_COOKIE, '', { maxAge: 0, path: '/' });
     } catch { /* swallow */ }
-    redirect('/login');
+    redirect('/login?reason=' + encodeURIComponent(r.reason));
   }
   const { user, profile } = r;
 

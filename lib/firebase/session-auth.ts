@@ -19,6 +19,10 @@ export interface CurrentUser {
 }
 
 // Đọc session cookie từ headers, verify, trả về user nếu hợp lệ.
+//
+// 2026-07-01 HOTFIX: log verify error trước khi swallow. Trước đây throw
+// bị nuốt hoàn toàn → user bị redirect /login mà không ai biết tại sao.
+// Log an toàn: KHÔNG log cookie value, chỉ log error name/code/message.
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   const c = await cookies();
   const cookie = c.get(SESSION_COOKIE)?.value;
@@ -32,7 +36,14 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       branchId: (decoded.branchId as string | undefined) ?? null,
       departmentId: (decoded.departmentId as string | undefined) ?? null,
     };
-  } catch {
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[getCurrentUser] verifySessionCookie FAIL — code='
+      + ((err as { code?: string }).code ?? 'unknown')
+      + ' name=' + ((err as Error).name ?? 'unknown')
+      + ' msg=' + ((err as Error).message ?? 'unknown').slice(0, 200),
+    );
     return null;
   }
 }

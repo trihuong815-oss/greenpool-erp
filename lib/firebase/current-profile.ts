@@ -183,7 +183,9 @@ export async function requireAuthedProfile(): Promise<ProfileResult> {
       + ' email=' + (r.email ?? 'none')
       + (r.errorMessage ? ' err=' + r.errorMessage : ''),
     );
-    redirect('/login');
+    // 2026-07-01 HOTFIX: pass reason to /login so user sees WHY they were kicked.
+    // Login page renders friendly banner based on ?reason= query param.
+    redirect('/login?reason=' + encodeURIComponent(r.reason));
   }
   return r;
 }
