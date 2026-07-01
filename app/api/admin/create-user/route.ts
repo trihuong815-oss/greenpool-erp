@@ -12,6 +12,8 @@ import { getFirebaseAdminAuth, getFirebaseAdminDb } from '@/lib/firebase/admin';
 import { COLLECTIONS } from '@/lib/firebase/collections';
 import { writeAuditLog } from '@/lib/firebase/audit-log';
 import { getCurrentProfile } from '@/lib/firebase/current-profile';
+// PR-USER-HEALTH-VALIDATION (2026-07-01) — canonical role gate
+import { validateUserConfig, UserConfigInvalidError } from '@/lib/auth/canonical-roles';
 
 interface RoleRow {
   code: string;
@@ -112,6 +114,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Thiếu email, họ tên hoặc vai trò.' }, { status: 400 });
   }
   const normalizedEmail = email.trim().toLowerCase();
+
+  // PR-USER-HEALTH-VALIDATION (2026-07-01): CANONICAL role + branch gate.
+  // Prevents accidental "QLCS_24" (missing NCT suffix) and similar typos —
+  // root cause of the 2026-06-30 "QLCS không vào được /tong-ket" bug.
+  const validationCreate = validateUserConfig({
+    roleCode: role_code,
+    branchId: facility_id ?? null,
+    status: 'active',
+  });
+  if (!validationCreate.ok) {
+    return NextResponse.json(
+      {
+        error: 'Cấu hình role/branch không hợp lệ — không tạo được user.',
+        issues: validationCreate.issues,
+        hints: validationCreate.hints,
+      },
+      { status: 400 },
+    );
+  }
 
   // 4. Target role
   const targetRoleSnap = await db.collection(COLLECTIONS.ROLES).doc(role_code).get();

@@ -8,6 +8,8 @@ import { COLLECTIONS } from '@/lib/firebase/collections';
 import { writeAuditLog } from '@/lib/firebase/audit-log';
 import { canAccessRoute } from '@/lib/permissions';
 import { getCurrentProfile } from '@/lib/firebase/current-profile';
+// PR-USER-HEALTH-VALIDATION (2026-07-01) — canonical role gate
+import { validateUserConfig } from '@/lib/auth/canonical-roles';
 
 const VALID_STATUS = new Set(['active', 'inactive']);
 
@@ -85,6 +87,32 @@ export async function PATCH(
     const targetFac = newFacility !== undefined ? newFacility : (before.branchId ?? null);
     const scope = canAssignRole(callerRole, newRole, callerCtx.profile.branchId ?? null, targetFac);
     if (!scope.ok) return NextResponse.json({ error: scope.reason }, { status: 403 });
+  }
+
+  // PR-USER-HEALTH-VALIDATION (2026-07-01): canonical role + branch validation
+  // BEFORE write. Reject typos (QLCS_24 vs QLCS_24NCT, etc.) and branch mismatch.
+  // Compute effective post-patch values, validate the FUTURE state of the doc.
+  const effectiveRoleCode = newRoleCode ?? (before.roleId as string | undefined) ?? '';
+  const effectiveBranchId = newFacility !== undefined
+    ? newFacility
+    : ((before.branchId as string | null | undefined) ?? null);
+  const effectiveStatus = typeof body.status === 'string'
+    ? body.status
+    : ((before.status as string | undefined) ?? 'active');
+  const validationPatch = validateUserConfig({
+    roleCode: effectiveRoleCode,
+    branchId: effectiveBranchId,
+    status: effectiveStatus,
+  });
+  if (!validationPatch.ok) {
+    return NextResponse.json(
+      {
+        error: 'Cấu hình role/branch không hợp lệ — không update được.',
+        issues: validationPatch.issues,
+        hints: validationPatch.hints,
+      },
+      { status: 400 },
+    );
   }
 
   // Build Firestore patch
